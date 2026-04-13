@@ -41,6 +41,7 @@ export const recastLocationWorkflow =
             imageModel: input.imageModel,
             referenceImageUrl: input.referenceImageUrl,
             libraryLocationDescription: input.libraryLocationDescription,
+            styleConfig: input.styleConfig,
           },
         }
       );

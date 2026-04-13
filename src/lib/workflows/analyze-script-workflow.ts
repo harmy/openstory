@@ -171,6 +171,7 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
           teamId: input.teamId,
           locationBible,
           libraryLocationMatches,
+          styleConfig,
         },
         flowControl: getFalFlowControl(),
       }),

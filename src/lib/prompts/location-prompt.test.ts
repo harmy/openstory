@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'bun:test';
 import type { LocationBibleEntry } from '@/lib/ai/scene-analysis.schema';
-import type { SequenceLocationMinimal } from '@/lib/db/schema';
+import type { SequenceLocationMinimal, StyleConfig } from '@/lib/db/schema';
 import {
   buildLocationDescription,
   buildLocationReferenceImages,
@@ -121,6 +121,68 @@ describe('location-prompt', () => {
 
       expect(result.prompt).toBe(basePrompt);
       expect(result.referenceUrls).toHaveLength(0);
+    });
+  });
+
+  describe('buildLocationSheetPrompt with styleConfig', () => {
+    const animatedStyle: StyleConfig = {
+      mood: 'Whimsical, playful, and colorful',
+      artStyle:
+        'Pixar-style 3D animation with exaggerated proportions and rich textures.',
+      lighting:
+        'Soft global illumination with warm key lights and cool fill. Bounced light creates depth.',
+      colorPalette: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'],
+      cameraWork:
+        'Smooth dollies and gentle crane movements. Wide establishing shots with shallow depth of field on details.',
+      referenceFilms: ['Up', 'Ratatouille', 'Coco'],
+      colorGrading:
+        'Saturated and warm with a slight bloom. Shadows are never pure black.',
+    };
+
+    it('without styleConfig produces no style direction section', () => {
+      const result = buildLocationSheetPrompt(mockLocationEntry);
+      expect(result.prompt).not.toContain('[STYLE DIRECTION]');
+    });
+
+    it('with styleConfig includes style direction section', () => {
+      const result = buildLocationSheetPrompt(
+        mockLocationEntry,
+        undefined,
+        animatedStyle
+      );
+
+      expect(result.prompt).toContain('[STYLE DIRECTION]');
+      expect(result.prompt).toContain('Pixar-style 3D animation');
+      expect(result.prompt).toContain('Whimsical, playful');
+      expect(result.prompt).toContain('Up');
+    });
+
+    it('with styleConfig preserves location-specific attributes', () => {
+      const result = buildLocationSheetPrompt(
+        mockLocationEntry,
+        undefined,
+        animatedStyle
+      );
+
+      expect(result.prompt).toContain('Contemporary minimalist');
+      expect(result.prompt).toContain('Floor-to-ceiling windows');
+      expect(result.prompt).toContain('[GRID LAYOUT');
+    });
+
+    it('with styleConfig and library overrides composes correctly', () => {
+      const result = buildLocationSheetPrompt(
+        mockLocationEntry,
+        {
+          description: 'A sleek tech startup',
+          referenceImageUrl: 'https://example.com/lib.png',
+        },
+        animatedStyle
+      );
+
+      expect(result.prompt).toContain('[STYLE DIRECTION]');
+      expect(result.prompt).toContain('Pixar-style 3D animation');
+      expect(result.prompt).toContain('A sleek tech startup');
+      expect(result.referenceUrls).toContain('https://example.com/lib.png');
     });
   });
 

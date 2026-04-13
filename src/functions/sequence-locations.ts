@@ -1,4 +1,4 @@
-import type { SequenceLocation } from '@/lib/db/schema';
+import { type SequenceLocation, StyleConfigSchema } from '@/lib/db/schema';
 import { getGenerationChannel } from '@/lib/realtime';
 import { triggerWorkflow } from '@/lib/workflow/client';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
@@ -94,6 +94,17 @@ export const recastLocationFn = createServerFn({ method: 'POST' })
       throw new Error('Location not found');
     }
 
+    // Fetch the sequence's style for location sheet generation
+    const sequence = await context.scopedDb.sequences.getForUser({
+      sequenceId: location.sequenceId,
+    });
+    const style = sequence.styleId
+      ? await context.scopedDb.styles.getById(sequence.styleId)
+      : null;
+    const styleConfig = style
+      ? StyleConfigSchema.parse(style.config)
+      : undefined;
+
     await context.scopedDb.sequenceLocations.updateReferenceStatus(
       data.locationId,
       'generating'
@@ -122,6 +133,7 @@ export const recastLocationFn = createServerFn({ method: 'POST' })
         referenceImageUrl: data.referenceImageUrl,
         libraryLocationDescription: data.description,
         affectedFrameIds,
+        styleConfig,
       } satisfies RecastLocationWorkflowInput,
       { label: buildWorkflowLabel(location.sequenceId) }
     );

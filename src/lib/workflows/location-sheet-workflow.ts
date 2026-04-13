@@ -71,10 +71,11 @@ export const locationSheetWorkflow = createScopedWorkflow<
             }
           : undefined;
 
-        // Build prompt with location identity + library reference
+        // Build prompt with location identity + library reference + sequence style
         const { prompt, referenceUrls } = buildLocationSheetPrompt(
           input.locationMetadata,
-          libraryOverrides
+          libraryOverrides,
+          input.styleConfig
         );
         const model = input.imageModel ?? DEFAULT_IMAGE_MODEL;
 

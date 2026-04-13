@@ -8,7 +8,7 @@
  */
 
 import type { LocationBibleEntry } from '@/lib/ai/scene-analysis.schema';
-import type { SequenceLocationMinimal } from '@/lib/db/schema';
+import type { SequenceLocationMinimal, StyleConfig } from '@/lib/db/schema';
 import {
   type PromptWithReferenceImages,
   type ReferenceImageDescription,
@@ -74,6 +74,29 @@ export const buildPromptWithLocationReferences = (
 };
 
 /**
+ * Format a style direction section for location reference sheets.
+ * Overlays the sequence's visual style on top of the location-specific attributes.
+ */
+const formatStyleDirectionForLocation = (styleConfig: StyleConfig): string => {
+  const colorPaletteStr = styleConfig.colorPalette.join(', ');
+  const referencesStr =
+    styleConfig.referenceFilms.length > 0
+      ? `\nReference look: ${styleConfig.referenceFilms.join(', ')}.`
+      : '';
+
+  return `
+[STYLE DIRECTION]:
+Render this location in the following visual style:
+Art style: ${styleConfig.artStyle}
+Mood: ${styleConfig.mood}
+Lighting direction: ${styleConfig.lighting}
+Color palette: ${colorPaletteStr}
+Color grading: ${styleConfig.colorGrading}
+Camera approach: ${styleConfig.cameraWork}${referencesStr}
+All 9 panels must consistently reflect this style direction.`;
+};
+
+/**
  * Build a location reference sheet prompt structure
  *
  * Creates a 3x3 grid of 16:9 images showing different angles and views:
@@ -83,6 +106,7 @@ export const buildPromptWithLocationReferences = (
  *
  * @param entry - The location bible entry from script analysis
  * @param libraryLocationOverrides - Optional library location data for overrides
+ * @param styleConfig - Optional sequence style to apply to the location sheet
  * @returns Complete prompt string and reference URLs
  */
 export const buildLocationSheetPrompt = (
@@ -90,7 +114,8 @@ export const buildLocationSheetPrompt = (
   libraryLocationOverrides?: {
     description?: string;
     referenceImageUrl?: string;
-  }
+  },
+  styleConfig?: StyleConfig
 ): { prompt: string; referenceUrls: string[] } => {
   const referenceUrls: string[] = [];
   if (libraryLocationOverrides?.referenceImageUrl) {
@@ -148,7 +173,7 @@ ${entry.lightingSetup || 'Match time of day and mood - consistent across all pan
 
 [ATMOSPHERE]:
 ${entry.ambiance || 'Derive from description and setting'}
-${referenceInstruction}
+${referenceInstruction}${styleConfig ? formatStyleDirectionForLocation(styleConfig) : ''}
 [GRID LAYOUT - 3 rows × 3 columns, each panel 16:9 aspect ratio]:
 
 Row 1 - ESTABLISHING SHOTS:

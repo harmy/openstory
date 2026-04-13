@@ -100,13 +100,17 @@ export const locationBibleWorkflow = createScopedWorkflow<
           // Check if location has a library match
           const libraryMatch = matchMap.get(location.locationId);
 
-          // Build location sheet prompt (with library overrides if matched)
+          // Build location sheet prompt (with library overrides if matched + sequence style)
           const { prompt, referenceUrls } = libraryMatch
-            ? buildLocationSheetPrompt(location, {
-                description: libraryMatch.description,
-                referenceImageUrl: libraryMatch.referenceImageUrl,
-              })
-            : buildLocationSheetPrompt(location);
+            ? buildLocationSheetPrompt(
+                location,
+                {
+                  description: libraryMatch.description,
+                  referenceImageUrl: libraryMatch.referenceImageUrl,
+                },
+                input.styleConfig
+              )
+            : buildLocationSheetPrompt(location, undefined, input.styleConfig);
 
           const model = input.imageModel ?? DEFAULT_IMAGE_MODEL;
 

@@ -422,6 +422,8 @@ export interface LocationSheetWorkflowInput extends SequenceWorkflowContext {
   referenceImageUrl?: string;
   /** Library location description for overrides */
   libraryLocationDescription?: string;
+  /** Sequence style config to apply to the location sheet */
+  styleConfig?: StyleConfig;
 }
 
 export interface LocationSheetWorkflowResult {
@@ -470,6 +472,8 @@ export interface LocationBibleWorkflowInput extends UserWorkflowContext {
   imageModel?: TextToImageModel;
   /** Library location matches for locations that should use library references */
   libraryLocationMatches?: LibraryLocationMatch[];
+  /** Sequence style config to apply to location sheets */
+  styleConfig?: StyleConfig;
 }
 
 /**
@@ -533,6 +537,8 @@ export interface RecastLocationWorkflowInput extends SequenceWorkflowContext {
   libraryLocationDescription?: string;
   /** Frame IDs to regenerate after sheet generation */
   affectedFrameIds: string[];
+  /** Sequence style config to apply to the location sheet */
+  styleConfig?: StyleConfig;
 }
 
 /**
