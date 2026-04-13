@@ -28,12 +28,12 @@ export const EvalSequenceMetadata: React.FC<EvalSequenceMetadataProps> = ({
   const imageModel = getImageModelById(sequence.imageModel);
 
   return (
-    <div className="h-full border-r border-b p-3 flex flex-col gap-2">
+    <div className="h-full border-r border-b p-3 flex flex-col gap-2 overflow-y-auto">
       {/* Title */}
       <Link
         to={sequencesScenesRoute.fullPath}
         params={{ id: sequence.id }}
-        className="font-medium text-sm line-clamp-2 hover:underline"
+        className="font-medium text-sm text-foreground line-clamp-2 hover:underline"
         title={sequence.title || 'Untitled Sequence'}
       >
         {sequence.title || 'Untitled Sequence'}
