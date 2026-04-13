@@ -293,10 +293,10 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         }
       }
     },
-    [sequenceId, frames, queryClient]
+    [sequenceId, frames, queryClient, posthog]
   );
 
-  const musicPromptsReady = !!(sequence?.musicPrompt && sequence?.musicTags);
+  const musicPromptsReady = !!(sequence?.musicPrompt && sequence.musicTags);
 
   return (
     <div className="flex h-full flex-col">

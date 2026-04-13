@@ -7,6 +7,7 @@ export function getPostHogClient(): PostHog | null {
     const projectToken =
       process.env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN ||
       import.meta.env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN;
+
     if (!projectToken) {
       // Gracefully return null if PostHog is not configured
       console.warn('PostHog is not configured');
