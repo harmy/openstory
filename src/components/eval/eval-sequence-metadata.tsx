@@ -110,45 +110,27 @@ export const EvalSequenceMetadata: React.FC<EvalSequenceMetadataProps> = ({
 const SequenceErrors: React.FC<{ sequence: SequenceWithFrames }> = ({
   sequence,
 }) => {
-  const errors: string[] = [];
+  let errorCount = 0;
 
-  if (sequence.status === 'failed') {
-    errors.push(sequence.statusError ?? 'Sequence failed');
-  }
-  if (sequence.mergedVideoError) {
-    errors.push(`Merge: ${sequence.mergedVideoError}`);
-  }
-  if (sequence.musicError) {
-    errors.push(`Music: ${sequence.musicError}`);
-  }
+  if (sequence.status === 'failed') errorCount++;
+  if (sequence.mergedVideoError) errorCount++;
+  if (sequence.musicError) errorCount++;
 
-  const failedImages = sequence.frames.filter(
+  errorCount += sequence.frames.filter(
     (f) => f.thumbnailStatus === 'failed'
   ).length;
-  const failedVideos = sequence.frames.filter(
+  errorCount += sequence.frames.filter(
     (f) => f.videoStatus === 'failed'
   ).length;
 
-  if (failedImages > 0) {
-    errors.push(`${failedImages} image${failedImages > 1 ? 's' : ''} failed`);
-  }
-  if (failedVideos > 0) {
-    errors.push(`${failedVideos} video${failedVideos > 1 ? 's' : ''} failed`);
-  }
-
-  if (errors.length === 0) return null;
+  if (errorCount === 0) return null;
 
   return (
-    <div className="flex flex-col gap-1">
-      {errors.map((err) => (
-        <div
-          key={err}
-          className="flex items-start gap-1 text-xs text-destructive"
-        >
-          <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
-          <span className="line-clamp-2">{err}</span>
-        </div>
-      ))}
+    <div className="flex items-center gap-1 text-xs text-destructive">
+      <AlertTriangle className="h-3 w-3 shrink-0" />
+      <span>
+        {errorCount} error{errorCount !== 1 ? 's' : ''}
+      </span>
     </div>
   );
 };
