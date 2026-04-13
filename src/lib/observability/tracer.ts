@@ -12,7 +12,7 @@ import {
   trace,
 } from '@opentelemetry/api';
 
-const tracer = trace.getTracer('openstory-ai');
+const tracer = trace.getTracer('openstory');
 
 type GenAISpanAttrs = {
   model: string;

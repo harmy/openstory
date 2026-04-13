@@ -48,6 +48,7 @@ export function initTracing(): void {
         publicKey: langfusePublicKey,
         secretKey: langfuseSecretKey,
         baseUrl: env.LANGFUSE_BASE_URL ?? 'https://cloud.langfuse.com',
+        exportMode: 'batched',
       })
     );
     console.log('[Tracing] Langfuse exporter enabled');
