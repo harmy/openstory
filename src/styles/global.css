@@ -269,6 +269,18 @@ body {
   }
 }
 
+@property --glow-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes glow-spin {
+  to {
+    --glow-angle: 360deg;
+  }
+}
+
 #how-it-works {
   scroll-margin-top: 5rem;
 }
