@@ -32,6 +32,7 @@ type EvalToolbarProps = {
   sortCriteria: SortCriteria[];
   onSortChange: (criteria: SortCriteria[]) => void;
   availableWorkflows: string[];
+  supportMode?: boolean;
 };
 
 const SORT_FIELDS: { value: SortCriteria['field']; label: string }[] = [
@@ -50,6 +51,7 @@ export const EvalToolbar: React.FC<EvalToolbarProps> = ({
   sortCriteria,
   onSortChange,
   availableWorkflows,
+  supportMode,
 }) => {
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onFiltersChange({ ...filters, search: e.target.value });
@@ -159,7 +161,11 @@ export const EvalToolbar: React.FC<EvalToolbarProps> = ({
       <div className="flex flex-wrap items-center gap-4">
         {/* Search */}
         <Input
-          placeholder="Search by title…"
+          placeholder={
+            supportMode
+              ? 'Search by title or name\u2026'
+              : 'Search by title\u2026'
+          }
           value={filters.search}
           onChange={handleSearchChange}
           className="w-48"

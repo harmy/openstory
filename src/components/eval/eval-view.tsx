@@ -179,6 +179,7 @@ export const EvalView: React.FC = () => {
         sortCriteria={sortCriteria}
         onSortChange={setSortCriteria}
         availableWorkflows={availableWorkflows}
+        supportMode={supportMode}
       />
       {filteredAndSorted.length === 0 ? (
         <EmptyState
