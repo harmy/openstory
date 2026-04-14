@@ -29,17 +29,34 @@ export const ModelBadge = ({ model }: { model?: string }) => {
   );
 };
 
-export const ImageModelBadge = ({ model }: { model?: string }) => {
-  if (!model) {
+function getImageModelDisplayName(model: string): string {
+  return isValidTextToImageModel(model) ? IMAGE_MODELS[model].name : model;
+}
+
+function formatImageModels(models: string[]): string {
+  if (models.length === 0) return '';
+  if (models.length === 1) return getImageModelDisplayName(models[0]);
+  if (models.length === 2)
+    return `${getImageModelDisplayName(models[0])}, ${getImageModelDisplayName(models[1])}`;
+  return `${getImageModelDisplayName(models[0])} + ${models.length - 1} others`;
+}
+
+export const ImageModelBadge = ({
+  model,
+  models,
+}: {
+  model?: string;
+  models?: string[];
+}) => {
+  const allModels = models && models.length > 0 ? models : model ? [model] : [];
+
+  if (allModels.length === 0) {
     return <Skeleton className="w-[100px] h-[20px]" />;
   }
 
-  const modelConfig = isValidTextToImageModel(model)
-    ? IMAGE_MODELS[model]
-    : undefined;
   return (
     <Badge variant="secondary" className="text-xs">
-      {modelConfig?.name || model}
+      {formatImageModels(allModels)}
     </Badge>
   );
 };

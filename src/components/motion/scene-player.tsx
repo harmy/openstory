@@ -39,6 +39,8 @@ type ScenePlayerProps = {
   className?: string;
   wrapperClassName?: string;
   selectedTab?: TabValue;
+  overrideImageUrl?: string | null;
+  badgeMessage?: string | null;
   progressMessage?: string;
   posterUrl?: string;
   onTimeUpdate?: (currentTime: number) => void;
@@ -52,6 +54,8 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
   selectedFrameId,
   aspectRatio,
   selectedTab,
+  overrideImageUrl,
+  badgeMessage,
   progressMessage,
   posterUrl,
   onSelectFrame,
@@ -238,14 +242,17 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
     currentFrame.metadata?.metadata?.title ??
     (sceneNumber ? `Scene ${sceneNumber}` : undefined);
 
-  // Best available image: final thumbnail → fast preview → sequence poster
+  // Best available image: override (variant preview) → final thumbnail → fast preview → sequence poster
   const displayImage =
+    overrideImageUrl ??
     currentFrame.thumbnailUrl ??
     currentFrame.previewThumbnailUrl ??
     posterUrl ??
     null;
   const isPreviewImage =
     !!currentFrame.previewThumbnailUrl && !currentFrame.thumbnailUrl;
+  const isVariantPreview =
+    !!overrideImageUrl && overrideImageUrl !== currentFrame.thumbnailUrl;
 
   return (
     <div className={cn('flex w-full flex-col', wrapperClassName)}>
@@ -386,7 +393,12 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
             videoStatus={currentFrame.videoStatus ?? null}
             progressMessage={progressMessage}
           />
-          {isPreviewImage && (
+          {badgeMessage && (
+            <span className="absolute top-2 left-2 z-10 rounded bg-primary/80 px-2 py-1 text-xs font-medium text-primary-foreground backdrop-blur-sm">
+              {badgeMessage}
+            </span>
+          )}
+          {isPreviewImage && !isVariantPreview && (
             <span className="absolute top-2 right-2 z-10 rounded bg-background/80 px-2 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">
               Preview
             </span>

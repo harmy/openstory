@@ -11,7 +11,6 @@ import { FailureSummaryBanner } from '@/components/sequence/failure-summary-bann
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { batchGenerateMotionFn } from '@/functions/motion-functions';
 import { smartRetryFn } from '@/functions/smart-retry';
-import { useActiveImageModel } from '@/hooks/use-active-model';
 import { BILLING_BALANCE_KEY } from '@/hooks/use-billing-balance';
 import { useFramesBySequence } from '@/hooks/use-frames';
 import { useSequence } from '@/hooks/use-sequences';
@@ -97,6 +96,13 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     Set<string>
   >(() => new Set());
 
+  const [previewVariantUrl, setPreviewVariantUrl] = useState<string | null>(
+    null
+  );
+  const [playerBadgeMessage, setPlayerBadgeMessage] = useState<string | null>(
+    null
+  );
+
   const [motionStartedAt, setMotionStartedAt] = useState<number | null>(null);
   const [motionIncludesMusic, setMotionIncludesMusic] = useState(false);
 
@@ -149,45 +155,21 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     enabled: !!sequenceId,
   });
 
-  const { activeModel } = useActiveImageModel(sequenceId);
-
-  // Resolve frames: overlay active model's variant data onto frame fields
-  const frames = useMemo(() => {
-    if (!rawFrames) return rawFrames;
-    if (!imageVariants || !activeModel) return rawFrames;
-
-    // Build lookup: frameId → variant for the active model
-    const variantMap = new Map<string, FrameVariant>();
-    for (const v of imageVariants) {
-      if (v.model === activeModel) {
-        variantMap.set(v.frameId, v);
-      }
-    }
-
-    // If no variants match (e.g. single-model legacy), return frames as-is
-    if (variantMap.size === 0) return rawFrames;
-
-    return rawFrames.map((frame) => {
-      const variant = variantMap.get(frame.id);
-      if (!variant) return frame;
-      return {
-        ...frame,
-        thumbnailUrl: variant.url ?? frame.thumbnailUrl,
-        thumbnailPath: variant.storagePath ?? frame.thumbnailPath,
-        thumbnailStatus: variant.status ?? frame.thumbnailStatus,
-        previewThumbnailUrl: variant.previewUrl ?? frame.previewThumbnailUrl,
-        variantImageUrl: variant.shotVariantUrl ?? frame.variantImageUrl,
-        variantImageStatus:
-          variant.shotVariantStatus ?? frame.variantImageStatus,
-      };
-    });
-  }, [rawFrames, imageVariants, activeModel]);
+  const frames = rawFrames;
 
   const curSelectedFrameId = selectedFrameId || frames?.[0]?.id;
   const selectedFrame = useMemo(
     () => frames?.find((frame) => frame.id === curSelectedFrameId),
     [frames, curSelectedFrameId]
   );
+
+  // Filter variants for the currently selected frame
+  const selectedFrameVariants = useMemo(() => {
+    if (!imageVariants || !curSelectedFrameId) return undefined;
+    return imageVariants.filter(
+      (v) => v.frameId === curSelectedFrameId && v.variantType === 'image'
+    );
+  }, [imageVariants, curSelectedFrameId]);
 
   const setterForType = useCallback((type: RegenerationType) => {
     switch (type) {
@@ -418,6 +400,12 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
               aspectRatio={aspectRatio}
               onSelectFrame={setSelectedFrameId}
               selectedTab={selectedTab}
+              overrideImageUrl={
+                selectedTab === 'image-prompt' ? previewVariantUrl : null
+              }
+              badgeMessage={
+                selectedTab === 'image-prompt' ? playerBadgeMessage : null
+              }
               progressMessage={
                 generationState.phases.find((p) => p.status === 'active')
                   ?.phaseName
@@ -437,6 +425,9 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
             regeneratingSceneVariants={regeneratingSceneVariants}
             onRegenerateStart={handleRegenerateStart}
             aspectRatio={aspectRatio}
+            frameVariants={selectedFrameVariants}
+            onPreviewVariantChange={setPreviewVariantUrl}
+            onBadgeMessageChange={setPlayerBadgeMessage}
           />
         </ScrollArea>
       </div>

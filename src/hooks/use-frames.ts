@@ -16,6 +16,7 @@ import {
   generateFrameImageFn,
   generateFrameVariantsFn,
   selectFrameVariantFn,
+  setImageFromVariantFn,
 } from '@/functions/frame-image';
 import type { GenerateVariantInput as SchemaGenerateVariantInput } from '@/lib/schemas/frame.schemas';
 import type { Scene } from '@/lib/ai/scene-analysis.schema';
@@ -509,6 +510,67 @@ export function useSelectVariant() {
         queryKey: frameKeys.detail(frameId),
       });
 
+      await queryClient.invalidateQueries({
+        queryKey: frameKeys.list(sequenceId),
+      });
+    },
+  });
+}
+
+// Hook for setting a frame's image from an existing variant
+export function useSetImageFromVariant() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { frameId: string; thumbnailUrl: string },
+    Error,
+    { sequenceId: string; frameId: string; model: string }
+  >({
+    mutationFn: async (input) => {
+      return setImageFromVariantFn({ data: input });
+    },
+    onMutate: async ({ sequenceId, frameId }) => {
+      await queryClient.cancelQueries({
+        queryKey: frameKeys.detail(frameId),
+      });
+      await queryClient.cancelQueries({
+        queryKey: frameKeys.list(sequenceId),
+      });
+    },
+    onSuccess: async (data, { sequenceId, frameId }) => {
+      queryClient.setQueryData<Frame>(frameKeys.detail(frameId), (oldFrame) => {
+        if (!oldFrame) return oldFrame;
+        return {
+          ...oldFrame,
+          thumbnailUrl: data.thumbnailUrl,
+          thumbnailStatus: 'completed' as const,
+          imageModel: oldFrame.imageModel,
+          videoUrl: null,
+          videoStatus: 'pending' as const,
+        };
+      });
+
+      queryClient.setQueryData<Frame[]>(
+        frameKeys.list(sequenceId),
+        (oldFrames) => {
+          if (!oldFrames) return oldFrames;
+          return oldFrames.map((f) =>
+            f.id === frameId
+              ? {
+                  ...f,
+                  thumbnailUrl: data.thumbnailUrl,
+                  thumbnailStatus: 'completed' as const,
+                  videoUrl: null,
+                  videoStatus: 'pending' as const,
+                }
+              : f
+          );
+        }
+      );
+
+      await queryClient.invalidateQueries({
+        queryKey: frameKeys.detail(frameId),
+      });
       await queryClient.invalidateQueries({
         queryKey: frameKeys.list(sequenceId),
       });

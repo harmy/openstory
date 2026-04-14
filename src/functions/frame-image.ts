@@ -398,3 +398,47 @@ export const selectFrameVariantFn = createServerFn({ method: 'POST' })
       upscaleWorkflowRunId: workflowRunId,
     };
   });
+
+// ---------------------------------------------------------------------------
+// Set Image from Variant
+// ---------------------------------------------------------------------------
+
+const setImageFromVariantInputSchema = z.object({
+  sequenceId: ulidSchema,
+  frameId: ulidSchema,
+  model: z.string().min(1),
+});
+
+export const setImageFromVariantFn = createServerFn({ method: 'POST' })
+  .middleware([frameAccessMiddleware])
+  .inputValidator(zodValidator(setImageFromVariantInputSchema))
+  .handler(async ({ context, data }) => {
+    const { frame } = context;
+
+    const variant = await context.scopedDb.frameVariants.getByFrameAndModel(
+      frame.id,
+      'image',
+      data.model
+    );
+
+    if (!variant || variant.status !== 'completed' || !variant.url) {
+      throw new Error('No completed variant found for this model');
+    }
+
+    await context.scopedDb.frames.update(frame.id, {
+      thumbnailUrl: variant.url,
+      thumbnailPath: variant.storagePath,
+      thumbnailStatus: 'completed',
+      thumbnailError: null,
+      imageModel: data.model,
+      // Clear stale video fields — video must be regenerated
+      videoUrl: null,
+      videoPath: null,
+      videoStatus: 'pending',
+      videoWorkflowRunId: null,
+      videoGeneratedAt: null,
+      videoError: null,
+    });
+
+    return { frameId: frame.id, thumbnailUrl: variant.url };
+  });
