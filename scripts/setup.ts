@@ -916,7 +916,7 @@ async function deploySetup(
       const shouldPushVars = checkCancel(
         await p.confirm({
           message:
-            'Push R2 domain variables to GitHub production environment? (needed for CI seed)',
+            'Push variables to GitHub production environment? (needed for CI build + seed)',
           initialValue: true,
         })
       );
@@ -1101,14 +1101,18 @@ async function deploySetup(
   // 5. Push CI secrets to GitHub production environment
   const ciSecrets =
     platform === 'cloudflare'
-      ? (['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN'] as const)
+      ? ([
+          'CLOUDFLARE_ACCOUNT_ID',
+          'CLOUDFLARE_API_TOKEN',
+          'VITE_PUBLIC_POSTHOG_PROJECT_TOKEN',
+        ] as const)
       : (['TURSO_DATABASE_URL', 'TURSO_AUTH_TOKEN'] as const);
   const ciSecretsToPush = ciSecrets.filter((k) => vars.get(k));
 
   if (ciSecretsToPush.length > 0) {
     const shouldPushCiSecrets = checkCancel(
       await p.confirm({
-        message: `Push CI secrets (${ciSecretsToPush.join(', ')}) to GitHub production environment?`,
+        message: `Push CI/build secrets (${ciSecretsToPush.join(', ')}) to GitHub production environment?`,
         initialValue: true,
       })
     );
