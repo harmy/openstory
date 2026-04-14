@@ -79,6 +79,8 @@ type SceneScriptPromptsProps = {
     type: 'image' | 'motion' | 'scene-variants'
   ) => void;
   aspectRatio?: AspectRatio;
+  /** Current style category, used to show/hide style-restricted motion models */
+  styleCategory?: string;
 };
 
 type PromptTabContentProps = {
@@ -151,6 +153,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   regeneratingSceneVariants,
   onRegenerateStart,
   aspectRatio,
+  styleCategory,
 }) => {
   const [copiedTab, setCopiedTab] = useState<string | null>(null);
   const [shortenStatus, setShortenStatus] = useState<{
@@ -486,7 +489,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     setEditedMotionPrompt(rawMotionPrompt);
   }
 
-  const motionModelKey = `${frame?.motionModel ?? ''}:${aspectRatio ?? ''}`;
+  const motionModelKey = `${frame?.motionModel ?? ''}:${aspectRatio ?? ''}:${styleCategory ?? ''}`;
   if (motionModelKey !== prevMotionModelKeyRef.current) {
     prevMotionModelKeyRef.current = motionModelKey;
     const currentModel = frame?.motionModel
@@ -495,7 +498,14 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     const compatibleModel = aspectRatio
       ? getCompatibleModel(currentModel, aspectRatio)
       : currentModel;
-    setSelectedMotionModel(compatibleModel);
+    // Fall back if the model requires a style category that doesn't match
+    const modelConfig = IMAGE_TO_VIDEO_MODELS[compatibleModel];
+    const finalModel =
+      'requiredStyleCategory' in modelConfig &&
+      modelConfig.requiredStyleCategory !== styleCategory
+        ? DEFAULT_VIDEO_MODEL
+        : compatibleModel;
+    setSelectedMotionModel(finalModel);
   }
 
   // Check if image is currently generating
@@ -712,6 +722,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
               onModelChange={setSelectedMotionModel}
               disabled={isGenerating || isGeneratingMotion}
               aspectRatio={aspectRatio}
+              styleCategory={styleCategory}
             />
           </div>
 

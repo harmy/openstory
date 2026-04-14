@@ -39,6 +39,7 @@ import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_MUSIC_MODEL,
   DEFAULT_VIDEO_MODEL,
+  IMAGE_TO_VIDEO_MODELS,
   safeAudioModel,
   safeImageToVideoModel,
   safeTextToImageModel,
@@ -184,6 +185,14 @@ export const ScriptView: FC<{
     }
   }, [styles, isLoadingStyles, styleId, sequence?.styleId]);
 
+  // Derive style category for motion model filtering
+  const styleCategory = useMemo(
+    () =>
+      styles.find((s) => s.id === (styleId || sequence?.styleId))?.category ??
+      undefined,
+    [styles, styleId, sequence?.styleId]
+  );
+
   // Sync draft state when creating new sequences (not editing)
   const hasSyncedDraftRef = React.useRef(false);
   useEffect(() => {
@@ -266,6 +275,17 @@ export const ScriptView: FC<{
     selectedLocationIds,
     saveDraft,
   ]);
+
+  // Auto-fallback motion model when style changes away from a required category
+  useEffect(() => {
+    const model = IMAGE_TO_VIDEO_MODELS[motionModel];
+    if (
+      'requiredStyleCategory' in model &&
+      model.requiredStyleCategory !== styleCategory
+    ) {
+      updateGen('motionModel', DEFAULT_VIDEO_MODEL);
+    }
+  }, [styleCategory, motionModel]);
 
   const [targetDuration, setTargetDuration] = useState(30);
   const [enhancePopoverOpen, setEnhancePopoverOpen] = useState(false);
@@ -484,6 +504,7 @@ export const ScriptView: FC<{
             onMusicModelChange={(v) => updateGen('musicModel', v)}
             onAutoGenerateMusicChange={(v) => updateGen('autoGenerateMusic', v)}
             disabled={loading}
+            styleCategory={styleCategory}
           />
           <div className="flex items-center gap-2">
             {selectedTalentIds.length === 0 &&

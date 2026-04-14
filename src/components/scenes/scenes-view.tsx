@@ -15,6 +15,7 @@ import { useActiveImageModel } from '@/hooks/use-active-model';
 import { BILLING_BALANCE_KEY } from '@/hooks/use-billing-balance';
 import { useFramesBySequence } from '@/hooks/use-frames';
 import { useSequence } from '@/hooks/use-sequences';
+import { useStyle } from '@/hooks/use-styles';
 import {
   DEFAULT_ASPECT_RATIO,
   type AspectRatio,
@@ -106,6 +107,8 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   });
   const aspectRatio = sequence?.aspectRatio || DEFAULT_ASPECT_RATIO;
   const isProcessing = sequence?.status === 'processing';
+  const { data: style } = useStyle(sequence?.styleId ?? '');
+  const styleCategory = style?.category ?? undefined;
 
   // Phase config from DB — set in stone when the workflow was triggered
   const phaseConfig = useMemo<GenerationPhaseConfig>(
@@ -437,6 +440,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
             regeneratingSceneVariants={regeneratingSceneVariants}
             onRegenerateStart={handleRegenerateStart}
             aspectRatio={aspectRatio}
+            styleCategory={styleCategory}
           />
         </ScrollArea>
       </div>

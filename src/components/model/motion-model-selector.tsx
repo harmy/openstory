@@ -15,6 +15,8 @@ type MotionModelSelectorProps = {
   onModelChange: (model: ImageToVideoModel) => void;
   disabled?: boolean;
   aspectRatio?: AspectRatio;
+  /** When set, models with a matching `requiredStyleCategory` are included */
+  styleCategory?: string;
 };
 
 export const MotionModelSelector: React.FC<MotionModelSelectorProps> = ({
@@ -22,6 +24,7 @@ export const MotionModelSelector: React.FC<MotionModelSelectorProps> = ({
   onModelChange,
   disabled = false,
   aspectRatio,
+  styleCategory,
 }) => {
   const models = useMemo(
     () =>
@@ -29,6 +32,11 @@ export const MotionModelSelector: React.FC<MotionModelSelectorProps> = ({
         .filter(([key, m]) => {
           if (!isValidImageToVideoModel(key)) return false;
           if ('hidden' in m) return false;
+          if (
+            'requiredStyleCategory' in m &&
+            m.requiredStyleCategory !== styleCategory
+          )
+            return false;
           return aspectRatio
             ? isModelCompatibleWithAspectRatio(key, aspectRatio)
             : true;
@@ -40,7 +48,7 @@ export const MotionModelSelector: React.FC<MotionModelSelectorProps> = ({
           group: 'all',
           badge: m.license,
         })),
-    [aspectRatio]
+    [aspectRatio, styleCategory]
   );
 
   return (

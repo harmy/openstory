@@ -72,6 +72,8 @@ type GenerationSettingsProps = {
   singleSelectAnalysis?: boolean;
   /** Use single-select for image model (e.g. in regeneration context) */
   singleSelectImage?: boolean;
+  /** Current style category, used to show/hide style-restricted motion models */
+  styleCategory?: string;
 };
 
 export const GenerationSettings: FC<GenerationSettingsProps> = ({
@@ -92,6 +94,7 @@ export const GenerationSettings: FC<GenerationSettingsProps> = ({
   disabled = false,
   singleSelectAnalysis = false,
   singleSelectImage = false,
+  styleCategory,
 }) => {
   const [open, setOpen] = useState(false);
 
@@ -175,6 +178,7 @@ export const GenerationSettings: FC<GenerationSettingsProps> = ({
               onModelChange={onMotionModelChange}
               disabled={disabled || !autoGenerateMotion}
               aspectRatio={aspectRatio}
+              styleCategory={styleCategory}
             />
           </section>
 

@@ -91,7 +91,7 @@ export const IMAGE_TO_VIDEO_MODELS = {
     qualityRank: 2,
     maxPromptLength: 4096,
     performance: { estimatedGenerationTime: 20, quality: 'best' as const },
-    hidden: true,
+    requiredStyleCategory: 'animation',
   },
 } as const;
 
