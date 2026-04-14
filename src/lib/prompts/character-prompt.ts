@@ -104,7 +104,7 @@ const formatStyleForSheet = (
       : '';
 
   return {
-    environment: `Environment matching the visual style: ${styleConfig.artStyle}. Mood: ${styleConfig.mood}. Color palette: ${colorPaletteStr}. Color grading: ${styleConfig.colorGrading}.${referencesStr} The environment should reinforce the character's visual identity within this style direction.`,
+    environment: `Render the character in ${styleConfig.artStyle} style. Background: clean, seamless studio backdrop with no environmental detail — simple flat or gradient tone using the style's color palette: ${colorPaletteStr}. Color grading: ${styleConfig.colorGrading}. Mood: ${styleConfig.mood}.${referencesStr} All visual interest comes from the character, not the environment.`,
     opticalSpecs: `${styleConfig.artStyle} style rendering. Camera approach: ${styleConfig.cameraWork}. Maintain sharp focus and consistent character detail across all panels.`,
     lighting: `${styleConfig.lighting}. The lighting should be consistent across all four panels and match the overall ${styleConfig.mood} mood.`,
   };
