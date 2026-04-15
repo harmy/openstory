@@ -233,6 +233,11 @@ body {
   }
 }
 
+/* Override Video.js default skin: remove saturate filter that causes color shift */
+.media-default-skin .media-overlay {
+  backdrop-filter: none;
+}
+
 /* Blob Loader Animation */
 @keyframes blob-morph {
   0%,
