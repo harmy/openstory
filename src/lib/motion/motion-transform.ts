@@ -34,7 +34,7 @@ export function getDurationValues<T extends MotionJSONSchema>(
   schema: T
 ): (string | number)[] {
   const props = schema.properties;
-  if (!props || !('duration' in props)) return [];
+  if (!('duration' in props)) return [];
   const dur = props.duration as JSONProp;
 
   const withEnum = unwrapAnyOf(dur, 'enum');
@@ -53,14 +53,13 @@ export function getDurationValues<T extends MotionJSONSchema>(
 /** Extract maxLength from the prompt property, handling anyOf wrappers. */
 function getPromptMaxLength(schema: MotionJSONSchema): number | undefined {
   const props = schema.properties;
-  if (!props || !('prompt' in props)) return undefined;
+  if (!('prompt' in props)) return undefined;
   return Number(unwrapAnyOf(props.prompt, 'maxLength')?.maxLength ?? undefined);
 }
 
 /** Find the image URL field name (start_image_url or image_url). */
 function getImageUrlField(schema: MotionJSONSchema): string | undefined {
   const props = schema.properties;
-  if (!props) return undefined;
   if ('start_image_url' in props) return 'start_image_url';
   if ('image_url' in props) return 'image_url';
   return undefined;

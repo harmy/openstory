@@ -22,6 +22,7 @@ export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
     const { sequenceId, teamId } = input;
     const model = input.model || DEFAULT_MUSIC_MODEL;
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
     if (scopedDb && sequenceId) {
       await context.run('set-generating-status', async () => {
         await scopedDb.sequence(sequenceId).updateMusicFields({
@@ -58,11 +59,14 @@ export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
     });
 
     const actualDuration =
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       typeof audioResult.metadata?.duration === 'number'
         ? audioResult.metadata.duration
-        : (input.duration ?? 60);
+        : // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
+          (input.duration ?? 60);
 
     // Deduct credits (skip if team used own fal key)
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
     const musicCostMicros = audioResult.metadata?.cost ?? ZERO_MICROS;
     if (musicCostMicros > 0 && !audioResult.metadata.usedOwnKey) {
       await context.run('deduct-credits', async () => {
@@ -79,6 +83,7 @@ export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
           metadata: {
             model,
             sequenceId,
+            // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
             duration: audioResult.metadata?.duration,
           },
         });
@@ -89,6 +94,7 @@ export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
       throw new Error('Audio URL missing from generation result');
     }
     let audioUrl = audioResult.audioUrl;
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
     if (sequenceId && scopedDb) {
       const storageResult = await context.run('upload-to-storage', async () => {
         const result = await uploadAudioToStorage({

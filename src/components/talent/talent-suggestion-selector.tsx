@@ -40,8 +40,8 @@ const TalentPickerCard: React.FC<TalentPickerCardProps> = ({
   isSelected,
   onClick,
 }) => {
-  const sheet = talent.sheets?.find((s) => s.isDefault) ?? talent.sheets?.[0];
-  const imageUrl = sheet?.imageUrl ?? talent.imageUrl;
+  const sheet = talent.sheets.find((s) => s.isDefault) ?? talent.sheets[0];
+  const imageUrl = sheet.imageUrl ?? talent.imageUrl;
 
   return (
     <button
@@ -82,8 +82,8 @@ type TalentAvatarProps = {
 };
 
 const TalentAvatar: React.FC<TalentAvatarProps> = ({ talent, onRemove }) => {
-  const sheet = talent.sheets?.find((s) => s.isDefault) ?? talent.sheets?.[0];
-  const imageUrl = sheet?.imageUrl ?? talent.imageUrl;
+  const sheet = talent.sheets.find((s) => s.isDefault) ?? talent.sheets[0];
+  const imageUrl = sheet.imageUrl ?? talent.imageUrl;
 
   return (
     <div className="group relative">

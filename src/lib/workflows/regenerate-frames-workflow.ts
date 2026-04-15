@@ -163,6 +163,7 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
           flowControl: getFalFlowControl(),
         });
 
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
         if (isFailed || isCanceled || !body?.imageUrl) {
           return {
             frameId: frame.id,

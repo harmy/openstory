@@ -109,6 +109,7 @@ export function createFramesMethods(db: Database) {
         .where(eq(frames.id, frameId))
         .returning();
 
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
       if (!frame && options?.throwOnMissing !== false) {
         throw new Error(`Frame ${frameId} not found`);
       }
@@ -137,6 +138,7 @@ export function createFramesMethods(db: Database) {
     },
     delete: async (frameId: string): Promise<boolean> => {
       const result = await db.delete(frames).where(eq(frames.id, frameId));
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
       return (result.rowsAffected ?? 0) > 0;
     },
 
@@ -144,6 +146,7 @@ export function createFramesMethods(db: Database) {
       const result = await db
         .delete(frames)
         .where(eq(frames.sequenceId, sequenceId));
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
       return result.rowsAffected ?? 0;
     },
 

@@ -112,7 +112,9 @@ export const createLibraryLocationFn = createServerFn({ method: 'POST' })
     const newLocation = await context.scopedDb.locations.create({
       name: data.name,
       description: data.description,
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       referenceImageUrl: mainImage?.url,
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       referenceImagePath: mainImage?.path,
     });
 
@@ -325,6 +327,7 @@ export const deleteLocationSheetFn = createServerFn({ method: 'POST' })
     const record = await context.scopedDb.locationSheets.getWithLocation(
       data.sheetId
     );
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
     if (!record || record.location.teamId !== context.teamId) {
       throw new Error('Sheet not found');
     }

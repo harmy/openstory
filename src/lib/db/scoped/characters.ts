@@ -46,6 +46,7 @@ export function createCharactersMethods(db: Database) {
       .where(eq(characters.id, id))
       .returning();
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
     if (!character) {
       throw new Error(`SequenceCharacter ${id} not found`);
     }
@@ -175,6 +176,7 @@ export function createCharactersMethods(db: Database) {
 
     delete: async (id: string): Promise<boolean> => {
       const result = await db.delete(characters).where(eq(characters.id, id));
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
       return (result.rowsAffected ?? 0) > 0;
     },
 
@@ -182,6 +184,7 @@ export function createCharactersMethods(db: Database) {
       const result = await db
         .delete(characters)
         .where(eq(characters.sequenceId, sequenceId));
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
       return result.rowsAffected ?? 0;
     },
 
@@ -233,6 +236,7 @@ export function createCharactersMethods(db: Database) {
         .where(eq(characters.id, characterId))
         .returning();
 
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
       if (!character) {
         throw new Error(`Character ${characterId} not found`);
       }
@@ -250,6 +254,7 @@ export function createCharactersMethods(db: Database) {
         .from(characters)
         .where(eq(characters.id, characterId));
       const character = charResult[0] ?? null;
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
       if (!character || character.sequenceId !== sequenceId) {
         return [];
       }
@@ -277,6 +282,7 @@ export function createCharactersMethods(db: Database) {
         .from(characters)
         .where(eq(characters.id, characterId));
       const character = charResult[0] ?? null;
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
       if (!character || character.sequenceId !== sequenceId) {
         return [];
       }

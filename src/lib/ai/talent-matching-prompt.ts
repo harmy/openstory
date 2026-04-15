@@ -13,10 +13,10 @@ export function buildMatchingPromptVariables(
     .map(
       (c) => `- Character ID: ${c.characterId}
   Name: ${c.name}
-  Age: ${c.age ?? 'unspecified'}
-  Gender: ${c.gender ?? 'unspecified'}
-  Ethnicity: ${c.ethnicity ?? 'unspecified'}
-  Physical: ${c.physicalDescription ?? 'no description'}`
+  Age: ${c.age}
+  Gender: ${c.gender}
+  Ethnicity: ${c.ethnicity}
+  Physical: ${c.physicalDescription}`
     )
     .join('\n\n');
 

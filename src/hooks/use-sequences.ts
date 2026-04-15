@@ -74,6 +74,7 @@ export function useCreateSequence() {
           script: input.script,
           styleId: input.styleId,
           title: input.title || 'Untitled Sequence',
+          // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
           analysisModels: input.analysisModels || [DEFAULT_ANALYSIS_MODEL],
           teamId: input.teamId,
           aspectRatio: input.aspectRatio,
@@ -117,6 +118,7 @@ export function useUpdateSequence() {
       });
     },
     onSuccess: (data) => {
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       if (data?.id) {
         queryClient.setQueryData(sequenceKeys.detail(data.id), data);
       }

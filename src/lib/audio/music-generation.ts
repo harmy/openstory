@@ -141,10 +141,6 @@ export async function generateMusic(
   const modelKey = options.model || DEFAULT_MUSIC_MODEL;
   const modelConfig = AUDIO_MODELS[modelKey];
 
-  if (!modelConfig) {
-    throw new Error(`Invalid audio model: ${modelKey}`);
-  }
-
   const span = startGenAISpan(options.traceName ?? 'fal-music', {
     model: modelKey,
     provider: 'fal',
@@ -160,7 +156,7 @@ export async function generateMusic(
   try {
     const result = await callFalAudio(options, modelConfig);
 
-    if (result.metadata?.cost) {
+    if (result.metadata.cost) {
       span.setAttribute('gen_ai.usage.cost', microsToUsd(result.metadata.cost));
     }
     endSpanSuccess(span, { audioUrl: result.audioUrl });
@@ -212,7 +208,7 @@ async function callFalAudio(
         console.log(`[Music Service] Queue position: ${update.queue_position}`);
       } else if (update.status === 'IN_PROGRESS') {
         console.log(`[Music Service] Generation in progress...`);
-      } else if (update.status === 'COMPLETED') {
+      } else {
         console.log(
           `[Music Service] Completed in ${update.metrics?.inference_time || 'unknown'}s`
         );

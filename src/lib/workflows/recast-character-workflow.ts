@@ -47,6 +47,7 @@ export const recastCharacterWorkflow =
         }
       );
 
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       if (sheetFailed || !sheetResult?.sheetImageUrl) {
         throw new Error(
           `Character sheet generation failed for ${input.characterName}`
@@ -84,7 +85,9 @@ export const recastCharacterWorkflow =
             `Frame regeneration failed for ${input.characterName}`
           );
         } else {
+          // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
           framesRegenerated = regenerateResult?.successCount ?? 0;
+          // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
           framesFailed = regenerateResult?.failedFrames?.length ?? 0;
           console.log(
             '[RecastCharacterWorkflow]',

@@ -48,7 +48,7 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
   const virtualItems = rowVirtualizer.getVirtualItems();
   const lastItemIndex = virtualItems[virtualItems.length - 1]?.index;
   useEffect(() => {
-    if (lastItemIndex == null || !onLoadMore || !hasMore) return;
+    if (!onLoadMore || !hasMore) return;
     if (lastItemIndex >= sequences.length - 5) {
       onLoadMore();
     }
@@ -64,12 +64,7 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
       sceneIndex >= 0 &&
       sceneIndex < maxSceneCount
     ) {
-      const sequence = sequences[sequenceIndex];
-      const frame = sequence?.frames[sceneIndex];
-      // Only navigate if the target cell has a frame
-      if (frame) {
-        setOpenDialog({ sequenceIndex, sceneIndex });
-      }
+      setOpenDialog({ sequenceIndex, sceneIndex });
     }
   };
 

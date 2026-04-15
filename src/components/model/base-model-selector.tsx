@@ -41,14 +41,14 @@ export const BaseModelSelector: React.FC<BaseModelSelectorProps> = ({
 
   // Group models by their group field
   const groupedModels = useMemo(() => {
-    const groups: Record<string, ModelItem[]> = {};
+    const groups = new Map<string, ModelItem[]>();
     for (const model of models) {
-      if (!groups[model.group]) {
-        groups[model.group] = [];
+      if (!groups.has(model.group)) {
+        groups.set(model.group, []);
       }
-      groups[model.group].push(model);
+      groups.get(model.group)?.push(model);
     }
-    return groups;
+    return Object.fromEntries(groups);
   }, [models]);
 
   const handleToggle = useCallback(
@@ -118,7 +118,7 @@ export const BaseModelSelector: React.FC<BaseModelSelectorProps> = ({
         <DropdownMenuSeparator />
         {groupOrder.map((groupKey, groupIndex) => {
           const groupModels = groupedModels[groupKey];
-          if (!groupModels || groupModels.length === 0) return null;
+          if (groupModels.length === 0) return null;
 
           return (
             <DropdownMenuGroup key={groupKey}>

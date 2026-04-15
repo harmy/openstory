@@ -64,11 +64,11 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
         const sceneIndex = i;
         const isDialogOpen =
           openDialog?.sequenceIndex === sequenceIndex &&
-          openDialog?.sceneIndex === sceneIndex;
+          openDialog.sceneIndex === sceneIndex;
 
         return (
           <div
-            key={frame?.id ?? `empty-${i}`}
+            key={frame.id}
             className="shrink-0 h-full"
             style={{ width: CELL_WIDTH }}
           >

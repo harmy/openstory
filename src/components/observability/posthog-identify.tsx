@@ -12,8 +12,6 @@ export const PostHogIdentify: React.FC = () => {
   const identifiedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!posthog) return;
-
     if (user && identifiedRef.current !== user.id) {
       posthog.identify(user.id, {
         email: user.email,

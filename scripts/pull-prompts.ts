@@ -39,7 +39,7 @@ async function main() {
         const prompt = await langfuse.prompt.get(name, { type: 'text' });
         textPrompts[name] = prompt.prompt;
         console.log(`  [text] ${name} (${prompt.prompt.length} chars)`);
-      } else if (type === 'chat') {
+      } else {
         const prompt = await langfuse.prompt.get(name, { type: 'chat' });
         // Langfuse chat prompts return an array of messages (or placeholders)
         const validRoles: Set<string> = new Set([
@@ -62,8 +62,6 @@ async function main() {
         }
         chatPrompts[name] = messages;
         console.log(`  [chat] ${name} (${messages.length} messages)`);
-      } else {
-        console.log(`  [skip] ${name} (unknown type: ${String(type)})`);
       }
     } catch (error) {
       console.error(

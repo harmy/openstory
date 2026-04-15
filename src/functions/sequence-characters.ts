@@ -74,7 +74,9 @@ export const recastCharacterFn = createServerFn({ method: 'POST' })
     }
 
     const defaultSheet =
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       talentWithSheets.sheets?.find((s) => s.isDefault) ??
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       talentWithSheets.sheets?.[0];
 
     // Merge talent appearance with character role attributes
@@ -91,6 +93,7 @@ export const recastCharacterFn = createServerFn({ method: 'POST' })
         consistencyTag: character.consistencyTag ?? '',
       },
       {
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
         sheetMetadata: defaultSheet?.metadata ?? undefined,
         talentName: talentWithSheets.name,
         talentDescription: talentWithSheets.description ?? undefined,
@@ -141,7 +144,9 @@ export const recastCharacterFn = createServerFn({ method: 'POST' })
       sequenceId: character.sequenceId,
       teamId: context.teamId,
       userId: context.user.id,
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       referenceImageUrl: defaultSheet?.imageUrl ?? undefined,
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       talentMetadata: defaultSheet?.metadata ?? undefined,
       talentDescription:
         `This character must look exactly like ${talentWithSheets.name}. ${talentWithSheets.description ?? ''}`.trim(),

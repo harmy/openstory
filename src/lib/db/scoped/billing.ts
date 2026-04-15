@@ -59,6 +59,7 @@ export function createBillingReadMethods(db: Database, teamId: string) {
       .where(eq(credits.teamId, teamId))
       .limit(1);
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
     if (!row) {
       await db.insert(credits).values({ teamId, balance: 0 });
       return ZERO_MICROS;
@@ -130,6 +131,7 @@ export function createBillingReadMethods(db: Database, teamId: string) {
       .where(eq(teamBillingSettings.teamId, teamId))
       .limit(1);
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
     if (!row) {
       const [created] = await db
         .insert(teamBillingSettings)
@@ -390,6 +392,7 @@ export function createBillingMethods(
       .orderBy(desc(transactions.createdAt))
       .limit(1);
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
     if (recentAutoTopUp) {
       const elapsed = Date.now() - recentAutoTopUp.createdAt.getTime();
       if (elapsed < AUTO_TOPUP_COOLDOWN_MS) {
@@ -409,6 +412,7 @@ export function createBillingMethods(
     if (customer.deleted) return;
 
     const defaultPaymentMethod =
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
       customer.invoice_settings?.default_payment_method;
     if (!defaultPaymentMethod) return;
 
@@ -465,6 +469,7 @@ export function createBillingMethods(
       .where(eq(credits.teamId, teamId))
       .limit(1);
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
     const runningBalance = micros(balanceRow?.balance ?? 0);
 
     const [batchRow] = await db
@@ -474,6 +479,7 @@ export function createBillingMethods(
       .from(creditBatches)
       .where(eq(creditBatches.teamId, teamId));
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
     const batchTotal = micros(batchRow?.total ?? 0);
 
     return {
@@ -510,6 +516,7 @@ export function createBillingMethods(
       .where(eq(giftTokens.code, normalizedCode))
       .limit(1);
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
     if (!token) {
       throw new ValidationError('Invalid gift code');
     }
@@ -540,6 +547,7 @@ export function createBillingMethods(
       .onConflictDoNothing()
       .returning();
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
     if (!inserted) {
       throw new ValidationError(
         'Your team has already redeemed this gift code'

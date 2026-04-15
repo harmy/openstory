@@ -158,7 +158,7 @@ async function main() {
   const aspectRatio: AspectRatio = aspectRatioResult.data;
 
   // Validate analysis model
-  const analysisModel = values['analysis-model'] ?? DEFAULT_ANALYSIS_MODEL;
+  const analysisModel = values['analysis-model'];
   if (!isValidAnalysisModelId(analysisModel)) {
     console.error(`Error: Invalid analysis model: ${analysisModel}`);
     console.error('Run with --help to see available models');

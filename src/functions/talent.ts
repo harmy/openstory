@@ -393,6 +393,7 @@ export const generateTalentSheetFn = createServerFn({ method: 'POST' })
     }
 
     const imageMedia =
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       talentRecord.media?.filter((m) => m.type === 'image') ?? [];
     if (imageMedia.length === 0) {
       throw new Error(
@@ -455,7 +456,7 @@ export const addCharacterToLibraryFn = createServerFn({ method: 'POST' })
         metadata: {
           characterId: character.characterId,
           name: character.name,
-          age: character.age ?? undefined,
+          age: character.age ?? undefined, // eslint-disable-line @typescript-eslint/no-unnecessary-condition -- runtime guard
           gender: character.gender ?? '',
           ethnicity: character.ethnicity ?? '',
           physicalDescription: character.physicalDescription ?? '',

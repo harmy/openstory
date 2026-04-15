@@ -9,7 +9,9 @@ import {
   IMAGE_PRICING,
   VIDEO_PRICING,
   AUDIO_PRICING,
+  type ImagePricing,
   type VideoPricing,
+  type AudioPricing,
 } from '@/lib/ai/fal-pricing-data';
 import {
   type Microdollars,
@@ -37,22 +39,14 @@ export type ImageCostParams = {
 };
 
 export function calculateImageCost(params: ImageCostParams): Microdollars {
-  const pricing = IMAGE_PRICING[params.endpointId];
-  if (!pricing) {
-    warnMissing('image', params.endpointId);
-    return ZERO_MICROS;
-  }
+  const pricing = IMAGE_PRICING[params.endpointId] as ImagePricing | undefined;
+  if (!pricing) return ZERO_MICROS;
 
   // Quality/size matrix (e.g. GPT Image 1.5)
   if (pricing.qualitySizeMatrix && params.quality && params.imageSize) {
     const qualityPrices = pricing.qualitySizeMatrix[params.quality];
-    if (qualityPrices) {
-      const price = qualityPrices[params.imageSize];
-      if (price !== undefined) {
-        return multiplyMicros(price, params.numImages);
-      }
-    }
-    // Fall through to base price if matrix doesn't match
+    const price = qualityPrices[params.imageSize];
+    return multiplyMicros(price, params.numImages);
   }
 
   if (pricing.unit === 'per_megapixel') {
@@ -75,17 +69,13 @@ export function calculateImageCost(params: ImageCostParams): Microdollars {
   // Apply resolution multiplier
   if (pricing.resolutionMultipliers && params.resolution) {
     const mult = pricing.resolutionMultipliers[params.resolution];
-    if (mult !== undefined) {
-      cost = multiplyMicros(cost, mult);
-    }
+    if (mult !== undefined) cost = multiplyMicros(cost, mult);
   }
 
   // Apply style multiplier
   if (pricing.styleMultipliers && params.style) {
     const mult = pricing.styleMultipliers[params.style];
-    if (mult !== undefined) {
-      cost = multiplyMicros(cost, mult);
-    }
+    cost = multiplyMicros(cost, mult);
   }
 
   return cost;
@@ -107,11 +97,8 @@ export type VideoCostParams = {
 };
 
 export function calculateVideoCost(params: VideoCostParams): Microdollars {
-  const pricing = VIDEO_PRICING[params.endpointId];
-  if (!pricing) {
-    warnMissing('video', params.endpointId);
-    return ZERO_MICROS;
-  }
+  const pricing = VIDEO_PRICING[params.endpointId] as VideoPricing | undefined;
+  if (!pricing) return ZERO_MICROS;
 
   if (pricing.mode === 'per_token') {
     return calculateTokenBasedVideoCost(pricing, params);
@@ -142,22 +129,18 @@ function calculateSecondBasedVideoCost(
   // Resolution+audio matrix (e.g. Veo 3.1)
   if (pricing.resolutionAudioPricing && params.resolution) {
     const resPricing = pricing.resolutionAudioPricing[params.resolution];
-    if (resPricing) {
-      rate = params.audioEnabled ? resPricing.withAudio : resPricing.noAudio;
-      let cost = multiplyMicros(rate, params.durationSeconds);
-      if (pricing.surcharges?.imageInput) {
-        cost = addMicros(cost, pricing.surcharges.imageInput);
-      }
-      return cost;
+    rate = params.audioEnabled ? resPricing.withAudio : resPricing.noAudio;
+    let cost = multiplyMicros(rate, params.durationSeconds);
+    if (pricing.surcharges?.imageInput) {
+      cost = addMicros(cost, pricing.surcharges.imageInput);
     }
+    return cost;
   }
 
   // Resolution-only pricing (e.g. Wan Flash, Grok Video)
   if (pricing.resolutionPricing && params.resolution) {
     const resRate = pricing.resolutionPricing[params.resolution];
-    if (resRate !== undefined) {
-      rate = resRate;
-    }
+    rate = resRate;
   }
 
   // Audio/voice multipliers (e.g. Kling v3 Pro, Veo3)
@@ -189,11 +172,8 @@ export type AudioCostParams = {
 };
 
 export function calculateAudioCost(params: AudioCostParams): Microdollars {
-  const pricing = AUDIO_PRICING[params.endpointId];
-  if (!pricing) {
-    warnMissing('audio', params.endpointId);
-    return ZERO_MICROS;
-  }
+  const pricing = AUDIO_PRICING[params.endpointId] as AudioPricing | undefined;
+  if (!pricing) return ZERO_MICROS;
 
   if (pricing.roundUpToMinute) {
     return multiplyMicros(
@@ -212,14 +192,4 @@ export function calculateAudioCost(params: AudioCostParams): Microdollars {
 
   // per_compute_second
   return multiplyMicros(pricing.basePrice, DEFAULT_COMPUTE_SECONDS);
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function warnMissing(type: string, endpointId: string): void {
-  console.warn(
-    `[fal-cost] No ${type} pricing data for endpoint: ${endpointId}, returning 0`
-  );
 }

@@ -35,7 +35,7 @@ export function getMotionPrompt(frame: Frame): string | null {
  */
 export function getSceneScript(frame: Frame): string | null {
   const scene = frame.metadata;
-  return scene?.originalScript?.extract || null;
+  return scene?.originalScript.extract || null;
 }
 
 type EvalSceneCellProps = {

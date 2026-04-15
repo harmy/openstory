@@ -10,7 +10,6 @@
  */
 
 import { createD1HttpClient } from '@/lib/db/client-d1-http';
-import { generateId } from '@/lib/db/id';
 import { styles, teams } from '@/lib/db/schema';
 import { DEFAULT_SYSTEM_STYLES } from '@/lib/style/style-templates';
 import { createClient } from '@libsql/client';
@@ -95,26 +94,12 @@ async function seed() {
 
     // 1. Find or create system team
     console.log('Finding or creating system team...');
-    let [systemTeam]: { id: string }[] = await db
+    const [systemTeam]: { id: string }[] = await db
       .select()
       .from(teams)
       .where(eq(teams.slug, SYSTEM_TEAM_SLUG));
 
-    if (!systemTeam) {
-      console.log('System team not found, creating...');
-      const teamId = generateId();
-      await db.insert(teams).values({
-        id: teamId,
-        name: 'System Templates',
-        slug: SYSTEM_TEAM_SLUG,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-      systemTeam = { id: teamId };
-      console.log(`✅ System team created with ID: ${systemTeam.id}\n`);
-    } else {
-      console.log(`✅ System team found with ID: ${systemTeam.id}\n`);
-    }
+    console.log(`✅ System team found with ID: ${systemTeam.id}\n`);
 
     // 2. Rename old template styles
     console.log('Checking for styles to rename...');

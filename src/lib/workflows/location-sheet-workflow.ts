@@ -51,6 +51,7 @@ export const locationSheetWorkflow = createScopedWorkflow<
     const generationParams: ImageGenerationParams = await context.run(
       'build-prompt',
       async () => {
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
         if (!input.locationMetadata) {
           throw new WorkflowValidationError('locationMetadata is required');
         }

@@ -81,6 +81,7 @@ export function createSequencesReadMethods(db: Database, teamId: string) {
       return {
         ...sequence,
         frames: seqFrames,
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
         style: style ?? null,
       } as SequenceWithFrames;
     },
@@ -142,6 +143,7 @@ export function createSequencesMethods(
         .values(sequenceData)
         .returning();
 
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
       if (!data) {
         throw new Error('No sequence returned from database');
       }
@@ -172,6 +174,7 @@ export function createSequencesMethods(
         .where(eq(sequences.id, params.id))
         .returning();
 
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
       if (!data) {
         throw new ValidationError('Sequence not found');
       }

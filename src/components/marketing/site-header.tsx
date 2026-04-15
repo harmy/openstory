@@ -89,9 +89,7 @@ export function SiteHeader() {
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {'icon' in link && link.icon && (
-                  <GitHubIcon className="size-4" />
-                )}
+                {'icon' in link && <GitHubIcon className="size-4" />}
                 {link.label}
               </a>
             ) : (
@@ -150,9 +148,7 @@ export function SiteHeader() {
                   className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                   onClick={() => setSheetOpen(false)}
                 >
-                  {'icon' in link && link.icon && (
-                    <GitHubIcon className="size-4" />
-                  )}
+                  {'icon' in link && <GitHubIcon className="size-4" />}
                   {link.label}
                 </a>
               ) : (

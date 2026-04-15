@@ -232,7 +232,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   );
 
   // Get imagePrompt early so it can be used in handleShortenPrompt
-  const scriptText = frame?.metadata?.originalScript?.extract;
+  const scriptText = frame?.metadata?.originalScript.extract;
   const imageModel = safeTextToImageModel(
     frame?.imageModel,
     DEFAULT_IMAGE_MODEL
@@ -248,7 +248,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     variantIsCompleted && variantForSelectedModel.url === frame?.thumbnailUrl;
 
   const handleSetImageFromVariant = useCallback(async () => {
-    if (!frame?.id || !frame?.sequenceId || !selectedImageModel) return;
+    if (!frame?.id || !frame.sequenceId || !selectedImageModel) return;
 
     try {
       await setImageFromVariant.mutateAsync({
@@ -297,7 +297,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   }, [editedImagePrompt, imagePrompt]);
 
   const handleRegenerate = useCallback(async () => {
-    if (!frame?.id || !frame?.sequenceId) return;
+    if (!frame?.id || !frame.sequenceId) return;
 
     onRegenerateStart(frame.id, 'image');
 
@@ -371,7 +371,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   ]);
 
   const handleRegenerateMotion = useCallback(async () => {
-    if (!frame?.id || !frame?.sequenceId) return;
+    if (!frame?.id || !frame.sequenceId) return;
 
     onRegenerateStart(frame.id, 'motion');
 
@@ -443,7 +443,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   ]);
 
   const handleGenerateSceneVariants = useCallback(async () => {
-    if (!frame?.id || !frame?.sequenceId) return;
+    if (!frame?.id || !frame.sequenceId) return;
 
     onRegenerateStart(frame.id, 'scene-variants');
 
@@ -461,7 +461,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
 
   const handleVariantSelect = useCallback(
     async (index: number) => {
-      if (!frame?.id || !frame?.sequenceId) return;
+      if (!frame?.id || !frame.sequenceId) return;
       try {
         await selectVariant.mutateAsync({
           sequenceId: frame.sequenceId,
@@ -506,8 +506,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
 
   const motionModel = selectedMotionModel || DEFAULT_VIDEO_MODEL;
   const maxPromptLength = IMAGE_TO_VIDEO_MODELS[motionModel].maxPromptLength;
-  const isOverLimit =
-    assembledPrompt != null && assembledPrompt.length > maxPromptLength;
+  const isOverLimit = assembledPrompt.length > maxPromptLength;
 
   // Sync local state when props change (prev-value refs avoid extra re-renders)
   if (imagePrompt !== prevImagePromptRef.current) {

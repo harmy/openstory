@@ -304,7 +304,7 @@ export const buildCharacterSheetPrompt = (
   const ethnicity = talentMeta?.ethnicity || entry.ethnicity;
   const physicalDescription =
     talentMeta?.physicalDescription ||
-    (hasTalent && talentOverrides?.description
+    (hasTalent && talentOverrides.description
       ? `${talentOverrides.description}. Match this person's real-world appearance exactly.`
       : entry.physicalDescription);
 
@@ -333,7 +333,7 @@ ${characterFeatures}`;
   // Build reference image instruction
   let referenceInstruction = '';
   if (hasTalent && referenceUrls.length > 0) {
-    const talentNotes = talentOverrides?.description
+    const talentNotes = talentOverrides.description
       ? `\nTalent notes: ${talentOverrides.description}`
       : '';
     referenceInstruction = `

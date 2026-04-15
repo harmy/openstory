@@ -51,7 +51,7 @@ export function createD1HttpClient(opts: {
     }
     // /raw returns { columns: string[], rows: unknown[][] }
     // sqlite-proxy expects { rows: unknown[][] } for all/get/values
-    return { rows: rawResult.rows ?? [] };
+    return { rows: rawResult.rows };
   };
 
   return drizzle(remoteCallback, { schema, casing: 'snake_case' });

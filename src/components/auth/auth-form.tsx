@@ -42,7 +42,6 @@ export function AuthForm({
 
     const preloadPasskeys = async () => {
       if (
-        !window.PublicKeyCredential?.isConditionalMediationAvailable ||
         !(await window.PublicKeyCredential.isConditionalMediationAvailable())
       ) {
         return;
@@ -53,7 +52,7 @@ export function AuthForm({
         autoFill: true,
       });
 
-      if (!cancelled && result?.data) {
+      if (result.data) {
         void navigate({ to: redirectTo });
       }
     };

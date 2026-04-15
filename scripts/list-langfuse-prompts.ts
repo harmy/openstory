@@ -7,7 +7,7 @@ async function main() {
   console.log('Existing prompts in Langfuse:\n');
   for (const prompt of prompts.data) {
     console.log(
-      `- ${prompt.name} (type: ${prompt.type}, labels: ${prompt.labels?.join(', ') || 'none'})`
+      `- ${prompt.name} (type: ${prompt.type}, labels: ${prompt.labels.join(', ') || 'none'})`
     );
   }
 }

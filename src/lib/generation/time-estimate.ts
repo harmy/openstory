@@ -24,7 +24,6 @@ export function estimateSceneCount(script: string): number {
 
 function phaseBudget(phaseIndex: number, sceneCount: number): number {
   const budget = PHASE_BUDGETS[phaseIndex];
-  if (!budget) return 0;
   return budget.base + budget.perScene * sceneCount;
 }
 
@@ -38,7 +37,6 @@ export function estimateTotalSeconds(
   let total = 0;
   for (let i = 0; i < Math.min(phaseCount, PHASE_BUDGETS.length); i++) {
     const b = PHASE_BUDGETS[i];
-    if (!b) continue;
     total += b.base + b.perScene * scenes;
   }
   return total;

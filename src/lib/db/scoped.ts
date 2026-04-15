@@ -89,6 +89,7 @@ export async function resolveUserTeam(
     )
     .limit(1);
 
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
   return result ?? null;
 }
 
@@ -112,6 +113,7 @@ export async function getUserTeamMembership(
     .where(and(eq(teamMembers.userId, userId), eq(teamMembers.teamId, teamId)))
     .limit(1);
 
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
   return result ?? null;
 }
 
@@ -127,6 +129,7 @@ export async function getSequenceByIdUnscoped(
     .select()
     .from(sequences)
     .where(eq(sequences.id, sequenceId));
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
   return result ?? null;
 }
 
@@ -184,6 +187,7 @@ export async function ensureUserAndTeam(authUser: {
       .values({ name: teamName, slug: teamSlug })
       .returning();
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
     if (!team) throw new Error('Failed to create team');
 
     await db.insert(teamMembers).values({

@@ -35,11 +35,9 @@ export async function cleanupLocationByName(
     .where(
       and(eq(locationLibrary.teamId, teamId), eq(locationLibrary.name, name))
     );
-  if (created) {
-    await testDb
-      .delete(locationLibrary)
-      .where(eq(locationLibrary.id, created.id));
-  }
+  await testDb
+    .delete(locationLibrary)
+    .where(eq(locationLibrary.id, created.id));
 }
 
 /**
@@ -54,7 +52,5 @@ export async function cleanupTalentByName(
     .select({ id: talent.id })
     .from(talent)
     .where(and(eq(talent.teamId, teamId), eq(talent.name, name)));
-  if (created) {
-    await testDb.delete(talent).where(eq(talent.id, created.id));
-  }
+  await testDb.delete(talent).where(eq(talent.id, created.id));
 }

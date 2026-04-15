@@ -101,7 +101,7 @@ class ProgressTracker {
 
   constructor(totalTasks: number) {
     this.totalTasks = totalTasks;
-    this.isTTY = process.stdout.isTTY ?? false;
+    this.isTTY = process.stdout.isTTY;
   }
 
   private clearLines() {
@@ -304,7 +304,7 @@ async function processTask(
               );
             } else if (update.status === 'COMPLETED') {
               progressTracker.updateTask(displayKey, 'completed');
-            } else if (update.status === 'FAILED') {
+            } else {
               progressTracker.updateTask(displayKey, 'failed');
             }
 
@@ -503,7 +503,7 @@ async function main() {
         `Lighting: ${styleConfig.lighting}`,
         `Camera: ${styleConfig.cameraWork}`,
         `Color Grading: ${styleConfig.colorGrading}`,
-        styleConfig.referenceFilms?.length
+        styleConfig.referenceFilms.length
           ? `Inspired by: ${styleConfig.referenceFilms.join(', ')}`
           : '',
         'No text, no words, no titles, no watermarks, no logos. No celebrities, no famous people, no real identifiable individuals. No grid, no collage, no montage, no multiple images, no split screen, no photo collection. Single image only',

@@ -47,7 +47,7 @@ export function initTracing(): void {
       new LangfuseSpanProcessor({
         publicKey: langfusePublicKey,
         secretKey: langfuseSecretKey,
-        baseUrl: env.LANGFUSE_BASE_URL ?? 'https://cloud.langfuse.com',
+        baseUrl: env.LANGFUSE_BASE_URL,
         exportMode: 'batched',
       })
     );

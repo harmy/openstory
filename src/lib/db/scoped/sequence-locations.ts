@@ -79,6 +79,7 @@ export function createSequenceLocationsMethods(db: Database) {
       .where(eq(sequenceLocations.id, id))
       .returning();
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
     if (!location) {
       throw new Error(`SequenceLocation ${id} not found`);
     }
@@ -194,6 +195,7 @@ export function createSequenceLocationsMethods(db: Database) {
       const result = await db
         .delete(sequenceLocations)
         .where(eq(sequenceLocations.id, id));
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
       return (result.rowsAffected ?? 0) > 0;
     },
 
@@ -201,6 +203,7 @@ export function createSequenceLocationsMethods(db: Database) {
       const result = await db
         .delete(sequenceLocations)
         .where(eq(sequenceLocations.sequenceId, sequenceId));
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
       return result.rowsAffected ?? 0;
     },
 
@@ -254,6 +257,7 @@ export function createSequenceLocationsMethods(db: Database) {
         .from(sequenceLocations)
         .where(eq(sequenceLocations.id, locationId));
       const location = locResult[0] ?? null;
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
       if (!location || location.sequenceId !== sequenceId) {
         return [];
       }
@@ -286,6 +290,7 @@ export function createSequenceLocationsMethods(db: Database) {
         .from(sequenceLocations)
         .where(eq(sequenceLocations.id, locationId));
       const location = locResult[0] ?? null;
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
       if (!location || location.sequenceId !== sequenceId) {
         return [];
       }
@@ -344,6 +349,7 @@ export function createSequenceLocationsMethods(db: Database) {
 
       return result.map((r) => ({
         ...r.location,
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
         sequenceTitle: r.sequenceTitle ?? 'Untitled',
       }));
     },

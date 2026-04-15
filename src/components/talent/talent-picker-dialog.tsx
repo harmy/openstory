@@ -30,8 +30,8 @@ const TalentPickerCard: React.FC<TalentPickerCardProps> = ({
   onClick,
 }) => {
   // Get the default sheet or first sheet for the avatar
-  const sheet = talent.sheets?.find((s) => s.isDefault) ?? talent.sheets?.[0];
-  const imageUrl = sheet?.imageUrl ?? talent.imageUrl;
+  const sheet = talent.sheets.find((s) => s.isDefault) ?? talent.sheets[0];
+  const imageUrl = sheet.imageUrl ?? talent.imageUrl;
 
   return (
     <button

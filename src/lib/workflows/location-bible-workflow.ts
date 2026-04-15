@@ -63,17 +63,29 @@ export const locationBibleWorkflow = createScopedWorkflow<
               sequenceId,
               locationId: location.locationId,
               name: location.name,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               type: location.type ?? null,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               timeOfDay: location.timeOfDay ?? null,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               description: location.description ?? null,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               architecturalStyle: location.architecturalStyle ?? null,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               keyFeatures: location.keyFeatures ?? null,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               colorPalette: location.colorPalette ?? null,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               lightingSetup: location.lightingSetup ?? null,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               ambiance: location.ambiance ?? null,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               consistencyTag: location.consistencyTag ?? null,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               firstMentionSceneId: location.firstMention?.sceneId ?? null,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               firstMentionText: location.firstMention?.text ?? null,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               firstMentionLine: location.firstMention?.lineNumber ?? null,
               referenceStatus: 'generating' as const,
               // Link to library location if matched
@@ -176,7 +188,9 @@ export const locationBibleWorkflow = createScopedWorkflow<
               name: location.name,
               referenceImageUrl: storageResult.publicUrl,
               referenceStatus: 'completed' as const,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               description: location.description ?? null,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               consistencyTag: location.consistencyTag ?? null,
             };
           }
@@ -187,7 +201,9 @@ export const locationBibleWorkflow = createScopedWorkflow<
             name: location.name,
             referenceImageUrl: imageUrl,
             referenceStatus: 'completed' as const,
+            // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
             description: location.description ?? null,
+            // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
             consistencyTag: location.consistencyTag ?? null,
           };
         });

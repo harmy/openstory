@@ -239,8 +239,7 @@ export const InteractionFlow: Story = {
             {selectedStyle ? (
               <div className="p-4 border rounded-lg">
                 <p className="font-medium">{selectedStyle.name}</p>
-                {selectedStyle.config &&
-                typeof selectedStyle.config === 'object' &&
+                {typeof selectedStyle.config === 'object' &&
                 'artStyle' in selectedStyle.config ? (
                   <p className="text-sm text-muted-foreground">
                     {String(selectedStyle.config.artStyle)}

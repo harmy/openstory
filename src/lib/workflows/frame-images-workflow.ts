@@ -91,9 +91,11 @@ export const frameImagesWorkflow = createScopedWorkflow<
         );
 
         const characterRefs = buildCharacterReferenceImages(
+          // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
           sceneCharacterMap[scene.sceneId] || []
         );
         const locationRefs = buildLocationReferenceImages(
+          // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
           sceneLocationMap[scene.sceneId] || []
         );
         const allReferences = [...characterRefs, ...locationRefs];

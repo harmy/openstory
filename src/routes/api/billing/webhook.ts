@@ -32,12 +32,14 @@ export const Route = createFileRoute('/api/billing/webhook')({
               const session = event.data.object;
 
               if (
+                // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                 session.metadata?.type !== 'credit_top_up' ||
                 session.payment_status !== 'paid'
               ) {
                 break;
               }
 
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               const amountUsd = parseFloat(session.metadata?.amountUsd ?? '');
 
               if (isNaN(amountUsd)) {
@@ -127,6 +129,7 @@ export const Route = createFileRoute('/api/billing/webhook')({
             case 'payment_intent.succeeded': {
               // Handle auto-top-up payment confirmations
               const paymentIntent = event.data.object;
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               if (paymentIntent.metadata?.type === 'auto_top_up') {
                 console.log(
                   `[Webhook] Auto-top-up payment succeeded for team ${paymentIntent.metadata.teamId}`

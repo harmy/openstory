@@ -96,7 +96,7 @@ function truncatePromptForModel(
   model: TextToImageModel
 ): string {
   const maxLength = IMAGE_MODELS[model].maxPromptLength;
-  if (!maxLength || prompt.length <= maxLength) return prompt;
+  if (prompt.length <= maxLength) return prompt;
 
   console.warn(
     `[Image Generation] Prompt truncated from ${prompt.length} to ${maxLength} chars for ${model}`

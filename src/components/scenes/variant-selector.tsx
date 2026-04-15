@@ -59,7 +59,7 @@ export function VariantSelector({
 
   // Reset focusable index when selection changes
   useEffect(() => {
-    if (selectedVariantIndex !== null && selectedVariantIndex !== undefined) {
+    if (selectedVariantIndex !== null) {
       setFocusableIndex(selectedVariantIndex);
     }
   }, [selectedVariantIndex]);

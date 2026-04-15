@@ -51,6 +51,7 @@ export const characterSheetWorkflow = createScopedWorkflow<
     const generationParams: ImageGenerationParams = await context.run(
       'build-prompt',
       async () => {
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
         if (!input.characterMetadata) {
           throw new WorkflowValidationError('characterMetadata is required');
         }

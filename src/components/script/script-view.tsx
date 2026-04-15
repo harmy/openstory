@@ -112,7 +112,7 @@ export const ScriptView: FC<{
 
   // Initialize with sequence values (if editing) or localStorage defaults (if creating)
   const sequenceAnalysisModels: AnalysisModelId[] = useMemo(() => {
-    if (isEditing && sequence?.analysisModel) {
+    if (isEditing && sequence.analysisModel) {
       return isValidAnalysisModelId(sequence.analysisModel)
         ? [sequence.analysisModel]
         : [DEFAULT_ANALYSIS_MODEL];
@@ -130,21 +130,18 @@ export const ScriptView: FC<{
     autoGenerateMusic: boolean;
   }>(() => ({
     analysisModels: sequenceAnalysisModels,
-    aspectRatio:
-      isEditing && sequence?.aspectRatio
-        ? sequence.aspectRatio
-        : savedSettings.aspectRatio,
+    aspectRatio: isEditing ? sequence.aspectRatio : savedSettings.aspectRatio,
     imageModels:
-      isEditing && sequence?.imageModel
+      isEditing && sequence.imageModel
         ? [safeTextToImageModel(sequence.imageModel, DEFAULT_IMAGE_MODEL)]
-        : (savedSettings.imageModels ?? [savedSettings.imageModel]),
+        : savedSettings.imageModels,
     motionModel:
-      isEditing && sequence?.videoModel
+      isEditing && sequence.videoModel
         ? safeImageToVideoModel(sequence.videoModel, DEFAULT_VIDEO_MODEL)
         : savedSettings.motionModel,
     autoGenerateMotion: isEditing ? false : savedSettings.autoGenerateMotion,
     musicModel:
-      isEditing && sequence?.musicModel
+      isEditing && sequence.musicModel
         ? safeAudioModel(sequence.musicModel, DEFAULT_MUSIC_MODEL)
         : savedSettings.musicModel,
     autoGenerateMusic: isEditing ? false : savedSettings.autoGenerateMusic,
@@ -238,7 +235,7 @@ export const ScriptView: FC<{
       setGenSettings({
         aspectRatio: savedSettings.aspectRatio,
         analysisModels: savedSettings.analysisModels,
-        imageModels: savedSettings.imageModels ?? [savedSettings.imageModel],
+        imageModels: savedSettings.imageModels,
         motionModel: savedSettings.motionModel,
         autoGenerateMotion: savedSettings.autoGenerateMotion,
         musicModel: savedSettings.musicModel,

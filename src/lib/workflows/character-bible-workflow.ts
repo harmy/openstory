@@ -65,14 +65,14 @@ export const characterBibleWorkflow = createScopedWorkflow<
             sequenceId: input.sequenceId,
             characterId: character.characterId,
             name: character.name,
-            age: castingAttrs?.age ?? character.age ?? '',
-            gender: castingAttrs?.gender ?? character.gender ?? null,
-            ethnicity: castingAttrs?.ethnicity ?? character.ethnicity ?? null,
+            age: castingAttrs?.age ?? character.age,
+            gender: castingAttrs?.gender ?? character.gender,
+            ethnicity: castingAttrs?.ethnicity ?? character.ethnicity,
             physicalDescription:
               castingAttrs?.physicalDescription ??
               character.physicalDescription,
             standardClothing: character.standardClothing,
-            distinguishingFeatures: character.distinguishingFeatures ?? null,
+            distinguishingFeatures: character.distinguishingFeatures,
             consistencyTag:
               castingAttrs?.consistencyTag ?? character.consistencyTag,
             firstMentionSceneId: null,

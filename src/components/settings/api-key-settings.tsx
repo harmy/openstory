@@ -93,7 +93,7 @@ function ApiKeySettingsContent({
   // Show toast when both keys become configured and there's a return path
   useEffect(() => {
     if (hasShownToastRef.current) return;
-    if (keyStatus?.fal !== 'team' || keyStatus?.openrouter !== 'team') return;
+    if (keyStatus?.fal !== 'team' || keyStatus.openrouter !== 'team') return;
     const returnTo = localStorage.getItem(RETURN_KEY);
     if (!returnTo) return;
 

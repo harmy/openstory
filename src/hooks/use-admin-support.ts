@@ -81,7 +81,7 @@ export function useAdminAllSequencesWithFrames(enabled: boolean) {
     isLoading,
     error,
     fetchNextPage,
-    hasNextPage: hasNextPage ?? false,
+    hasNextPage,
     isFetchingNextPage,
   };
 }

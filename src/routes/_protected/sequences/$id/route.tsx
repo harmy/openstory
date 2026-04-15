@@ -39,6 +39,7 @@ export const Route = createFileRoute('/_protected/sequences/$id')({
         queryKey: sequenceKeys.detail(params.id),
         queryFn: () => getSequenceFn({ data: { sequenceId: params.id } }),
       });
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       if (!sequence) throw notFound();
     } catch (error) {
       if (isNotFound(error)) throw error;

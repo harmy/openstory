@@ -82,10 +82,6 @@ export async function submitMotionJob(
   const modelKey = options.model || DEFAULT_VIDEO_MODEL;
   const modelConfig = IMAGE_TO_VIDEO_MODELS[modelKey];
 
-  if (!modelConfig) {
-    throw new Error(`Invalid model: ${modelKey}`);
-  }
-
   // Prepare the model input
   const modelInput = buildModelInput(options, modelConfig, modelKey);
 

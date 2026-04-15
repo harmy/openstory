@@ -217,6 +217,7 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
                   src={frame.videoUrl}
                   controls
                   loop
+                  muted
                   playsInline
                   className="max-w-full max-h-full rounded-lg"
                 />

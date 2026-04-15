@@ -88,7 +88,7 @@ async function main() {
             console.log(`  [${log.level}] ${log.message}`);
           });
         }
-      } else if (status.status === 'COMPLETED') {
+      } else {
         console.log('✅ Generation completed!');
         if (status.metrics?.inference_time) {
           console.log(

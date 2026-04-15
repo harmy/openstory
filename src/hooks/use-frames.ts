@@ -132,6 +132,7 @@ export function useCreateFrame() {
       return data;
     },
     onSuccess: async (data) => {
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       if (data?.sequenceId) {
         await queryClient.invalidateQueries({
           queryKey: frameKeys.list(data.sequenceId),
@@ -161,9 +162,11 @@ export function useUpdateFrame() {
       return data;
     },
     onSuccess: async (data) => {
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       if (data?.id) {
         queryClient.setQueryData(frameKeys.detail(data.id), data);
       }
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       if (data?.sequenceId) {
         await queryClient.invalidateQueries({
           queryKey: frameKeys.list(data.sequenceId),
@@ -619,6 +622,7 @@ export function useFramePreviewStatus(frames: Frame[]) {
       let isGenerating = false;
       if (!frame.thumbnailUrl && !frame.previewThumbnailUrl) {
         const createdAt = new Date(frame.createdAt).getTime();
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
         const updatedAt = frame.updatedAt
           ? new Date(frame.updatedAt).getTime()
           : createdAt;

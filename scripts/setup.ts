@@ -426,7 +426,7 @@ async function prPreviewSetup() {
           process.exit(0);
         }
 
-        if (value?.trim()) {
+        if (value.trim()) {
           merged.set(key, value.trim());
         }
       }
@@ -524,7 +524,7 @@ async function prPreviewSetup() {
           process.exit(0);
         }
 
-        zoneId = manualZoneId?.trim() || undefined;
+        zoneId = manualZoneId.trim() || undefined;
       }
 
       if (zoneId) {

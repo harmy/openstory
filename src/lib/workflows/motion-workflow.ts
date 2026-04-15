@@ -66,6 +66,7 @@ export const generateMotionWorkflow = createScopedWorkflow<MotionWorkflowInput>(
     const input = context.requestPayload;
     const model = input.model || DEFAULT_VIDEO_MODEL;
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
     if (!input.imageUrl?.trim()) {
       throw new WorkflowValidationError(
         'Thumbnail Path is required for motion generation'

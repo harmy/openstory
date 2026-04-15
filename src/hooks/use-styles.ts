@@ -99,6 +99,7 @@ export function useUpdateStyle() {
       return data;
     },
     onSuccess: async (data) => {
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       if (data?.id) {
         queryClient.setQueryData(styleKeys.detail(data.id), data);
       }

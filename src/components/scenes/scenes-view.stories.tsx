@@ -61,10 +61,10 @@ const meta = {
   decorators: [
     (Story, context) => {
       // Get frames from story parameters (not args since ScenesView doesn't accept them)
-      const frames = (context.parameters.frames as Frame[]) || [];
+      const frames = context.parameters.frames as Frame[];
       const sequenceId = context.args.sequenceId || 'mock-sequence';
-      const sequenceOverrides =
-        (context.parameters.sequenceOverrides as Partial<Sequence>) || {};
+      const sequenceOverrides = context.parameters
+        .sequenceOverrides as Partial<Sequence>;
 
       // Create a query client with mock data
       const queryClient = new QueryClient({

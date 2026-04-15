@@ -66,7 +66,7 @@ export function VerifyForm({
         }
       });
     },
-    [email, navigate, redirectTo]
+    [email, navigate, posthog, redirectTo]
   );
 
   // Auto-verify when OTP is complete (6 digits)
