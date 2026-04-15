@@ -66,7 +66,7 @@ export const generateFrameMotionFn = createServerFn({ method: 'POST' })
           imageUrl: frame.thumbnailUrl,
           prompt,
           model,
-          duration: data.duration,
+          duration,
           fps: data.fps,
           motionBucket: data.motionBucket,
           aspectRatio: sequence.aspectRatio,
@@ -170,7 +170,11 @@ export const batchGenerateMotionFn = createServerFn({ method: 'POST' })
           prompt: resolveMotionPrompt(frame, frameModel),
           model: frameModel,
           duration:
-            data.duration || frame.metadata?.metadata?.durationSeconds || 3,
+            data.duration ??
+            (frame.durationMs
+              ? frame.durationMs / 1000
+              : frame.metadata?.metadata?.durationSeconds) ??
+            3,
           fps: data.fps,
           motionBucket: data.motionBucket,
           aspectRatio: sequence.aspectRatio,
