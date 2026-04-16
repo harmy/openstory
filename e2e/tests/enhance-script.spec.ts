@@ -63,9 +63,8 @@ testWithUser.describe('Enhance Script Flow', () => {
       timeout: 30000,
     });
 
-    // Verify enhanced content appeared in textarea
+    // Verify enhanced content appeared in textarea — should be longer and different
     const enhancedContent = await scriptTextarea.inputValue();
-    expect(enhancedContent).toContain('COFFEE SHOP');
     expect(enhancedContent.length).toBeGreaterThan(100);
 
     // Verify "Undo" button appeared

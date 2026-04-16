@@ -60,7 +60,7 @@ export default defineConfig({
 
   webServer: {
     command:
-      'E2E_TEST=true PORT=3001 DATABASE_URL=file:test.db VITE_APP_URL=http://localhost:3001 OPENROUTER_KEY=test-mock-key OPENROUTER_BASE_URL=http://localhost:4010 VITE_DISABLE_DEVTOOLS=true bun dev:e2e',
+      'E2E_TEST=true PORT=3001 DATABASE_URL=file:test.db VITE_APP_URL=http://localhost:3001 OPENROUTER_BASE_URL=http://localhost:4010 VITE_DISABLE_DEVTOOLS=true bun dev:e2e',
     url: 'http://localhost:3001',
     reuseExistingServer: true,
     timeout: 180_000,
