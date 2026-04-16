@@ -659,33 +659,35 @@ export const ScriptView: FC<{
             </div>
 
             {/* Action buttons */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-              <span className="hidden sm:block text-xs text-muted-foreground">
+            <div className="flex flex-col items-stretch gap-1 w-full sm:w-auto">
+              <div className="flex flex-row items-center gap-3 justify-end">
+                {sequence?.id && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleCancel}
+                  >
+                    Cancel
+                  </Button>
+                )}
+                <Button
+                  type="submit"
+                  disabled={isDisabled}
+                  className="group relative px-6 bg-linear-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-semibold tracking-wide shadow-lg shadow-primary/20 hover:shadow-primary/30 overflow-hidden"
+                >
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    <GenerateSequenceIcon className="size-4" />
+                    Generate
+                  </span>
+                  {/* Shine effect */}
+                  <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none" />
+                </Button>
+              </div>
+              <span className="hidden sm:block text-xs text-muted-foreground text-right">
                 {analysisModels.length === 1
                   ? '1 sequence will be created'
                   : `${analysisModels.length} sequences will be created`}
               </span>
-              {sequence?.id && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleCancel}
-                >
-                  Cancel
-                </Button>
-              )}
-              <Button
-                type="submit"
-                disabled={isDisabled}
-                className="group relative px-6 bg-linear-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-semibold tracking-wide shadow-lg shadow-primary/20 hover:shadow-primary/30 overflow-hidden"
-              >
-                <span className="relative z-10 flex items-center justify-center gap-2">
-                  <GenerateSequenceIcon className="size-4" />
-                  {sequence?.id ? 'Generate Again' : 'Generate Sequence'}
-                </span>
-                {/* Shine effect */}
-                <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none" />
-              </Button>
             </div>
           </div>
         </CardFooter>
@@ -703,7 +705,7 @@ export const ScriptView: FC<{
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Generate again?</AlertDialogTitle>
+            <AlertDialogTitle>Generate new sequence?</AlertDialogTitle>
             <AlertDialogDescription>
               A new sequence will be created from this script.
             </AlertDialogDescription>
