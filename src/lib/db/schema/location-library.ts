@@ -32,6 +32,8 @@ export const locationLibrary = sqliteTable(
     // Reference image (establishing shot / mood board)
     referenceImageUrl: text('reference_image_url'),
     referenceImagePath: text('reference_image_path'), // R2 storage path
+    isPublic: integer('is_public', { mode: 'boolean' }).default(false),
+    isTemplate: integer('is_template', { mode: 'boolean' }).default(false),
     // Tracking
     createdBy: text('created_by').references(() => user.id, {
       onDelete: 'set null',

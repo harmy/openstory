@@ -51,6 +51,8 @@ export const talent = sqliteTable(
     isInTeamLibrary: integer('is_in_team_library', { mode: 'boolean' }).default(
       false
     ),
+    isPublic: integer('is_public', { mode: 'boolean' }).default(false),
+    isTemplate: integer('is_template', { mode: 'boolean' }).default(false),
     createdBy: text('created_by').references(() => user.id, {
       onDelete: 'set null',
     }),

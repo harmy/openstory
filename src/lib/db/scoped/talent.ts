@@ -3,7 +3,7 @@
  * Team-scoped talent library CRUD with sheet counts and default sheets.
  */
 
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, or, sql } from 'drizzle-orm';
 import type { Database } from '@/lib/db/client';
 import { talent, talentMedia, talentSheets } from '@/lib/db/schema';
 import type {
@@ -21,7 +21,11 @@ function createTalentReadMethods(db: Database, teamId: string) {
     list: async (options?: {
       favoritesOnly?: boolean;
     }): Promise<TalentWithSheets[]> => {
-      const conditions = [eq(talent.teamId, teamId)];
+      const teamOrPublic = or(
+        eq(talent.teamId, teamId),
+        eq(talent.isPublic, true)
+      );
+      const conditions = teamOrPublic ? [teamOrPublic] : [];
       if (options?.favoritesOnly) {
         conditions.push(eq(talent.isFavorite, true));
       }
@@ -104,7 +108,7 @@ function createTalentReadMethods(db: Database, teamId: string) {
         .from(talent)
         .where(
           and(
-            eq(talent.teamId, teamId),
+            or(eq(talent.teamId, teamId), eq(talent.isPublic, true)),
             sql`${talent.id} IN (${sql.join(
               ids.map((id) => sql`${id}`),
               sql`, `
@@ -162,13 +166,19 @@ function createTalentReadMethods(db: Database, teamId: string) {
 
     getById: async (talentId: string): Promise<Talent | undefined> => {
       return db.query.talent.findFirst({
-        where: and(eq(talent.id, talentId), eq(talent.teamId, teamId)),
+        where: and(
+          eq(talent.id, talentId),
+          or(eq(talent.teamId, teamId), eq(talent.isPublic, true))
+        ),
       });
     },
 
     getWithRelations: async (talentId: string) => {
       return db.query.talent.findFirst({
-        where: and(eq(talent.id, talentId), eq(talent.teamId, teamId)),
+        where: and(
+          eq(talent.id, talentId),
+          or(eq(talent.teamId, teamId), eq(talent.isPublic, true))
+        ),
         with: {
           sheets: {
             orderBy: [

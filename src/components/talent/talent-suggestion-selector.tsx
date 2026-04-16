@@ -18,9 +18,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTalent } from '@/hooks/use-talent';
 import type { TalentWithSheets } from '@/lib/db/schema';
+import { AddTalentDialog } from '@/components/talent-library/add-talent-dialog';
 import { cn } from '@/lib/utils';
-import { Link } from '@tanstack/react-router';
-import { Check, Search, User, Users, X } from 'lucide-react';
+import { Check, Plus, Search, User, Users, X } from 'lucide-react';
 import { useState } from 'react';
 
 type TalentSuggestionSelectorProps = {
@@ -231,12 +231,14 @@ export const TalentSuggestionSelector: React.FC<
                     : 'Your talent library is empty'}
                 </p>
                 {!searchQuery && (
-                  <Link
-                    to="/talent"
-                    className="mt-2 text-sm text-primary hover:underline"
-                  >
-                    Go to Talent Library to add talent
-                  </Link>
+                  <AddTalentDialog
+                    trigger={
+                      <Button variant="outline" size="sm" className="mt-3">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Talent
+                      </Button>
+                    }
+                  />
                 )}
               </div>
             ) : (
@@ -253,8 +255,16 @@ export const TalentSuggestionSelector: React.FC<
             )}
           </ScrollArea>
 
-          {/* Done button */}
-          <div className="flex justify-end">
+          {/* Footer */}
+          <div className="flex justify-between">
+            <AddTalentDialog
+              trigger={
+                <Button variant="outline" size="sm">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Talent
+                </Button>
+              }
+            />
             <Button onClick={() => setIsDialogOpen(false)}>Done</Button>
           </div>
         </DialogContent>

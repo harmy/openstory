@@ -11,8 +11,10 @@
 
 import { createD1HttpClient } from '@/lib/db/client-d1-http';
 import { generateId } from '@/lib/db/id';
-import { styles, teams } from '@/lib/db/schema';
+import { locationLibrary, styles, talent, teams } from '@/lib/db/schema';
+import { DEFAULT_SYSTEM_LOCATIONS } from '@/lib/location/location-templates';
 import { DEFAULT_SYSTEM_STYLES } from '@/lib/style/style-templates';
+import { DEFAULT_SYSTEM_TALENT } from '@/lib/talent/talent-templates';
 import { createClient } from '@libsql/client';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/libsql';
@@ -185,6 +187,91 @@ async function seed() {
 
     console.log(
       `✅ Synced templates: ${updatedCount} updated, ${insertedCount} inserted\n`
+    );
+
+    // 4. Sync system talent
+    console.log('Syncing system talent...');
+    const existingTalent = await db
+      .select()
+      .from(talent)
+      .where(eq(talent.teamId, systemTeam.id));
+
+    const existingTalentByName = new Map(
+      existingTalent.map((t) => [t.name, t])
+    );
+    let talentInserted = 0;
+    let talentUpdated = 0;
+
+    for (const template of DEFAULT_SYSTEM_TALENT) {
+      const existing = existingTalentByName.get(template.name);
+
+      if (existing) {
+        await db
+          .update(talent)
+          .set({
+            description: template.description,
+            isPublic: template.isPublic,
+            isTemplate: template.isTemplate,
+            isHuman: template.isHuman,
+            updatedAt: new Date(),
+          })
+          .where(eq(talent.id, existing.id));
+        talentUpdated++;
+      } else {
+        await db.insert(talent).values({
+          ...template,
+          teamId: systemTeam.id,
+          createdBy: null,
+        } as typeof talent.$inferInsert);
+        talentInserted++;
+        console.log(`   + ${template.name}`);
+      }
+    }
+
+    console.log(
+      `✅ Synced talent: ${talentUpdated} updated, ${talentInserted} inserted\n`
+    );
+
+    // 5. Sync system locations
+    console.log('Syncing system locations...');
+    const existingLocations = await db
+      .select()
+      .from(locationLibrary)
+      .where(eq(locationLibrary.teamId, systemTeam.id));
+
+    const existingLocationsByName = new Map(
+      existingLocations.map((l) => [l.name, l])
+    );
+    let locationsInserted = 0;
+    let locationsUpdated = 0;
+
+    for (const template of DEFAULT_SYSTEM_LOCATIONS) {
+      const existing = existingLocationsByName.get(template.name);
+
+      if (existing) {
+        await db
+          .update(locationLibrary)
+          .set({
+            description: template.description,
+            isPublic: template.isPublic,
+            isTemplate: template.isTemplate,
+            updatedAt: new Date(),
+          })
+          .where(eq(locationLibrary.id, existing.id));
+        locationsUpdated++;
+      } else {
+        await db.insert(locationLibrary).values({
+          ...template,
+          teamId: systemTeam.id,
+          createdBy: null,
+        } as typeof locationLibrary.$inferInsert);
+        locationsInserted++;
+        console.log(`   + ${template.name}`);
+      }
+    }
+
+    console.log(
+      `✅ Synced locations: ${locationsUpdated} updated, ${locationsInserted} inserted\n`
     );
 
     console.log('🎉 Database seeded successfully!');

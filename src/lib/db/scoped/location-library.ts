@@ -3,7 +3,7 @@
  * Team-scoped location library CRUD and location sheet operations.
  */
 
-import { eq, ilike, and, inArray } from 'drizzle-orm';
+import { eq, ilike, and, inArray, or } from 'drizzle-orm';
 import type { Database } from '@/lib/db/client';
 import { locationLibrary, locationSheets } from '@/lib/db/schema';
 import type {
@@ -18,7 +18,12 @@ export function createLocationsReadMethods(db: Database, teamId: string) {
       return await db
         .select()
         .from(locationLibrary)
-        .where(eq(locationLibrary.teamId, teamId));
+        .where(
+          or(
+            eq(locationLibrary.teamId, teamId),
+            eq(locationLibrary.isPublic, true)
+          )
+        );
     },
 
     search: async (query: string, limit = 10): Promise<LibraryLocation[]> => {
@@ -27,7 +32,10 @@ export function createLocationsReadMethods(db: Database, teamId: string) {
         .from(locationLibrary)
         .where(
           and(
-            eq(locationLibrary.teamId, teamId),
+            or(
+              eq(locationLibrary.teamId, teamId),
+              eq(locationLibrary.isPublic, true)
+            ),
             ilike(locationLibrary.name, `%${query}%`)
           )
         )
@@ -38,7 +46,12 @@ export function createLocationsReadMethods(db: Database, teamId: string) {
       const locations = await db
         .select()
         .from(locationLibrary)
-        .where(eq(locationLibrary.teamId, teamId));
+        .where(
+          or(
+            eq(locationLibrary.teamId, teamId),
+            eq(locationLibrary.isPublic, true)
+          )
+        );
       return locations.filter((loc) => loc.referenceImageUrl !== null);
     },
 
@@ -47,7 +60,13 @@ export function createLocationsReadMethods(db: Database, teamId: string) {
         .select()
         .from(locationLibrary)
         .where(
-          and(eq(locationLibrary.id, id), eq(locationLibrary.teamId, teamId))
+          and(
+            eq(locationLibrary.id, id),
+            or(
+              eq(locationLibrary.teamId, teamId),
+              eq(locationLibrary.isPublic, true)
+            )
+          )
         );
       return result[0] ?? null;
     },
