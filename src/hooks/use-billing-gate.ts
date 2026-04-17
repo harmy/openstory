@@ -17,6 +17,7 @@ type BillingGateStatus = {
   balance: number;
   hasAutoTopUp: boolean;
   stripeEnabled: boolean;
+  hasRedeemedGift: boolean;
 };
 
 export function useBillingGateQuery() {
@@ -74,6 +75,7 @@ export function useBillingGate(mode: 'all' | 'fal' = 'all') {
     hasCredits: data?.hasCredits ?? true,
     hasAutoTopUp: data?.hasAutoTopUp ?? false,
     stripeEnabled: data?.stripeEnabled ?? true,
+    hasRedeemedGift: data?.hasRedeemedGift ?? false,
     showGate,
     gateProps: { open, onOpenChange: setOpen },
     isLoading: query.isLoading,

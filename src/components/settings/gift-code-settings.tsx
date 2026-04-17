@@ -23,7 +23,16 @@ import {
 } from '@/functions/gift-tokens';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { Check, Copy, Gift, Layers, LinkIcon, ShieldCheck } from 'lucide-react';
+import { useBillingGateQuery } from '@/hooks/use-billing-gate';
+import {
+  Check,
+  Copy,
+  Gift,
+  Layers,
+  LinkIcon,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -35,9 +44,11 @@ export function GiftCodeSettings() {
     queryFn: () => isSystemAdminFn(),
     staleTime: 5 * 60 * 1000,
   });
+  const { data: gateStatus } = useBillingGateQuery();
 
   return (
     <div className="space-y-6">
+      {gateStatus && !gateStatus.hasRedeemedGift && <FollowOnXCard />}
       <RedeemSection />
       {adminLoading ? (
         <Skeleton className="h-48 w-full" />
@@ -45,6 +56,51 @@ export function GiftCodeSettings() {
         <AdminSection />
       ) : null}
     </div>
+  );
+}
+
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+}
+
+function FollowOnXCard() {
+  return (
+    <Card className="border-primary/20 bg-primary/[0.02]">
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+            <XIcon className="h-5 w-5 text-primary" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <CardTitle>Get $10 Free Credits</CardTitle>
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                <Sparkles className="size-2.5" />
+                Free
+              </span>
+            </div>
+            <CardDescription>
+              Follow @openstory on X and we'll DM you a gift code worth $10
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <Button asChild>
+          <a
+            href="https://twitter.com/openstory"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Follow @openstory on X
+          </a>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 

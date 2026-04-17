@@ -141,11 +141,22 @@ export function createBillingReadMethods(db: Database, teamId: string) {
     return row;
   }
 
+  async function hasRedeemedGiftCode(): Promise<boolean> {
+    const [row] = await db
+      .select({ value: count() })
+      .from(giftTokenRedemptions)
+      .where(eq(giftTokenRedemptions.teamId, teamId))
+      .limit(1);
+
+    return (row?.value ?? 0) > 0;
+  }
+
   return {
     getBalance,
     hasEnoughCredits,
     getTransactionHistory,
     getBillingSettings,
+    hasRedeemedGiftCode,
   };
 }
 
