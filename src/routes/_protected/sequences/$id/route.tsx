@@ -21,7 +21,6 @@ import { isValidId } from '@/lib/db/id';
 import { useQuery } from '@tanstack/react-query';
 import {
   createFileRoute,
-  isNotFound,
   notFound,
   Outlet,
   useRouterState,
@@ -34,17 +33,10 @@ export const Route = createFileRoute('/_protected/sequences/$id')({
       throw notFound();
     }
 
-    try {
-      const sequence = await queryClient.ensureQueryData({
-        queryKey: sequenceKeys.detail(params.id),
-        queryFn: () => getSequenceFn({ data: { sequenceId: params.id } }),
-      });
-      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
-      if (!sequence) throw notFound();
-    } catch (error) {
-      if (isNotFound(error)) throw error;
-      throw notFound();
-    }
+    await queryClient.ensureQueryData({
+      queryKey: sequenceKeys.detail(params.id),
+      queryFn: () => getSequenceFn({ data: { sequenceId: params.id } }),
+    });
   },
   errorComponent: (props) => (
     <RouteErrorFallback {...props} heading="Sequence error" />
