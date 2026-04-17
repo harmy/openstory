@@ -226,7 +226,8 @@ function mapEventToAction(
  */
 export function useGenerationStream(
   sequenceId: string,
-  phaseConfig?: GenerationPhaseConfig
+  phaseConfig?: GenerationPhaseConfig,
+  options?: { replayHistory?: boolean }
 ) {
   const queryClient = useQueryClient();
   const [state, dispatch] = useReducer(
@@ -234,6 +235,7 @@ export function useGenerationStream(
     phaseConfig,
     createInitialState
   );
+  const replayHistory = options?.replayHistory ?? true;
 
   // Handle incoming events
   const handleEvent = useCallback(
@@ -255,7 +257,10 @@ export function useGenerationStream(
   // Replay channel history on mount so progress survives page refresh.
   // The realtime client doesn't replay past events on reconnect, so we fetch
   // all events from server-side history and replay them through the reducer.
+  // Skipped when replayHistory is false (e.g., sequence already complete) to
+  // avoid briefly flashing progress UI from old events on tab re-mount.
   useEffect(() => {
+    if (!replayHistory) return;
     getChannelHistoryFn({ data: { channel: sequenceId } })
       .then((events: { event: string; data: string }[]) => {
         for (const evt of events) {
@@ -277,7 +282,7 @@ export function useGenerationStream(
           error
         );
       });
-  }, [sequenceId]);
+  }, [sequenceId, replayHistory]);
 
   // Subscribe to realtime events for live updates.
   const { status } = useRealtime({

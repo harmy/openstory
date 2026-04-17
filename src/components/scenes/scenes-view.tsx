@@ -12,8 +12,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { batchGenerateMotionFn } from '@/functions/motion-functions';
 import { smartRetryFn } from '@/functions/smart-retry';
 import { BILLING_BALANCE_KEY } from '@/hooks/use-billing-balance';
-import { useFramesBySequence } from '@/hooks/use-frames';
-import { useSequence } from '@/hooks/use-sequences';
+import { frameKeys, useFramesBySequence } from '@/hooks/use-frames';
+import { sequenceKeys, useSequence } from '@/hooks/use-sequences';
 import { useStyle } from '@/hooks/use-styles';
 import { safeTextToImageModel, DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
 import {
@@ -24,7 +24,8 @@ import { analyzeFailures } from '@/lib/failures/failure-analysis';
 import type { GenerationPhaseConfig } from '@/lib/realtime/generation-stream.reducer';
 import { useGenerationStream } from '@/lib/realtime/use-generation-stream';
 import { getSequenceImageVariantsFn } from '@/functions/frames';
-import type { FrameVariant } from '@/lib/db/schema';
+import type { Frame, FrameVariant } from '@/lib/db/schema';
+import type { Sequence } from '@/types/database';
 import { usePostHog } from '@posthog/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -102,12 +103,21 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     null
   );
 
-  const [motionStartedAt, setMotionStartedAt] = useState<number | null>(null);
-  const [motionIncludesMusic, setMotionIncludesMusic] = useState(false);
-
-  // Initial fetch to determine sequence status - poll during motion generation
+  // Poll sequence while a motion batch is in flight so mergedVideoStatus stays
+  // fresh. The refetchInterval fn reads from the query cache each tick to
+  // avoid a circular dependency between sequence state and the poll condition.
   const { data: sequence } = useSequence(sequenceId, {
-    refetchInterval: motionStartedAt !== null ? 2000 : false,
+    refetchInterval: (query) => {
+      const seq = query.state.data;
+      if (!seq) return false;
+      if (seq.mergedVideoStatus === 'merging') return 2000;
+      const cachedFrames = queryClient.getQueryData<Frame[]>(
+        frameKeys.list(sequenceId)
+      );
+      return cachedFrames?.some((f) => f.videoStatus === 'generating')
+        ? 2000
+        : false;
+    },
   });
   const aspectRatio = sequence?.aspectRatio || DEFAULT_ASPECT_RATIO;
   const isProcessing = sequence?.status === 'processing';
@@ -123,16 +133,16 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     [sequence?.autoGenerateMotion, sequence?.autoGenerateMusic]
   );
 
-  // Subscribe to real-time generation events when sequence is processing
+  // Subscribe to real-time generation events when sequence is processing.
+  // Skip history replay for non-processing sequences to avoid a brief flash of
+  // the progress banner on tab re-mount caused by replaying old phase events.
   const {
     state: generationState,
     status: realtimeStatus,
     reset: resetGenerationStream,
-  } = useGenerationStream(sequenceId, phaseConfig);
-  const handleMotionComplete = useCallback(() => {
-    setMotionStartedAt(null);
-    resetGenerationStream();
-  }, [resetGenerationStream]);
+  } = useGenerationStream(sequenceId, phaseConfig, {
+    replayHistory: isProcessing,
+  });
 
   // Hybrid polling: only poll when processing AND realtime has failed
   // - 'connecting' → wait for connection, don't poll
@@ -273,6 +283,25 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     handleRegenerateEnd,
   ]);
 
+  // Derive motion banner state from query data so it persists naturally across
+  // tab switches — no local state needed. startedAt uses the earliest
+  // generating frame's updatedAt so elapsed time stays accurate.
+  const motionBannerState = useMemo(() => {
+    if (!frames || !sequence) return null;
+    const anyGenerating = frames.some((f) => f.videoStatus === 'generating');
+    const merging = sequence.mergedVideoStatus === 'merging';
+    if (!anyGenerating && !merging) return null;
+    const generatingTimes = frames
+      .filter((f) => f.videoStatus === 'generating')
+      .map((f) => f.updatedAt.getTime());
+    const startedAt =
+      generatingTimes.length > 0 ? Math.min(...generatingTimes) : Date.now();
+    return {
+      startedAt,
+      includeMusic: sequence.musicStatus === 'generating',
+    };
+  }, [frames, sequence]);
+
   const [isRetrying, setIsRetrying] = useState(false);
 
   const failureSummary = useMemo(
@@ -330,8 +359,24 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         .map((f) => f.id);
 
       setRegeneratingMotion((prev) => addAllToSet(prev, eligibleFrameIds));
-      setMotionStartedAt(Date.now());
-      setMotionIncludesMusic(includeMusic);
+
+      // Optimistically mark frames as generating in the query cache so the
+      // derived banner state shows the banner immediately — no separate state.
+      const eligibleSet = new Set(eligibleFrameIds);
+      const now = new Date();
+      queryClient.setQueryData<Frame[]>(frameKeys.list(sequenceId), (old) =>
+        old?.map((f) =>
+          eligibleSet.has(f.id)
+            ? { ...f, videoStatus: 'generating', updatedAt: now }
+            : f
+        )
+      );
+      if (includeMusic) {
+        queryClient.setQueryData<Sequence>(
+          sequenceKeys.detail(sequenceId),
+          (old) => (old ? { ...old, musicStatus: 'generating' } : old)
+        );
+      }
 
       posthog.capture('motion_generation_started', {
         sequence_id: sequenceId,
@@ -347,7 +392,17 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         setRegeneratingMotion((prev) =>
           removeAllFromSet(prev, eligibleFrameIds)
         );
-        setMotionStartedAt(null);
+        // Roll back optimistic cache updates
+        queryClient.setQueryData<Frame[]>(frameKeys.list(sequenceId), (old) =>
+          old?.map((f) =>
+            eligibleSet.has(f.id) ? { ...f, videoStatus: 'pending' } : f
+          )
+        );
+        if (includeMusic) {
+          void queryClient.invalidateQueries({
+            queryKey: sequenceKeys.detail(sequenceId),
+          });
+        }
 
         if (isInsufficientCreditsError(error)) {
           toast.error('Insufficient credits', {
@@ -376,7 +431,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     <div className="flex h-full flex-col">
       {/* Generation progress banner */}
       {(isProcessing || generationState.currentPhase > 0) &&
-        motionStartedAt === null && (
+        motionBannerState === null && (
           <div className="pl-4 pr-4 pt-4 md:pr-8">
             <GenerationProgressBanner
               generationState={generationState}
@@ -388,14 +443,14 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         )}
 
       {/* Motion generation progress banner */}
-      {motionStartedAt !== null && sequence && frames && (
+      {motionBannerState !== null && sequence && frames && (
         <div className="pl-4 pr-4 pt-4 md:pr-8">
           <MotionProgressBanner
             frames={frames}
             sequence={sequence}
-            includeMusic={motionIncludesMusic}
-            startedAt={motionStartedAt}
-            onComplete={handleMotionComplete}
+            includeMusic={motionBannerState.includeMusic}
+            startedAt={motionBannerState.startedAt}
+            onComplete={resetGenerationStream}
           />
         </div>
       )}
