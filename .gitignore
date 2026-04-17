@@ -111,6 +111,9 @@ scripts/schemas/
 # agent harness
 .claude-harness/
 
+# content-collections
+.content-collections/
+
 # previews
 preview*/
 

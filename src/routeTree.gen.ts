@@ -12,14 +12,17 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
+import { Route as DocsRouteImport } from './routes/docs'
 import { Route as MarketingRouteImport } from './routes/_marketing'
 import { Route as ProtectedRouteRouteImport } from './routes/_protected/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
+import { Route as DocsIndexRouteImport } from './routes/docs/index'
 import { Route as MarketingIndexRouteImport } from './routes/_marketing/index'
 import { Route as MetaOgLinkedinRouteImport } from './routes/meta/og-linkedin'
 import { Route as MetaOgGithubRouteImport } from './routes/meta/og-github'
 import { Route as MetaOgRouteImport } from './routes/meta/og'
 import { Route as GiftCodeRouteImport } from './routes/gift/$code'
+import { Route as DocsSplatRouteImport } from './routes/docs/$'
 import { Route as ApiRealtimeRouteImport } from './routes/api/realtime'
 import { Route as ProtectedCreditsRouteImport } from './routes/_protected/credits'
 import { Route as MarketingTermsRouteImport } from './routes/_marketing/terms'
@@ -72,6 +75,11 @@ const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
   path: '/llms.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MarketingRoute = MarketingRouteImport.update({
   id: '/_marketing',
   getParentRoute: () => rootRouteImport,
@@ -83,6 +91,11 @@ const ProtectedRouteRoute = ProtectedRouteRouteImport.update({
 const AuthRouteRoute = AuthRouteRouteImport.update({
   id: '/_auth',
   getParentRoute: () => rootRouteImport,
+} as any)
+const DocsIndexRoute = DocsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DocsRoute,
 } as any)
 const MarketingIndexRoute = MarketingIndexRouteImport.update({
   id: '/',
@@ -108,6 +121,11 @@ const GiftCodeRoute = GiftCodeRouteImport.update({
   id: '/gift/$code',
   path: '/gift/$code',
   getParentRoute: () => rootRouteImport,
+} as any)
+const DocsSplatRoute = DocsSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => DocsRoute,
 } as any)
 const ApiRealtimeRoute = ApiRealtimeRouteImport.update({
   id: '/api/realtime',
@@ -305,6 +323,7 @@ const ProtectedSequencesIdCastCharacterIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof MarketingIndexRoute
+  '/docs': typeof DocsRouteWithChildren
   '/llms.txt': typeof LlmsDottxtRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -316,10 +335,12 @@ export interface FileRoutesByFullPath {
   '/terms': typeof MarketingTermsRoute
   '/credits': typeof ProtectedCreditsRoute
   '/api/realtime': typeof ApiRealtimeRoute
+  '/docs/$': typeof DocsSplatRoute
   '/gift/$code': typeof GiftCodeRoute
   '/meta/og': typeof MetaOgRoute
   '/meta/og-github': typeof MetaOgGithubRoute
   '/meta/og-linkedin': typeof MetaOgLinkedinRoute
+  '/docs/': typeof DocsIndexRoute
   '/sequences/$id': typeof ProtectedSequencesIdRouteRouteWithChildren
   '/admin/eval': typeof ProtectedAdminEvalRoute
   '/admin/usage': typeof ProtectedAdminUsageRoute
@@ -361,10 +382,12 @@ export interface FileRoutesByTo {
   '/terms': typeof MarketingTermsRoute
   '/credits': typeof ProtectedCreditsRoute
   '/api/realtime': typeof ApiRealtimeRoute
+  '/docs/$': typeof DocsSplatRoute
   '/gift/$code': typeof GiftCodeRoute
   '/meta/og': typeof MetaOgRoute
   '/meta/og-github': typeof MetaOgGithubRoute
   '/meta/og-linkedin': typeof MetaOgLinkedinRoute
+  '/docs': typeof DocsIndexRoute
   '/sequences/$id': typeof ProtectedSequencesIdRouteRouteWithChildren
   '/admin/eval': typeof ProtectedAdminEvalRoute
   '/admin/usage': typeof ProtectedAdminUsageRoute
@@ -399,6 +422,7 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteRouteWithChildren
   '/_protected': typeof ProtectedRouteRouteWithChildren
   '/_marketing': typeof MarketingRouteWithChildren
+  '/docs': typeof DocsRouteWithChildren
   '/llms.txt': typeof LlmsDottxtRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -410,11 +434,13 @@ export interface FileRoutesById {
   '/_marketing/terms': typeof MarketingTermsRoute
   '/_protected/credits': typeof ProtectedCreditsRoute
   '/api/realtime': typeof ApiRealtimeRoute
+  '/docs/$': typeof DocsSplatRoute
   '/gift/$code': typeof GiftCodeRoute
   '/meta/og': typeof MetaOgRoute
   '/meta/og-github': typeof MetaOgGithubRoute
   '/meta/og-linkedin': typeof MetaOgLinkedinRoute
   '/_marketing/': typeof MarketingIndexRoute
+  '/docs/': typeof DocsIndexRoute
   '/_protected/sequences/$id': typeof ProtectedSequencesIdRouteRouteWithChildren
   '/_protected/admin/eval': typeof ProtectedAdminEvalRoute
   '/_protected/admin/usage': typeof ProtectedAdminUsageRoute
@@ -448,6 +474,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/docs'
     | '/llms.txt'
     | '/robots.txt'
     | '/sitemap.xml'
@@ -459,10 +486,12 @@ export interface FileRouteTypes {
     | '/terms'
     | '/credits'
     | '/api/realtime'
+    | '/docs/$'
     | '/gift/$code'
     | '/meta/og'
     | '/meta/og-github'
     | '/meta/og-linkedin'
+    | '/docs/'
     | '/sequences/$id'
     | '/admin/eval'
     | '/admin/usage'
@@ -504,10 +533,12 @@ export interface FileRouteTypes {
     | '/terms'
     | '/credits'
     | '/api/realtime'
+    | '/docs/$'
     | '/gift/$code'
     | '/meta/og'
     | '/meta/og-github'
     | '/meta/og-linkedin'
+    | '/docs'
     | '/sequences/$id'
     | '/admin/eval'
     | '/admin/usage'
@@ -541,6 +572,7 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/_protected'
     | '/_marketing'
+    | '/docs'
     | '/llms.txt'
     | '/robots.txt'
     | '/sitemap.xml'
@@ -552,11 +584,13 @@ export interface FileRouteTypes {
     | '/_marketing/terms'
     | '/_protected/credits'
     | '/api/realtime'
+    | '/docs/$'
     | '/gift/$code'
     | '/meta/og'
     | '/meta/og-github'
     | '/meta/og-linkedin'
     | '/_marketing/'
+    | '/docs/'
     | '/_protected/sequences/$id'
     | '/_protected/admin/eval'
     | '/_protected/admin/usage'
@@ -591,6 +625,7 @@ export interface RootRouteChildren {
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   ProtectedRouteRoute: typeof ProtectedRouteRouteWithChildren
   MarketingRoute: typeof MarketingRouteWithChildren
+  DocsRoute: typeof DocsRouteWithChildren
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -631,6 +666,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LlmsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_marketing': {
       id: '/_marketing'
       path: ''
@@ -651,6 +693,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AuthRouteRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/docs/': {
+      id: '/docs/'
+      path: '/'
+      fullPath: '/docs/'
+      preLoaderRoute: typeof DocsIndexRouteImport
+      parentRoute: typeof DocsRoute
     }
     '/_marketing/': {
       id: '/_marketing/'
@@ -686,6 +735,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/gift/$code'
       preLoaderRoute: typeof GiftCodeRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/docs/$': {
+      id: '/docs/$'
+      path: '/$'
+      fullPath: '/docs/$'
+      preLoaderRoute: typeof DocsSplatRouteImport
+      parentRoute: typeof DocsRoute
     }
     '/api/realtime': {
       id: '/api/realtime'
@@ -1066,10 +1122,23 @@ const MarketingRouteWithChildren = MarketingRoute._addFileChildren(
   MarketingRouteChildren,
 )
 
+interface DocsRouteChildren {
+  DocsSplatRoute: typeof DocsSplatRoute
+  DocsIndexRoute: typeof DocsIndexRoute
+}
+
+const DocsRouteChildren: DocsRouteChildren = {
+  DocsSplatRoute: DocsSplatRoute,
+  DocsIndexRoute: DocsIndexRoute,
+}
+
+const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   AuthRouteRoute: AuthRouteRouteWithChildren,
   ProtectedRouteRoute: ProtectedRouteRouteWithChildren,
   MarketingRoute: MarketingRouteWithChildren,
+  DocsRoute: DocsRouteWithChildren,
   LlmsDottxtRoute: LlmsDottxtRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
