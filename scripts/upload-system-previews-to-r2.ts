@@ -63,7 +63,16 @@ async function uploadToR2(
     return;
   }
 
-  await $`bunx wrangler r2 object put ${R2_CONFIG.bucket}/${r2Key} --file=${localPath} --content-type=${contentType}`.quiet();
+  const result =
+    await $`bunx wrangler r2 object put ${R2_CONFIG.bucket}/${r2Key} --file=${localPath} --content-type=${contentType} --remote`
+      .quiet()
+      .nothrow();
+  if (result.exitCode !== 0) {
+    console.error(
+      `  ❌ Upload failed for ${r2Key}: ${result.stderr.toString()}`
+    );
+    throw new Error(`Upload failed: ${r2Key}`);
+  }
 }
 
 async function dirExists(dirPath: string): Promise<boolean> {
@@ -92,15 +101,17 @@ async function processTalent(): Promise<number> {
     const talentPath = path.join(talentDir, dir.name);
     const files = await readdir(talentPath);
 
-    for (const file of files) {
-      if (!file.endsWith('.webp')) continue;
+    // Only process source files from generate script (headshot.webp, sheet.webp)
+    const sourceFiles = files.filter(
+      (f) => f === 'headshot.webp' || f === 'sheet.webp'
+    );
 
+    for (const file of sourceFiles) {
       const localPath = path.join(talentPath, file);
       const baseName = file.replace('.webp', '');
 
       // Upload original
-      const originalKey = `talent/${dir.name}/${file}`;
-      await uploadToR2(localPath, originalKey);
+      await uploadToR2(localPath, `talent/${dir.name}/${file}`);
       uploaded++;
 
       // Upload resized thumbnail (for headshots)
@@ -146,15 +157,17 @@ async function processLocations(): Promise<number> {
     const locationPath = path.join(locationsDir, dir.name);
     const files = await readdir(locationPath);
 
-    for (const file of files) {
-      if (!file.endsWith('.webp')) continue;
+    // Only process source files from generate script (preview.webp, sheet.webp)
+    const sourceFiles = files.filter(
+      (f) => f === 'preview.webp' || f === 'sheet.webp'
+    );
 
+    for (const file of sourceFiles) {
       const localPath = path.join(locationPath, file);
       const baseName = file.replace('.webp', '');
 
       // Upload original
-      const originalKey = `locations/${dir.name}/${file}`;
-      await uploadToR2(localPath, originalKey);
+      await uploadToR2(localPath, `locations/${dir.name}/${file}`);
       uploaded++;
 
       // Upload thumbnail (for preview images)
