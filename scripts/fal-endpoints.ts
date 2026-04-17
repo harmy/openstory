@@ -10,13 +10,9 @@ import {
 
 export function getFalEndpointIds(): string[] {
   const video = Object.values(IMAGE_TO_VIDEO_MODELS).map((m) => m.id);
-  const image = Object.values(IMAGE_MODELS)
-    .map((m) => m.id)
-    .filter((id) => id !== 'letzai/image'); // LetzAI is not a fal model
+  const image = Object.values(IMAGE_MODELS).map((m) => m.id);
   const audio = Object.values(AUDIO_MODELS).map((m) => m.id);
-  const edit = Object.values(EDIT_ENDPOINTS).filter(
-    (v): v is string => v !== undefined
-  );
+  const edit = Object.values(EDIT_ENDPOINTS);
 
   return [...new Set([...video, ...image, ...edit, ...audio])];
 }

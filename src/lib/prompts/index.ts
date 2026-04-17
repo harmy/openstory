@@ -23,9 +23,9 @@ function getClient(): LangfuseClient {
   if (!client) {
     const env = getEnv();
     client = new LangfuseClient({
-      publicKey: env.LANGFUSE_PUBLIC_KEY ?? '',
-      secretKey: env.LANGFUSE_SECRET_KEY ?? '',
-      baseUrl: env.LANGFUSE_BASE_URL ?? 'https://cloud.langfuse.com',
+      publicKey: env.LANGFUSE_PUBLIC_KEY,
+      secretKey: env.LANGFUSE_SECRET_KEY,
+      baseUrl: env.LANGFUSE_BASE_URL,
     });
   }
   return client;
@@ -121,6 +121,7 @@ export async function getChatPrompt(
 
   // Fall back to local prompts
   const localMessages = WORKFLOW_CHAT_PROMPTS[name];
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record<string, T> lookup returns undefined for missing keys
   if (!localMessages) {
     throw new Error(
       `Chat prompt "${name}" not found in local prompts. Run \`bun scripts/pull-prompts.ts\` to populate.`

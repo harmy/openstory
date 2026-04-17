@@ -1,4 +1,4 @@
-import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
+import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS } from '@/lib/ai/models';
 import {
   deductWorkflowCredits,
   extractImageCost,
@@ -32,13 +32,6 @@ export const generateVariantWorkflow = createScopedWorkflow<
 >(
   async (context, scopedDb) => {
     const input = context.requestPayload;
-
-    // Guard against undefined payload (can happen with stale workflow retries)
-    if (!input) {
-      throw new WorkflowValidationError(
-        'Invalid workflow payload: requestPayload is undefined'
-      );
-    }
 
     // Step 1: Set status to generating if frameId is provided
     const generationParams: ImageGenerationParams | null = await context.run(
@@ -82,8 +75,21 @@ export const generateVariantWorkflow = createScopedWorkflow<
             return null; // Signal to skip
           }
 
+          // Dual-write: update shot variant status on frame_variants row (returns null if row doesn't exist)
+          if (input.sequenceId) {
+            await scopedDb.frameVariants.updateByFrameAndModel(
+              input.frameId,
+              'image',
+              model,
+              {
+                shotVariantStatus: 'generating',
+                shotVariantWorkflowRunId: context.workflowRunId,
+              }
+            );
+          }
+
           // Emit realtime progress
-          await getGenerationChannel(input.sequenceId)?.emit(
+          await getGenerationChannel(input.sequenceId).emit(
             'generation.variant-image:progress',
             {
               frameId: input.frameId,
@@ -113,7 +119,11 @@ export const generateVariantWorkflow = createScopedWorkflow<
         ];
 
         const { prompt: enhancedPrompt, referenceUrls } =
-          buildReferenceImagePrompt(basePrompt, allReferences);
+          buildReferenceImagePrompt(
+            basePrompt,
+            allReferences,
+            IMAGE_MODELS[model].maxPromptLength
+          );
 
         // Return the generation params so it shows in the workflow context for debugging
         return {
@@ -204,8 +214,21 @@ export const generateVariantWorkflow = createScopedWorkflow<
           return { url: result.url, path: result.path };
         }
 
+        // Dual-write: update shot variant on frame_variants row (returns null if row doesn't exist)
+        const variantModel = input.model || DEFAULT_IMAGE_MODEL;
+        await scopedDb.frameVariants.updateByFrameAndModel(
+          input.frameId,
+          'image',
+          variantModel,
+          {
+            shotVariantUrl: result.url,
+            shotVariantPath: result.path || null,
+            shotVariantStatus: 'completed',
+          }
+        );
+
         // Emit completion progress
-        await getGenerationChannel(input.sequenceId)?.emit(
+        await getGenerationChannel(input.sequenceId).emit(
           'generation.variant-image:progress',
           {
             frameId: input.frameId,
@@ -247,10 +270,21 @@ export const generateVariantWorkflow = createScopedWorkflow<
           { throwOnMissing: false }
         );
 
+        // Dual-write: update shot variant status on frame_variants row (returns null if row doesn't exist)
+        const model = input.model || DEFAULT_IMAGE_MODEL;
+        if (input.sequenceId) {
+          await scopedDb.frameVariants.updateByFrameAndModel(
+            input.frameId,
+            'image',
+            model,
+            { shotVariantStatus: 'failed' }
+          );
+        }
+
         // Emit failure progress
         if (input.sequenceId) {
           try {
-            await getGenerationChannel(input.sequenceId)?.emit(
+            await getGenerationChannel(input.sequenceId).emit(
               'generation.variant-image:progress',
               {
                 frameId: input.frameId,

@@ -37,6 +37,37 @@ export const createGiftTokenFn = createServerFn({ method: 'POST' })
     });
   });
 
+export const batchCreateGiftTokensFn = createServerFn({ method: 'POST' })
+  .middleware([systemAdminMiddleware])
+  .inputValidator(
+    zodValidator(
+      z.object({
+        count: z.number().int().min(1).max(500),
+        amountUsd: z.number().positive(),
+        note: z.string().optional(),
+        expiresInDays: z.number().positive().optional(),
+      })
+    )
+  )
+  .handler(async ({ context, data }) => {
+    const expiresAt = data.expiresInDays
+      ? new Date(Date.now() + data.expiresInDays * MS_PER_DAY)
+      : undefined;
+
+    const codes: string[] = [];
+    for (let i = 0; i < data.count; i++) {
+      const token = await context.adminScopedDb.admin.createGiftToken({
+        createdByUserId: context.user.id,
+        amountUsd: data.amountUsd,
+        maxRedemptions: 1,
+        note: data.note,
+        expiresAt,
+      });
+      codes.push(token.code);
+    }
+    return { codes };
+  });
+
 export const redeemGiftTokenFn = createServerFn({ method: 'POST' })
   .middleware([authWithTeamMiddleware])
   .inputValidator(zodValidator(z.object({ code: z.string().min(1) })))

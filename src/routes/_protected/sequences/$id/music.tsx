@@ -3,6 +3,7 @@ import { generateMusicFn, mergeVideoAndMusicFn } from '@/functions/sequences';
 import { useFramesBySequence } from '@/hooks/use-frames';
 import { useSequence, sequenceKeys } from '@/hooks/use-sequences';
 import { useGenerationStream } from '@/lib/realtime/use-generation-stream';
+import { usePostHog } from '@posthog/react';
 import { useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
@@ -25,6 +26,7 @@ function MusicPage() {
     refetchInterval: false,
   });
   const queryClient = useQueryClient();
+  const posthog = usePostHog();
 
   // Compute total video duration from frames (same logic as generateMusicFn)
   const videoDuration = useMemo(() => {
@@ -56,11 +58,16 @@ function MusicPage() {
           duration: args?.duration,
         },
       }),
-    onMutate: () => {
+    onMutate: (args) => {
       queryClient.setQueryData<Sequence>(
         sequenceKeys.detail(sequenceId),
         (old) => (old ? { ...old, musicStatus: 'generating' as const } : old)
       );
+      posthog.capture('music_generation_started', {
+        sequence_id: sequenceId,
+        has_custom_prompt: !!args?.prompt,
+        duration: args?.duration,
+      });
     },
   });
 
@@ -71,6 +78,9 @@ function MusicPage() {
         sequenceKeys.detail(sequenceId),
         (old) => (old ? { ...old, mergedVideoStatus: 'merging' as const } : old)
       );
+      posthog.capture('merged_video_generation_started', {
+        sequence_id: sequenceId,
+      });
     },
   });
 

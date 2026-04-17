@@ -91,6 +91,7 @@ export async function reconcileStaleFrameStatuses(
       const { runs } = await client.logs({ workflowRunId: runId, count: 1 });
       const run = runs[0];
 
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       if (!run) {
         // No record in QStash — workflow never ran or was cleaned up
         await framesDb.update(

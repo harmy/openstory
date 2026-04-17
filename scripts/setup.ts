@@ -147,6 +147,10 @@ function writeEnvFile(vars: Map<string, string>) {
       ],
     },
     {
+      header: 'Analytics (PostHog)',
+      keys: ['VITE_PUBLIC_POSTHOG_PROJECT_TOKEN', 'VITE_PUBLIC_POSTHOG_HOST'],
+    },
+    {
       header: 'Billing (Stripe)',
       keys: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'],
     },
@@ -247,6 +251,7 @@ const PR_PREVIEW_SECRETS_BASE = [
   'RESEND_API_KEY',
   'UPSTASH_REDIS_REST_TOKEN',
   'UPSTASH_REDIS_REST_URL',
+  'VITE_PUBLIC_POSTHOG_PROJECT_TOKEN',
 ] as const;
 
 function getPrPreviewSecrets(vars: Map<string, string>): string[] {
@@ -262,6 +267,7 @@ function getPrPreviewSecrets(vars: Map<string, string>): string[] {
 const PR_PREVIEW_VARIABLES = [
   'VITE_CONTACT_EMAIL',
   'VITE_PRIVACY_EMAIL',
+  'VITE_PUBLIC_POSTHOG_HOST',
   'VITE_R2_PUBLIC_ASSETS_DOMAIN',
   'R2_PUBLIC_STORAGE_DOMAIN',
 ] as const;
@@ -420,7 +426,7 @@ async function prPreviewSetup() {
           process.exit(0);
         }
 
-        if (value?.trim()) {
+        if (value.trim()) {
           merged.set(key, value.trim());
         }
       }
@@ -518,7 +524,7 @@ async function prPreviewSetup() {
           process.exit(0);
         }
 
-        zoneId = manualZoneId?.trim() || undefined;
+        zoneId = manualZoneId.trim() || undefined;
       }
 
       if (zoneId) {
@@ -910,7 +916,7 @@ async function deploySetup(
       const shouldPushVars = checkCancel(
         await p.confirm({
           message:
-            'Push R2 domain variables to GitHub production environment? (needed for CI seed)',
+            'Push variables to GitHub production environment? (needed for CI build + seed)',
           initialValue: true,
         })
       );
@@ -1095,14 +1101,18 @@ async function deploySetup(
   // 5. Push CI secrets to GitHub production environment
   const ciSecrets =
     platform === 'cloudflare'
-      ? (['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN'] as const)
+      ? ([
+          'CLOUDFLARE_ACCOUNT_ID',
+          'CLOUDFLARE_API_TOKEN',
+          'VITE_PUBLIC_POSTHOG_PROJECT_TOKEN',
+        ] as const)
       : (['TURSO_DATABASE_URL', 'TURSO_AUTH_TOKEN'] as const);
   const ciSecretsToPush = ciSecrets.filter((k) => vars.get(k));
 
   if (ciSecretsToPush.length > 0) {
     const shouldPushCiSecrets = checkCancel(
       await p.confirm({
-        message: `Push CI secrets (${ciSecretsToPush.join(', ')}) to GitHub production environment?`,
+        message: `Push CI/build secrets (${ciSecretsToPush.join(', ')}) to GitHub production environment?`,
         initialValue: true,
       })
     );
@@ -2374,6 +2384,43 @@ async function main() {
   }
 
   // -------------------------------------------------------------------------
+  // Analytics (PostHog)
+  // -------------------------------------------------------------------------
+  const posthogKeys = ['VITE_PUBLIC_POSTHOG_PROJECT_TOKEN'] as const;
+  const hasPostHog = posthogKeys.some((k) => vars.has(k));
+
+  if (hasPostHog) {
+    for (const k of posthogKeys) {
+      if (vars.has(k)) p.log.success(`${k} — already configured`);
+    }
+    if (vars.has('VITE_PUBLIC_POSTHOG_HOST'))
+      p.log.success('VITE_PUBLIC_POSTHOG_HOST — already configured');
+  }
+
+  const setupPostHog =
+    hasPostHog ||
+    checkCancel(
+      await p.confirm({
+        message:
+          'Set up PostHog for product analytics & error tracking? (optional)',
+        initialValue: false,
+      })
+    );
+
+  if (setupPostHog) {
+    await promptForKey(
+      'VITE_PUBLIC_POSTHOG_PROJECT_TOKEN',
+      'PostHog Project API Key',
+      'Get one at: https://us.posthog.com/settings/project'
+    );
+    await promptForKey(
+      'VITE_PUBLIC_POSTHOG_HOST',
+      'PostHog Host (leave empty for default)',
+      'Default: https://us.i.posthog.com'
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // Billing (Stripe)
   // -------------------------------------------------------------------------
   const stripeKeys = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'] as const;
@@ -2479,6 +2526,10 @@ async function main() {
       vars.has('LANGFUSE_PUBLIC_KEY')
         ? 'Configured'
         : 'Skipped (using local prompts)',
+    ],
+    [
+      'PostHog',
+      vars.has('VITE_PUBLIC_POSTHOG_PROJECT_TOKEN') ? 'Configured' : 'Skipped',
     ],
     ['Stripe', vars.has('STRIPE_SECRET_KEY') ? 'Configured' : 'Not configured'],
   ];

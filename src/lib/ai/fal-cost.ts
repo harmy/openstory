@@ -9,7 +9,9 @@ import {
   IMAGE_PRICING,
   VIDEO_PRICING,
   AUDIO_PRICING,
+  type ImagePricing,
   type VideoPricing,
+  type AudioPricing,
 } from '@/lib/ai/fal-pricing-data';
 import {
   type Microdollars,
@@ -37,9 +39,11 @@ export type ImageCostParams = {
 };
 
 export function calculateImageCost(params: ImageCostParams): Microdollars {
-  const pricing = IMAGE_PRICING[params.endpointId];
+  const pricing = IMAGE_PRICING[params.endpointId] as ImagePricing | undefined;
   if (!pricing) {
-    warnMissing('image', params.endpointId);
+    console.error(
+      `[fal-cost] No image pricing data for endpoint: ${params.endpointId}`
+    );
     return ZERO_MICROS;
   }
 
@@ -75,17 +79,13 @@ export function calculateImageCost(params: ImageCostParams): Microdollars {
   // Apply resolution multiplier
   if (pricing.resolutionMultipliers && params.resolution) {
     const mult = pricing.resolutionMultipliers[params.resolution];
-    if (mult !== undefined) {
-      cost = multiplyMicros(cost, mult);
-    }
+    if (mult !== undefined) cost = multiplyMicros(cost, mult);
   }
 
   // Apply style multiplier
   if (pricing.styleMultipliers && params.style) {
     const mult = pricing.styleMultipliers[params.style];
-    if (mult !== undefined) {
-      cost = multiplyMicros(cost, mult);
-    }
+    if (mult !== undefined) cost = multiplyMicros(cost, mult);
   }
 
   return cost;
@@ -107,9 +107,11 @@ export type VideoCostParams = {
 };
 
 export function calculateVideoCost(params: VideoCostParams): Microdollars {
-  const pricing = VIDEO_PRICING[params.endpointId];
+  const pricing = VIDEO_PRICING[params.endpointId] as VideoPricing | undefined;
   if (!pricing) {
-    warnMissing('video', params.endpointId);
+    console.error(
+      `[fal-cost] No video pricing data for endpoint: ${params.endpointId}`
+    );
     return ZERO_MICROS;
   }
 
@@ -155,9 +157,7 @@ function calculateSecondBasedVideoCost(
   // Resolution-only pricing (e.g. Wan Flash, Grok Video)
   if (pricing.resolutionPricing && params.resolution) {
     const resRate = pricing.resolutionPricing[params.resolution];
-    if (resRate !== undefined) {
-      rate = resRate;
-    }
+    if (resRate !== undefined) rate = resRate;
   }
 
   // Audio/voice multipliers (e.g. Kling v3 Pro, Veo3)
@@ -189,9 +189,11 @@ export type AudioCostParams = {
 };
 
 export function calculateAudioCost(params: AudioCostParams): Microdollars {
-  const pricing = AUDIO_PRICING[params.endpointId];
+  const pricing = AUDIO_PRICING[params.endpointId] as AudioPricing | undefined;
   if (!pricing) {
-    warnMissing('audio', params.endpointId);
+    console.error(
+      `[fal-cost] No audio pricing data for endpoint: ${params.endpointId}`
+    );
     return ZERO_MICROS;
   }
 
@@ -212,14 +214,4 @@ export function calculateAudioCost(params: AudioCostParams): Microdollars {
 
   // per_compute_second
   return multiplyMicros(pricing.basePrice, DEFAULT_COMPUTE_SECONDS);
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function warnMissing(type: string, endpointId: string): void {
-  console.warn(
-    `[fal-cost] No ${type} pricing data for endpoint: ${endpointId}, returning 0`
-  );
 }

@@ -229,6 +229,7 @@ function resolveMissingRefs(spec: OpenAPISpec): {
   for (const missingRef of missingRefs) {
     spec.components.schemas ??= {};
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
     if (KNOWN_MISSING_SCHEMAS[missingRef]) {
       spec.components.schemas[missingRef] = KNOWN_MISSING_SCHEMAS[missingRef];
       fixed++;
@@ -392,15 +393,15 @@ function mergeOpenAPISpecs(
 
   // Take security/servers from first spec
   const first = specs[0];
-  if (first?.components?.securitySchemes) {
+  if (first.components?.securitySchemes) {
     if (!merged.components?.securitySchemes)
       throw new Error('Components security schemes not found');
     merged.components.securitySchemes = structuredClone(
       first.components.securitySchemes
     );
   }
-  if (first?.servers) merged.servers = structuredClone(first.servers);
-  if (first?.security) merged.security = structuredClone(first.security);
+  if (first.servers) merged.servers = structuredClone(first.servers);
+  if (first.security) merged.security = structuredClone(first.security);
 
   return merged;
 }
@@ -426,9 +427,7 @@ function getFalGroupedCategoryFilenames(): Array<{
         /fal\.models\.([^-.]+-to-([^.]+)|([^-.]+))\.json/,
         '$2$3'
       );
-      if (!acc[category]) {
-        acc[category] = [];
-      }
+      acc[category] ??= [];
       acc[category].push(filename);
       return acc;
     }, {})

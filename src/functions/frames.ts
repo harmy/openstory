@@ -38,6 +38,24 @@ export const getFrameFn = createServerFn({ method: 'GET' })
     return context.frame;
   });
 
+export const getSequenceImageModelsFn = createServerFn({ method: 'GET' })
+  .middleware([sequenceAccessMiddleware])
+  .handler(async ({ context }) => {
+    return context.scopedDb.frameVariants.listModelsForSequence(
+      context.sequence.id,
+      'image'
+    );
+  });
+
+export const getSequenceImageVariantsFn = createServerFn({ method: 'GET' })
+  .middleware([sequenceAccessMiddleware])
+  .handler(async ({ context }) => {
+    return context.scopedDb.frameVariants.listBySequence(
+      context.sequence.id,
+      'image'
+    );
+  });
+
 export const createFrameFn = createServerFn({ method: 'POST' })
   .middleware([sequenceAccessMiddleware])
   .inputValidator(

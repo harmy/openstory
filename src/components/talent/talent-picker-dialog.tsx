@@ -30,7 +30,8 @@ const TalentPickerCard: React.FC<TalentPickerCardProps> = ({
   onClick,
 }) => {
   // Get the default sheet or first sheet for the avatar
-  const sheet = talent.sheets?.find((s) => s.isDefault) ?? talent.sheets?.[0];
+  const sheet = talent.sheets.find((s) => s.isDefault) ?? talent.sheets[0];
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- sheet is undefined when sheets array is empty
   const imageUrl = sheet?.imageUrl ?? talent.imageUrl;
 
   return (

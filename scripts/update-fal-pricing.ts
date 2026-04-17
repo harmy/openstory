@@ -87,9 +87,7 @@ const endpoints = getFalEndpointIds();
 // ============================================================================
 
 const imageEndpointIds = new Set<string>(
-  Object.values(IMAGE_MODELS)
-    .map((m) => m.id)
-    .filter((id) => id !== 'letzai/image')
+  Object.values(IMAGE_MODELS).map((m) => m.id)
 );
 // Include edit endpoints from the single source of truth
 for (const editId of Object.values(EDIT_ENDPOINTS)) {
@@ -288,7 +286,9 @@ for (const p of data.prices.sort((a, b) =>
     case 'image': {
       const override = IMAGE_OVERRIDES[p.endpoint_id];
       imagePricing[p.endpoint_id] = {
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
         basePrice: override?.basePrice ?? m(p.unit_price),
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
         unit: override?.unit ?? mapImageUnit(p.unit),
         ...override,
       };
@@ -296,6 +296,7 @@ for (const p of data.prices.sort((a, b) =>
     }
     case 'video': {
       const override = VIDEO_OVERRIDES[p.endpoint_id];
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
       if (override && 'mode' in override && override.mode === 'per_token') {
         videoPricing[p.endpoint_id] = {
           mode: 'per_token',
@@ -317,6 +318,7 @@ for (const p of data.prices.sort((a, b) =>
       const override = AUDIO_OVERRIDES[p.endpoint_id];
       audioPricing[p.endpoint_id] = {
         basePrice: m(p.unit_price),
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
         unit: override?.unit ?? mapAudioUnit(p.unit),
         ...override,
       };
@@ -391,18 +393,21 @@ if (fetchLlmsTxt) {
 if (!fetchLlmsTxt) {
   for (const [id, entry] of typedEntries(imagePricing)) {
     const old = oldImagePricing[id];
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
     if (old?.pricingNotes && !entry.pricingNotes) {
       entry.pricingNotes = old.pricingNotes;
     }
   }
   for (const [id, entry] of typedEntries(videoPricing)) {
     const old = oldVideoPricing[id];
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
     if (old?.pricingNotes && !entry.pricingNotes) {
       entry.pricingNotes = old.pricingNotes;
     }
   }
   for (const [id, entry] of typedEntries(audioPricing)) {
     const old = oldAudioPricing[id];
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
     if (old?.pricingNotes && !entry.pricingNotes) {
       entry.pricingNotes = old.pricingNotes;
     }
@@ -459,6 +464,7 @@ diffMap(
   Object.keys(imagePricing),
   Object.keys(oldImagePricing),
   (id) => getMicrosBasePrice(imagePricing[id]),
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
   (id) => (oldImagePricing[id] ? getBasePrice(oldImagePricing[id]) : undefined)
 );
 diffMap(
@@ -466,6 +472,7 @@ diffMap(
   Object.keys(videoPricing),
   Object.keys(oldVideoPricing),
   (id) => getMicrosBasePrice(videoPricing[id]),
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
   (id) => (oldVideoPricing[id] ? getBasePrice(oldVideoPricing[id]) : undefined)
 );
 diffMap(
@@ -473,6 +480,7 @@ diffMap(
   Object.keys(audioPricing),
   Object.keys(oldAudioPricing),
   (id) => getMicrosBasePrice(audioPricing[id]),
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
   (id) => (oldAudioPricing[id] ? getBasePrice(oldAudioPricing[id]) : undefined)
 );
 

@@ -103,7 +103,7 @@ export async function composeAudioVideo({
   });
 
   const outputUrl =
-    result.data && typeof result.data === 'object' && 'video_url' in result.data
+    typeof result.data === 'object' && 'video_url' in result.data
       ? result.data.video_url
       : undefined;
 

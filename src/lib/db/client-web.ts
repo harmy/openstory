@@ -13,13 +13,15 @@ let _db: Database | undefined;
 
 function buildLibsqlClient(): LibsqlClient {
   const env = getEnv();
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- process.env values can be undefined at runtime
   const url = env.TURSO_DATABASE_URL?.trim();
-  if (url === undefined) {
+  if (!url) {
     throw new Error('TURSO_DATABASE_URL env var is not defined');
   }
 
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- process.env values can be undefined at runtime
   const authToken = env.TURSO_AUTH_TOKEN?.trim();
-  if (authToken == undefined) {
+  if (!authToken) {
     throw new Error('TURSO_AUTH_TOKEN env var is not defined');
   }
 

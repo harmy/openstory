@@ -41,10 +41,12 @@ export const recastLocationWorkflow =
             imageModel: input.imageModel,
             referenceImageUrl: input.referenceImageUrl,
             libraryLocationDescription: input.libraryLocationDescription,
+            styleConfig: input.styleConfig,
           },
         }
       );
 
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       if (sheetFailed || !sheetResult?.referenceImageUrl) {
         throw new Error(
           `Location reference generation failed for ${input.locationName}`
@@ -81,7 +83,9 @@ export const recastLocationWorkflow =
             `Frame regeneration failed for ${input.locationName}`
           );
         } else {
+          // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
           framesRegenerated = regenerateResult?.successCount ?? 0;
+          // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
           framesFailed = regenerateResult?.failedFrames?.length ?? 0;
           console.log(
             '[RecastLocationWorkflow]',

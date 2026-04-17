@@ -133,9 +133,7 @@ describe('createStreamingSceneParser', () => {
     const events = parser.feed(partial);
     const sceneEvents = events.filter((e) => e.type === 'scene');
     expect(sceneEvents).toHaveLength(1);
-    expect(
-      sceneEvents[0].type === 'scene' && sceneEvents[0].scene.sceneId
-    ).toBe('scene-1');
+    expect(sceneEvents[0].scene.sceneId).toBe('scene-1');
   });
 
   test('reset clears state', () => {
@@ -200,13 +198,8 @@ describe('createStreamingSceneParser', () => {
     const events2 = parser.feed(partial2);
     const updateEvents = events2.filter((e) => e.type === 'scene:updated');
     expect(updateEvents).toHaveLength(1);
-    expect(
-      updateEvents[0].type === 'scene:updated' &&
-        updateEvents[0].scene.metadata?.title
-    ).toBe('City Skyline at Dawn');
-    expect(
-      updateEvents[0].type === 'scene:updated' && updateEvents[0].index
-    ).toBe(0);
+    expect(updateEvents[0].scene.metadata.title).toBe('City Skyline at Dawn');
+    expect(updateEvents[0].index).toBe(0);
   });
 
   test('does not emit scene:updated when title is unchanged', () => {

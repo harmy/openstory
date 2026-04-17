@@ -51,6 +51,7 @@ export const locationSheetWorkflow = createScopedWorkflow<
     const generationParams: ImageGenerationParams = await context.run(
       'build-prompt',
       async () => {
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
         if (!input.locationMetadata) {
           throw new WorkflowValidationError('locationMetadata is required');
         }
@@ -71,10 +72,11 @@ export const locationSheetWorkflow = createScopedWorkflow<
             }
           : undefined;
 
-        // Build prompt with location identity + library reference
+        // Build prompt with location identity + library reference + sequence style
         const { prompt, referenceUrls } = buildLocationSheetPrompt(
           input.locationMetadata,
-          libraryOverrides
+          libraryOverrides,
+          input.styleConfig
         );
         const model = input.imageModel ?? DEFAULT_IMAGE_MODEL;
 

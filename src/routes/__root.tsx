@@ -1,11 +1,12 @@
 import { getEnv } from '#env';
+import { getProductionDeploymentAppUrl } from '@/lib/utils/environment';
 import { DefaultNotFound } from '@/components/error/default-not-found';
 import { Providers } from '@/components/providers';
 import { Button } from '@/components/ui/button';
 import { SITE_CONFIG } from '@/lib/marketing/constants';
-import { getProductionDeploymentAppUrl } from '@/lib/utils/environment';
 import appCss from '@/styles/global.css?url';
 import type { QueryClient } from '@tanstack/react-query';
+import type { ErrorComponentProps } from '@tanstack/react-router';
 import {
   createRootRouteWithContext,
   HeadContent,
@@ -15,9 +16,8 @@ import {
   Scripts,
   useRouter,
 } from '@tanstack/react-router';
-import type { ErrorComponentProps } from '@tanstack/react-router';
 import { createIsomorphicFn } from '@tanstack/react-start';
-import { getRequestHeaders } from '@tanstack/react-start/server';
+import { getRequest } from '@tanstack/react-start/server';
 
 type RouterContext = {
   queryClient: QueryClient;
@@ -31,11 +31,18 @@ const getIsPreviewFn = createIsomorphicFn()
   .client(() => false);
 
 const getCanonicalOriginFn = createIsomorphicFn().server(() => {
-  const headers = getRequestHeaders();
-  const host = headers.get('x-forwarded-host') ?? headers.get('host');
+  const request = getRequest();
+  const host =
+    request.headers.get('x-forwarded-host') ?? request.headers.get('host');
   if (!host) return null;
 
-  const canonical = new URL(getProductionDeploymentAppUrl(headers));
+  // Don't redirect localhost or IP addresses (local/network dev access)
+  const hostname = host.split(':')[0];
+  if (hostname === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+    return null;
+  }
+
+  const canonical = new URL(getProductionDeploymentAppUrl(request));
   if (host === canonical.host) return null;
   return canonical.origin;
 });

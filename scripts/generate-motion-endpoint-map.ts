@@ -90,10 +90,17 @@ function extractEndpoints(): EndpointInfo[] {
 }
 
 function generateEndpointMap(endpoints: EndpointInfo[]): string {
-  const zodImports = endpoints.map((e) => e.zodInputSchema).sort();
-  const jsonSchemaImports = endpoints.map((e) => e.jsonSchema).sort();
+  const sorted = [...endpoints].sort((a, b) =>
+    a.endpointId.localeCompare(b.endpointId)
+  );
+  const zodImports = sorted.map((e) => e.zodInputSchema).sort();
+  const jsonSchemaImports = sorted.map((e) => e.jsonSchema).sort();
 
-  const codecEntries = endpoints
+  const jsonSchemaEntries = sorted
+    .map((e) => `  ${JSON.stringify(e.endpointId)}: ${e.jsonSchema},`)
+    .join('\n');
+
+  const codecEntries = sorted
     .map(
       (e) =>
         `  ${JSON.stringify(e.endpointId)}: motionTransform(${e.zodInputSchema}, ${e.jsonSchema}),`
@@ -122,7 +129,7 @@ ${jsonSchemaImports.map((s) => `  ${s},`).join('\n')}
 export type MotionJSONSchema = ${jsonSchemaUnion};
 
 export const MOTION_INPUT_SCHEMAS = {
-${endpoints.map((e) => `  ${JSON.stringify(e.endpointId)}: ${e.zodInputSchema},`).join('\n')}
+${sorted.map((e) => `  ${JSON.stringify(e.endpointId)}: ${e.zodInputSchema},`).join('\n')}
 };
 
 export type MotionEndpointId = keyof typeof MOTION_INPUT_SCHEMAS;
@@ -130,6 +137,10 @@ export type MotionEndpointId = keyof typeof MOTION_INPUT_SCHEMAS;
 export type MotionInputFor<T extends MotionEndpointId> = z.infer<
   (typeof MOTION_INPUT_SCHEMAS)[T]
 >;
+
+export const MOTION_JSON_SCHEMAS = {
+${jsonSchemaEntries}
+} satisfies Record<MotionEndpointId, MotionJSONSchema>;
 
 export const MOTION_TRANSFORMS = {
 ${codecEntries}

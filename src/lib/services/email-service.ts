@@ -88,7 +88,7 @@ async function sendEmail({
       return { success: false, error: error.message };
     }
 
-    console.log('[Email] Sent successfully:', data?.id);
+    console.log('[Email] Sent successfully:', data.id);
     return { success: true };
   } catch (error) {
     console.error('[Email] Exception:', error);

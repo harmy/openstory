@@ -72,7 +72,7 @@ export const motionMusicPromptsWorkflow = createScopedWorkflow<
         durationSeconds: scene.metadata?.durationSeconds || 5,
         location: scene.metadata?.location || '',
         timeOfDay: scene.metadata?.timeOfDay || '',
-        visualSummary: scene.prompts?.visual?.components?.atmosphere || '',
+        visualSummary: scene.prompts?.visual?.components.atmosphere || '',
       })
     );
 

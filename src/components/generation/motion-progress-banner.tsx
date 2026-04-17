@@ -43,7 +43,7 @@ function getMotionBudget(sequence: Sequence, frameCount: number): number {
     DEFAULT_VIDEO_MODEL
   );
   const config = IMAGE_TO_VIDEO_MODELS[modelKey];
-  const perFrame = config?.performance.estimatedGenerationTime ?? 20;
+  const perFrame = config.performance.estimatedGenerationTime;
   return Math.max(
     perFrame * frameCount * QUEUE_OVERHEAD_FACTOR,
     MIN_MOTION_BUDGET_SECONDS

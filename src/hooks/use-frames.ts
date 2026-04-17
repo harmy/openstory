@@ -16,6 +16,7 @@ import {
   generateFrameImageFn,
   generateFrameVariantsFn,
   selectFrameVariantFn,
+  setImageFromVariantFn,
 } from '@/functions/frame-image';
 import type { GenerateVariantInput as SchemaGenerateVariantInput } from '@/lib/schemas/frame.schemas';
 import type { Scene } from '@/lib/ai/scene-analysis.schema';
@@ -69,6 +70,8 @@ export const frameKeys = {
   list: (sequenceId: string) => [...frameKeys.lists(), sequenceId] as const,
   details: () => [...frameKeys.all, 'detail'] as const,
   detail: (id: string) => [...frameKeys.details(), id] as const,
+  imageModels: (sequenceId: string) =>
+    [...frameKeys.all, 'image-models', sequenceId] as const,
 };
 
 // Hook for listing frames by sequence with optional auto-refresh
@@ -86,38 +89,11 @@ export function useFramesBySequence(
       const data = await getFramesFn({ data: { sequenceId } });
       return data;
     },
-    staleTime: options?.staleTime ?? 1000, // Default to 1 second for better responsiveness
-    // If refetchInterval is explicitly passed, use it; otherwise use smart polling
-    refetchInterval:
-      options?.refetchInterval !== undefined
-        ? options.refetchInterval
-        : (query) => {
-            if (!query.state.data) return 1000;
-
-            const frames = query.state.data;
-
-            // Phase-aware polling using frame status fields:
-            // - Phase 6 (Images): Any frame.thumbnailStatus === 'generating'
-            // - Phase 7 (Videos): Any frame.videoStatus === 'generating'
-            const isGeneratingImages = frames.some(
-              (f: Frame) => f.thumbnailStatus === 'generating'
-            );
-            const isGeneratingVideos = frames.some(
-              (f: Frame) => f.videoStatus === 'generating'
-            );
-
-            // Phases 6-7: Image/video generation (rapid parallel updates)
-            // Poll faster for snappier UI updates as thumbnails/videos complete
-            if (
-              frames.length > 0 &&
-              !isGeneratingImages &&
-              !isGeneratingVideos
-            ) {
-              return false;
-            }
-
-            return 2000;
-          },
+    staleTime: options?.staleTime ?? 30_000, // Realtime events update the cache; polling is a fallback
+    // Callers pass an explicit refetchInterval when needed (e.g. scenes-view
+    // passes 2000 when realtime has failed). No default polling — realtime
+    // events keep the cache fresh via updateQueryCacheFromEvent.
+    refetchInterval: options?.refetchInterval ?? false,
     refetchOnMount: 'always', // Always refetch on mount to ensure fresh data
     refetchOnWindowFocus: true, // Refetch when window regains focus
     enabled: !!sequenceId,
@@ -156,6 +132,7 @@ export function useCreateFrame() {
       return data;
     },
     onSuccess: async (data) => {
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       if (data?.sequenceId) {
         await queryClient.invalidateQueries({
           queryKey: frameKeys.list(data.sequenceId),
@@ -185,9 +162,11 @@ export function useUpdateFrame() {
       return data;
     },
     onSuccess: async (data) => {
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       if (data?.id) {
         queryClient.setQueryData(frameKeys.detail(data.id), data);
       }
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       if (data?.sequenceId) {
         await queryClient.invalidateQueries({
           queryKey: frameKeys.list(data.sequenceId),
@@ -489,7 +468,6 @@ export function useSelectVariant() {
   >({
     mutationFn: async (input: SelectVariantInput) => {
       const { sequenceId, frameId, variantIndex } = input;
-      console.log('useSelectVariant', input);
       const result = await selectFrameVariantFn({
         data: {
           sequenceId,
@@ -543,6 +521,68 @@ export function useSelectVariant() {
   });
 }
 
+// Hook for setting a frame's image from an existing variant
+export function useSetImageFromVariant() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { frameId: string; thumbnailUrl: string },
+    Error,
+    { sequenceId: string; frameId: string; model: string }
+  >({
+    mutationFn: async (input) => {
+      return setImageFromVariantFn({ data: input });
+    },
+    onMutate: async ({ sequenceId, frameId }) => {
+      await queryClient.cancelQueries({
+        queryKey: frameKeys.detail(frameId),
+      });
+      await queryClient.cancelQueries({
+        queryKey: frameKeys.list(sequenceId),
+      });
+    },
+    onSuccess: async (data, { sequenceId, frameId, model }) => {
+      queryClient.setQueryData<Frame>(frameKeys.detail(frameId), (oldFrame) => {
+        if (!oldFrame) return oldFrame;
+        return {
+          ...oldFrame,
+          thumbnailUrl: data.thumbnailUrl,
+          thumbnailStatus: 'completed' as const,
+          imageModel: model,
+          videoUrl: null,
+          videoStatus: 'pending' as const,
+        };
+      });
+
+      queryClient.setQueryData<Frame[]>(
+        frameKeys.list(sequenceId),
+        (oldFrames) => {
+          if (!oldFrames) return oldFrames;
+          return oldFrames.map((f) =>
+            f.id === frameId
+              ? {
+                  ...f,
+                  thumbnailUrl: data.thumbnailUrl,
+                  thumbnailStatus: 'completed' as const,
+                  imageModel: model,
+                  videoUrl: null,
+                  videoStatus: 'pending' as const,
+                }
+              : f
+          );
+        }
+      );
+
+      await queryClient.invalidateQueries({
+        queryKey: frameKeys.detail(frameId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: frameKeys.list(sequenceId),
+      });
+    },
+  });
+}
+
 // Hook to track preview image generation status for frames
 export function useFramePreviewStatus(frames: Frame[]) {
   // Get frames that might be generating previews (no image URLs but were recently created)
@@ -563,7 +603,7 @@ export function useFramePreviewStatus(frames: Frame[]) {
   const { data: refreshedFrames = frames } = useFramesBySequence(
     frames.length > 0 ? frames[0].sequenceId : '',
     {
-      refetchInterval: framesNeedingPreviews.length > 0 ? 2000 : false, // Faster refresh
+      refetchInterval: framesNeedingPreviews.length > 0 ? 5000 : false, // Fallback poll
       staleTime: 500, // Shorter stale time for preview updates
     }
   );
@@ -582,6 +622,7 @@ export function useFramePreviewStatus(frames: Frame[]) {
       let isGenerating = false;
       if (!frame.thumbnailUrl && !frame.previewThumbnailUrl) {
         const createdAt = new Date(frame.createdAt).getTime();
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
         const updatedAt = frame.updatedAt
           ? new Date(frame.updatedAt).getTime()
           : createdAt;

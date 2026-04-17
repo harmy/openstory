@@ -1,0 +1,26 @@
+import { ulidSchema } from '@/lib/schemas/id.schemas';
+import { createServerFn } from '@tanstack/react-start';
+import { zodValidator } from '@tanstack/zod-adapter';
+import { z } from 'zod';
+import { systemAdminMiddleware } from './middleware';
+
+export const getAllAdminSequencesFn = createServerFn({ method: 'GET' })
+  .middleware([systemAdminMiddleware])
+  .inputValidator(
+    zodValidator(
+      z.object({
+        limit: z.number().int().min(1).max(200).optional(),
+        offset: z.number().int().min(0).optional(),
+      })
+    )
+  )
+  .handler(async ({ context, data }) => {
+    return context.adminScopedDb.admin.getAllSequences(data);
+  });
+
+export const getAdminFramesFn = createServerFn({ method: 'GET' })
+  .middleware([systemAdminMiddleware])
+  .inputValidator(zodValidator(z.object({ sequenceId: ulidSchema })))
+  .handler(async ({ context, data }) => {
+    return context.adminScopedDb.admin.getFramesForSequence(data.sequenceId);
+  });

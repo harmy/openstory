@@ -51,6 +51,7 @@ export const characterSheetWorkflow = createScopedWorkflow<
     const generationParams: ImageGenerationParams = await context.run(
       'build-prompt',
       async () => {
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
         if (!input.characterMetadata) {
           throw new WorkflowValidationError('characterMetadata is required');
         }
@@ -70,10 +71,11 @@ export const characterSheetWorkflow = createScopedWorkflow<
             }
           : undefined;
 
-        // Build prompt with character identity + talent appearance
+        // Build prompt with character identity + talent appearance + sequence style
         const { prompt, referenceUrls } = buildCharacterSheetPrompt(
           input.characterMetadata,
-          talentOverrides
+          talentOverrides,
+          input.styleConfig
         );
         const model = input.imageModel ?? DEFAULT_IMAGE_MODEL;
 

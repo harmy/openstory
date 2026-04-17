@@ -115,9 +115,6 @@ const IMAGE_DIMS: Record<ImageVariation, { width: number; height: number }> = {
   high_res: { width: 1920, height: 1080 },
 };
 
-// For GPT Image 1.5 — only one 16:9 option exists
-const GPT_16_9_SIZE = '1536x1024';
-
 function buildImageInput(
   modelKey: TextToImageModel,
   variation: ImageVariation
@@ -126,46 +123,6 @@ function buildImageInput(
   const isHighRes = variation === 'high_res';
 
   switch (modelKey) {
-    // GPT Image — string sizes, only one 16:9 option
-    case 'gpt_image_1_5':
-      return { ...base, image_size: GPT_16_9_SIZE, quality: 'high' };
-
-    // HiDream — fixed square dimensions
-    case 'hidream_i1_full':
-      return {
-        ...base,
-        image_size: isHighRes
-          ? { width: 1920, height: 1080 }
-          : { width: 1024, height: 1024 },
-      };
-
-    // Recraft — uses image_size enum + style
-    case 'recraft_v3':
-      return {
-        ...base,
-        image_size: isHighRes
-          ? { width: 1920, height: 1080 }
-          : 'landscape_16_9',
-        style: 'realistic_image',
-      };
-
-    // Imagen 4 — aspect_ratio + resolution
-    case 'imagen4_preview_ultra':
-      return {
-        ...base,
-        aspect_ratio: '16:9',
-        resolution: isHighRes ? '2K' : '1K',
-        num_images: 1,
-      };
-
-    // Kling Image — aspect_ratio + resolution
-    case 'kling_image_v3':
-      return {
-        ...base,
-        aspect_ratio: '16:9',
-        resolution: isHighRes ? '2K' : '1K',
-      };
-
     // Nano Banana Pro/2 — aspect_ratio + resolution (has cost multipliers)
     case 'nano_banana_pro':
       return {
@@ -181,17 +138,18 @@ function buildImageInput(
         resolution: isHighRes ? '4K' : '1K',
       };
 
-    // Nano Banana — aspect_ratio only
-    case 'nano_banana':
-      return { ...base, aspect_ratio: '16:9' };
-
     // Grok Imagine — aspect_ratio only
     case 'grok_imagine_image':
       return { ...base, aspect_ratio: '16:9' };
 
-    // Flux Pro Ultra — aspect_ratio (per_image flat rate)
-    case 'flux_pro_v1_1_ultra':
-      return { ...base, aspect_ratio: '16:9', raw: false };
+    // HiDream — uses image_size
+    case 'hidream_i1':
+      return {
+        ...base,
+        image_size: isHighRes
+          ? { width: 1920, height: 1080 }
+          : { width: 1024, height: 1024 },
+      };
 
     // All other models — image_size (named preset or custom dims)
     default:
@@ -210,9 +168,6 @@ function getImageCostResolution(
 ): '0.5K' | '1K' | '2K' | '4K' | undefined {
   const isHighRes = variation === 'high_res';
   switch (modelKey) {
-    case 'imagen4_preview_ultra':
-    case 'kling_image_v3':
-      return isHighRes ? '2K' : '1K';
     case 'nano_banana_pro':
       return isHighRes ? '4K' : '2K';
     case 'nano_banana_2':
@@ -234,9 +189,6 @@ function calculateImageCostForVariation(
     widthPx: dims.width,
     heightPx: dims.height,
     resolution: getImageCostResolution(modelKey, variation),
-    style: modelKey === 'recraft_v3' ? 'realistic_image' : undefined,
-    quality: modelKey === 'gpt_image_1_5' ? 'high' : undefined,
-    imageSize: GPT_16_9_SIZE,
   });
 }
 
@@ -245,8 +197,6 @@ function buildImageTasks(): Task[] {
   const variations: ImageVariation[] = ['standard', 'high_res'];
 
   for (const [modelKey, model] of typedEntries(IMAGE_MODELS)) {
-    if (modelKey === 'letzai') continue; // different provider
-
     for (const variation of variations) {
       tasks.push({
         type: 'image',
@@ -332,7 +282,6 @@ function buildVideoTasks(imageUrl: string): Task[] {
 
 const SKIP_AUDIO_MODELS = new Set<AudioModel>([
   'mmaudio_v2', // needs video input
-  'ace_step_audio_to_audio', // needs audio input
   'elevenlabs_sfx', // broken on fal (deprecated v0 model, no param to override)
 ]);
 
@@ -342,7 +291,7 @@ function buildAudioInput(
   durationSeconds: number
 ): Record<string, unknown> {
   switch (config.provider) {
-    case 'ace-step':
+    case 'ACE Studio':
       return {
         prompt: TEST_AUDIO_PROMPT,
         lyrics: '[inst]',
@@ -351,18 +300,25 @@ function buildAudioInput(
         scheduler: 'euler',
         cfg_type: 'apg',
       };
-    case 'elevenlabs':
+    case 'ElevenLabs':
+      // Music vs SFX — music uses music_length_ms, SFX uses duration_seconds
+      if (config.type === 'music') {
+        return {
+          prompt: TEST_AUDIO_PROMPT,
+          music_length_ms: durationSeconds * 1000,
+          force_instrumental: true,
+        };
+      }
       return {
         text: TEST_AUDIO_PROMPT,
         duration_seconds: durationSeconds,
       };
-    case 'elevenlabs-music':
+    case 'Google':
       return {
         prompt: TEST_AUDIO_PROMPT,
-        music_length_ms: durationSeconds * 1000,
-        force_instrumental: true,
+        duration: durationSeconds,
       };
-    case 'beatoven':
+    case 'MiniMax':
       return {
         prompt: TEST_AUDIO_PROMPT,
         duration: durationSeconds,
@@ -649,8 +605,8 @@ function comparisonToCsv(results: Result[], usage: UsageResponse): string {
         r.variation,
         r.tier,
         actual?.authMethod ?? '',
-        actual?.unitPrice?.toFixed(6) ?? '',
-        actual?.quantity?.toFixed(4) ?? '',
+        actual?.unitPrice.toFixed(6) ?? '',
+        actual?.quantity.toFixed(4) ?? '',
         r.estimatedCostUsd.toFixed(6),
         actualCost.toFixed(6),
         diff.toFixed(6),

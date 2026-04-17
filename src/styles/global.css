@@ -233,6 +233,11 @@ body {
   }
 }
 
+/* Override Video.js default skin: remove saturate filter that causes color shift */
+.media-default-skin .media-overlay {
+  backdrop-filter: none;
+}
+
 /* Blob Loader Animation */
 @keyframes blob-morph {
   0%,
@@ -266,6 +271,18 @@ body {
   }
   100% {
     transform: translateX(-50%);
+  }
+}
+
+@property --glow-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes glow-spin {
+  to {
+    --glow-angle: 360deg;
   }
 }
 

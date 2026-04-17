@@ -837,7 +837,7 @@ Respond with exactly {{numTalent}} matches.`,
 2. **NO FORMATTING**: Inside the prompt string, use natural language only. No headers (e.g., "Subject:"), no bullet points.
 
 ### VISUAL CONSTRUCTION STRATEGY
-1. **REFERENCE ALIGNMENT**: We are injecting a reference image for the character. Your text description of the character (from the <CHARACTER_BIBLE>) must MATCH the visual reference to prevent generation artifacts. Do not alter the costume defined in the Bible.
+1. **CHARACTER IDENTITY VIA REFERENCE IMAGE**: A reference image handles each character's physical appearance. Do NOT describe face, hair, skin, build, or body type in the prompt text. Instead, refer to each character by NAME IN CAPS (e.g., "SERENA"). From the <CHARACTER_BIBLE>, include ONLY their costume/wardrobe (standardClothing) and any costume-relevant distinguishingFeatures. Do not alter the costume defined in the Bible.
 2. **THE "STARTING FRAME"**: Describe the exact moment the scene begins. Focus on the *potential energy*—muscles tensed, mid-breath, looking off-camera. This is a still image that implies motion.
 3. **ENVIRONMENT & LIGHTING**: Since the character identity is handled by reference, spend 60% of your tokens on the atmosphere, lighting texture, depth of field, and background details.
 4. **DIRECTOR STYLE**: Apply the <DIRECTOR_STYLE> to the camera lens (e.g., "anamorphic flares"), film stock, and color palette.
@@ -846,10 +846,10 @@ Respond with exactly {{numTalent}} matches.`,
 1. **NO HOLOGRAPHIC SCREENS**: Do NOT describe floating interfaces, holograms, or HUDs. Technology must be physical (glass screens, tactile buttons, cables, metal) and grounded.
 2. **NO TEXT**: No subtitles, no signs, no dialogue.
 3. **ONE SHOT**: Describe a single coherent frame.
-4. **ZERO MEMORY**: Re-describe the setting and character fully. Do not refer to "the previous scene."
+4. **ZERO MEMORY**: Re-describe the setting fully and name each character present with their costume. Do not refer to "the previous scene." Do NOT re-describe character physical appearance — the reference image provides identity.
 
 ### PROMPT STRUCTURE (Flatten into one paragraph)
-[Medium/Style] + [Character Appearance & EXACT Costume] + [Specific Pose/Action] + [Detailed Environment] + [Lighting Conditions] + [Camera Angle/Lens]`,
+[Medium/Style] + [CHARACTER NAME IN CAPS & Costume/Wardrobe] + [Specific Pose/Action] + [Detailed Environment] + [Lighting Conditions] + [Camera Angle/Lens]`,
     },
     {
       role: 'user',
@@ -870,6 +870,7 @@ Respond with exactly {{numTalent}} matches.`,
 </SCENE_AFTER>
 
 <CHARACTER_BIBLE>
+(Use ONLY for character names and costume/wardrobe. Do NOT describe physical appearance — the reference image handles identity.)
 {{characterBible}}
 </CHARACTER_BIBLE>
 

@@ -24,6 +24,7 @@ import {
 import { initiateOpenRouterOAuthFn } from '@/functions/openrouter-oauth';
 import { getCurrentUserProfileFn } from '@/functions/user';
 import { BILLING_GATE_KEY } from '@/hooks/use-billing-gate';
+import { usePostHog } from '@posthog/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { ExternalLink, Key, Trash2 } from 'lucide-react';
@@ -71,6 +72,7 @@ function ApiKeySettingsContent({
   error: urlError,
 }: ApiKeySettingsProps & { teamId: string }) {
   const queryClient = useQueryClient();
+  const posthog = usePostHog();
   const [falKeyInput, setFalKeyInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -91,7 +93,7 @@ function ApiKeySettingsContent({
   // Show toast when both keys become configured and there's a return path
   useEffect(() => {
     if (hasShownToastRef.current) return;
-    if (keyStatus?.fal !== 'team' || keyStatus?.openrouter !== 'team') return;
+    if (keyStatus?.fal !== 'team' || keyStatus.openrouter !== 'team') return;
     const returnTo = localStorage.getItem(RETURN_KEY);
     if (!returnTo) return;
 
@@ -120,6 +122,7 @@ function ApiKeySettingsContent({
       invalidateKeys();
       setFalKeyInput('');
       setError(null);
+      posthog.capture('api_key_saved', { provider: 'fal' });
     },
     onError: (err) => {
       setError(err instanceof Error ? err.message : 'Failed to save key');
@@ -129,9 +132,10 @@ function ApiKeySettingsContent({
   const deleteMutation = useMutation({
     mutationFn: (provider: 'openrouter' | 'fal') =>
       deleteApiKeyFn({ data: { teamId, provider } }),
-    onSuccess: () => {
+    onSuccess: (_, provider) => {
       invalidateKeys();
       setError(null);
+      posthog.capture('api_key_deleted', { provider });
     },
     onError: (err) => {
       setError(err instanceof Error ? err.message : 'Failed to delete key');
@@ -141,6 +145,7 @@ function ApiKeySettingsContent({
   const oauthMutation = useMutation({
     mutationFn: () => initiateOpenRouterOAuthFn({ data: { teamId } }),
     onSuccess: (data) => {
+      posthog.capture('openrouter_oauth_started');
       window.location.href = data.authUrl;
     },
     onError: (err) => {

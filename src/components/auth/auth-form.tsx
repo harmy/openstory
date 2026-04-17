@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authClient } from '@/lib/auth/client';
+import { usePostHog } from '@posthog/react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
@@ -30,6 +31,7 @@ export function AuthForm({
   isPreview = false,
 }: AuthFormProps) {
   const navigate = useNavigate();
+  const posthog = usePostHog();
   const [email, setEmail] = useState(emailEntered || '');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +42,7 @@ export function AuthForm({
 
     const preloadPasskeys = async () => {
       if (
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: method may not exist in all browsers
         !window.PublicKeyCredential?.isConditionalMediationAvailable ||
         !(await window.PublicKeyCredential.isConditionalMediationAvailable())
       ) {
@@ -51,7 +54,8 @@ export function AuthForm({
         autoFill: true,
       });
 
-      if (!cancelled && result?.data) {
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- cancelled can be set true by cleanup between awaits
+      if (!cancelled && result.data) {
         void navigate({ to: redirectTo });
       }
     };
@@ -66,6 +70,8 @@ export function AuthForm({
     e.preventDefault();
     setError(null);
     setIsLoading(true);
+
+    posthog.capture('user_otp_requested', { email });
 
     try {
       const result = await authClient.emailOtp.sendVerificationOtp({
@@ -94,6 +100,8 @@ export function AuthForm({
   const handleGoogleSignIn = async () => {
     setError(null);
     setIsLoading(true);
+
+    posthog.capture('user_google_sign_in_started');
 
     try {
       await authClient.signIn.social({

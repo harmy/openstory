@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Switch } from '@/components/ui/switch';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -15,6 +16,7 @@ type ModelItem = {
   id: string;
   name: string;
   group: string;
+  badge?: 'open-source' | 'proprietary';
 };
 
 type BaseModelSelectorProps = {
@@ -37,25 +39,30 @@ export const BaseModelSelector: React.FC<BaseModelSelectorProps> = ({
   multiSelect = false,
 }) => {
   const [open, setOpen] = useState(false);
+  const [multipleEnabled, setMultipleEnabled] = useState(
+    selectedIds.length > 1
+  );
 
   // Group models by their group field
   const groupedModels = useMemo(() => {
-    const groups: Record<string, ModelItem[]> = {};
+    const groups = new Map<string, ModelItem[]>();
     for (const model of models) {
-      if (!groups[model.group]) {
-        groups[model.group] = [];
+      if (!groups.has(model.group)) {
+        groups.set(model.group, []);
       }
-      groups[model.group].push(model);
+      groups.get(model.group)?.push(model);
     }
-    return groups;
+    return Object.fromEntries(groups);
   }, [models]);
+
+  const isMultiActive = multiSelect && multipleEnabled;
 
   const handleToggle = useCallback(
     (modelId: string, checked: boolean) => {
       if (disabled) return;
 
-      if (!multiSelect) {
-        // Single select mode
+      if (!isMultiActive) {
+        // Single select mode — pick this model
         if (checked) {
           onSelectionChange([modelId]);
         }
@@ -71,7 +78,18 @@ export const BaseModelSelector: React.FC<BaseModelSelectorProps> = ({
         }
       }
     },
-    [selectedIds, onSelectionChange, disabled, multiSelect]
+    [selectedIds, onSelectionChange, disabled, isMultiActive]
+  );
+
+  const handleMultipleToggle = useCallback(
+    (enabled: boolean) => {
+      setMultipleEnabled(enabled);
+      // When turning off multiple, snap to just the first selected model
+      if (!enabled && selectedIds.length > 1) {
+        onSelectionChange([selectedIds[0]]);
+      }
+    },
+    [selectedIds, onSelectionChange]
   );
 
   // Display label for button
@@ -98,6 +116,8 @@ export const BaseModelSelector: React.FC<BaseModelSelectorProps> = ({
       .join(' ');
   };
 
+  const showGroupHeaders = groupOrder.length > 1;
+
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
@@ -111,22 +131,43 @@ export const BaseModelSelector: React.FC<BaseModelSelectorProps> = ({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-[260px] max-h-[400px] overflow-y-auto">
-        <DropdownMenuLabel className="text-xs">{label}</DropdownMenuLabel>
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <DropdownMenuLabel className="p-0 text-xs">{label}</DropdownMenuLabel>
+          {multiSelect && (
+            <div className="flex items-center gap-1.5">
+              <label
+                htmlFor="multi-toggle"
+                className="text-[10px] text-muted-foreground"
+              >
+                Multiple
+              </label>
+              <Switch
+                id="multi-toggle"
+                size="sm"
+                checked={multipleEnabled}
+                onCheckedChange={handleMultipleToggle}
+              />
+            </div>
+          )}
+        </div>
         <DropdownMenuSeparator />
         {groupOrder.map((groupKey, groupIndex) => {
           const groupModels = groupedModels[groupKey];
-          if (!groupModels || groupModels.length === 0) return null;
+          if (groupModels.length === 0) return null;
 
           return (
             <DropdownMenuGroup key={groupKey}>
               {groupIndex > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider font-normal">
-                {formatGroupLabel(groupKey)}
-              </DropdownMenuLabel>
+              {showGroupHeaders && (
+                <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider font-normal">
+                  {formatGroupLabel(groupKey)}
+                </DropdownMenuLabel>
+              )}
               {groupModels.map((model) => {
                 const isSelected = selectedIds.includes(model.id);
-                const isLastSelected = isSelected && selectedIds.length === 1;
-                const isDisabled = !multiSelect ? isSelected : isLastSelected;
+                const isDisabled = isMultiActive
+                  ? isSelected && selectedIds.length === 1
+                  : isSelected;
 
                 return (
                   <DropdownMenuCheckboxItem
@@ -139,7 +180,14 @@ export const BaseModelSelector: React.FC<BaseModelSelectorProps> = ({
                     disabled={isDisabled}
                     className="cursor-pointer"
                   >
-                    <span className="text-sm">{model.name}</span>
+                    <span className="flex items-center gap-2 text-sm">
+                      <span className="truncate">{model.name}</span>
+                      {model.badge === 'open-source' && (
+                        <span className="shrink-0 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-500">
+                          Open Source
+                        </span>
+                      )}
+                    </span>
                   </DropdownMenuCheckboxItem>
                 );
               })}

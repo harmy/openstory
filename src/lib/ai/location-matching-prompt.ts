@@ -13,12 +13,12 @@ export function buildLocationMatchingPromptVariables(
     .map(
       (loc) => `- Location ID: ${loc.locationId}
   Name: ${loc.name}
-  Type: ${loc.type ?? 'unspecified'}
-  Time of Day: ${loc.timeOfDay ?? 'unspecified'}
-  Description: ${loc.description ?? 'no description'}
-  Architectural Style: ${loc.architecturalStyle ?? 'unspecified'}
-  Key Features: ${loc.keyFeatures ?? 'none specified'}
-  Ambiance: ${loc.ambiance ?? 'unspecified'}`
+  Type: ${loc.type}
+  Time of Day: ${loc.timeOfDay}
+  Description: ${loc.description}
+  Architectural Style: ${loc.architecturalStyle}
+  Key Features: ${loc.keyFeatures}
+  Ambiance: ${loc.ambiance}`
     )
     .join('\n\n');
 

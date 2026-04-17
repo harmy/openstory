@@ -1,3 +1,4 @@
+import { IMAGE_MODELS } from '@/lib/ai/models';
 import { ZERO_MICROS } from '@/lib/billing/money';
 import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import {
@@ -93,7 +94,11 @@ export const upscaleVariantWorkflow = createScopedWorkflow<
         })),
       ];
       const { prompt: enhancedPrompt, referenceUrls: charLocUrls } =
-        buildReferenceImagePrompt(UPSCALE_PROMPT, allReferences);
+        buildReferenceImagePrompt(
+          UPSCALE_PROMPT,
+          allReferences,
+          IMAGE_MODELS.nano_banana_2.maxPromptLength
+        );
 
       // Determine output image size from sequence aspect ratio
       const imageSize = input.aspectRatio

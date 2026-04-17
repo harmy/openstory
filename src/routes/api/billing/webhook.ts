@@ -9,6 +9,7 @@ import {
 } from '@/functions/middleware';
 import { microsToDisplayUsd, usdToMicros } from '@/lib/billing/money';
 import { getStripeOrThrow } from '@/lib/billing/stripe';
+import { getPostHogClient } from '@/lib/posthog-server';
 import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/api/billing/webhook')({
@@ -31,12 +32,14 @@ export const Route = createFileRoute('/api/billing/webhook')({
               const session = event.data.object;
 
               if (
+                // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                 session.metadata?.type !== 'credit_top_up' ||
                 session.payment_status !== 'paid'
               ) {
                 break;
               }
 
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               const amountUsd = parseFloat(session.metadata?.amountUsd ?? '');
 
               if (isNaN(amountUsd)) {
@@ -107,12 +110,26 @@ export const Route = createFileRoute('/api/billing/webhook')({
               console.log(
                 `[Webhook] Added $${amountUsd} credits to team ${teamId}`
               );
+
+              if (teamId) {
+                const posthog = getPostHogClient();
+                posthog?.capture({
+                  distinctId: teamId,
+                  event: 'credits_added',
+                  properties: {
+                    amount_usd: amountUsd,
+                    stripe_session_id: session.id,
+                    source: 'stripe_webhook',
+                  },
+                });
+              }
               break;
             }
 
             case 'payment_intent.succeeded': {
               // Handle auto-top-up payment confirmations
               const paymentIntent = event.data.object;
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               if (paymentIntent.metadata?.type === 'auto_top_up') {
                 console.log(
                   `[Webhook] Auto-top-up payment succeeded for team ${paymentIntent.metadata.teamId}`

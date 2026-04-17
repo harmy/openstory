@@ -39,15 +39,15 @@ describe('Scene Analysis Schema Validation', () => {
     for (const scene of sceneAnalysisExample.scenes) {
       if (!scene.prompts?.visual) continue;
       const { components } = scene.prompts.visual;
-      expect(components?.sceneDescription).toBeDefined();
-      expect(components?.subject).toBeDefined();
-      expect(components?.environment).toBeDefined();
-      expect(components?.lighting).toBeDefined();
-      expect(components?.camera).toBeDefined();
-      expect(components?.composition).toBeDefined();
-      expect(components?.style).toBeDefined();
-      expect(components?.technical).toBeDefined();
-      expect(components?.atmosphere).toBeDefined();
+      expect(components.sceneDescription).toBeDefined();
+      expect(components.subject).toBeDefined();
+      expect(components.environment).toBeDefined();
+      expect(components.lighting).toBeDefined();
+      expect(components.camera).toBeDefined();
+      expect(components.composition).toBeDefined();
+      expect(components.style).toBeDefined();
+      expect(components.technical).toBeDefined();
+      expect(components.atmosphere).toBeDefined();
     }
   });
 
@@ -55,19 +55,19 @@ describe('Scene Analysis Schema Validation', () => {
     for (const scene of sceneAnalysisExample.scenes) {
       if (!scene.prompts?.motion) continue;
       const { components } = scene.prompts.motion;
-      expect(components?.cameraMovement).toBeDefined();
-      expect(components?.startPosition).toBeDefined();
-      expect(components?.endPosition).toBeDefined();
-      expect(components?.durationSeconds).toBeGreaterThan(0);
-      expect(components?.speed).toBeDefined();
-      expect(components?.smoothness).toBeDefined();
-      expect(components?.subjectTracking).toBeDefined();
-      expect(components?.equipment).toBeDefined();
+      expect(components.cameraMovement).toBeDefined();
+      expect(components.startPosition).toBeDefined();
+      expect(components.endPosition).toBeDefined();
+      expect(components.durationSeconds).toBeGreaterThan(0);
+      expect(components.speed).toBeDefined();
+      expect(components.smoothness).toBeDefined();
+      expect(components.subjectTracking).toBeDefined();
+      expect(components.equipment).toBeDefined();
     }
   });
 
   test('character bible entries have required fields', () => {
-    for (const character of sceneAnalysisExample.characterBible || []) {
+    for (const character of sceneAnalysisExample.characterBible) {
       expect(character.characterId).toBeDefined();
       expect(character.name).toBeDefined();
       expect(character.physicalDescription).toBeDefined();

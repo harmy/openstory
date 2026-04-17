@@ -159,6 +159,7 @@ function TalentDetailPage() {
         </PageHeader>
 
         {/* Media Section */}
+        {/* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime guard */}
         {talent.media && talent.media.length > 0 && (
           <section>
             <h2 className="text-lg font-semibold mb-4">
@@ -193,8 +194,10 @@ function TalentDetailPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <ImageIcon className="h-5 w-5" />
+              {/* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime guard */}
               Talent Sheets ({talent.sheets?.length ?? 0})
             </h2>
+            {/* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime guard */}
             {talent.media &&
               talent.media.filter((m) => m.type === 'image').length > 0 && (
                 <Button
@@ -209,9 +212,11 @@ function TalentDetailPage() {
               )}
           </div>
 
+          {/* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime guard */}
           {!talent.sheets || talent.sheets.length === 0 ? (
             <Card className="p-8 text-center">
               <User className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
+              {/* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime guard */}
               {talent.media &&
               talent.media.filter((m) => m.type === 'image').length > 0 ? (
                 <div>

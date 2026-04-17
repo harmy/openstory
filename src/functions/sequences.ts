@@ -10,6 +10,7 @@ import {
   DEFAULT_ANALYSIS_MODEL,
   getAnalysisModelById,
 } from '@/lib/ai/models.config';
+import { resolveImageModels } from '@/lib/ai/resolve-image-models';
 import { requireTeamMemberAccess } from '@/lib/auth/action-utils';
 import { estimateStoryboardCost } from '@/lib/billing/cost-estimation';
 import { usdToMicros } from '@/lib/billing/money';
@@ -65,7 +66,8 @@ export const createSequenceFn = createServerFn({ method: 'POST' })
       styleId,
       aspectRatio,
       analysisModels,
-      imageModel,
+      imageModel: imageModelLegacy,
+      imageModels: imageModelsInput,
       videoModel,
       autoGenerateMotion = false,
       autoGenerateMusic = true,
@@ -74,6 +76,16 @@ export const createSequenceFn = createServerFn({ method: 'POST' })
       suggestedLocationIds,
     } = data;
 
+    // Validate and resolve image models
+    const validatedModels = imageModelsInput.map((m) =>
+      safeTextToImageModel(m)
+    );
+    const imageModels = resolveImageModels(
+      validatedModels,
+      imageModelLegacy ? safeTextToImageModel(imageModelLegacy) : undefined
+    );
+    const primaryImageModel = imageModels[0];
+
     if (!styleId || !aspectRatio) {
       throw new Error('Style ID and aspect ratio are required');
     }
@@ -81,7 +93,8 @@ export const createSequenceFn = createServerFn({ method: 'POST' })
     await requireCredits(
       context.scopedDb,
       estimateStoryboardCost({
-        imageModel: safeTextToImageModel(imageModel, DEFAULT_IMAGE_MODEL),
+        imageModel: primaryImageModel,
+        imageModelCount: imageModels.length,
         aspectRatio,
         autoGenerateMotion,
         videoModel: safeImageToVideoModel(videoModel, DEFAULT_VIDEO_MODEL),
@@ -101,7 +114,7 @@ export const createSequenceFn = createServerFn({ method: 'POST' })
           aspectRatio,
           analysisModel:
             getAnalysisModelById(modelId)?.id || DEFAULT_ANALYSIS_MODEL,
-          imageModel,
+          imageModel: primaryImageModel,
           videoModel,
           musicModel:
             musicModel && isValidAudioModel(musicModel)
@@ -109,12 +122,19 @@ export const createSequenceFn = createServerFn({ method: 'POST' })
               : DEFAULT_MUSIC_MODEL,
           autoGenerateMotion,
           autoGenerateMusic,
+          suggestedTalentIds: suggestedTalentIds?.length
+            ? suggestedTalentIds
+            : undefined,
+          suggestedLocationIds: suggestedLocationIds?.length
+            ? suggestedLocationIds
+            : undefined,
         });
 
         const workflowInput: StoryboardWorkflowInput = {
           userId: context.user.id,
           teamId,
           sequenceId: sequence.id,
+          imageModels,
           options: {
             framesPerScene: 3,
             generateThumbnails: true,
@@ -310,7 +330,7 @@ export function buildSceneSummaries(frames: Frame[]): MusicSceneSummary[] {
       musicStyle: md?.style || legacyMusic?.style || '',
       musicMood: md?.mood || legacyMusic?.mood || '',
       musicPresence: md?.presence || legacyMusic?.presence || 'none',
-      atmosphere: prompts?.visual?.components?.atmosphere,
+      atmosphere: prompts?.visual?.components.atmosphere,
     };
   });
 }

@@ -5,6 +5,7 @@ import type { SequenceWithFrames } from '@/hooks/use-sequences-with-frames';
 import type { ViewMode } from './eval-view';
 
 const METADATA_WIDTH = 280;
+const VIDEO_WIDTH = 200;
 const CELL_WIDTH = 200;
 
 type OpenDialogState = {
@@ -39,15 +40,35 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
       >
         <EvalSequenceMetadata sequence={sequence} />
       </div>
+      <div
+        className="sticky z-10 bg-background shrink-0 h-full border-r border-b p-2 flex items-center justify-center"
+        style={{ left: METADATA_WIDTH, width: VIDEO_WIDTH }}
+      >
+        {sequence.mergedVideoUrl ? (
+          <video
+            src={sequence.mergedVideoUrl}
+            className="w-full h-full object-contain rounded-md"
+            muted
+            loop
+            playsInline
+            controls
+          />
+        ) : (
+          <div className="text-xs text-muted-foreground text-center">
+            No video
+          </div>
+        )}
+      </div>
       {Array.from({ length: maxSceneCount }, (_, i) => {
         const frame = sequence.frames[i];
         const sceneIndex = i;
         const isDialogOpen =
           openDialog?.sequenceIndex === sequenceIndex &&
-          openDialog?.sceneIndex === sceneIndex;
+          openDialog.sceneIndex === sceneIndex;
 
         return (
           <div
+            // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- frame is undefined when sequence has fewer frames than maxSceneCount
             key={frame?.id ?? `empty-${i}`}
             className="shrink-0 h-full"
             style={{ width: CELL_WIDTH }}

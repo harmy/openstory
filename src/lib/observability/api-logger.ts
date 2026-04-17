@@ -58,7 +58,7 @@ export function withApiLogging(
           const jsonResult = errorBodySchema.safeParse(safeJsonParse(text));
           if (jsonResult.success) {
             const body = jsonResult.data;
-            message = body?.error?.message ?? body?.message ?? message;
+            message = body.error?.message ?? body.message ?? message;
           } else if (text.length > 0) {
             // Use raw text (truncated) for non-JSON error bodies
             message = text.length > 200 ? `${text.slice(0, 200)}…` : text;
@@ -66,7 +66,7 @@ export function withApiLogging(
 
           errorDetail = {
             code: jsonResult.success
-              ? (jsonResult.data?.error?.code ?? `HTTP_${response.status}`)
+              ? (jsonResult.data.error?.code ?? `HTTP_${response.status}`)
               : `HTTP_${response.status}`,
             message,
             statusCode: response.status,

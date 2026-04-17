@@ -12,6 +12,7 @@ import { redeemGiftTokenFn } from '@/functions/gift-tokens';
 import { BILLING_BALANCE_KEY } from '@/hooks/use-billing-balance';
 import { BILLING_GATE_KEY } from '@/hooks/use-billing-gate';
 import { sessionQueryOptions } from '@/lib/auth/session-query';
+import { usePostHog } from '@posthog/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createFileRoute,
@@ -109,6 +110,7 @@ type GiftCodeViewProps = {
 function AutoRedeemView({ code }: GiftCodeViewProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const posthog = usePostHog();
   const hasTriggered = useRef(false);
 
   const { mutate, isError, isPending, error } = useMutation({
@@ -119,6 +121,11 @@ function AutoRedeemView({ code }: GiftCodeViewProps) {
       });
       void queryClient.invalidateQueries({
         queryKey: [...BILLING_GATE_KEY],
+      });
+
+      posthog.capture('gift_code_redeemed', {
+        amount_usd: result.amountUsd,
+        new_balance: result.newBalance,
       });
 
       toast.success(`$${result.amountUsd.toFixed(2)} added to your balance`, {

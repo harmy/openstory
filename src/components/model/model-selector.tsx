@@ -6,7 +6,7 @@ import {
 } from '@/lib/ai/models.config';
 import { useMemo } from 'react';
 
-const TIER_ORDER = ['ultra-fast', 'fast', 'premium'] as const;
+const GROUP_ORDER = ['all'] as const;
 
 type ModelSelectorProps = {
   selectedModels: AnalysisModelId[];
@@ -23,11 +23,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 }) => {
   const models = useMemo(
     () =>
-      SCRIPT_ANALYSIS_MODELS.map((m) => ({
-        id: m.id,
-        name: m.name,
-        group: m.tier,
-      })),
+      [...SCRIPT_ANALYSIS_MODELS]
+        .sort((a, b) => a.qualityRank - b.qualityRank)
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          group: 'all',
+          badge: m.license,
+        })),
     []
   );
 
@@ -35,7 +38,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     <BaseModelSelector
       label="Analysis Model"
       models={models}
-      groupOrder={TIER_ORDER}
+      groupOrder={GROUP_ORDER}
       selectedIds={selectedModels}
       onSelectionChange={(ids) => {
         const validIds = ids.filter((id): id is AnalysisModelId =>

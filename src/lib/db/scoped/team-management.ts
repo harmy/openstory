@@ -236,6 +236,7 @@ export function createTeamManagementMethods(
       })
       .returning();
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
     if (!invitation) {
       throw new Error('No invitation returned from database');
     }

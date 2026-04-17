@@ -1,16 +1,23 @@
 /**
  * AI Event Bridge
- * Subscribes to TanStack AI events and forwards to Langfuse automatically.
- * Replaces manual per-call startObservation/generation.update().end() instrumentation.
+ * Subscribes to TanStack AI events and forwards to OpenTelemetry as gen_ai.* spans.
+ * Any OTel-compatible backend (Langfuse, PostHog, Datadog, etc.) receives these spans.
  *
  * Metadata contract: callers pass observability hints via chat({ metadata: { ... } }).
  * TanStack AI places this at event.payload.options.metadata.
  * We parse it with zod since the shape is unknown at the type level.
  */
 
-import { propagateAttributes, startObservation } from '@langfuse/tracing';
+import type { Span } from '@opentelemetry/api';
 import { aiEventClient } from '@tanstack/ai-event-client';
 import { z } from 'zod';
+
+import {
+  endSpanError,
+  endSpanSuccess,
+  setSpanUsage,
+  startGenAISpan,
+} from './tracer';
 
 const llmMetadataSchema = z.object({
   observationName: z.string().optional(),
@@ -27,7 +34,7 @@ const llmMetadataSchema = z.object({
   userId: z.string().optional(),
 });
 
-const inflight = new Map<string, ReturnType<typeof startObservation>>();
+const inflight = new Map<string, Span>();
 const inputAccumulator = new Map<
   string,
   {
@@ -50,31 +57,18 @@ export function initAIEventBridge(): void {
         messages: [],
       });
 
-      const createObs = () => {
-        const obs = startObservation(
-          name,
-          {
-            model: payload.model,
-            ...(meta.prompt && { prompt: meta.prompt }),
-            ...(meta.tags && { tags: meta.tags }),
-            ...(meta.metadata && { metadata: meta.metadata }),
-          },
-          { asType: 'generation' }
-        );
-        inflight.set(payload.requestId, obs);
-      };
+      const span = startGenAISpan(name, {
+        model: payload.model,
+        provider: payload.provider,
+        operation: 'chat',
+        sessionId: meta.sessionId,
+        userId: meta.userId,
+        prompt: meta.prompt,
+        tags: meta.tags,
+        metadata: meta.metadata,
+      });
 
-      if (meta.sessionId) {
-        propagateAttributes(
-          {
-            sessionId: meta.sessionId,
-            ...(meta.userId && { userId: meta.userId }),
-          },
-          createObs
-        );
-      } else {
-        createObs();
-      }
+      inflight.set(payload.requestId, span);
     },
     { withEventTarget: true }
   );
@@ -98,21 +92,23 @@ export function initAIEventBridge(): void {
     'text:request:completed',
     (event) => {
       const payload = event.payload;
-      const obs = inflight.get(payload.requestId);
-      if (!obs) return;
+      const span = inflight.get(payload.requestId);
+      if (!span) return;
+
       const accumulated = inputAccumulator.get(payload.requestId);
-      obs
-        .update({
-          input: accumulated ?? undefined,
-          output: payload.content,
-          ...(payload.usage && {
-            usageDetails: {
-              input: payload.usage.promptTokens,
-              output: payload.usage.completionTokens,
-            },
-          }),
-        })
-        .end();
+      if (accumulated) {
+        span.setAttribute('gen_ai.input.messages', JSON.stringify(accumulated));
+      }
+
+      if (payload.usage) {
+        setSpanUsage(span, {
+          inputTokens: payload.usage.promptTokens,
+          outputTokens: payload.usage.completionTokens,
+        });
+      }
+
+      endSpanSuccess(span, payload.content);
+
       inflight.delete(payload.requestId);
       inputAccumulator.delete(payload.requestId);
     },
@@ -124,9 +120,11 @@ export function initAIEventBridge(): void {
     (event) => {
       const payload = event.payload;
       const reqId = payload.requestId ?? payload.streamId;
-      const obs = inflight.get(reqId);
-      if (!obs) return;
-      obs.update({ level: 'ERROR', statusMessage: payload.error }).end();
+      const span = inflight.get(reqId);
+      if (!span) return;
+
+      endSpanError(span, payload.error);
+
       inflight.delete(reqId);
       inputAccumulator.delete(reqId);
     },

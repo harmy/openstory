@@ -3,7 +3,7 @@
  * Displays user authentication state with login/logout actions
  */
 
-import { LogOut, Settings, User, Wallet } from 'lucide-react';
+import { BarChart3, LogOut, Settings, User, Wallet } from 'lucide-react';
 import { Route as sequencesRoute } from '@/routes/_protected/sequences/index';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -17,9 +17,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { isSystemAdminFn } from '@/functions/gift-tokens';
 import { useUser } from '@/hooks/use-user';
 import { authClient } from '@/lib/auth/client';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 
 export function UserBadge() {
@@ -96,6 +97,7 @@ export function UserBadge() {
             Credits
           </Link>
         </DropdownMenuItem>
+        <AdminMenuItem />
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => void handleSignOut()}
@@ -106,6 +108,25 @@ export function UserBadge() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function AdminMenuItem() {
+  const { data: adminStatus } = useQuery({
+    queryKey: ['system-admin-status'],
+    queryFn: () => isSystemAdminFn(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (!adminStatus?.isAdmin) return null;
+
+  return (
+    <DropdownMenuItem asChild>
+      <Link to="/admin/usage">
+        <BarChart3 className="mr-2 h-4 w-4" />
+        Admin
+      </Link>
+    </DropdownMenuItem>
   );
 }
 

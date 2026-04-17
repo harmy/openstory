@@ -8,11 +8,15 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Frame } from '@/types/database';
-import { FileTextIcon, ImageIcon, TextIcon } from 'lucide-react';
+import { Clapperboard, FileTextIcon, ImageIcon, TextIcon } from 'lucide-react';
 import { Image } from '@unpic/react';
 import type React from 'react';
 import { useEffect } from 'react';
-import { getSceneScript, getVisualPrompt } from './eval-scene-cell';
+import {
+  getMotionPrompt,
+  getSceneScript,
+  getVisualPrompt,
+} from './eval-scene-cell';
 import type { ViewMode } from './eval-view';
 
 type EvalCellDialogProps = {
@@ -41,6 +45,7 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
   onNavigateDown,
 }) => {
   const prompt = getVisualPrompt(frame);
+  const motionPrompt = getMotionPrompt(frame);
   const script = getSceneScript(frame);
 
   // Handle keyboard navigation
@@ -124,11 +129,15 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
               </TabsTrigger>
               <TabsTrigger value="prompts">
                 <TextIcon className="h-4 w-4 mr-2" />
-                Prompt
+                Prompts
               </TabsTrigger>
               <TabsTrigger value="images">
                 <ImageIcon className="h-4 w-4 mr-2" />
                 Image
+              </TabsTrigger>
+              <TabsTrigger value="motion">
+                <Clapperboard className="h-4 w-4 mr-2" />
+                Motion
               </TabsTrigger>
             </TabsList>
           </div>
@@ -148,15 +157,33 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
           </TabsContent>
 
           <TabsContent value="prompts" className="flex-1 min-h-0 mt-0">
-            {!prompt ? (
+            {!prompt && !motionPrompt ? (
               <div className="flex items-center justify-center h-full text-muted-foreground">
-                No prompt available
+                No prompts available
               </div>
             ) : (
               <ScrollArea className="h-full">
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {prompt}
-                </p>
+                {prompt && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">
+                      Visual
+                    </p>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                      {prompt}
+                    </p>
+                  </div>
+                )}
+                {prompt && motionPrompt && <hr className="my-3 border-muted" />}
+                {motionPrompt && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">
+                      Motion
+                    </p>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                      {motionPrompt}
+                    </p>
+                  </div>
+                )}
               </ScrollArea>
             )}
           </TabsContent>
@@ -174,6 +201,25 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
                   className="max-w-full max-h-full object-contain rounded-lg"
                   width={1000}
                   height={1000}
+                />
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="motion" className="flex-1 min-h-0 mt-0">
+            {!frame.videoUrl ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                No video available
+              </div>
+            ) : (
+              <div className="flex justify-center items-center h-full">
+                <video
+                  src={frame.videoUrl}
+                  controls
+                  loop
+                  muted
+                  playsInline
+                  className="max-w-full max-h-full rounded-lg"
                 />
               </div>
             )}

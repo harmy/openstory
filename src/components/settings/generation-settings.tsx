@@ -1,4 +1,7 @@
-import { ImageModelSelector } from '@/components/model/image-model-selector';
+import {
+  ImageModelMultiSelector,
+  ImageModelSelector,
+} from '@/components/model/image-model-selector';
 import { ModelSelector } from '@/components/model/model-selector';
 import { MotionModelSelector } from '@/components/model/motion-model-selector';
 import { MusicModelSelector } from '@/components/model/music-model-selector';
@@ -53,39 +56,45 @@ const AutoToggle: FC<AutoToggleProps> = ({
 type GenerationSettingsProps = {
   aspectRatio: AspectRatio;
   analysisModels: AnalysisModelId[];
-  imageModel: TextToImageModel;
+  imageModels: TextToImageModel[];
   motionModel: ImageToVideoModel;
   autoGenerateMotion?: boolean;
   musicModel?: AudioModel;
   autoGenerateMusic?: boolean;
   onAspectRatioChange: (value: AspectRatio) => void;
   onAnalysisModelsChange: (value: AnalysisModelId[]) => void;
-  onImageModelChange: (value: TextToImageModel) => void;
+  onImageModelsChange: (value: TextToImageModel[]) => void;
   onMotionModelChange: (value: ImageToVideoModel) => void;
   onAutoGenerateMotionChange?: (value: boolean) => void;
   onMusicModelChange?: (value: AudioModel) => void;
   onAutoGenerateMusicChange?: (value: boolean) => void;
   disabled?: boolean;
   singleSelectAnalysis?: boolean;
+  /** Use single-select for image model (e.g. in regeneration context) */
+  singleSelectImage?: boolean;
+  /** Current style category, used to show/hide style-restricted motion models */
+  styleCategory?: string;
 };
 
 export const GenerationSettings: FC<GenerationSettingsProps> = ({
   aspectRatio,
   analysisModels,
-  imageModel,
+  imageModels,
   motionModel,
   autoGenerateMotion = false,
   musicModel,
   autoGenerateMusic = false,
   onAspectRatioChange,
   onAnalysisModelsChange,
-  onImageModelChange,
+  onImageModelsChange,
   onMotionModelChange,
   onAutoGenerateMotionChange,
   onMusicModelChange,
   onAutoGenerateMusicChange,
   disabled = false,
   singleSelectAnalysis = false,
+  singleSelectImage = false,
+  styleCategory,
 }) => {
   const [open, setOpen] = useState(false);
 
@@ -130,12 +139,22 @@ export const GenerationSettings: FC<GenerationSettingsProps> = ({
 
           {/* Image Model Section */}
           <section className="flex flex-col gap-2">
-            <h3 className="text-sm font-medium text-foreground">Image Model</h3>
-            <ImageModelSelector
-              selectedModel={imageModel}
-              onModelChange={onImageModelChange}
-              disabled={disabled}
-            />
+            <h3 className="text-sm font-medium text-foreground">
+              Image Model{!singleSelectImage && 's'}
+            </h3>
+            {singleSelectImage ? (
+              <ImageModelSelector
+                selectedModel={imageModels[0]}
+                onModelChange={(model) => onImageModelsChange([model])}
+                disabled={disabled}
+              />
+            ) : (
+              <ImageModelMultiSelector
+                selectedModels={imageModels}
+                onModelsChange={onImageModelsChange}
+                disabled={disabled}
+              />
+            )}
           </section>
 
           <Separator />
@@ -159,6 +178,7 @@ export const GenerationSettings: FC<GenerationSettingsProps> = ({
               onModelChange={onMotionModelChange}
               disabled={disabled || !autoGenerateMotion}
               aspectRatio={aspectRatio}
+              styleCategory={styleCategory}
             />
           </section>
 

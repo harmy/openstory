@@ -137,23 +137,6 @@ describe('assembleMotionPrompt', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Kling v3 Pro no audio
-  // ---------------------------------------------------------------------------
-
-  describe('Kling v3 Pro no audio', () => {
-    const model = 'kling_v3_pro_no_audio';
-
-    it('returns fullPrompt only for non-audio model', () => {
-      const result = assembleMotionPrompt({
-        motionPrompt: makeMotionPrompt(),
-        model,
-      });
-
-      expect(result).toBe(fullPromptText);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
   // Google Veo 3.1 (audio-capable)
   // ---------------------------------------------------------------------------
 
@@ -215,21 +198,8 @@ describe('assembleMotionPrompt', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Non-audio models (Seedance, Wan, Grok)
+  // Non-audio models (Grok, MiniMax)
   // ---------------------------------------------------------------------------
-
-  describe('Seedance v1 Pro (no audio)', () => {
-    const model = 'seedance_v1_pro';
-
-    it('returns fullPrompt without dialogue or audio enrichment', () => {
-      const result = assembleMotionPrompt({
-        motionPrompt: makeMotionPrompt(),
-        model,
-      });
-
-      expect(result).toBe(fullPromptText);
-    });
-  });
 
   describe('Grok Imagine Video (no audio)', () => {
     const model = 'grok_imagine_video';
@@ -244,8 +214,8 @@ describe('assembleMotionPrompt', () => {
     });
   });
 
-  describe('Wan 2.6 Flash (no audio)', () => {
-    const model = 'wan_v2_6_flash';
+  describe('MiniMax Hailuo 02 (no audio)', () => {
+    const model = 'minimax_hailuo_02';
 
     it('returns fullPrompt for non-audio model', () => {
       const result = assembleMotionPrompt({
@@ -254,25 +224,6 @@ describe('assembleMotionPrompt', () => {
       });
 
       expect(result).toBe(fullPromptText);
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // OpenAI Sora 2 (audio-capable, uses Veo-style)
-  // ---------------------------------------------------------------------------
-
-  describe('OpenAI Sora 2 (audio)', () => {
-    const model = 'sora_2';
-
-    it('uses Veo-style natural narrative with dialogue', () => {
-      const result = assembleMotionPrompt({
-        motionPrompt: makeMotionPrompt(),
-        model,
-      });
-
-      expect(result).toStartWith(fullPromptText);
-      expect(result).toContain('Sarah says in a firm commanding voice');
-      expect(result).toContain('Audio:');
     });
   });
 

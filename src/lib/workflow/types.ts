@@ -92,6 +92,8 @@ export interface StoryboardWorkflowInput extends SequenceWorkflowContext {
     aiProvider?: 'openai' | 'anthropic' | 'openrouter';
     regenerateAll?: boolean;
   };
+  /** Multiple image models for variant generation (first is primary) */
+  imageModels?: TextToImageModel[];
   autoGenerateMotion?: boolean;
   autoGenerateMusic?: boolean;
   musicModel?: keyof typeof AUDIO_MODELS;
@@ -111,6 +113,8 @@ export interface AnalyzeScriptWorkflowInput extends SequenceWorkflowContext {
   styleConfig: StyleConfig;
   analysisModelId: AnalysisModelId;
   imageModel: TextToImageModel;
+  /** Multiple image models for variant generation (first is primary) */
+  imageModels?: TextToImageModel[];
   videoModel?: ImageToVideoModel;
   autoGenerateMotion?: boolean;
   autoGenerateMusic?: boolean;
@@ -173,6 +177,8 @@ export interface CharacterSheetWorkflowInput extends SequenceWorkflowContext {
   talentMetadata?: CharacterBibleEntry;
   /** Talent description to include in prompt */
   talentDescription?: string;
+  /** Sequence style config to apply to the character sheet */
+  styleConfig?: StyleConfig;
 }
 
 /**
@@ -209,6 +215,8 @@ export interface RecastCharacterWorkflowInput extends SequenceWorkflowContext {
   talentDescription?: string;
   /** Frame IDs to regenerate after sheet generation */
   affectedFrameIds: string[];
+  /** Sequence style config to apply to the character sheet */
+  styleConfig?: StyleConfig;
 }
 
 /**
@@ -267,6 +275,9 @@ export interface CharacterBibleWorkflowInput extends SequenceWorkflowContext {
 
   /** Matched talent data for characters that should use talent references */
   talentMatches?: TalentCharacterMatch[];
+
+  /** Sequence style config to apply to character sheets */
+  styleConfig?: StyleConfig;
 }
 
 export type FrameMapping = Array<{ sceneId: string; frameId: string }>;
@@ -419,6 +430,8 @@ export interface LocationSheetWorkflowInput extends SequenceWorkflowContext {
   referenceImageUrl?: string;
   /** Library location description for overrides */
   libraryLocationDescription?: string;
+  /** Sequence style config to apply to the location sheet */
+  styleConfig?: StyleConfig;
 }
 
 export interface LocationSheetWorkflowResult {
@@ -467,6 +480,8 @@ export interface LocationBibleWorkflowInput extends UserWorkflowContext {
   imageModel?: TextToImageModel;
   /** Library location matches for locations that should use library references */
   libraryLocationMatches?: LibraryLocationMatch[];
+  /** Sequence style config to apply to location sheets */
+  styleConfig?: StyleConfig;
 }
 
 /**
@@ -532,6 +547,8 @@ export interface RecastLocationWorkflowInput extends SequenceWorkflowContext {
   libraryLocationDescription?: string;
   /** Frame IDs to regenerate after sheet generation */
   affectedFrameIds: string[];
+  /** Sequence style config to apply to the location sheet */
+  styleConfig?: StyleConfig;
 }
 
 /**
@@ -637,6 +654,8 @@ export interface FrameImagesWorkflowInput extends SequenceWorkflowContext {
   locationsWithSheets: SequenceLocationMinimal[];
   frameMapping: FrameMapping;
   imageModel?: TextToImageModel;
+  /** Multiple image models for variant generation (first is primary) */
+  imageModels?: TextToImageModel[];
   aspectRatio: AspectRatio;
 }
 

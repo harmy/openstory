@@ -27,6 +27,7 @@ type GenerationSettings = {
   aspectRatio: AspectRatio;
   analysisModels: AnalysisModelId[];
   imageModel: TextToImageModel;
+  imageModels: TextToImageModel[];
   motionModel: ImageToVideoModel;
   autoGenerateMotion: boolean;
   musicModel: AudioModel;
@@ -37,6 +38,7 @@ const DEFAULT_SETTINGS: GenerationSettings = {
   aspectRatio: DEFAULT_ASPECT_RATIO,
   analysisModels: [DEFAULT_ANALYSIS_MODEL],
   imageModel: DEFAULT_IMAGE_MODEL,
+  imageModels: [DEFAULT_IMAGE_MODEL],
   motionModel: DEFAULT_VIDEO_MODEL,
   autoGenerateMotion: false,
   musicModel: DEFAULT_MUSIC_MODEL,
@@ -110,6 +112,15 @@ function loadSettings(): GenerationSettings {
       ? parsed.imageModel
       : DEFAULT_IMAGE_MODEL;
 
+    // Load imageModels array, falling back to [imageModel] for backward compat
+    const imageModels =
+      'imageModels' in parsed &&
+      Array.isArray(parsed.imageModels) &&
+      parsed.imageModels.length > 0 &&
+      parsed.imageModels.every(isValidTextToImageModel)
+        ? parsed.imageModels
+        : [imageModel];
+
     const rawMotionModel = isValidImageToVideoModel(parsed.motionModel)
       ? parsed.motionModel
       : DEFAULT_VIDEO_MODEL;
@@ -138,6 +149,7 @@ function loadSettings(): GenerationSettings {
       aspectRatio,
       analysisModels,
       imageModel,
+      imageModels,
       motionModel,
       autoGenerateMotion,
       musicModel,

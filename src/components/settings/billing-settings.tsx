@@ -45,6 +45,7 @@ import {
   MIN_TOPUP_AMOUNT_USD,
   PRESET_TOPUP_AMOUNTS_USD,
 } from '@/lib/billing/constants';
+import { usePostHog } from '@posthog/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
@@ -102,6 +103,7 @@ const RETURN_KEY = 'openstory:billing-return';
 
 export function BillingSettings({ success, canceled }: BillingSettingsProps) {
   const queryClient = useQueryClient();
+  const posthog = usePostHog();
   const [error, setError] = useState<string | null>(null);
   const [customAmount, setCustomAmount] = useState('');
   const [selectedAmount, setSelectedAmount] = useState<number | null>(100);
@@ -225,6 +227,7 @@ export function BillingSettings({ success, canceled }: BillingSettingsProps) {
       setError(`Minimum top-up is $${MIN_TOPUP_AMOUNT_USD}`);
       return;
     }
+    posthog.capture('credits_topup_started', { amount_usd: effectiveAmount });
     // Remember the amount so we can suggest it for auto-topup after checkout
     localStorage.setItem(
       'openstory:last-topup-amount',
@@ -409,7 +412,15 @@ export function BillingSettings({ success, canceled }: BillingSettingsProps) {
             balanceLoading={balanceLoading}
             balanceData={balanceData}
             isPending={autoTopUpMutation.isPending}
-            onSave={(settings) => autoTopUpMutation.mutate(settings)}
+            onSave={(settings) => {
+              if (settings.enabled) {
+                posthog.capture('auto_topup_enabled', {
+                  threshold_usd: settings.thresholdUsd,
+                  amount_usd: settings.amountUsd,
+                });
+              }
+              autoTopUpMutation.mutate(settings);
+            }}
           />
 
           {/* Invoices */}

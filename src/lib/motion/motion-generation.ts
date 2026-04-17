@@ -13,6 +13,12 @@ import {
   aspectRatioSchema,
 } from '@/lib/constants/aspect-ratios';
 import type { ScopedDb } from '@/lib/db/scoped';
+import { MOTION_JSON_SCHEMAS } from '@/lib/motion/endpoint-map';
+import {
+  getDurationValues,
+  numericOf,
+  snapTo,
+} from '@/lib/motion/motion-transform';
 import { generateVideo, getVideoJobStatus } from '@tanstack/ai';
 import { falVideo } from '@tanstack/ai-fal';
 import { z } from 'zod';
@@ -44,24 +50,19 @@ export type GenerateMotionOptions = {
 import { buildModelInput } from './build-model-input';
 
 /** Snap a requested duration to the nearest valid value for a model.
- *  Uses buildModelInput (the Zod transform) to determine the snapped value. */
+ *  Reads supported durations from the model's JSON Schema and snaps directly. */
 export function snapDuration(
   requested: number | undefined,
   modelKey: ImageToVideoModel
 ): number {
-  const modelConfig = IMAGE_TO_VIDEO_MODELS[modelKey];
-  // The easiest way to get the snapped duration is to build the model input with a dummy prompt and image URL.
-  const result = buildModelInput(
-    { prompt: 'x', imageUrl: 'https://x', duration: requested },
-    modelConfig,
-    modelKey
-  );
-  if ('duration' in result && result.duration != null) {
-    return typeof result.duration === 'number'
-      ? result.duration
-      : parseInt(String(result.duration));
-  }
-  return requested ?? 5;
+  const endpointId = IMAGE_TO_VIDEO_MODELS[modelKey].id;
+  const jsonSchema = MOTION_JSON_SCHEMAS[endpointId];
+  const validValues = getDurationValues(jsonSchema);
+
+  if (validValues.length === 0) return requested ?? 5;
+
+  const target = requested ?? numericOf(validValues[0]);
+  return numericOf(snapTo(target, validValues));
 }
 
 export type MotionJobSubmission = {
@@ -80,10 +81,6 @@ export async function submitMotionJob(
 ): Promise<MotionJobSubmission> {
   const modelKey = options.model || DEFAULT_VIDEO_MODEL;
   const modelConfig = IMAGE_TO_VIDEO_MODELS[modelKey];
-
-  if (!modelConfig) {
-    throw new Error(`Invalid model: ${modelKey}`);
-  }
 
   // Prepare the model input
   const modelInput = buildModelInput(options, modelConfig, modelKey);

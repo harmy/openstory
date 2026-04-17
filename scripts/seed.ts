@@ -100,6 +100,7 @@ async function seed() {
       .from(teams)
       .where(eq(teams.slug, SYSTEM_TEAM_SLUG));
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB query returns undefined when no rows match
     if (!systemTeam) {
       console.log('System team not found, creating...');
       const teamId = generateId();

@@ -1,5 +1,6 @@
+import { getChannelHistoryFn } from '@/functions/realtime-history';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useReducer } from 'react';
+import { useCallback, useEffect, useReducer } from 'react';
 import { useRealtime } from './client';
 import {
   createInitialState,
@@ -251,9 +252,34 @@ export function useGenerationStream(
     [queryClient, sequenceId]
   );
 
-  // Subscribe to realtime events with history replay.
-  // History replays past events on mount so progress persists across navigation.
-  // https://upstash.com/docs/realtime/features/history#subscribe-with-history
+  // Replay channel history on mount so progress survives page refresh.
+  // The realtime client doesn't replay past events on reconnect, so we fetch
+  // all events from server-side history and replay them through the reducer.
+  useEffect(() => {
+    getChannelHistoryFn({ data: { channel: sequenceId } })
+      .then((events: { event: string; data: string }[]) => {
+        for (const evt of events) {
+          try {
+            const parsed = JSON.parse(evt.data);
+            const action = mapEventToAction(evt.event, parsed);
+            if (action) dispatch(action);
+          } catch (e) {
+            console.error(
+              `[useGenerationStream] Failed to parse history event "${evt.event}":`,
+              e
+            );
+          }
+        }
+      })
+      .catch((error: Error) => {
+        console.error(
+          `[useGenerationStream] Failed to fetch history for "${sequenceId}":`,
+          error
+        );
+      });
+  }, [sequenceId]);
+
+  // Subscribe to realtime events for live updates.
   const { status } = useRealtime({
     channels: [sequenceId],
     events: [

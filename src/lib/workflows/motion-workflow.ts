@@ -7,6 +7,7 @@
  * This reduces QStash steps by ~10x vs one-step-per-poll.
  */
 
+import { extractFalErrorMessage } from '@/lib/ai/fal-error';
 import { DEFAULT_VIDEO_MODEL, IMAGE_TO_VIDEO_MODELS } from '@/lib/ai/models';
 import { microsToUsd, type Microdollars } from '@/lib/billing/money';
 import { ensureImageUnderLimit } from '@/lib/image/image-compress';
@@ -26,7 +27,7 @@ import type {
   MergeVideoWorkflowInput,
   MotionWorkflowInput,
 } from '@/lib/workflow/types';
-import { startObservation } from '@langfuse/tracing';
+import { endSpanSuccess, startGenAISpan } from '@/lib/observability/tracer';
 import { WorkflowNonRetryableError } from '@upstash/workflow';
 
 /** Each batch polls in a tight loop for ~30s, then checkpoints for durability */
@@ -46,24 +47,18 @@ function recordMotionObservation(params: {
   videoDuration: number;
   generationTimeMs: number;
 }) {
-  const span = startObservation(
-    'fal-motion',
-    {
-      model: params.model,
-      input: { prompt: params.prompt, imageUrl: params.imageUrl },
+  const span = startGenAISpan('fal-motion', {
+    model: params.model,
+    provider: 'fal',
+    operation: 'generate_content',
+    input: { prompt: params.prompt, imageUrl: params.imageUrl },
+    metadata: {
+      videoDuration: params.videoDuration,
+      generationTimeMs: params.generationTimeMs,
     },
-    { asType: 'generation' }
-  );
-  span
-    .update({
-      output: { videoUrl: params.videoUrl },
-      costDetails: { total: microsToUsd(params.cost) },
-      metadata: {
-        videoDuration: params.videoDuration,
-        generationTimeMs: params.generationTimeMs,
-      },
-    })
-    .end();
+  });
+  span.setAttribute('gen_ai.usage.cost', microsToUsd(params.cost));
+  endSpanSuccess(span, { videoUrl: params.videoUrl });
 }
 
 export const generateMotionWorkflow = createScopedWorkflow<MotionWorkflowInput>(
@@ -71,6 +66,7 @@ export const generateMotionWorkflow = createScopedWorkflow<MotionWorkflowInput>(
     const input = context.requestPayload;
     const model = input.model || DEFAULT_VIDEO_MODEL;
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
     if (!input.imageUrl?.trim()) {
       throw new WorkflowValidationError(
         'Thumbnail Path is required for motion generation'
@@ -148,7 +144,7 @@ export const generateMotionWorkflow = createScopedWorkflow<MotionWorkflowInput>(
     // Step 2: Prepare start image — use Cloudflare Image Resizing if Kling model and image exceeds 10MB
     const startImageUrl = await context.run('prepare-start-image', async () => {
       const modelConfig = IMAGE_TO_VIDEO_MODELS[model];
-      if (modelConfig.provider !== 'kling') {
+      if (modelConfig.provider !== 'Kling') {
         return input.imageUrl;
       }
 
@@ -185,7 +181,7 @@ export const generateMotionWorkflow = createScopedWorkflow<MotionWorkflowInput>(
           error.status === 422
         ) {
           throw new WorkflowNonRetryableError(
-            `Motion job submission rejected (422): ${error.message}`
+            `Motion job submission rejected (422): ${extractFalErrorMessage(error)}`
           );
         }
         // If the error is not a 422, throw it. We'll retry
@@ -221,7 +217,7 @@ export const generateMotionWorkflow = createScopedWorkflow<MotionWorkflowInput>(
               error.status === 422
             ) {
               throw new WorkflowNonRetryableError(
-                `Motion job polling failed (422): ${error.message}`
+                `Motion job polling failed (422): ${extractFalErrorMessage(error)}`
               );
             }
             // If the error is not a 422, throw it. We'll retry

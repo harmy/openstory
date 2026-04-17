@@ -86,8 +86,10 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
-          # AI services (mocked via Playwright routes)
+          # AI services — LLM calls mocked via aimock server, fal.ai via Playwright routes
           FAL_KEY: ${{ secrets.FAL_KEY }}
+          OPENROUTER_KEY: test-mock-key
+          OPENROUTER_BASE_URL: http://localhost:4010
           # Email - preview environment
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}

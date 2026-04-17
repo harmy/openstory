@@ -16,6 +16,7 @@ export function createAdapter(model: TextModel, apiKey?: string) {
   const config = {
     httpReferer: env.VITE_APP_URL || 'http://localhost:3000',
     xTitle: env.VITE_APP_NAME || 'OpenStory',
+    ...(env.OPENROUTER_BASE_URL && { serverURL: env.OPENROUTER_BASE_URL }),
   };
 
   return key

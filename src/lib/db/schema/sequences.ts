@@ -125,6 +125,14 @@ export const sequences = sqliteTable(
     autoGenerateMusic: integer('auto_generate_music', { mode: 'boolean' })
       .default(false)
       .notNull(),
+
+    // Suggested talent/location IDs used during generation (for pre-populating the UI)
+    suggestedTalentIds: text('suggested_talent_ids', {
+      mode: 'json',
+    }).$type<string[]>(),
+    suggestedLocationIds: text('suggested_location_ids', {
+      mode: 'json',
+    }).$type<string[]>(),
   },
   (table) => [
     index('idx_sequences_created_at').on(table.createdAt),

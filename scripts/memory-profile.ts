@@ -20,6 +20,7 @@
  */
 export {};
 
+// oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- env var can be undefined at runtime
 const BASE_URL = process.env.VITE_APP_URL ?? 'http://localhost:3000';
 const API_URL = `${BASE_URL}/api/dev/memory`;
 const OUTPUT_PATH = '.output/memory-profile.html';
@@ -318,6 +319,7 @@ async function mainLoop() {
   if (mode === '--watch') {
     console.log('Watching memory profile (Ctrl+C to stop)...');
     let opened = false;
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- intentional infinite loop
     while (true) {
       try {
         const samples = await fetchSamples();

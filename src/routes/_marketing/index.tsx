@@ -2,10 +2,9 @@ import { createFileRoute, redirect } from '@tanstack/react-router';
 import { sessionQueryOptions } from '@/lib/auth/session-query';
 import { HeroSection } from '@/components/marketing/hero-section';
 import { ManifestoSection } from '@/components/marketing/manifesto-section';
-import { ProductShowcase } from '@/components/marketing/product-showcase';
 import { TopTierFeatures } from '@/components/marketing/feature-cards';
-import { HowItWorks } from '@/components/marketing/how-it-works';
 import { OpenFairSection } from '@/components/marketing/open-fair-section';
+import { HowItWorks } from '@/components/marketing/how-it-works';
 import { FaqSection } from '@/components/marketing/faq-section';
 import { FAQ_ITEMS, SITE_CONFIG } from '@/lib/marketing/constants';
 
@@ -75,7 +74,6 @@ function HomePage() {
     <main>
       <HeroSection />
       <ManifestoSection />
-      <ProductShowcase />
       <TopTierFeatures />
       <OpenFairSection />
       <HowItWorks />

@@ -96,6 +96,9 @@ export default defineConfig({
     }),
     viteReact(),
   ],
+  optimizeDeps: {
+    exclude: ['bun'],
+  },
   ssr: {
     noExternal: ['@upstash/realtime', '@videojs/react'],
   },

@@ -21,6 +21,7 @@ import {
   Link,
   Download,
 } from 'lucide-react';
+import { usePostHog } from '@posthog/react';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 
@@ -37,16 +38,21 @@ export const TheatreView: React.FC<TheatreViewProps> = ({
 }) => {
   const { mergedVideoStatus, mergedVideoUrl, mergedVideoError, aspectRatio } =
     sequence;
+  const posthog = usePostHog();
 
   const handleCopyVideoUrl = useCallback(async () => {
     if (!mergedVideoUrl) return;
     try {
       await navigator.clipboard.writeText(mergedVideoUrl);
       toast.success('Video URL copied');
-    } catch {
+      posthog.capture('video_url_copied', {
+        sequence_id: sequence.id,
+      });
+    } catch (err) {
       toast.error('Failed to copy URL');
+      posthog.captureException(err);
     }
-  }, [mergedVideoUrl]);
+  }, [mergedVideoUrl, sequence.id, posthog]);
 
   const handleDownloadVideo = useCallback(() => {
     if (!mergedVideoUrl) return;
@@ -56,7 +62,10 @@ export const TheatreView: React.FC<TheatreViewProps> = ({
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  }, [mergedVideoUrl, sequence.title]);
+    posthog.capture('video_downloaded', {
+      sequence_id: sequence.id,
+    });
+  }, [mergedVideoUrl, sequence.id, sequence.title, posthog]);
 
   // Merging state
   if (mergedVideoStatus === 'merging') {

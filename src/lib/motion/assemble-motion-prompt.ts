@@ -52,11 +52,10 @@ export function assembleMotionPrompt({
     const dialogueData = hasDialogue ? dialogue : undefined;
 
     switch (provider) {
-      case 'kling':
+      case 'Kling':
         assembled = buildKlingPrompt(fullPrompt, dialogueData, audio);
         break;
-      case 'google':
-      case 'openai':
+      case 'Google':
       default:
         assembled = buildVeoPrompt(fullPrompt, dialogueData, audio);
         break;

@@ -238,6 +238,7 @@ export const smartRetryFn = createServerFn({ method: 'POST' })
           prompt: resolveMotionPrompt(frame, videoModel),
           model: videoModel,
           aspectRatio: sequence.aspectRatio,
+          duration: frame.durationMs ? frame.durationMs / 1000 : undefined,
         };
 
         await triggerWorkflow('/motion', workflowInput, {

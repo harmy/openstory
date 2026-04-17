@@ -6,52 +6,44 @@ import { z } from 'zod';
 import { motionTransform } from './motion-transform';
 
 import {
-  zBytedanceSeedanceV1ProImageToVideoInput,
+  zBytedanceSeedanceV15ProImageToVideoInput,
   zGrokImagineVideoImageToVideoInput,
-  zKlingVideoO1ImageToVideoInput,
-  zKlingVideoV25TurboProImageToVideoInput,
   zKlingVideoV3ProImageToVideoInput,
-  zSora2ImageToVideoInput,
-  zV26ImageToVideoFlashInput,
+  zLtx23ImageToVideoInput,
+  zMinimaxHailuo02ProImageToVideoInput,
+  zSeedance20ImageToVideoInput,
   zVeo31ImageToVideoInput,
-  zVeo3Input,
 } from './generated/zod.gen';
 
 import {
-  BytedanceSeedanceV1ProImageToVideoInputSchema,
+  BytedanceSeedanceV15ProImageToVideoInputSchema,
   GrokImagineVideoImageToVideoInputSchema,
-  KlingVideoO1ImageToVideoInputSchema,
-  KlingVideoV25TurboProImageToVideoInputSchema,
   KlingVideoV3ProImageToVideoInputSchema,
-  Sora2ImageToVideoInputSchema,
-  V26ImageToVideoFlashInputSchema,
+  Ltx23ImageToVideoInputSchema,
+  MinimaxHailuo02ProImageToVideoInputSchema,
+  Seedance20ImageToVideoInputSchema,
   Veo31ImageToVideoInputSchema,
-  Veo3InputSchema,
 } from './generated/schemas.gen';
 
 export type MotionJSONSchema =
-  | typeof BytedanceSeedanceV1ProImageToVideoInputSchema
+  | typeof BytedanceSeedanceV15ProImageToVideoInputSchema
   | typeof GrokImagineVideoImageToVideoInputSchema
-  | typeof KlingVideoO1ImageToVideoInputSchema
-  | typeof KlingVideoV25TurboProImageToVideoInputSchema
   | typeof KlingVideoV3ProImageToVideoInputSchema
-  | typeof Sora2ImageToVideoInputSchema
-  | typeof V26ImageToVideoFlashInputSchema
-  | typeof Veo31ImageToVideoInputSchema
-  | typeof Veo3InputSchema;
+  | typeof Ltx23ImageToVideoInputSchema
+  | typeof MinimaxHailuo02ProImageToVideoInputSchema
+  | typeof Seedance20ImageToVideoInputSchema
+  | typeof Veo31ImageToVideoInputSchema;
 
 export const MOTION_INPUT_SCHEMAS = {
-  'fal-ai/bytedance/seedance/v1/pro/image-to-video':
-    zBytedanceSeedanceV1ProImageToVideoInput,
-  'fal-ai/veo3': zVeo3Input,
-  'fal-ai/veo3.1/image-to-video': zVeo31ImageToVideoInput,
-  'fal-ai/kling-video/v2.5-turbo/pro/image-to-video':
-    zKlingVideoV25TurboProImageToVideoInput,
-  'fal-ai/sora-2/image-to-video': zSora2ImageToVideoInput,
-  'fal-ai/kling-video/o1/image-to-video': zKlingVideoO1ImageToVideoInput,
+  'bytedance/seedance-2.0/image-to-video': zSeedance20ImageToVideoInput,
+  'fal-ai/bytedance/seedance/v1.5/pro/image-to-video':
+    zBytedanceSeedanceV15ProImageToVideoInput,
   'fal-ai/kling-video/v3/pro/image-to-video': zKlingVideoV3ProImageToVideoInput,
+  'fal-ai/ltx-2.3/image-to-video': zLtx23ImageToVideoInput,
+  'fal-ai/minimax/hailuo-02/pro/image-to-video':
+    zMinimaxHailuo02ProImageToVideoInput,
+  'fal-ai/veo3.1/image-to-video': zVeo31ImageToVideoInput,
   'xai/grok-imagine-video/image-to-video': zGrokImagineVideoImageToVideoInput,
-  'wan/v2.6/image-to-video/flash': zV26ImageToVideoFlashInput,
 };
 
 export type MotionEndpointId = keyof typeof MOTION_INPUT_SCHEMAS;
@@ -60,38 +52,47 @@ export type MotionInputFor<T extends MotionEndpointId> = z.infer<
   (typeof MOTION_INPUT_SCHEMAS)[T]
 >;
 
+export const MOTION_JSON_SCHEMAS = {
+  'bytedance/seedance-2.0/image-to-video': Seedance20ImageToVideoInputSchema,
+  'fal-ai/bytedance/seedance/v1.5/pro/image-to-video':
+    BytedanceSeedanceV15ProImageToVideoInputSchema,
+  'fal-ai/kling-video/v3/pro/image-to-video':
+    KlingVideoV3ProImageToVideoInputSchema,
+  'fal-ai/ltx-2.3/image-to-video': Ltx23ImageToVideoInputSchema,
+  'fal-ai/minimax/hailuo-02/pro/image-to-video':
+    MinimaxHailuo02ProImageToVideoInputSchema,
+  'fal-ai/veo3.1/image-to-video': Veo31ImageToVideoInputSchema,
+  'xai/grok-imagine-video/image-to-video':
+    GrokImagineVideoImageToVideoInputSchema,
+} satisfies Record<MotionEndpointId, MotionJSONSchema>;
+
 export const MOTION_TRANSFORMS = {
-  'fal-ai/bytedance/seedance/v1/pro/image-to-video': motionTransform(
-    zBytedanceSeedanceV1ProImageToVideoInput,
-    BytedanceSeedanceV1ProImageToVideoInputSchema
+  'bytedance/seedance-2.0/image-to-video': motionTransform(
+    zSeedance20ImageToVideoInput,
+    Seedance20ImageToVideoInputSchema
   ),
-  'fal-ai/veo3': motionTransform(zVeo3Input, Veo3InputSchema),
-  'fal-ai/veo3.1/image-to-video': motionTransform(
-    zVeo31ImageToVideoInput,
-    Veo31ImageToVideoInputSchema
-  ),
-  'fal-ai/kling-video/v2.5-turbo/pro/image-to-video': motionTransform(
-    zKlingVideoV25TurboProImageToVideoInput,
-    KlingVideoV25TurboProImageToVideoInputSchema
-  ),
-  'fal-ai/sora-2/image-to-video': motionTransform(
-    zSora2ImageToVideoInput,
-    Sora2ImageToVideoInputSchema
-  ),
-  'fal-ai/kling-video/o1/image-to-video': motionTransform(
-    zKlingVideoO1ImageToVideoInput,
-    KlingVideoO1ImageToVideoInputSchema
+  'fal-ai/bytedance/seedance/v1.5/pro/image-to-video': motionTransform(
+    zBytedanceSeedanceV15ProImageToVideoInput,
+    BytedanceSeedanceV15ProImageToVideoInputSchema
   ),
   'fal-ai/kling-video/v3/pro/image-to-video': motionTransform(
     zKlingVideoV3ProImageToVideoInput,
     KlingVideoV3ProImageToVideoInputSchema
   ),
+  'fal-ai/ltx-2.3/image-to-video': motionTransform(
+    zLtx23ImageToVideoInput,
+    Ltx23ImageToVideoInputSchema
+  ),
+  'fal-ai/minimax/hailuo-02/pro/image-to-video': motionTransform(
+    zMinimaxHailuo02ProImageToVideoInput,
+    MinimaxHailuo02ProImageToVideoInputSchema
+  ),
+  'fal-ai/veo3.1/image-to-video': motionTransform(
+    zVeo31ImageToVideoInput,
+    Veo31ImageToVideoInputSchema
+  ),
   'xai/grok-imagine-video/image-to-video': motionTransform(
     zGrokImagineVideoImageToVideoInput,
     GrokImagineVideoImageToVideoInputSchema
-  ),
-  'wan/v2.6/image-to-video/flash': motionTransform(
-    zV26ImageToVideoFlashInput,
-    V26ImageToVideoFlashInputSchema
   ),
 };

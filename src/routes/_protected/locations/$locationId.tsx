@@ -222,6 +222,7 @@ function LocationDetailPage() {
             </Card>
           )}
 
+          {/* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime guard */}
           {location.sheets && location.sheets.some((s) => s.imageUrl) ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {location.sheets
@@ -271,6 +272,7 @@ function LocationDetailPage() {
                 Created
               </dt>
               <dd className="text-sm">
+                {/* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime guard */}
                 {location.createdAt
                   ? new Date(location.createdAt).toLocaleDateString()
                   : 'Unknown'}

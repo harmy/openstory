@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { CharacterBibleEntry } from '@/lib/ai/scene-analysis.schema';
+import type { StyleConfig } from '@/lib/db/schema';
 import {
   buildCastingAttributes,
   buildCharacterSheetPrompt,
@@ -119,6 +120,85 @@ describe('buildCastingAttributes', () => {
     expect(result.gender).toBe('Female'); // falls back to script
     expect(result.ethnicity).toBe('Caucasian'); // falls back to script
     expect(result.physicalDescription).toBe('Muscular build');
+  });
+});
+
+const neoNoirStyle: StyleConfig = {
+  mood: 'Dark, brooding, and atmospheric',
+  artStyle:
+    'Neo-noir cinematic style with deep shadows and high contrast. Gritty urban realism with expressionist framing.',
+  lighting:
+    'Low-key chiaroscuro lighting with single hard sources. Venetian blind shadows, neon reflections, harsh rim lighting.',
+  colorPalette: ['#0A0A0A', '#1A1A2E', '#E94560', '#16213E', '#533483'],
+  cameraWork:
+    'Dutch angles, low-angle power shots, tight close-ups. Slow deliberate movements with dramatic reveals.',
+  referenceFilms: ['Blade Runner', 'Sin City', 'Drive'],
+  colorGrading:
+    'Desaturated with selective color pops. Teal and orange split toning with crushed blacks.',
+};
+
+describe('buildCharacterSheetPrompt with styleConfig', () => {
+  test('without styleConfig produces default studio prompt', () => {
+    const { prompt } = buildCharacterSheetPrompt(scriptEntry);
+
+    expect(prompt).toContain('cyclorama');
+    expect(prompt).toContain('5500K daylight');
+    expect(prompt).toContain('Commercial reference photography');
+  });
+
+  test('with styleConfig replaces environment, lighting, and optical sections', () => {
+    const { prompt } = buildCharacterSheetPrompt(
+      scriptEntry,
+      undefined,
+      neoNoirStyle
+    );
+
+    // Should NOT contain studio defaults
+    expect(prompt).not.toContain('cyclorama');
+    expect(prompt).not.toContain('5500K daylight');
+    expect(prompt).not.toContain('Commercial reference photography');
+
+    // Should contain style-derived content
+    expect(prompt).toContain('Neo-noir cinematic style');
+    expect(prompt).toContain('chiaroscuro');
+    expect(prompt).toContain('Dark, brooding');
+    expect(prompt).toContain('Blade Runner');
+  });
+
+  test('with styleConfig preserves layout and materiality sections', () => {
+    const { prompt } = buildCharacterSheetPrompt(
+      scriptEntry,
+      undefined,
+      neoNoirStyle
+    );
+
+    expect(prompt).toContain('[LAYOUT]');
+    expect(prompt).toContain('four distinct, technical views');
+    expect(prompt).toContain('[MATERIALITY]');
+    expect(prompt).toContain('Hyper-accurate rendering');
+  });
+
+  test('with styleConfig and talentOverrides composes correctly', () => {
+    const { prompt, referenceUrls } = buildCharacterSheetPrompt(
+      scriptEntry,
+      {
+        sheetMetadata: talentMetadata,
+        sheetImageUrl: 'https://example.com/sheet.png',
+      },
+      neoNoirStyle
+    );
+
+    // Style is applied
+    expect(prompt).toContain('Neo-noir cinematic style');
+    expect(prompt).not.toContain('cyclorama');
+
+    // Talent reference is preserved
+    expect(prompt).toContain('IMAGE takes priority');
+    expect(referenceUrls).toContain('https://example.com/sheet.png');
+
+    // Talent appearance is used
+    expect(prompt).toContain('Male');
+    expect(prompt).toContain('Dark hair, sideburns');
   });
 });
 

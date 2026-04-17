@@ -77,6 +77,7 @@ export const realtimeSchema = {
         .optional(),
       thumbnailUrl: z.string().optional(),
       previewThumbnailUrl: z.string().optional(),
+      model: z.string().optional(),
     }),
 
     // Fast preview frames replaced by AI-analyzed frames

@@ -127,16 +127,19 @@ export const sceneSplitWorkflow = createScopedWorkflow<
 
             if (event.type === 'scene:updated') {
               console.log(
+                // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                 `[Stream:${logName}] Scene ${event.index + 1} title updated: "${event.scene.metadata?.title}" (chunk #${chunkCount})`
               );
 
               if (sequenceId) {
                 await scopedDb.frames.upsert({
                   sequenceId,
+                  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                   description: event.scene.originalScript?.extract || '',
                   orderIndex: event.index,
                   metadata: event.scene,
                   durationMs: Math.round(
+                    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                     (event.scene.metadata?.durationSeconds || 3) * 1000
                   ),
                   thumbnailStatus: 'generating',
@@ -149,8 +152,11 @@ export const sceneSplitWorkflow = createScopedWorkflow<
                 {
                   sceneId: event.scene.sceneId,
                   sceneNumber: event.scene.sceneNumber,
+                  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                   title: event.scene.metadata?.title || 'Untitled Scene',
+                  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                   scriptExtract: event.scene.originalScript?.extract || '',
+                  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                   durationSeconds: event.scene.metadata?.durationSeconds || 3,
                 }
               );
@@ -158,6 +164,7 @@ export const sceneSplitWorkflow = createScopedWorkflow<
 
             if (event.type === 'scene') {
               console.log(
+                // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                 `[Stream:${logName}] Scene ${event.index + 1} complete: "${event.scene.metadata?.title}" (chunk #${chunkCount}, ${finalText.length} chars)`
               );
 
@@ -166,8 +173,11 @@ export const sceneSplitWorkflow = createScopedWorkflow<
                 {
                   sceneId: event.scene.sceneId,
                   sceneNumber: event.scene.sceneNumber,
+                  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                   title: event.scene.metadata?.title || 'Untitled Scene',
+                  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                   scriptExtract: event.scene.originalScript?.extract || '',
+                  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                   durationSeconds: event.scene.metadata?.durationSeconds || 3,
                 }
               );
@@ -175,10 +185,12 @@ export const sceneSplitWorkflow = createScopedWorkflow<
               if (sequenceId) {
                 const frame = await scopedDb.frames.upsert({
                   sequenceId,
+                  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                   description: event.scene.originalScript?.extract || '',
                   orderIndex: event.index,
                   metadata: event.scene,
                   durationMs: Math.round(
+                    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                     (event.scene.metadata?.durationSeconds || 3) * 1000
                   ),
                   thumbnailStatus: 'generating',
@@ -204,7 +216,9 @@ export const sceneSplitWorkflow = createScopedWorkflow<
                 );
                 if (prevScene && prevFrameId) {
                   const sceneText =
+                    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                     prevScene.originalScript?.extract ??
+                    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                     prevScene.metadata?.title ??
                     'A cinematic scene';
                   const prompt = buildPreviewPrompt(sceneText, styleConfig);
@@ -242,7 +256,9 @@ export const sceneSplitWorkflow = createScopedWorkflow<
         // Trigger preview for the last scene (the loop only triggers N-1)
         if (prevScene && prevFrameId && sequenceId) {
           const sceneText =
+            // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
             prevScene.originalScript?.extract ??
+            // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
             prevScene.metadata?.title ??
             'A cinematic scene';
           const prompt = buildPreviewPrompt(sceneText, styleConfig);
@@ -289,6 +305,7 @@ export const sceneSplitWorkflow = createScopedWorkflow<
     const { scenes, title, frameMapping, characterBible, locationBible } =
       await context.run('reconcile-frames', async () => {
         const { scenes, projectMetadata } = streamResult;
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
         const resolvedTitle = projectMetadata?.title || 'Untitled';
 
         if (!sequenceId) {
@@ -307,10 +324,12 @@ export const sceneSplitWorkflow = createScopedWorkflow<
           (scene, index) =>
             ({
               sequenceId,
+              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
               description: scene.originalScript?.extract || '',
               orderIndex: index,
               metadata: scene,
               durationMs: Math.round(
+                // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                 (scene.metadata?.durationSeconds || 3) * 1000
               ),
               thumbnailStatus: 'generating',
@@ -320,6 +339,7 @@ export const sceneSplitWorkflow = createScopedWorkflow<
 
         const reconciledFrames = await scopedDb.frames.bulkUpsert(frameInserts);
         const reconciledMapping = reconciledFrames.map((f) => ({
+          // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: metadata is JSONB, can be null despite Drizzle types
           sceneId: f.metadata?.sceneId || '',
           frameId: f.id,
         }));

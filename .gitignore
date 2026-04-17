@@ -106,6 +106,9 @@ docs/architecture/scoped-db-context-implementation.md
 
 .tanstack
 
+# claude code local state
+.claude/*.lock
+
 # previews
 preview*/
 
@@ -115,3 +118,4 @@ docs/superpowers/
 
 # json
 json/
+.env

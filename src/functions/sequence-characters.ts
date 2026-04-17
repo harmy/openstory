@@ -7,6 +7,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { zodValidator } from '@tanstack/zod-adapter';
 import { z } from 'zod';
 
+import { StyleConfigSchema } from '@/lib/db/schema';
 import { buildCastingAttributes } from '@/lib/prompts/character-prompt';
 import { getGenerationChannel } from '@/lib/realtime';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
@@ -51,6 +52,17 @@ export const recastCharacterFn = createServerFn({ method: 'POST' })
       throw new Error('Character not found');
     }
 
+    // Fetch the sequence's style for character sheet generation
+    const sequence = await context.scopedDb.sequences.getForUser({
+      sequenceId: character.sequenceId,
+    });
+    const style = sequence.styleId
+      ? await context.scopedDb.styles.getById(sequence.styleId)
+      : null;
+    const styleConfig = style
+      ? StyleConfigSchema.parse(style.config)
+      : undefined;
+
     const talentWithSheets = await context.scopedDb.talent.getWithRelations(
       data.talentId
     );
@@ -62,7 +74,9 @@ export const recastCharacterFn = createServerFn({ method: 'POST' })
     }
 
     const defaultSheet =
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       talentWithSheets.sheets?.find((s) => s.isDefault) ??
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       talentWithSheets.sheets?.[0];
 
     // Merge talent appearance with character role attributes
@@ -79,6 +93,7 @@ export const recastCharacterFn = createServerFn({ method: 'POST' })
         consistencyTag: character.consistencyTag ?? '',
       },
       {
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
         sheetMetadata: defaultSheet?.metadata ?? undefined,
         talentName: talentWithSheets.name,
         talentDescription: talentWithSheets.description ?? undefined,
@@ -129,11 +144,14 @@ export const recastCharacterFn = createServerFn({ method: 'POST' })
       sequenceId: character.sequenceId,
       teamId: context.teamId,
       userId: context.user.id,
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       referenceImageUrl: defaultSheet?.imageUrl ?? undefined,
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
       talentMetadata: defaultSheet?.metadata ?? undefined,
       talentDescription:
         `This character must look exactly like ${talentWithSheets.name}. ${talentWithSheets.description ?? ''}`.trim(),
       affectedFrameIds,
+      styleConfig,
     };
 
     const workflowRunId = await triggerWorkflow(

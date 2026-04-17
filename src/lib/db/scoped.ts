@@ -19,6 +19,7 @@ import {
   createBillingReadMethods,
 } from '@/lib/db/scoped/billing';
 import { createCharactersMethods } from '@/lib/db/scoped/characters';
+import { createFrameVariantsMethods } from '@/lib/db/scoped/frame-variants';
 import { createFramesMethods } from '@/lib/db/scoped/frames';
 import { createLibraryMethods } from '@/lib/db/scoped/library';
 import {
@@ -51,6 +52,7 @@ import { and, eq, sql } from 'drizzle-orm';
 export type {
   GiftTokenStatus,
   GiftTokenWithStatus,
+  UserActivityRow,
 } from '@/lib/db/scoped/admin';
 
 export type {
@@ -87,6 +89,7 @@ export async function resolveUserTeam(
     )
     .limit(1);
 
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
   return result ?? null;
 }
 
@@ -110,6 +113,7 @@ export async function getUserTeamMembership(
     .where(and(eq(teamMembers.userId, userId), eq(teamMembers.teamId, teamId)))
     .limit(1);
 
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
   return result ?? null;
 }
 
@@ -125,6 +129,7 @@ export async function getSequenceByIdUnscoped(
     .select()
     .from(sequences)
     .where(eq(sequences.id, sequenceId));
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
   return result ?? null;
 }
 
@@ -182,6 +187,7 @@ export async function ensureUserAndTeam(authUser: {
       .values({ name: teamName, slug: teamSlug })
       .returning();
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
     if (!team) throw new Error('Failed to create team');
 
     await db.insert(teamMembers).values({
@@ -232,6 +238,7 @@ export function createScopedDb(teamId: string, userId: string) {
     library: createLibraryMethods(db, teamId),
 
     frames: createFramesMethods(db),
+    frameVariants: createFrameVariantsMethods(db),
 
     characters: createCharactersMethods(db),
     sequenceLocations: createSequenceLocationsMethods(db),
@@ -264,6 +271,7 @@ export function createReadOnlyScopedDb(teamId: string) {
     library: createLibraryMethods(db, teamId),
 
     frames: createFramesMethods(db),
+    frameVariants: createFrameVariantsMethods(db),
 
     characters: createCharactersMethods(db),
     sequenceLocations: createSequenceLocationsMethods(db),

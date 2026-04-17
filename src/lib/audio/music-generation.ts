@@ -1,5 +1,6 @@
 import { getEnv } from '#env';
 import { calculateAudioCost } from '@/lib/ai/fal-cost';
+import { extractFalErrorMessage } from '@/lib/ai/fal-error';
 import {
   AUDIO_MODEL_KEYS,
   AUDIO_MODELS,
@@ -10,7 +11,11 @@ import {
 import { microsToUsd, type Microdollars } from '@/lib/billing/money';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { createFalClient } from '@fal-ai/client';
-import { startObservation } from '@langfuse/tracing';
+import {
+  endSpanError,
+  endSpanSuccess,
+  startGenAISpan,
+} from '@/lib/observability/tracer';
 import { z } from 'zod';
 
 export const generateMusicOptionsSchema = z.object({
@@ -64,14 +69,13 @@ function clampDuration(
   return Math.min(requested, config.capabilities.maxDuration);
 }
 
-const AUDIO_PROVIDER_INPUT_BUILDERS: Record<
-  string,
-  (
-    options: GenerateMusicOptions,
-    config: AudioModelConfig
-  ) => Record<string, unknown>
-> = {
-  'ace-step': (options, config) => {
+type AudioInputBuilder = (
+  options: GenerateMusicOptions,
+  config: AudioModelConfig
+) => Record<string, unknown>;
+
+const AUDIO_INPUT_BUILDERS: Partial<Record<AudioModel, AudioInputBuilder>> = {
+  ace_step: (options, config) => {
     const lyrics =
       options.instrumental && !options.lyrics
         ? '[inst]'
@@ -88,24 +92,18 @@ const AUDIO_PROVIDER_INPUT_BUILDERS: Record<
     };
   },
 
-  elevenlabs: (options, config) => ({
-    text: options.prompt,
-    duration_seconds: clampDuration(options.duration, config),
-  }),
-
-  mmaudio: (options, config) => ({
-    prompt: options.prompt,
-    duration: clampDuration(options.duration, config),
-    num_steps: 25,
-  }),
-
-  'elevenlabs-music': (options, config) => ({
+  elevenlabs_music: (options, config) => ({
     prompt: options.prompt,
     music_length_ms: clampDuration(options.duration, config) * 1000,
     force_instrumental: options.instrumental ?? true,
   }),
 
-  beatoven: (options, config) => ({
+  minimax_music_v2: (options, config) => ({
+    prompt: options.prompt,
+    duration: clampDuration(options.duration, config),
+  }),
+
+  lyria_2: (options, config) => ({
     prompt: options.prompt,
     duration: clampDuration(options.duration, config),
   }),
@@ -143,44 +141,29 @@ export async function generateMusic(
   const modelKey = options.model || DEFAULT_MUSIC_MODEL;
   const modelConfig = AUDIO_MODELS[modelKey];
 
-  if (!modelConfig) {
-    throw new Error(`Invalid audio model: ${modelKey}`);
-  }
-
-  const span = startObservation(
-    options.traceName ?? 'fal-music',
-    {
-      model: modelKey,
-      input: {
-        prompt: options.prompt,
-        tags: options.tags,
-        duration: options.duration,
-        instrumental: options.instrumental,
-      },
+  const span = startGenAISpan(options.traceName ?? 'fal-music', {
+    model: modelKey,
+    provider: 'fal',
+    operation: 'generate_content',
+    input: {
+      prompt: options.prompt,
+      tags: options.tags,
+      duration: options.duration,
+      instrumental: options.instrumental,
     },
-    { asType: 'generation' }
-  );
+  });
 
   try {
     const result = await callFalAudio(options, modelConfig);
 
-    span
-      .update({
-        output: { audioUrl: result.audioUrl },
-        costDetails: result.metadata?.cost
-          ? { total: microsToUsd(result.metadata.cost) }
-          : undefined,
-      })
-      .end();
+    if (result.metadata.cost) {
+      span.setAttribute('gen_ai.usage.cost', microsToUsd(result.metadata.cost));
+    }
+    endSpanSuccess(span, { audioUrl: result.audioUrl });
 
     return result;
   } catch (error) {
-    span
-      .update({
-        level: 'ERROR',
-        statusMessage: error instanceof Error ? error.message : String(error),
-      })
-      .end();
+    endSpanError(span, extractFalErrorMessage(error));
     throw error;
   }
 }
@@ -189,11 +172,10 @@ async function callFalAudio(
   options: GenerateMusicOptions,
   modelConfig: AudioModelConfig
 ): Promise<MusicResult> {
-  const inputBuilder = AUDIO_PROVIDER_INPUT_BUILDERS[modelConfig.provider];
+  const modelKey = options.model || DEFAULT_MUSIC_MODEL;
+  const inputBuilder = AUDIO_INPUT_BUILDERS[modelKey];
   if (!inputBuilder) {
-    throw new Error(
-      `No input builder for audio provider: ${modelConfig.provider}`
-    );
+    throw new Error(`No input builder for audio model: ${modelKey}`);
   }
 
   const input = inputBuilder(options, modelConfig);
@@ -226,7 +208,7 @@ async function callFalAudio(
         console.log(`[Music Service] Queue position: ${update.queue_position}`);
       } else if (update.status === 'IN_PROGRESS') {
         console.log(`[Music Service] Generation in progress...`);
-      } else if (update.status === 'COMPLETED') {
+      } else {
         console.log(
           `[Music Service] Completed in ${update.metrics?.inference_time || 'unknown'}s`
         );

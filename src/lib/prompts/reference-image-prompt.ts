@@ -24,11 +24,14 @@ export type ReferenceImageDescription = {
  *
  * @param basePrompt - The original prompt
  * @param references - The reference images (order determines Image numbering)
+ * @param maxPromptLength - If set, truncate the base prompt to fit within this
+ *   total limit while preserving the reference-images section in full.
  * @returns The enhanced prompt and ordered reference URLs
  */
 export function buildReferenceImagePrompt(
   basePrompt: string,
-  references: ReferenceImageDescription[]
+  references: ReferenceImageDescription[],
+  maxPromptLength?: number
 ): PromptWithReferenceImages {
   // strip any existing reference-images section from the prompt
   const promptWithoutReferenceImages = basePrompt.replace(
@@ -88,21 +91,61 @@ export function buildReferenceImagePrompt(
   </reference-images>`;
 
     // Return URLs in the same order as the labeled list
+    const combinedPrompt = `${promptWithoutReferenceImages}\n\n  ${referenceSection}`;
     return {
-      prompt: `${promptWithoutReferenceImages}\n\n  ${referenceSection}`,
+      prompt: truncateBasePrompt(
+        promptWithoutReferenceImages,
+        referenceSection,
+        combinedPrompt,
+        maxPromptLength
+      ),
       referenceUrls: ordered.map((r) => r.referenceImageUrl),
     };
   }
 
   // Legacy path: no roles set, flat list
-  const enhancedPrompt = `${promptWithoutReferenceImages}
-
-  <reference-images>
+  const legacyRefSection = `<reference-images>
     ${references.map((reference, index) => `- Image ${index + 1}: ${reference.description}`).join('\n    ')}
   </reference-images>`;
 
+  const combinedPrompt = `${promptWithoutReferenceImages}\n\n  ${legacyRefSection}`;
   return {
-    prompt: enhancedPrompt,
+    prompt: truncateBasePrompt(
+      promptWithoutReferenceImages,
+      legacyRefSection,
+      combinedPrompt,
+      maxPromptLength
+    ),
     referenceUrls: references.map((reference) => reference.referenceImageUrl),
   };
+}
+
+/**
+ * Truncate the base prompt portion while preserving the reference-images section.
+ * Returns the combined prompt unchanged when no limit is set or it already fits.
+ */
+function truncateBasePrompt(
+  basePrompt: string,
+  refSection: string,
+  combinedPrompt: string,
+  maxLength?: number
+): string {
+  if (!maxLength || combinedPrompt.length <= maxLength) return combinedPrompt;
+
+  // joiner between base prompt and reference section
+  const joiner = '\n\n  ';
+  const available = maxLength - refSection.length - joiner.length - 3; // 3 for '...'
+
+  if (available <= 0) {
+    // Reference section alone exceeds limit — truncate the whole thing as a last resort
+    console.warn(
+      `[buildReferenceImagePrompt] Reference section (${refSection.length} chars) exceeds maxPromptLength (${maxLength})`
+    );
+    return combinedPrompt.slice(0, maxLength - 3) + '...';
+  }
+
+  console.warn(
+    `[buildReferenceImagePrompt] Base prompt truncated from ${basePrompt.length} to ${available} chars (reference-images preserved)`
+  );
+  return basePrompt.slice(0, available) + '...' + joiner + refSection;
 }

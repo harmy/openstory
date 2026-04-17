@@ -65,14 +65,14 @@ export const characterBibleWorkflow = createScopedWorkflow<
             sequenceId: input.sequenceId,
             characterId: character.characterId,
             name: character.name,
-            age: castingAttrs?.age ?? character.age ?? '',
-            gender: castingAttrs?.gender ?? character.gender ?? null,
-            ethnicity: castingAttrs?.ethnicity ?? character.ethnicity ?? null,
+            age: castingAttrs?.age ?? character.age,
+            gender: castingAttrs?.gender ?? character.gender,
+            ethnicity: castingAttrs?.ethnicity ?? character.ethnicity,
             physicalDescription:
               castingAttrs?.physicalDescription ??
               character.physicalDescription,
             standardClothing: character.standardClothing,
-            distinguishingFeatures: character.distinguishingFeatures ?? null,
+            distinguishingFeatures: character.distinguishingFeatures,
             consistencyTag:
               castingAttrs?.consistencyTag ?? character.consistencyTag,
             firstMentionSceneId: null,
@@ -112,14 +112,22 @@ export const characterBibleWorkflow = createScopedWorkflow<
               })
             : null;
 
-          // Generate character sheet (with talent appearance as reference)
+          // Generate character sheet (with talent appearance as reference + sequence style)
           const { prompt, referenceUrls } = talentMatch
-            ? buildCharacterSheetPrompt(character, {
-                sheetMetadata: talentMatch.sheetMetadata,
-                description: `This character must look exactly like ${talentMatch.talentName}`,
-                sheetImageUrl: talentMatch.sheetImageUrl,
-              })
-            : buildCharacterSheetPrompt(character);
+            ? buildCharacterSheetPrompt(
+                character,
+                {
+                  sheetMetadata: talentMatch.sheetMetadata,
+                  description: `This character must look exactly like ${talentMatch.talentName}`,
+                  sheetImageUrl: talentMatch.sheetImageUrl,
+                },
+                input.styleConfig
+              )
+            : buildCharacterSheetPrompt(
+                character,
+                undefined,
+                input.styleConfig
+              );
 
           const model = input.imageModel ?? DEFAULT_IMAGE_MODEL;
 

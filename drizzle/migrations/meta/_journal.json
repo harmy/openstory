@@ -85,6 +85,20 @@
       "when": 1774606614816,
       "tag": "0011_parched_weapon_omega",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1776147079048,
+      "tag": "0012_greedy_warhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1776317307336,
+      "tag": "0013_careless_living_mummy",
+      "breakpoints": true
     }
   ]
 }

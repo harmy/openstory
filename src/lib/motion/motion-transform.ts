@@ -30,15 +30,16 @@ function unwrapAnyOf(prop: JSONProp, key: string): JSONProp | undefined {
 }
 
 /** Extract valid duration values from the JSON Schema duration property. */
-function getDurationValues<T extends MotionJSONSchema>(
+export function getDurationValues<T extends MotionJSONSchema>(
   schema: T
 ): (string | number)[] {
   const props = schema.properties;
-  if (!props || !('duration' in props)) return [];
+  if (!('duration' in props)) return [];
   const dur = props.duration as JSONProp;
 
   const withEnum = unwrapAnyOf(dur, 'enum');
-  if (withEnum && Array.isArray(withEnum.enum)) return withEnum.enum;
+  if (withEnum && Array.isArray(withEnum.enum))
+    return withEnum.enum.filter((v) => !Number.isNaN(numericOf(v)));
 
   const withRange = unwrapAnyOf(dur, 'minimum');
   if (withRange) {
@@ -53,14 +54,13 @@ function getDurationValues<T extends MotionJSONSchema>(
 /** Extract maxLength from the prompt property, handling anyOf wrappers. */
 function getPromptMaxLength(schema: MotionJSONSchema): number | undefined {
   const props = schema.properties;
-  if (!props || !('prompt' in props)) return undefined;
+  if (!('prompt' in props)) return undefined;
   return Number(unwrapAnyOf(props.prompt, 'maxLength')?.maxLength ?? undefined);
 }
 
 /** Find the image URL field name (start_image_url or image_url). */
 function getImageUrlField(schema: MotionJSONSchema): string | undefined {
   const props = schema.properties;
-  if (!props) return undefined;
   if ('start_image_url' in props) return 'start_image_url';
   if ('image_url' in props) return 'image_url';
   return undefined;
@@ -77,15 +77,16 @@ const zMotionInput = z.looseObject({
   aspectRatio: z.string().optional(),
 });
 
-function numericOf(v: string | number): number {
+export function numericOf(v: string | number): number {
   return typeof v === 'number' ? v : parseFloat(v);
 }
 
-function snapTo(
+export function snapTo(
   n: number,
   values: readonly (string | number)[]
 ): string | number {
-  return values.reduce((prev, curr) =>
+  const numeric = values.filter((v) => !Number.isNaN(numericOf(v)));
+  return numeric.reduce((prev, curr) =>
     Math.abs(numericOf(curr) - n) < Math.abs(numericOf(prev) - n) ? curr : prev
   );
 }

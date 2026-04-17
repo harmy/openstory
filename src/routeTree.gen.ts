@@ -17,6 +17,7 @@ import { Route as ProtectedRouteRouteImport } from './routes/_protected/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as MarketingIndexRouteImport } from './routes/_marketing/index'
 import { Route as MetaOgLinkedinRouteImport } from './routes/meta/og-linkedin'
+import { Route as MetaOgGithubRouteImport } from './routes/meta/og-github'
 import { Route as MetaOgRouteImport } from './routes/meta/og'
 import { Route as GiftCodeRouteImport } from './routes/gift/$code'
 import { Route as ApiRealtimeRouteImport } from './routes/api/realtime'
@@ -27,6 +28,7 @@ import { Route as MarketingPrivacyRouteImport } from './routes/_marketing/privac
 import { Route as AuthVerifyRouteImport } from './routes/_auth/verify'
 import { Route as AuthLoginRouteImport } from './routes/_auth/login'
 import { Route as ProtectedSettingsRouteRouteImport } from './routes/_protected/settings/route'
+import { Route as ProtectedAdminRouteRouteImport } from './routes/_protected/admin/route'
 import { Route as ProtectedTalentIndexRouteImport } from './routes/_protected/talent/index'
 import { Route as ProtectedSettingsIndexRouteImport } from './routes/_protected/settings/index'
 import { Route as ProtectedSequencesIndexRouteImport } from './routes/_protected/sequences/index'
@@ -43,6 +45,7 @@ import { Route as ProtectedSettingsPasskeysRouteImport } from './routes/_protect
 import { Route as ProtectedSettingsApiKeysRouteImport } from './routes/_protected/settings/api-keys'
 import { Route as ProtectedSequencesNewRouteImport } from './routes/_protected/sequences/new'
 import { Route as ProtectedLocationsLocationIdRouteImport } from './routes/_protected/locations/$locationId'
+import { Route as ProtectedAdminUsageRouteImport } from './routes/_protected/admin/usage'
 import { Route as ProtectedSequencesIdRouteRouteImport } from './routes/_protected/sequences/$id/route'
 import { Route as ProtectedSequencesIdTheatreRouteImport } from './routes/_protected/sequences/$id/theatre'
 import { Route as ProtectedSequencesIdScriptRouteImport } from './routes/_protected/sequences/$id/script'
@@ -88,6 +91,11 @@ const MarketingIndexRoute = MarketingIndexRouteImport.update({
 const MetaOgLinkedinRoute = MetaOgLinkedinRouteImport.update({
   id: '/meta/og-linkedin',
   path: '/meta/og-linkedin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MetaOgGithubRoute = MetaOgGithubRouteImport.update({
+  id: '/meta/og-github',
+  path: '/meta/og-github',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MetaOgRoute = MetaOgRouteImport.update({
@@ -138,6 +146,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
 const ProtectedSettingsRouteRoute = ProtectedSettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => ProtectedRouteRoute,
+} as any)
+const ProtectedAdminRouteRoute = ProtectedAdminRouteRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => ProtectedRouteRoute,
 } as any)
 const ProtectedTalentIndexRoute = ProtectedTalentIndexRouteImport.update({
@@ -223,6 +236,11 @@ const ProtectedLocationsLocationIdRoute =
     path: '/locations/$locationId',
     getParentRoute: () => ProtectedRouteRoute,
   } as any)
+const ProtectedAdminUsageRoute = ProtectedAdminUsageRouteImport.update({
+  id: '/usage',
+  path: '/usage',
+  getParentRoute: () => ProtectedAdminRouteRoute,
+} as any)
 const ProtectedSequencesIdRouteRoute =
   ProtectedSequencesIdRouteRouteImport.update({
     id: '/sequences/$id',
@@ -283,6 +301,7 @@ export interface FileRoutesByFullPath {
   '/llms.txt': typeof LlmsDottxtRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/admin': typeof ProtectedAdminRouteRouteWithChildren
   '/settings': typeof ProtectedSettingsRouteRouteWithChildren
   '/login': typeof AuthLoginRoute
   '/verify': typeof AuthVerifyRoute
@@ -293,8 +312,10 @@ export interface FileRoutesByFullPath {
   '/api/realtime': typeof ApiRealtimeRoute
   '/gift/$code': typeof GiftCodeRoute
   '/meta/og': typeof MetaOgRoute
+  '/meta/og-github': typeof MetaOgGithubRoute
   '/meta/og-linkedin': typeof MetaOgLinkedinRoute
   '/sequences/$id': typeof ProtectedSequencesIdRouteRouteWithChildren
+  '/admin/usage': typeof ProtectedAdminUsageRoute
   '/locations/$locationId': typeof ProtectedLocationsLocationIdRoute
   '/sequences/new': typeof ProtectedSequencesNewRoute
   '/settings/api-keys': typeof ProtectedSettingsApiKeysRoute
@@ -325,6 +346,7 @@ export interface FileRoutesByTo {
   '/llms.txt': typeof LlmsDottxtRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/admin': typeof ProtectedAdminRouteRouteWithChildren
   '/login': typeof AuthLoginRoute
   '/verify': typeof AuthVerifyRoute
   '/privacy': typeof MarketingPrivacyRoute
@@ -334,8 +356,10 @@ export interface FileRoutesByTo {
   '/api/realtime': typeof ApiRealtimeRoute
   '/gift/$code': typeof GiftCodeRoute
   '/meta/og': typeof MetaOgRoute
+  '/meta/og-github': typeof MetaOgGithubRoute
   '/meta/og-linkedin': typeof MetaOgLinkedinRoute
   '/sequences/$id': typeof ProtectedSequencesIdRouteRouteWithChildren
+  '/admin/usage': typeof ProtectedAdminUsageRoute
   '/locations/$locationId': typeof ProtectedLocationsLocationIdRoute
   '/sequences/new': typeof ProtectedSequencesNewRoute
   '/settings/api-keys': typeof ProtectedSettingsApiKeysRoute
@@ -369,6 +393,7 @@ export interface FileRoutesById {
   '/llms.txt': typeof LlmsDottxtRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/_protected/admin': typeof ProtectedAdminRouteRouteWithChildren
   '/_protected/settings': typeof ProtectedSettingsRouteRouteWithChildren
   '/_auth/login': typeof AuthLoginRoute
   '/_auth/verify': typeof AuthVerifyRoute
@@ -379,9 +404,11 @@ export interface FileRoutesById {
   '/api/realtime': typeof ApiRealtimeRoute
   '/gift/$code': typeof GiftCodeRoute
   '/meta/og': typeof MetaOgRoute
+  '/meta/og-github': typeof MetaOgGithubRoute
   '/meta/og-linkedin': typeof MetaOgLinkedinRoute
   '/_marketing/': typeof MarketingIndexRoute
   '/_protected/sequences/$id': typeof ProtectedSequencesIdRouteRouteWithChildren
+  '/_protected/admin/usage': typeof ProtectedAdminUsageRoute
   '/_protected/locations/$locationId': typeof ProtectedLocationsLocationIdRoute
   '/_protected/sequences/new': typeof ProtectedSequencesNewRoute
   '/_protected/settings/api-keys': typeof ProtectedSettingsApiKeysRoute
@@ -414,6 +441,7 @@ export interface FileRouteTypes {
     | '/llms.txt'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/admin'
     | '/settings'
     | '/login'
     | '/verify'
@@ -424,8 +452,10 @@ export interface FileRouteTypes {
     | '/api/realtime'
     | '/gift/$code'
     | '/meta/og'
+    | '/meta/og-github'
     | '/meta/og-linkedin'
     | '/sequences/$id'
+    | '/admin/usage'
     | '/locations/$locationId'
     | '/sequences/new'
     | '/settings/api-keys'
@@ -456,6 +486,7 @@ export interface FileRouteTypes {
     | '/llms.txt'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/admin'
     | '/login'
     | '/verify'
     | '/privacy'
@@ -465,8 +496,10 @@ export interface FileRouteTypes {
     | '/api/realtime'
     | '/gift/$code'
     | '/meta/og'
+    | '/meta/og-github'
     | '/meta/og-linkedin'
     | '/sequences/$id'
+    | '/admin/usage'
     | '/locations/$locationId'
     | '/sequences/new'
     | '/settings/api-keys'
@@ -499,6 +532,7 @@ export interface FileRouteTypes {
     | '/llms.txt'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/_protected/admin'
     | '/_protected/settings'
     | '/_auth/login'
     | '/_auth/verify'
@@ -509,9 +543,11 @@ export interface FileRouteTypes {
     | '/api/realtime'
     | '/gift/$code'
     | '/meta/og'
+    | '/meta/og-github'
     | '/meta/og-linkedin'
     | '/_marketing/'
     | '/_protected/sequences/$id'
+    | '/_protected/admin/usage'
     | '/_protected/locations/$locationId'
     | '/_protected/sequences/new'
     | '/_protected/settings/api-keys'
@@ -548,6 +584,7 @@ export interface RootRouteChildren {
   ApiRealtimeRoute: typeof ApiRealtimeRoute
   GiftCodeRoute: typeof GiftCodeRoute
   MetaOgRoute: typeof MetaOgRoute
+  MetaOgGithubRoute: typeof MetaOgGithubRoute
   MetaOgLinkedinRoute: typeof MetaOgLinkedinRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiBillingWebhookRoute: typeof ApiBillingWebhookRoute
@@ -614,6 +651,13 @@ declare module '@tanstack/react-router' {
       path: '/meta/og-linkedin'
       fullPath: '/meta/og-linkedin'
       preLoaderRoute: typeof MetaOgLinkedinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/meta/og-github': {
+      id: '/meta/og-github'
+      path: '/meta/og-github'
+      fullPath: '/meta/og-github'
+      preLoaderRoute: typeof MetaOgGithubRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/meta/og': {
@@ -684,6 +728,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof ProtectedSettingsRouteRouteImport
+      parentRoute: typeof ProtectedRouteRoute
+    }
+    '/_protected/admin': {
+      id: '/_protected/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof ProtectedAdminRouteRouteImport
       parentRoute: typeof ProtectedRouteRoute
     }
     '/_protected/talent/': {
@@ -798,6 +849,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedLocationsLocationIdRouteImport
       parentRoute: typeof ProtectedRouteRoute
     }
+    '/_protected/admin/usage': {
+      id: '/_protected/admin/usage'
+      path: '/usage'
+      fullPath: '/admin/usage'
+      preLoaderRoute: typeof ProtectedAdminUsageRouteImport
+      parentRoute: typeof ProtectedAdminRouteRoute
+    }
     '/_protected/sequences/$id': {
       id: '/_protected/sequences/$id'
       path: '/sequences/$id'
@@ -878,6 +936,17 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
   AuthRouteRouteChildren,
 )
 
+interface ProtectedAdminRouteRouteChildren {
+  ProtectedAdminUsageRoute: typeof ProtectedAdminUsageRoute
+}
+
+const ProtectedAdminRouteRouteChildren: ProtectedAdminRouteRouteChildren = {
+  ProtectedAdminUsageRoute: ProtectedAdminUsageRoute,
+}
+
+const ProtectedAdminRouteRouteWithChildren =
+  ProtectedAdminRouteRoute._addFileChildren(ProtectedAdminRouteRouteChildren)
+
 interface ProtectedSettingsRouteRouteChildren {
   ProtectedSettingsApiKeysRoute: typeof ProtectedSettingsApiKeysRoute
   ProtectedSettingsPasskeysRoute: typeof ProtectedSettingsPasskeysRoute
@@ -928,6 +997,7 @@ const ProtectedSequencesIdRouteRouteWithChildren =
   )
 
 interface ProtectedRouteRouteChildren {
+  ProtectedAdminRouteRoute: typeof ProtectedAdminRouteRouteWithChildren
   ProtectedSettingsRouteRoute: typeof ProtectedSettingsRouteRouteWithChildren
   ProtectedCreditsRoute: typeof ProtectedCreditsRoute
   ProtectedEvalRoute: typeof ProtectedEvalRoute
@@ -941,6 +1011,7 @@ interface ProtectedRouteRouteChildren {
 }
 
 const ProtectedRouteRouteChildren: ProtectedRouteRouteChildren = {
+  ProtectedAdminRouteRoute: ProtectedAdminRouteRouteWithChildren,
   ProtectedSettingsRouteRoute: ProtectedSettingsRouteRouteWithChildren,
   ProtectedCreditsRoute: ProtectedCreditsRoute,
   ProtectedEvalRoute: ProtectedEvalRoute,
@@ -983,6 +1054,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiRealtimeRoute: ApiRealtimeRoute,
   GiftCodeRoute: GiftCodeRoute,
   MetaOgRoute: MetaOgRoute,
+  MetaOgGithubRoute: MetaOgGithubRoute,
   MetaOgLinkedinRoute: MetaOgLinkedinRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiBillingWebhookRoute: ApiBillingWebhookRoute,

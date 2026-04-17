@@ -3,1363 +3,891 @@
 import * as z from 'zod';
 
 /**
- * VideoFile
+ * File
  */
-export const zVideoFile = z.object({
-  file_size: z.union([z.int(), z.unknown()]).optional(),
-  duration: z.union([z.number(), z.unknown()]).optional(),
-  height: z.union([z.int(), z.unknown()]).optional(),
-  url: z.string().register(z.globalRegistry, {
-    description: 'The URL where the file can be downloaded from.',
-  }),
-  fps: z.union([z.number(), z.unknown()]).optional(),
-  width: z.union([z.int(), z.unknown()]).optional(),
-  file_name: z.union([z.string(), z.unknown()]).optional(),
-  content_type: z.union([z.string(), z.unknown()]).optional(),
-  num_frames: z.union([z.int(), z.unknown()]).optional(),
+export const zFile = z.object({
+    file_name: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional(),
+    url: z.string().register(z.globalRegistry, {
+        description: 'The URL where the file can be downloaded from.'
+    }),
+    file_size: z.union([
+        z.int(),
+        z.unknown()
+    ]).optional(),
+    content_type: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional()
 });
 
 /**
- * ImageToVideoOutput
- *
- * Output for image-to-video generation
+ * Seedance2VideoOutput
  */
-export const zV26ImageToVideoFlashOutput = z
-  .object({
-    actual_prompt: z.union([z.string(), z.unknown()]).optional(),
+export const zSeedance20ImageToVideoOutput = z.object({
+    video: zFile,
     seed: z.int().register(z.globalRegistry, {
-      description: 'The seed used for generation',
-    }),
-    video: zVideoFile,
-  })
-  .register(z.globalRegistry, {
-    description: 'Output for image-to-video generation',
-  });
+        description: 'The seed used for generation.'
+    })
+});
 
 /**
- * ImageToVideoInput
- *
- * Input for Wan 2.6 image-to-video generation
+ * Seedance2I2VInput
  */
-export const zV26ImageToVideoFlashInput = z
-  .object({
-    prompt: z.string().min(1).register(z.globalRegistry, {
-      description:
-        'The text prompt describing the desired video motion. Max 800 characters.',
+export const zSeedance20ImageToVideoInput = z.object({
+    prompt: z.string().register(z.globalRegistry, {
+        description: 'The text prompt describing the desired motion and action for the video.'
     }),
-    duration: z
-      .enum(['5', '10', '15'])
-      .register(z.globalRegistry, {
-        description:
-          'Duration of the generated video in seconds. Choose between 5, 10 or 15 seconds.',
-      })
-      .optional(),
-    resolution: z
-      .enum(['720p', '1080p'])
-      .register(z.globalRegistry, {
-        description: 'Video resolution. Valid values: 720p, 1080p',
-      })
-      .optional(),
-    enable_safety_checker: z
-      .boolean()
-      .register(z.globalRegistry, {
-        description: 'If set to true, the safety checker will be enabled.',
-      })
-      .optional()
-      .default(true),
-    image_url: z.union([z.string(), z.string()]),
-    enable_prompt_expansion: z
-      .boolean()
-      .register(z.globalRegistry, {
-        description: 'Whether to enable prompt rewriting using LLM.',
-      })
-      .optional()
-      .default(true),
-    seed: z.union([z.int(), z.unknown()]).optional(),
-    multi_shots: z
-      .boolean()
-      .register(z.globalRegistry, {
-        description:
-          'When true, enables intelligent multi-shot segmentation. Only active when enable_prompt_expansion is True. Set to false for single-shot generation.',
-      })
-      .optional()
-      .default(false),
-    negative_prompt: z.union([z.string(), z.unknown()]).optional(),
-    audio_url: z.union([z.string(), z.unknown()]).optional(),
-  })
-  .register(z.globalRegistry, {
-    description: 'Input for Wan 2.6 image-to-video generation',
-  });
+    aspect_ratio: z.enum([
+        'auto',
+        '21:9',
+        '16:9',
+        '4:3',
+        '1:1',
+        '3:4',
+        '9:16'
+    ]).register(z.globalRegistry, {
+        description: 'The aspect ratio of the generated video. Use 16:9 for landscape, 9:16 for portrait/vertical, 1:1 for square, 21:9 for ultrawide cinematic, or auto to infer from the input image.'
+    }).optional(),
+    duration: z.enum([
+        'auto',
+        '4',
+        '5',
+        '6',
+        '7',
+        '8',
+        '9',
+        '10',
+        '11',
+        '12',
+        '13',
+        '14',
+        '15'
+    ]).register(z.globalRegistry, {
+        description: 'Duration of the video in seconds. Supports 4 to 15 seconds, or auto to let the model decide based on the prompt.'
+    }).optional(),
+    resolution: z.enum(['480p', '720p']).register(z.globalRegistry, {
+        description: 'Video resolution - 480p for faster generation, 720p for balance.'
+    }).optional(),
+    generate_audio: z.boolean().register(z.globalRegistry, {
+        description: 'Whether to generate synchronized audio for the video, including sound effects, ambient sounds, and lip-synced speech. The cost of video generation is the same regardless of whether audio is generated or not.'
+    }).optional().default(true),
+    end_user_id: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional(),
+    end_image_url: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional(),
+    seed: z.union([
+        z.int(),
+        z.unknown()
+    ]).optional(),
+    image_url: z.union([
+        z.string(),
+        z.string()
+    ])
+});
+
+/**
+ * SeedanceProv15I2VVideoOutput
+ */
+export const zBytedanceSeedanceV15ProImageToVideoOutput = z.object({
+    video: zFile,
+    seed: z.int().register(z.globalRegistry, {
+        description: 'Seed used for generation'
+    })
+});
+
+/**
+ * SeedanceProv15ImageToVideoInput
+ */
+export const zBytedanceSeedanceV15ProImageToVideoInput = z.object({
+    image_url: z.union([
+        z.string(),
+        z.string()
+    ]),
+    duration: z.enum([
+        '4',
+        '5',
+        '6',
+        '7',
+        '8',
+        '9',
+        '10',
+        '11',
+        '12'
+    ]).register(z.globalRegistry, {
+        description: 'Duration of the video in seconds'
+    }).optional(),
+    generate_audio: z.boolean().register(z.globalRegistry, {
+        description: 'Whether to generate audio for the video'
+    }).optional().default(true),
+    aspect_ratio: z.enum([
+        '21:9',
+        '16:9',
+        '4:3',
+        '1:1',
+        '3:4',
+        '9:16',
+        'auto'
+    ]).register(z.globalRegistry, {
+        description: 'The aspect ratio of the generated video'
+    }).optional(),
+    prompt: z.string().register(z.globalRegistry, {
+        description: 'The text prompt used to generate the video'
+    }),
+    end_image_url: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional(),
+    seed: z.union([
+        z.int(),
+        z.unknown()
+    ]).optional(),
+    resolution: z.enum([
+        '480p',
+        '720p',
+        '1080p'
+    ]).register(z.globalRegistry, {
+        description: 'Video resolution - 480p for faster generation, 720p for balance, 1080p for higher quality'
+    }).optional(),
+    camera_fixed: z.boolean().register(z.globalRegistry, {
+        description: 'Whether to fix the camera position'
+    }).optional().default(false),
+    enable_safety_checker: z.boolean().register(z.globalRegistry, {
+        description: 'If set to true, the safety checker will be enabled.'
+    }).optional().default(true)
+});
+
+/**
+ * ImageToVideoHailuo02Output
+ */
+export const zMinimaxHailuo02ProImageToVideoOutput = z.object({
+    video: zFile
+});
+
+/**
+ * ProImageToVideoHailuo02Input
+ */
+export const zMinimaxHailuo02ProImageToVideoInput = z.object({
+    image_url: z.union([
+        z.string(),
+        z.string()
+    ]),
+    prompt_optimizer: z.boolean().register(z.globalRegistry, {
+        description: 'Whether to use the model\'s prompt optimizer'
+    }).optional().default(true),
+    end_image_url: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional(),
+    prompt: z.string().max(2000)
+});
+
+/**
+ * VideoFile
+ */
+export const zVideoFile = z.object({
+    file_name: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional(),
+    fps: z.union([
+        z.number(),
+        z.unknown()
+    ]).optional(),
+    duration: z.union([
+        z.number(),
+        z.unknown()
+    ]).optional(),
+    content_type: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional(),
+    height: z.union([
+        z.int(),
+        z.unknown()
+    ]).optional(),
+    width: z.union([
+        z.int(),
+        z.unknown()
+    ]).optional(),
+    file_size: z.union([
+        z.int(),
+        z.unknown()
+    ]).optional(),
+    url: z.string().register(z.globalRegistry, {
+        description: 'The URL where the file can be downloaded from.'
+    }),
+    num_frames: z.union([
+        z.int(),
+        z.unknown()
+    ]).optional()
+});
 
 /**
  * XAIImageToVideoOutput
  */
 export const zGrokImagineVideoImageToVideoOutput = z.object({
-  video: zVideoFile,
+    video: zVideoFile
 });
 
 /**
  * XAIImageToVideoInput
  */
 export const zGrokImagineVideoImageToVideoInput = z.object({
-  prompt: z.string().max(4096).register(z.globalRegistry, {
-    description: 'Text description of desired changes or motion in the video.',
-  }),
-  aspect_ratio: z
-    .union([
-      z.enum(['auto', '16:9', '4:3', '3:2', '1:1', '2:3', '3:4', '9:16']),
-      z.unknown(),
-    ])
-    .optional(),
-  resolution: z
-    .enum(['480p', '720p'])
-    .register(z.globalRegistry, {
-      description: 'Resolution of the output video.',
-    })
-    .optional(),
-  duration: z
-    .int()
-    .gte(1)
-    .lte(15)
-    .register(z.globalRegistry, {
-      description: 'Video duration in seconds.',
-    })
-    .optional()
-    .default(6),
-  image_url: z.union([z.string(), z.string()]),
+    prompt: z.string().max(4096).register(z.globalRegistry, {
+        description: 'Text description of desired changes or motion in the video.'
+    }),
+    aspect_ratio: z.union([
+        z.enum([
+            'auto',
+            '16:9',
+            '4:3',
+            '3:2',
+            '1:1',
+            '2:3',
+            '3:4',
+            '9:16'
+        ]),
+        z.unknown()
+    ]).optional(),
+    image_url: z.union([
+        z.string(),
+        z.string()
+    ]),
+    duration: z.int().gte(1).lte(15).register(z.globalRegistry, {
+        description: 'Video duration in seconds.'
+    }).optional().default(6),
+    resolution: z.enum(['480p', '720p']).register(z.globalRegistry, {
+        description: 'Resolution of the output video.'
+    }).optional()
 });
 
 /**
  * KlingV3ComboElementInput
  */
 export const zKlingV3ComboElementInput = z.object({
-  video_url: z.union([z.string(), z.unknown()]).optional(),
-  voice_id: z.union([z.string(), z.unknown()]).optional(),
-  reference_image_urls: z.union([z.array(z.string()), z.unknown()]).optional(),
-  frontal_image_url: z.union([z.string(), z.unknown()]).optional(),
+    frontal_image_url: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional(),
+    video_url: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional(),
+    reference_image_urls: z.union([
+        z.array(z.string()),
+        z.unknown()
+    ]).optional(),
+    voice_id: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional()
 });
 
 /**
  * KlingV3MultiPromptElement
  */
 export const zKlingV3MultiPromptElement = z.object({
-  prompt: z.string().register(z.globalRegistry, {
-    description: 'The prompt for this shot.',
-  }),
-  duration: z
-    .enum([
-      '1',
-      '2',
-      '3',
-      '4',
-      '5',
-      '6',
-      '7',
-      '8',
-      '9',
-      '10',
-      '11',
-      '12',
-      '13',
-      '14',
-      '15',
-    ])
-    .register(z.globalRegistry, {
-      description: 'The duration of this shot in seconds',
-    })
-    .optional(),
-});
-
-/**
- * File
- */
-export const zFile = z.object({
-  file_size: z.union([z.int(), z.unknown()]).optional(),
-  file_name: z.union([z.string(), z.unknown()]).optional(),
-  content_type: z.union([z.string(), z.unknown()]).optional(),
-  url: z.string().register(z.globalRegistry, {
-    description: 'The URL where the file can be downloaded from.',
-  }),
+    prompt: z.string().register(z.globalRegistry, {
+        description: 'The prompt for this shot.'
+    }),
+    duration: z.enum([
+        '1',
+        '2',
+        '3',
+        '4',
+        '5',
+        '6',
+        '7',
+        '8',
+        '9',
+        '10',
+        '11',
+        '12',
+        '13',
+        '14',
+        '15'
+    ]).register(z.globalRegistry, {
+        description: 'The duration of this shot in seconds'
+    }).optional()
 });
 
 /**
  * ImageToVideoV3ProOutput
  */
 export const zKlingVideoV3ProImageToVideoOutput = z.object({
-  video: zFile,
+    video: zFile
 });
 
 /**
  * ImageToVideoV3ProRequest
  */
 export const zKlingVideoV3ProImageToVideoInput = z.object({
-  prompt: z.union([z.string().max(2500), z.unknown()]).optional(),
-  duration: z
-    .enum([
-      '3',
-      '4',
-      '5',
-      '6',
-      '7',
-      '8',
-      '9',
-      '10',
-      '11',
-      '12',
-      '13',
-      '14',
-      '15',
+    cfg_scale: z.number().gte(0).lte(1).register(z.globalRegistry, {
+        description: '\n            The CFG (Classifier Free Guidance) scale is a measure of how close you want\n            the model to stick to your prompt.\n        '
+    }).optional().default(0.5),
+    multi_prompt: z.union([
+        z.array(zKlingV3MultiPromptElement),
+        z.unknown()
+    ]).optional(),
+    shot_type: z.string().register(z.globalRegistry, {
+        description: 'The type of multi-shot video generation. Required when multi_prompt is provided.'
+    }).optional().default('customize'),
+    elements: z.union([
+        z.array(zKlingV3ComboElementInput),
+        z.unknown()
+    ]).optional(),
+    duration: z.enum([
+        '3',
+        '4',
+        '5',
+        '6',
+        '7',
+        '8',
+        '9',
+        '10',
+        '11',
+        '12',
+        '13',
+        '14',
+        '15'
+    ]).register(z.globalRegistry, {
+        description: 'The duration of the generated video in seconds'
+    }).optional(),
+    end_image_url: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional(),
+    generate_audio: z.boolean().register(z.globalRegistry, {
+        description: 'Whether to generate native audio for the video. Supports Chinese and English voice output. Other languages are automatically translated to English. For English speech, use lowercase letters; for acronyms or proper nouns, use uppercase.'
+    }).optional().default(true),
+    prompt: z.union([
+        z.string().max(2500),
+        z.unknown()
+    ]).optional(),
+    negative_prompt: z.string().max(2500).optional().default('blur, distort, and low quality'),
+    start_image_url: z.union([
+        z.string(),
+        z.string()
     ])
-    .register(z.globalRegistry, {
-      description: 'The duration of the generated video in seconds',
-    })
-    .optional(),
-  start_image_url: z.union([z.string(), z.string()]),
-  multi_prompt: z
-    .union([z.array(zKlingV3MultiPromptElement), z.unknown()])
-    .optional(),
-  generate_audio: z
-    .boolean()
-    .register(z.globalRegistry, {
-      description:
-        'Whether to generate native audio for the video. Supports Chinese and English voice output. Other languages are automatically translated to English. For English speech, use lowercase letters; for acronyms or proper nouns, use uppercase.',
-    })
-    .optional()
-    .default(true),
-  shot_type: z
-    .string()
-    .register(z.globalRegistry, {
-      description:
-        'The type of multi-shot video generation. Required when multi_prompt is provided.',
-    })
-    .optional()
-    .default('customize'),
-  elements: z
-    .union([z.array(zKlingV3ComboElementInput), z.unknown()])
-    .optional(),
-  end_image_url: z.union([z.string(), z.unknown()]).optional(),
-  negative_prompt: z
-    .string()
-    .max(2500)
-    .optional()
-    .default('blur, distort, and low quality'),
-  cfg_scale: z
-    .number()
-    .gte(0)
-    .lte(1)
-    .register(z.globalRegistry, {
-      description:
-        '\n            The CFG (Classifier Free Guidance) scale is a measure of how close you want\n            the model to stick to your prompt.\n        ',
-    })
-    .optional()
-    .default(0.5),
-});
-
-/**
- * OmniVideoImageToVideoOutput
- *
- * Output for Kling Omni Video generation.
- */
-export const zKlingVideoO1ImageToVideoOutput = z
-  .object({
-    video: zFile,
-  })
-  .register(z.globalRegistry, {
-    description: 'Output for Kling Omni Video generation.',
-  });
-
-/**
- * OmniVideoImageToVideoInput
- */
-export const zKlingVideoO1ImageToVideoInput = z.object({
-  prompt: z.string().max(2500).register(z.globalRegistry, {
-    description:
-      'Use @Image1 to reference the start frame, @Image2 to reference the end frame.',
-  }),
-  duration: z
-    .enum(['3', '4', '5', '6', '7', '8', '9', '10'])
-    .register(z.globalRegistry, {
-      description: 'Video duration in seconds.',
-    })
-    .optional(),
-  start_image_url: z.union([z.string(), z.string()]),
-  end_image_url: z.union([z.string(), z.unknown()]).optional(),
-});
-
-/**
- * ImageFile
- */
-export const zImageFile = z.object({
-  file_size: z.union([z.int(), z.unknown()]).optional(),
-  height: z.union([z.int(), z.unknown()]).optional(),
-  file_name: z.union([z.string(), z.unknown()]).optional(),
-  content_type: z.union([z.string(), z.unknown()]).optional(),
-  url: z.string().register(z.globalRegistry, {
-    description: 'The URL where the file can be downloaded from.',
-  }),
-  width: z.union([z.int(), z.unknown()]).optional(),
-});
-
-/**
- * ImageToVideoOutput
- */
-export const zSora2ImageToVideoOutput = z.object({
-  thumbnail: z.union([zImageFile, z.unknown()]).optional(),
-  video_id: z.string().register(z.globalRegistry, {
-    description: 'The ID of the generated video',
-  }),
-  spritesheet: z.union([zImageFile, z.unknown()]).optional(),
-  video: zVideoFile,
-});
-
-/**
- * ImageToVideoInput
- */
-export const zSora2ImageToVideoInput = z.object({
-  prompt: z.string().min(1).max(5000).register(z.globalRegistry, {
-    description: 'The text prompt describing the video you want to generate',
-  }),
-  aspect_ratio: z
-    .enum(['auto', '9:16', '16:9'])
-    .register(z.globalRegistry, {
-      description: 'The aspect ratio of the generated video',
-    })
-    .optional(),
-  duration: z
-    .union([
-      z.literal(4),
-      z.literal(8),
-      z.literal(12),
-      z.literal(16),
-      z.literal(20),
-    ])
-    .register(z.globalRegistry, {
-      description: 'Duration of the generated video in seconds',
-    })
-    .optional(),
-  resolution: z
-    .enum(['auto', '720p'])
-    .register(z.globalRegistry, {
-      description: 'The resolution of the generated video',
-    })
-    .optional(),
-  character_ids: z.union([z.array(z.string()).max(2), z.unknown()]).optional(),
-  image_url: z.union([z.string(), z.string()]),
-  model: z
-    .enum(['sora-2', 'sora-2-2025-12-08', 'sora-2-2025-10-06'])
-    .register(z.globalRegistry, {
-      description:
-        'The model to use for the generation. When the default model is selected, the latest snapshot of the model will be used - otherwise, select a specific snapshot of the model.',
-    })
-    .optional(),
-  delete_video: z
-    .boolean()
-    .register(z.globalRegistry, {
-      description:
-        'Whether to delete the video after generation for privacy reasons. If True, the video cannot be used for remixing and will be permanently deleted.',
-    })
-    .optional()
-    .default(true),
-  detect_and_block_ip: z
-    .boolean()
-    .register(z.globalRegistry, {
-      description:
-        'If enabled, the prompt (and image for image-to-video) will be checked for known intellectual property references and the request will be blocked if any are detected.',
-    })
-    .optional()
-    .default(false),
-});
-
-/**
- * ImageToVideoV25ProOutput
- */
-export const zKlingVideoV25TurboProImageToVideoOutput = z.object({
-  video: zFile,
-});
-
-/**
- * ImageToVideoV25ProRequest
- */
-export const zKlingVideoV25TurboProImageToVideoInput = z.object({
-  prompt: z.string().max(2500),
-  duration: z
-    .enum(['5', '10'])
-    .register(z.globalRegistry, {
-      description: 'The duration of the generated video in seconds',
-    })
-    .optional(),
-  cfg_scale: z
-    .number()
-    .gte(0)
-    .lte(1)
-    .register(z.globalRegistry, {
-      description:
-        '\n            The CFG (Classifier Free Guidance) scale is a measure of how close you want\n            the model to stick to your prompt.\n        ',
-    })
-    .optional()
-    .default(0.5),
-  tail_image_url: z.union([z.string(), z.unknown()]).optional(),
-  negative_prompt: z
-    .string()
-    .max(2500)
-    .optional()
-    .default('blur, distort, and low quality'),
-  image_url: z.union([z.string(), z.string()]),
 });
 
 /**
  * Veo31ImageToVideoOutput
  */
 export const zVeo31ImageToVideoOutput = z.object({
-  video: zFile,
+    video: zFile
 });
 
 /**
  * Veo31ImageToVideoInput
  */
 export const zVeo31ImageToVideoInput = z.object({
-  prompt: z.string().max(20000).register(z.globalRegistry, {
-    description: 'The text prompt describing the video you want to generate',
-  }),
-  auto_fix: z
-    .boolean()
-    .register(z.globalRegistry, {
-      description:
-        'Whether to automatically attempt to fix prompts that fail content policy or other validation checks by rewriting them.',
-    })
-    .optional()
-    .default(false),
-  duration: z
-    .enum(['4s', '6s', '8s'])
-    .register(z.globalRegistry, {
-      description: 'The duration of the generated video.',
-    })
-    .optional(),
-  generate_audio: z
-    .boolean()
-    .register(z.globalRegistry, {
-      description: 'Whether to generate audio for the video.',
-    })
-    .optional()
-    .default(true),
-  resolution: z
-    .enum(['720p', '1080p', '4k'])
-    .register(z.globalRegistry, {
-      description: 'The resolution of the generated video.',
-    })
-    .optional(),
-  aspect_ratio: z
-    .enum(['auto', '16:9', '9:16'])
-    .register(z.globalRegistry, {
-      description:
-        'The aspect ratio of the generated video. Only 16:9 and 9:16 are supported.',
-    })
-    .optional(),
-  image_url: z.union([z.string(), z.string()]),
-  safety_tolerance: z
-    .enum(['1', '2', '3', '4', '5', '6'])
-    .register(z.globalRegistry, {
-      description:
-        'The safety tolerance level for content moderation. 1 is the most strict (blocks most content), 6 is the least strict.',
-    })
-    .optional(),
-  seed: z.union([z.int(), z.unknown()]).optional(),
-  negative_prompt: z.union([z.string(), z.unknown()]).optional(),
+    aspect_ratio: z.enum([
+        'auto',
+        '16:9',
+        '9:16'
+    ]).register(z.globalRegistry, {
+        description: 'The aspect ratio of the generated video. Only 16:9 and 9:16 are supported.'
+    }).optional(),
+    prompt: z.string().max(20000).register(z.globalRegistry, {
+        description: 'The text prompt describing the video you want to generate'
+    }),
+    seed: z.union([
+        z.int(),
+        z.unknown()
+    ]).optional(),
+    negative_prompt: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional(),
+    resolution: z.enum([
+        '720p',
+        '1080p',
+        '4k'
+    ]).register(z.globalRegistry, {
+        description: 'The resolution of the generated video.'
+    }).optional(),
+    image_url: z.union([
+        z.string(),
+        z.string()
+    ]),
+    auto_fix: z.boolean().register(z.globalRegistry, {
+        description: 'Whether to automatically attempt to fix prompts that fail content policy or other validation checks by rewriting them.'
+    }).optional().default(false),
+    safety_tolerance: z.enum([
+        '1',
+        '2',
+        '3',
+        '4',
+        '5',
+        '6'
+    ]).register(z.globalRegistry, {
+        description: 'The safety tolerance level for content moderation. 1 is the most strict (blocks most content), 6 is the least strict.'
+    }).optional(),
+    generate_audio: z.boolean().register(z.globalRegistry, {
+        description: 'Whether to generate audio for the video.'
+    }).optional().default(true),
+    duration: z.enum([
+        '4s',
+        '6s',
+        '8s'
+    ]).register(z.globalRegistry, {
+        description: 'The duration of the generated video.'
+    }).optional()
 });
 
 /**
- * Veo3TextToVideoOutput
+ * LTXV23ImageToVideoResponse
  */
-export const zVeo3Output = z.object({
-  video: zFile,
+export const zLtx23ImageToVideoOutput = z.object({
+    video: zVideoFile
 });
 
 /**
- * Veo3TextToVideoInput
+ * LTXV23ImageToVideoRequest
  */
-export const zVeo3Input = z.object({
-  prompt: z.string().max(20000).register(z.globalRegistry, {
-    description: 'The text prompt describing the video you want to generate',
-  }),
-  aspect_ratio: z
-    .enum(['16:9', '9:16'])
-    .register(z.globalRegistry, {
-      description: 'The aspect ratio of the generated video.',
-    })
-    .optional(),
-  resolution: z
-    .enum(['720p', '1080p'])
-    .register(z.globalRegistry, {
-      description: 'The resolution of the generated video.',
-    })
-    .optional(),
-  generate_audio: z
-    .boolean()
-    .register(z.globalRegistry, {
-      description: 'Whether to generate audio for the video.',
-    })
-    .optional()
-    .default(true),
-  auto_fix: z
-    .boolean()
-    .register(z.globalRegistry, {
-      description:
-        'Whether to automatically attempt to fix prompts that fail content policy or other validation checks by rewriting them.',
-    })
-    .optional()
-    .default(true),
-  duration: z
-    .enum(['4s', '6s', '8s'])
-    .register(z.globalRegistry, {
-      description: 'The duration of the generated video.',
-    })
-    .optional(),
-  safety_tolerance: z
-    .enum(['1', '2', '3', '4', '5', '6'])
-    .register(z.globalRegistry, {
-      description:
-        'The safety tolerance level for content moderation. 1 is the most strict (blocks most content), 6 is the least strict.',
-    })
-    .optional(),
-  seed: z.union([z.int(), z.unknown()]).optional(),
-  negative_prompt: z.union([z.string(), z.unknown()]).optional(),
-});
-
-/**
- * SeedanceProI2VVideoOutput
- */
-export const zBytedanceSeedanceV1ProImageToVideoOutput = z.object({
-  seed: z.int().register(z.globalRegistry, {
-    description: 'Seed used for generation',
-  }),
-  video: zFile,
-});
-
-/**
- * SeedanceProImageToVideoInput
- */
-export const zBytedanceSeedanceV1ProImageToVideoInput = z.object({
-  prompt: z.string().register(z.globalRegistry, {
-    description: 'The text prompt used to generate the video',
-  }),
-  aspect_ratio: z
-    .enum(['21:9', '16:9', '4:3', '1:1', '3:4', '9:16', 'auto'])
-    .register(z.globalRegistry, {
-      description: 'The aspect ratio of the generated video',
-    })
-    .optional(),
-  resolution: z
-    .enum(['480p', '720p', '1080p'])
-    .register(z.globalRegistry, {
-      description:
-        'Video resolution - 480p for faster generation, 720p for balance, 1080p for higher quality',
-    })
-    .optional(),
-  duration: z
-    .enum(['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'])
-    .register(z.globalRegistry, {
-      description: 'Duration of the video in seconds',
-    })
-    .optional(),
-  image_url: z.union([z.string(), z.string()]),
-  enable_safety_checker: z
-    .boolean()
-    .register(z.globalRegistry, {
-      description: 'If set to true, the safety checker will be enabled.',
-    })
-    .optional()
-    .default(true),
-  camera_fixed: z
-    .boolean()
-    .register(z.globalRegistry, {
-      description: 'Whether to fix the camera position',
-    })
-    .optional()
-    .default(false),
-  end_image_url: z.union([z.string(), z.unknown()]).optional(),
-  num_frames: z.union([z.int().gte(29).lte(289), z.unknown()]).optional(),
-  seed: z.union([z.int(), z.unknown()]).optional(),
+export const zLtx23ImageToVideoInput = z.object({
+    image_url: z.union([
+        z.string(),
+        z.string()
+    ]),
+    fps: z.union([
+        z.literal(24),
+        z.literal(25),
+        z.literal(48),
+        z.literal(50)
+    ]).register(z.globalRegistry, {
+        description: 'The frames per second of the generated video'
+    }).optional(),
+    duration: z.union([
+        z.literal(6),
+        z.literal(8),
+        z.literal(10)
+    ]).register(z.globalRegistry, {
+        description: 'The duration of the generated video in seconds'
+    }).optional(),
+    prompt: z.string().min(1).max(5000).register(z.globalRegistry, {
+        description: 'The prompt to use for the generated video'
+    }),
+    generate_audio: z.boolean().register(z.globalRegistry, {
+        description: 'Whether to generate audio for the generated video'
+    }).optional().default(true),
+    end_image_url: z.union([
+        z.string(),
+        z.unknown()
+    ]).optional(),
+    resolution: z.enum([
+        '1080p',
+        '1440p',
+        '2160p'
+    ]).register(z.globalRegistry, {
+        description: 'The resolution of the generated video'
+    }).optional(),
+    aspect_ratio: z.enum([
+        'auto',
+        '16:9',
+        '9:16'
+    ]).register(z.globalRegistry, {
+        description: 'The aspect ratio of the generated video. If \'auto\', the aspect ratio will be determined automatically based on the input image.'
+    }).optional()
 });
 
 export const zQueueStatus = z.object({
-  status: z.enum(['IN_QUEUE', 'IN_PROGRESS', 'COMPLETED']),
-  request_id: z.string().register(z.globalRegistry, {
-    description: 'The request id.',
-  }),
-  response_url: z
-    .string()
-    .register(z.globalRegistry, {
-      description: 'The response url.',
-    })
-    .optional(),
-  status_url: z
-    .string()
-    .register(z.globalRegistry, {
-      description: 'The status url.',
-    })
-    .optional(),
-  cancel_url: z
-    .string()
-    .register(z.globalRegistry, {
-      description: 'The cancel url.',
-    })
-    .optional(),
-  logs: z
-    .record(z.string(), z.unknown())
-    .register(z.globalRegistry, {
-      description: 'The logs.',
-    })
-    .optional(),
-  metrics: z
-    .record(z.string(), z.unknown())
-    .register(z.globalRegistry, {
-      description: 'The metrics.',
-    })
-    .optional(),
-  queue_position: z
-    .int()
-    .register(z.globalRegistry, {
-      description: 'The queue position.',
-    })
-    .optional(),
-});
-
-export const zGetFalAiBytedanceSeedanceV1ProImageToVideoRequestsByRequestIdStatusData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z
-      .object({
-        logs: z
-          .number()
-          .register(z.globalRegistry, {
-            description:
-              'Whether to include logs (`1`) in the response or not (`0`).',
-          })
-          .optional(),
-      })
-      .optional(),
-  });
-
-/**
- * The request status.
- */
-export const zGetFalAiBytedanceSeedanceV1ProImageToVideoRequestsByRequestIdStatusResponse =
-  zQueueStatus;
-
-export const zPutFalAiBytedanceSeedanceV1ProImageToVideoRequestsByRequestIdCancelData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z.never().optional(),
-  });
-
-/**
- * The request was cancelled.
- */
-export const zPutFalAiBytedanceSeedanceV1ProImageToVideoRequestsByRequestIdCancelResponse =
-  z
-    .object({
-      success: z
-        .boolean()
-        .register(z.globalRegistry, {
-          description: 'Whether the request was cancelled successfully.',
-        })
-        .optional(),
-    })
-    .register(z.globalRegistry, {
-      description: 'The request was cancelled.',
-    });
-
-export const zPostFalAiBytedanceSeedanceV1ProImageToVideoData = z.object({
-  body: zBytedanceSeedanceV1ProImageToVideoInput,
-  path: z.never().optional(),
-  query: z.never().optional(),
-});
-
-/**
- * The request status.
- */
-export const zPostFalAiBytedanceSeedanceV1ProImageToVideoResponse =
-  zQueueStatus;
-
-export const zGetFalAiBytedanceSeedanceV1ProImageToVideoRequestsByRequestIdData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z.never().optional(),
-  });
-
-/**
- * Result of the request.
- */
-export const zGetFalAiBytedanceSeedanceV1ProImageToVideoRequestsByRequestIdResponse =
-  zBytedanceSeedanceV1ProImageToVideoOutput;
-
-export const zGetFalAiVeo3RequestsByRequestIdStatusData = z.object({
-  body: z.never().optional(),
-  path: z.object({
+    status: z.enum([
+        'IN_QUEUE',
+        'IN_PROGRESS',
+        'COMPLETED'
+    ]),
     request_id: z.string().register(z.globalRegistry, {
-      description: 'Request ID',
+        description: 'The request id.'
     }),
-  }),
-  query: z
-    .object({
-      logs: z
-        .number()
-        .register(z.globalRegistry, {
-          description:
-            'Whether to include logs (`1`) in the response or not (`0`).',
-        })
-        .optional(),
+    response_url: z.string().register(z.globalRegistry, {
+        description: 'The response url.'
+    }).optional(),
+    status_url: z.string().register(z.globalRegistry, {
+        description: 'The status url.'
+    }).optional(),
+    cancel_url: z.string().register(z.globalRegistry, {
+        description: 'The cancel url.'
+    }).optional(),
+    logs: z.record(z.string(), z.unknown()).register(z.globalRegistry, {
+        description: 'The logs.'
+    }).optional(),
+    metrics: z.record(z.string(), z.unknown()).register(z.globalRegistry, {
+        description: 'The metrics.'
+    }).optional(),
+    queue_position: z.int().register(z.globalRegistry, {
+        description: 'The queue position.'
+    }).optional()
+});
+
+export const zGetFalAiLtx23ImageToVideoRequestsByRequestIdStatusPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
     })
-    .optional(),
+});
+
+export const zGetFalAiLtx23ImageToVideoRequestsByRequestIdStatusQuery = z.object({
+    logs: z.number().register(z.globalRegistry, {
+        description: 'Whether to include logs (`1`) in the response or not (`0`).'
+    }).optional()
 });
 
 /**
  * The request status.
  */
-export const zGetFalAiVeo3RequestsByRequestIdStatusResponse = zQueueStatus;
+export const zGetFalAiLtx23ImageToVideoRequestsByRequestIdStatusResponse = zQueueStatus;
 
-export const zPutFalAiVeo3RequestsByRequestIdCancelData = z.object({
-  body: z.never().optional(),
-  path: z.object({
+export const zPutFalAiLtx23ImageToVideoRequestsByRequestIdCancelPath = z.object({
     request_id: z.string().register(z.globalRegistry, {
-      description: 'Request ID',
-    }),
-  }),
-  query: z.never().optional(),
+        description: 'Request ID'
+    })
 });
 
 /**
  * The request was cancelled.
  */
-export const zPutFalAiVeo3RequestsByRequestIdCancelResponse = z
-  .object({
-    success: z
-      .boolean()
-      .register(z.globalRegistry, {
-        description: 'Whether the request was cancelled successfully.',
-      })
-      .optional(),
-  })
-  .register(z.globalRegistry, {
-    description: 'The request was cancelled.',
-  });
-
-export const zPostFalAiVeo3Data = z.object({
-  body: zVeo3Input,
-  path: z.never().optional(),
-  query: z.never().optional(),
+export const zPutFalAiLtx23ImageToVideoRequestsByRequestIdCancelResponse = z.object({
+    success: z.boolean().register(z.globalRegistry, {
+        description: 'Whether the request was cancelled successfully.'
+    }).optional()
+}).register(z.globalRegistry, {
+    description: 'The request was cancelled.'
 });
+
+export const zPostFalAiLtx23ImageToVideoBody = zLtx23ImageToVideoInput;
 
 /**
  * The request status.
  */
-export const zPostFalAiVeo3Response = zQueueStatus;
+export const zPostFalAiLtx23ImageToVideoResponse = zQueueStatus;
 
-export const zGetFalAiVeo3RequestsByRequestIdData = z.object({
-  body: z.never().optional(),
-  path: z.object({
+export const zGetFalAiLtx23ImageToVideoRequestsByRequestIdPath = z.object({
     request_id: z.string().register(z.globalRegistry, {
-      description: 'Request ID',
-    }),
-  }),
-  query: z.never().optional(),
+        description: 'Request ID'
+    })
 });
 
 /**
  * Result of the request.
  */
-export const zGetFalAiVeo3RequestsByRequestIdResponse = zVeo3Output;
+export const zGetFalAiLtx23ImageToVideoRequestsByRequestIdResponse = zLtx23ImageToVideoOutput;
 
-export const zGetFalAiVeo31ImageToVideoRequestsByRequestIdStatusData = z.object(
-  {
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z
-      .object({
-        logs: z
-          .number()
-          .register(z.globalRegistry, {
-            description:
-              'Whether to include logs (`1`) in the response or not (`0`).',
-          })
-          .optional(),
-      })
-      .optional(),
-  }
-);
+export const zGetFalAiVeo31ImageToVideoRequestsByRequestIdStatusPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
+
+export const zGetFalAiVeo31ImageToVideoRequestsByRequestIdStatusQuery = z.object({
+    logs: z.number().register(z.globalRegistry, {
+        description: 'Whether to include logs (`1`) in the response or not (`0`).'
+    }).optional()
+});
 
 /**
  * The request status.
  */
-export const zGetFalAiVeo31ImageToVideoRequestsByRequestIdStatusResponse =
-  zQueueStatus;
+export const zGetFalAiVeo31ImageToVideoRequestsByRequestIdStatusResponse = zQueueStatus;
 
-export const zPutFalAiVeo31ImageToVideoRequestsByRequestIdCancelData = z.object(
-  {
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z.never().optional(),
-  }
-);
+export const zPutFalAiVeo31ImageToVideoRequestsByRequestIdCancelPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
 
 /**
  * The request was cancelled.
  */
-export const zPutFalAiVeo31ImageToVideoRequestsByRequestIdCancelResponse = z
-  .object({
-    success: z
-      .boolean()
-      .register(z.globalRegistry, {
-        description: 'Whether the request was cancelled successfully.',
-      })
-      .optional(),
-  })
-  .register(z.globalRegistry, {
-    description: 'The request was cancelled.',
-  });
-
-export const zPostFalAiVeo31ImageToVideoData = z.object({
-  body: zVeo31ImageToVideoInput,
-  path: z.never().optional(),
-  query: z.never().optional(),
+export const zPutFalAiVeo31ImageToVideoRequestsByRequestIdCancelResponse = z.object({
+    success: z.boolean().register(z.globalRegistry, {
+        description: 'Whether the request was cancelled successfully.'
+    }).optional()
+}).register(z.globalRegistry, {
+    description: 'The request was cancelled.'
 });
+
+export const zPostFalAiVeo31ImageToVideoBody = zVeo31ImageToVideoInput;
 
 /**
  * The request status.
  */
 export const zPostFalAiVeo31ImageToVideoResponse = zQueueStatus;
 
-export const zGetFalAiVeo31ImageToVideoRequestsByRequestIdData = z.object({
-  body: z.never().optional(),
-  path: z.object({
+export const zGetFalAiVeo31ImageToVideoRequestsByRequestIdPath = z.object({
     request_id: z.string().register(z.globalRegistry, {
-      description: 'Request ID',
-    }),
-  }),
-  query: z.never().optional(),
-});
-
-/**
- * Result of the request.
- */
-export const zGetFalAiVeo31ImageToVideoRequestsByRequestIdResponse =
-  zVeo31ImageToVideoOutput;
-
-export const zGetFalAiKlingVideoV25TurboProImageToVideoRequestsByRequestIdStatusData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z
-      .object({
-        logs: z
-          .number()
-          .register(z.globalRegistry, {
-            description:
-              'Whether to include logs (`1`) in the response or not (`0`).',
-          })
-          .optional(),
-      })
-      .optional(),
-  });
-
-/**
- * The request status.
- */
-export const zGetFalAiKlingVideoV25TurboProImageToVideoRequestsByRequestIdStatusResponse =
-  zQueueStatus;
-
-export const zPutFalAiKlingVideoV25TurboProImageToVideoRequestsByRequestIdCancelData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z.never().optional(),
-  });
-
-/**
- * The request was cancelled.
- */
-export const zPutFalAiKlingVideoV25TurboProImageToVideoRequestsByRequestIdCancelResponse =
-  z
-    .object({
-      success: z
-        .boolean()
-        .register(z.globalRegistry, {
-          description: 'Whether the request was cancelled successfully.',
-        })
-        .optional(),
+        description: 'Request ID'
     })
-    .register(z.globalRegistry, {
-      description: 'The request was cancelled.',
-    });
-
-export const zPostFalAiKlingVideoV25TurboProImageToVideoData = z.object({
-  body: zKlingVideoV25TurboProImageToVideoInput,
-  path: z.never().optional(),
-  query: z.never().optional(),
 });
-
-/**
- * The request status.
- */
-export const zPostFalAiKlingVideoV25TurboProImageToVideoResponse = zQueueStatus;
-
-export const zGetFalAiKlingVideoV25TurboProImageToVideoRequestsByRequestIdData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z.never().optional(),
-  });
 
 /**
  * Result of the request.
  */
-export const zGetFalAiKlingVideoV25TurboProImageToVideoRequestsByRequestIdResponse =
-  zKlingVideoV25TurboProImageToVideoOutput;
+export const zGetFalAiVeo31ImageToVideoRequestsByRequestIdResponse = zVeo31ImageToVideoOutput;
 
-export const zGetFalAiSora2ImageToVideoRequestsByRequestIdStatusData = z.object(
-  {
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z
-      .object({
-        logs: z
-          .number()
-          .register(z.globalRegistry, {
-            description:
-              'Whether to include logs (`1`) in the response or not (`0`).',
-          })
-          .optional(),
-      })
-      .optional(),
-  }
-);
-
-/**
- * The request status.
- */
-export const zGetFalAiSora2ImageToVideoRequestsByRequestIdStatusResponse =
-  zQueueStatus;
-
-export const zPutFalAiSora2ImageToVideoRequestsByRequestIdCancelData = z.object(
-  {
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z.never().optional(),
-  }
-);
-
-/**
- * The request was cancelled.
- */
-export const zPutFalAiSora2ImageToVideoRequestsByRequestIdCancelResponse = z
-  .object({
-    success: z
-      .boolean()
-      .register(z.globalRegistry, {
-        description: 'Whether the request was cancelled successfully.',
-      })
-      .optional(),
-  })
-  .register(z.globalRegistry, {
-    description: 'The request was cancelled.',
-  });
-
-export const zPostFalAiSora2ImageToVideoData = z.object({
-  body: zSora2ImageToVideoInput,
-  path: z.never().optional(),
-  query: z.never().optional(),
-});
-
-/**
- * The request status.
- */
-export const zPostFalAiSora2ImageToVideoResponse = zQueueStatus;
-
-export const zGetFalAiSora2ImageToVideoRequestsByRequestIdData = z.object({
-  body: z.never().optional(),
-  path: z.object({
+export const zGetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdStatusPath = z.object({
     request_id: z.string().register(z.globalRegistry, {
-      description: 'Request ID',
-    }),
-  }),
-  query: z.never().optional(),
+        description: 'Request ID'
+    })
 });
 
-/**
- * Result of the request.
- */
-export const zGetFalAiSora2ImageToVideoRequestsByRequestIdResponse =
-  zSora2ImageToVideoOutput;
-
-export const zGetFalAiKlingVideoO1ImageToVideoRequestsByRequestIdStatusData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z
-      .object({
-        logs: z
-          .number()
-          .register(z.globalRegistry, {
-            description:
-              'Whether to include logs (`1`) in the response or not (`0`).',
-          })
-          .optional(),
-      })
-      .optional(),
-  });
+export const zGetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdStatusQuery = z.object({
+    logs: z.number().register(z.globalRegistry, {
+        description: 'Whether to include logs (`1`) in the response or not (`0`).'
+    }).optional()
+});
 
 /**
  * The request status.
  */
-export const zGetFalAiKlingVideoO1ImageToVideoRequestsByRequestIdStatusResponse =
-  zQueueStatus;
+export const zGetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdStatusResponse = zQueueStatus;
 
-export const zPutFalAiKlingVideoO1ImageToVideoRequestsByRequestIdCancelData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z.never().optional(),
-  });
+export const zPutFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdCancelPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
 
 /**
  * The request was cancelled.
  */
-export const zPutFalAiKlingVideoO1ImageToVideoRequestsByRequestIdCancelResponse =
-  z
-    .object({
-      success: z
-        .boolean()
-        .register(z.globalRegistry, {
-          description: 'Whether the request was cancelled successfully.',
-        })
-        .optional(),
-    })
-    .register(z.globalRegistry, {
-      description: 'The request was cancelled.',
-    });
-
-export const zPostFalAiKlingVideoO1ImageToVideoData = z.object({
-  body: zKlingVideoO1ImageToVideoInput,
-  path: z.never().optional(),
-  query: z.never().optional(),
+export const zPutFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdCancelResponse = z.object({
+    success: z.boolean().register(z.globalRegistry, {
+        description: 'Whether the request was cancelled successfully.'
+    }).optional()
+}).register(z.globalRegistry, {
+    description: 'The request was cancelled.'
 });
 
-/**
- * The request status.
- */
-export const zPostFalAiKlingVideoO1ImageToVideoResponse = zQueueStatus;
-
-export const zGetFalAiKlingVideoO1ImageToVideoRequestsByRequestIdData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z.never().optional(),
-  });
-
-/**
- * Result of the request.
- */
-export const zGetFalAiKlingVideoO1ImageToVideoRequestsByRequestIdResponse =
-  zKlingVideoO1ImageToVideoOutput;
-
-export const zGetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdStatusData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z
-      .object({
-        logs: z
-          .number()
-          .register(z.globalRegistry, {
-            description:
-              'Whether to include logs (`1`) in the response or not (`0`).',
-          })
-          .optional(),
-      })
-      .optional(),
-  });
-
-/**
- * The request status.
- */
-export const zGetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdStatusResponse =
-  zQueueStatus;
-
-export const zPutFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdCancelData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z.never().optional(),
-  });
-
-/**
- * The request was cancelled.
- */
-export const zPutFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdCancelResponse =
-  z
-    .object({
-      success: z
-        .boolean()
-        .register(z.globalRegistry, {
-          description: 'Whether the request was cancelled successfully.',
-        })
-        .optional(),
-    })
-    .register(z.globalRegistry, {
-      description: 'The request was cancelled.',
-    });
-
-export const zPostFalAiKlingVideoV3ProImageToVideoData = z.object({
-  body: zKlingVideoV3ProImageToVideoInput,
-  path: z.never().optional(),
-  query: z.never().optional(),
-});
+export const zPostFalAiKlingVideoV3ProImageToVideoBody = zKlingVideoV3ProImageToVideoInput;
 
 /**
  * The request status.
  */
 export const zPostFalAiKlingVideoV3ProImageToVideoResponse = zQueueStatus;
 
-export const zGetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z.never().optional(),
-  });
+export const zGetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
 
 /**
  * Result of the request.
  */
-export const zGetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdResponse =
-  zKlingVideoV3ProImageToVideoOutput;
+export const zGetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdResponse = zKlingVideoV3ProImageToVideoOutput;
 
-export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdStatusData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z
-      .object({
-        logs: z
-          .number()
-          .register(z.globalRegistry, {
-            description:
-              'Whether to include logs (`1`) in the response or not (`0`).',
-          })
-          .optional(),
-      })
-      .optional(),
-  });
+export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdStatusPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
+
+export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdStatusQuery = z.object({
+    logs: z.number().register(z.globalRegistry, {
+        description: 'Whether to include logs (`1`) in the response or not (`0`).'
+    }).optional()
+});
 
 /**
  * The request status.
  */
-export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdStatusResponse =
-  zQueueStatus;
+export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdStatusResponse = zQueueStatus;
 
-export const zPutXaiGrokImagineVideoImageToVideoRequestsByRequestIdCancelData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z.never().optional(),
-  });
+export const zPutXaiGrokImagineVideoImageToVideoRequestsByRequestIdCancelPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
 
 /**
  * The request was cancelled.
  */
-export const zPutXaiGrokImagineVideoImageToVideoRequestsByRequestIdCancelResponse =
-  z
-    .object({
-      success: z
-        .boolean()
-        .register(z.globalRegistry, {
-          description: 'Whether the request was cancelled successfully.',
-        })
-        .optional(),
-    })
-    .register(z.globalRegistry, {
-      description: 'The request was cancelled.',
-    });
-
-export const zPostXaiGrokImagineVideoImageToVideoData = z.object({
-  body: zGrokImagineVideoImageToVideoInput,
-  path: z.never().optional(),
-  query: z.never().optional(),
+export const zPutXaiGrokImagineVideoImageToVideoRequestsByRequestIdCancelResponse = z.object({
+    success: z.boolean().register(z.globalRegistry, {
+        description: 'Whether the request was cancelled successfully.'
+    }).optional()
+}).register(z.globalRegistry, {
+    description: 'The request was cancelled.'
 });
+
+export const zPostXaiGrokImagineVideoImageToVideoBody = zGrokImagineVideoImageToVideoInput;
 
 /**
  * The request status.
  */
 export const zPostXaiGrokImagineVideoImageToVideoResponse = zQueueStatus;
 
-export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z.never().optional(),
-  });
+export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
 
 /**
  * Result of the request.
  */
-export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdResponse =
-  zGrokImagineVideoImageToVideoOutput;
+export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdResponse = zGrokImagineVideoImageToVideoOutput;
 
-export const zGetWanV26ImageToVideoFlashRequestsByRequestIdStatusData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z
-      .object({
-        logs: z
-          .number()
-          .register(z.globalRegistry, {
-            description:
-              'Whether to include logs (`1`) in the response or not (`0`).',
-          })
-          .optional(),
-      })
-      .optional(),
-  });
+export const zGetFalAiMinimaxHailuo02ProImageToVideoRequestsByRequestIdStatusPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
+
+export const zGetFalAiMinimaxHailuo02ProImageToVideoRequestsByRequestIdStatusQuery = z.object({
+    logs: z.number().register(z.globalRegistry, {
+        description: 'Whether to include logs (`1`) in the response or not (`0`).'
+    }).optional()
+});
 
 /**
  * The request status.
  */
-export const zGetWanV26ImageToVideoFlashRequestsByRequestIdStatusResponse =
-  zQueueStatus;
+export const zGetFalAiMinimaxHailuo02ProImageToVideoRequestsByRequestIdStatusResponse = zQueueStatus;
 
-export const zPutWanV26ImageToVideoFlashRequestsByRequestIdCancelData =
-  z.object({
-    body: z.never().optional(),
-    path: z.object({
-      request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID',
-      }),
-    }),
-    query: z.never().optional(),
-  });
+export const zPutFalAiMinimaxHailuo02ProImageToVideoRequestsByRequestIdCancelPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
 
 /**
  * The request was cancelled.
  */
-export const zPutWanV26ImageToVideoFlashRequestsByRequestIdCancelResponse = z
-  .object({
-    success: z
-      .boolean()
-      .register(z.globalRegistry, {
-        description: 'Whether the request was cancelled successfully.',
-      })
-      .optional(),
-  })
-  .register(z.globalRegistry, {
-    description: 'The request was cancelled.',
-  });
-
-export const zPostWanV26ImageToVideoFlashData = z.object({
-  body: zV26ImageToVideoFlashInput,
-  path: z.never().optional(),
-  query: z.never().optional(),
+export const zPutFalAiMinimaxHailuo02ProImageToVideoRequestsByRequestIdCancelResponse = z.object({
+    success: z.boolean().register(z.globalRegistry, {
+        description: 'Whether the request was cancelled successfully.'
+    }).optional()
+}).register(z.globalRegistry, {
+    description: 'The request was cancelled.'
 });
+
+export const zPostFalAiMinimaxHailuo02ProImageToVideoBody = zMinimaxHailuo02ProImageToVideoInput;
 
 /**
  * The request status.
  */
-export const zPostWanV26ImageToVideoFlashResponse = zQueueStatus;
+export const zPostFalAiMinimaxHailuo02ProImageToVideoResponse = zQueueStatus;
 
-export const zGetWanV26ImageToVideoFlashRequestsByRequestIdData = z.object({
-  body: z.never().optional(),
-  path: z.object({
+export const zGetFalAiMinimaxHailuo02ProImageToVideoRequestsByRequestIdPath = z.object({
     request_id: z.string().register(z.globalRegistry, {
-      description: 'Request ID',
-    }),
-  }),
-  query: z.never().optional(),
+        description: 'Request ID'
+    })
 });
 
 /**
  * Result of the request.
  */
-export const zGetWanV26ImageToVideoFlashRequestsByRequestIdResponse =
-  zV26ImageToVideoFlashOutput;
+export const zGetFalAiMinimaxHailuo02ProImageToVideoRequestsByRequestIdResponse = zMinimaxHailuo02ProImageToVideoOutput;
+
+export const zGetFalAiBytedanceSeedanceV15ProImageToVideoRequestsByRequestIdStatusPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
+
+export const zGetFalAiBytedanceSeedanceV15ProImageToVideoRequestsByRequestIdStatusQuery = z.object({
+    logs: z.number().register(z.globalRegistry, {
+        description: 'Whether to include logs (`1`) in the response or not (`0`).'
+    }).optional()
+});
+
+/**
+ * The request status.
+ */
+export const zGetFalAiBytedanceSeedanceV15ProImageToVideoRequestsByRequestIdStatusResponse = zQueueStatus;
+
+export const zPutFalAiBytedanceSeedanceV15ProImageToVideoRequestsByRequestIdCancelPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
+
+/**
+ * The request was cancelled.
+ */
+export const zPutFalAiBytedanceSeedanceV15ProImageToVideoRequestsByRequestIdCancelResponse = z.object({
+    success: z.boolean().register(z.globalRegistry, {
+        description: 'Whether the request was cancelled successfully.'
+    }).optional()
+}).register(z.globalRegistry, {
+    description: 'The request was cancelled.'
+});
+
+export const zPostFalAiBytedanceSeedanceV15ProImageToVideoBody = zBytedanceSeedanceV15ProImageToVideoInput;
+
+/**
+ * The request status.
+ */
+export const zPostFalAiBytedanceSeedanceV15ProImageToVideoResponse = zQueueStatus;
+
+export const zGetFalAiBytedanceSeedanceV15ProImageToVideoRequestsByRequestIdPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
+
+/**
+ * Result of the request.
+ */
+export const zGetFalAiBytedanceSeedanceV15ProImageToVideoRequestsByRequestIdResponse = zBytedanceSeedanceV15ProImageToVideoOutput;
+
+export const zGetBytedanceSeedance20ImageToVideoRequestsByRequestIdStatusPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
+
+export const zGetBytedanceSeedance20ImageToVideoRequestsByRequestIdStatusQuery = z.object({
+    logs: z.number().register(z.globalRegistry, {
+        description: 'Whether to include logs (`1`) in the response or not (`0`).'
+    }).optional()
+});
+
+/**
+ * The request status.
+ */
+export const zGetBytedanceSeedance20ImageToVideoRequestsByRequestIdStatusResponse = zQueueStatus;
+
+export const zPutBytedanceSeedance20ImageToVideoRequestsByRequestIdCancelPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
+
+/**
+ * The request was cancelled.
+ */
+export const zPutBytedanceSeedance20ImageToVideoRequestsByRequestIdCancelResponse = z.object({
+    success: z.boolean().register(z.globalRegistry, {
+        description: 'Whether the request was cancelled successfully.'
+    }).optional()
+}).register(z.globalRegistry, {
+    description: 'The request was cancelled.'
+});
+
+export const zPostBytedanceSeedance20ImageToVideoBody = zSeedance20ImageToVideoInput;
+
+/**
+ * The request status.
+ */
+export const zPostBytedanceSeedance20ImageToVideoResponse = zQueueStatus;
+
+export const zGetBytedanceSeedance20ImageToVideoRequestsByRequestIdPath = z.object({
+    request_id: z.string().register(z.globalRegistry, {
+        description: 'Request ID'
+    })
+});
+
+/**
+ * Result of the request.
+ */
+export const zGetBytedanceSeedance20ImageToVideoRequestsByRequestIdResponse = zSeedance20ImageToVideoOutput;

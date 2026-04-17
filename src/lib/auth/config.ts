@@ -39,7 +39,11 @@ function createAuth() {
       },
     }),
     secret: runtimeEnv.BETTER_AUTH_SECRET,
-    // Trusted origins for CSRF protection and OAuth proxy
+    trustedOrigins: [
+      'http://localhost:*',
+      'http://192.168.*:*',
+      'http://100.*:*',
+    ],
 
     // Session configuration
     // SECURITY: 90-day expiration mitigates:

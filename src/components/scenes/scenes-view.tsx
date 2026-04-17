@@ -14,6 +14,8 @@ import { smartRetryFn } from '@/functions/smart-retry';
 import { BILLING_BALANCE_KEY } from '@/hooks/use-billing-balance';
 import { useFramesBySequence } from '@/hooks/use-frames';
 import { useSequence } from '@/hooks/use-sequences';
+import { useStyle } from '@/hooks/use-styles';
+import { safeTextToImageModel, DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
 import {
   DEFAULT_ASPECT_RATIO,
   type AspectRatio,
@@ -21,7 +23,10 @@ import {
 import { analyzeFailures } from '@/lib/failures/failure-analysis';
 import type { GenerationPhaseConfig } from '@/lib/realtime/generation-stream.reducer';
 import { useGenerationStream } from '@/lib/realtime/use-generation-stream';
-import { useQueryClient } from '@tanstack/react-query';
+import { getSequenceImageVariantsFn } from '@/functions/frames';
+import type { FrameVariant } from '@/lib/db/schema';
+import { usePostHog } from '@posthog/react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -78,6 +83,7 @@ function isInsufficientCreditsError(error: unknown): boolean {
 export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const posthog = usePostHog();
 
   const [selectedFrameId, setSelectedFrameId] = useState<string | undefined>();
   const [selectedTab, setSelectedTab] = useState<TabValue>('scene-variants');
@@ -92,6 +98,10 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     Set<string>
   >(() => new Set());
 
+  const [imageModelOverride, setImageModelOverride] = useState<string | null>(
+    null
+  );
+
   const [motionStartedAt, setMotionStartedAt] = useState<number | null>(null);
   const [motionIncludesMusic, setMotionIncludesMusic] = useState(false);
 
@@ -101,6 +111,8 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   });
   const aspectRatio = sequence?.aspectRatio || DEFAULT_ASPECT_RATIO;
   const isProcessing = sequence?.status === 'processing';
+  const { data: style } = useStyle(sequence?.styleId ?? '');
+  const styleCategory = style?.category ?? undefined;
 
   // Phase config from DB — set in stone when the workflow was triggered
   const phaseConfig = useMemo<GenerationPhaseConfig>(
@@ -129,19 +141,83 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   const realtimeFailed = realtimeStatus === 'error';
   const shouldPoll = isProcessing && realtimeFailed;
 
-  // Fetch frames — only override refetchInterval when we need explicit polling
-  // (realtime failed during image generation). Otherwise let useFramesBySequence's
-  // smart polling handle it (auto-polls at 2s when any frame has generating status).
+  // Fetch frames — only poll when processing AND realtime has failed.
+  // Otherwise realtime events keep the cache fresh via updateQueryCacheFromEvent.
   const { data: frames } = useFramesBySequence(
     sequenceId,
     shouldPoll ? { refetchInterval: 2000 } : undefined
   );
+
+  // Fetch image variants for this sequence
+  const { data: imageVariants } = useQuery<FrameVariant[]>({
+    queryKey: ['sequence-image-variants', sequenceId],
+    queryFn: () => getSequenceImageVariantsFn({ data: { sequenceId } }),
+    staleTime: 30_000,
+    enabled: !!sequenceId,
+  });
 
   const curSelectedFrameId = selectedFrameId || frames?.[0]?.id;
   const selectedFrame = useMemo(
     () => frames?.find((frame) => frame.id === curSelectedFrameId),
     [frames, curSelectedFrameId]
   );
+
+  // Filter variants for the currently selected frame
+  const selectedFrameVariants = useMemo(() => {
+    if (!imageVariants || !curSelectedFrameId) return undefined;
+    return imageVariants.filter(
+      (v) => v.frameId === curSelectedFrameId && v.variantType === 'image'
+    );
+  }, [imageVariants, curSelectedFrameId]);
+
+  // Reset model override when switching frames
+  useEffect(() => {
+    setImageModelOverride(null);
+  }, [curSelectedFrameId]);
+
+  // Derive variant preview state from model override + variants
+  const effectiveImageModel =
+    imageModelOverride ??
+    safeTextToImageModel(selectedFrame?.imageModel, DEFAULT_IMAGE_MODEL);
+
+  const variantForSelectedModel = useMemo(() => {
+    if (!selectedFrameVariants) return undefined;
+    return selectedFrameVariants.find((v) => v.model === effectiveImageModel);
+  }, [selectedFrameVariants, effectiveImageModel]);
+
+  const { previewVariantUrl, playerBadgeMessage } = useMemo(() => {
+    const none = { previewVariantUrl: null, playerBadgeMessage: null };
+    if (selectedTab !== 'image-prompt' || !selectedFrame) return none;
+
+    if (
+      variantForSelectedModel?.status === 'completed' &&
+      variantForSelectedModel.url &&
+      variantForSelectedModel.url !== selectedFrame.thumbnailUrl
+    ) {
+      return {
+        previewVariantUrl: variantForSelectedModel.url,
+        playerBadgeMessage: 'Click Set Image to use',
+      };
+    }
+
+    const frameImageModel = safeTextToImageModel(
+      selectedFrame.imageModel,
+      DEFAULT_IMAGE_MODEL
+    );
+    if (effectiveImageModel !== frameImageModel && !variantForSelectedModel) {
+      return {
+        previewVariantUrl: null,
+        playerBadgeMessage: 'Click Generate Image to create',
+      };
+    }
+
+    return none;
+  }, [
+    selectedTab,
+    selectedFrame,
+    effectiveImageModel,
+    variantForSelectedModel,
+  ]);
 
   const setterForType = useCallback((type: RegenerationType) => {
     switch (type) {
@@ -257,6 +333,12 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
       setMotionStartedAt(Date.now());
       setMotionIncludesMusic(includeMusic);
 
+      posthog.capture('motion_generation_started', {
+        sequence_id: sequenceId,
+        include_music: includeMusic,
+        eligible_frame_count: eligibleFrameIds.length,
+      });
+
       try {
         await batchGenerateMotionFn({
           data: { sequenceId, includeMusic },
@@ -285,10 +367,10 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         }
       }
     },
-    [sequenceId, frames, queryClient]
+    [sequenceId, frames, queryClient, posthog]
   );
 
-  const musicPromptsReady = !!(sequence?.musicPrompt && sequence?.musicTags);
+  const musicPromptsReady = !!(sequence?.musicPrompt && sequence.musicTags);
 
   return (
     <div className="flex h-full flex-col">
@@ -366,6 +448,8 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
               aspectRatio={aspectRatio}
               onSelectFrame={setSelectedFrameId}
               selectedTab={selectedTab}
+              overrideImageUrl={previewVariantUrl}
+              badgeMessage={playerBadgeMessage}
               progressMessage={
                 generationState.phases.find((p) => p.status === 'active')
                   ?.phaseName
@@ -385,6 +469,9 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
             regeneratingSceneVariants={regeneratingSceneVariants}
             onRegenerateStart={handleRegenerateStart}
             aspectRatio={aspectRatio}
+            variantForSelectedModel={variantForSelectedModel}
+            onImageModelChange={setImageModelOverride}
+            styleCategory={styleCategory}
           />
         </ScrollArea>
       </div>

@@ -26,6 +26,7 @@ export const mergeVideoWorkflow = createScopedWorkflow<MergeVideoWorkflowInput>(
     if (!input.sequenceId) {
       throw new WorkflowValidationError('Sequence ID is required');
     }
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
     if (!input.videoUrls || input.videoUrls.length === 0) {
       throw new WorkflowValidationError('At least one video URL is required');
     }

@@ -79,6 +79,8 @@ function makeSequence(overrides: Partial<Sequence> = {}): Sequence {
     posterUrl: null,
     autoGenerateMotion: false,
     autoGenerateMusic: false,
+    suggestedTalentIds: null,
+    suggestedLocationIds: null,
     ...overrides,
   };
 }

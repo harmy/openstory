@@ -9,7 +9,7 @@
 
 import type { CharacterBibleEntry } from '@/lib/ai/scene-analysis.schema';
 
-import type { CharacterMinimal } from '@/lib/db/schema';
+import type { CharacterMinimal, StyleConfig } from '@/lib/db/schema';
 import {
   type PromptWithReferenceImages,
   type ReferenceImageDescription,
@@ -90,24 +90,60 @@ export const buildPromptWithCharacterReferences = (
 };
 
 /**
+ * Derive environment, optical, and lighting prompt sections from a sequence style.
+ * When provided, these replace the hardcoded studio defaults in character sheets
+ * so that character references match the sequence's visual direction.
+ */
+const formatStyleForSheet = (
+  styleConfig: StyleConfig
+): { environment: string; opticalSpecs: string; lighting: string } => {
+  const colorPaletteStr = styleConfig.colorPalette.join(', ');
+  const referencesStr =
+    styleConfig.referenceFilms.length > 0
+      ? ` Reference look: ${styleConfig.referenceFilms.join(', ')}.`
+      : '';
+
+  return {
+    environment: `Render the character in ${styleConfig.artStyle} style. Background: clean, seamless studio backdrop with no environmental detail — simple flat or gradient tone using the style's color palette: ${colorPaletteStr}. Color grading: ${styleConfig.colorGrading}. Mood: ${styleConfig.mood}.${referencesStr} All visual interest comes from the character, not the environment.`,
+    opticalSpecs: `${styleConfig.artStyle} style rendering. Camera approach: ${styleConfig.cameraWork}. Maintain sharp focus and consistent character detail across all panels.`,
+    lighting: `${styleConfig.lighting}. The lighting should be consistent across all four panels and match the overall ${styleConfig.mood} mood.`,
+  };
+};
+
+/**
  * Build the base 4-panel reference sheet prompt structure
  *
  * Creates a consistent prompt with:
  * - 4-panel horizontal layout (frontal, portrait, side, rear)
- * - Studio environment (white cyclorama)
- * - Commercial photography specs
- * - High-key lighting
+ * - Style-derived or default studio environment, lighting, and optical specs
  * - Hyper-accurate materiality
  *
  * @param identitySection - The identity section of the prompt
  * @param additionalInstructions - Optional additional instructions (e.g., reference image handling)
+ * @param styleConfig - Optional sequence style to apply instead of default studio look
  * @returns Complete prompt string
  */
 export const buildBaseSheetPrompt = (
   identitySection: string,
   /** Optional additional instructions (e.g., reference image handling) */
-  additionalInstructions: string = ''
+  additionalInstructions: string = '',
+  /** Optional sequence style config — replaces default studio look when provided */
+  styleConfig?: StyleConfig
 ): string => {
+  const styled = styleConfig ? formatStyleForSheet(styleConfig) : null;
+
+  const environmentSection = styled
+    ? styled.environment
+    : 'Seamless, minimalist commercial photo studio cyclorama with flat neutral white background. Clean, sterile, analytical atmosphere designed for clarity.';
+
+  const opticalSection = styled
+    ? styled.opticalSpecs
+    : 'Commercial reference photography style. High-resolution medium format digital, tack-sharp focus across all panels, deep depth of field. Flat perspective, no lens distortion.';
+
+  const lightingSection = styled
+    ? styled.lighting
+    : 'Neutral, even, high-key studio lighting. Diffused illumination from large softboxes to eliminate harsh shadows and highlight shape and form evenly. 5500K daylight balance.';
+
   return `A professional four-panel photographic character reference grid, maintaining absolute anatomical and stylistic consistency.
 
 [LAYOUT]:
@@ -122,13 +158,13 @@ All attire, accessories, hair, and features must be perfectly consistent across 
 ${identitySection}
 ${additionalInstructions}
 [ENVIRONMENT]:
-Seamless, minimalist commercial photo studio cyclorama with flat neutral white background. Clean, sterile, analytical atmosphere designed for clarity.
+${environmentSection}
 
 [OPTICAL & CAMERA SPECS]:
-Commercial reference photography style. High-resolution medium format digital, tack-sharp focus across all panels, deep depth of field. Flat perspective, no lens distortion.
+${opticalSection}
 
 [LIGHTING]:
-Neutral, even, high-key studio lighting. Diffused illumination from large softboxes to eliminate harsh shadows and highlight shape and form evenly. 5500K daylight balance.
+${lightingSection}
 
 [MATERIALITY]:
 Hyper-accurate rendering of all fabrics, skin textures, hardware, and micro-details. Consistent texture rendering across all four angles without beautification or alteration.`.trim();
@@ -240,11 +276,13 @@ type CharacterSheetPromptResult = {
  *
  * @param entry - The character bible entry from script analysis
  * @param talentOverrides - Optional talent data for casting
+ * @param styleConfig - Optional sequence style to apply instead of default studio look
  * @returns Prompt and reference URLs for image generation
  */
 export const buildCharacterSheetPrompt = (
   entry: CharacterBibleEntry,
-  talentOverrides?: TalentOverrides
+  talentOverrides?: TalentOverrides,
+  styleConfig?: StyleConfig
 ): CharacterSheetPromptResult => {
   const talentMeta = talentOverrides?.sheetMetadata;
   const hasTalent = !!(talentMeta || talentOverrides?.description);
@@ -266,7 +304,7 @@ export const buildCharacterSheetPrompt = (
   const ethnicity = talentMeta?.ethnicity || entry.ethnicity;
   const physicalDescription =
     talentMeta?.physicalDescription ||
-    (hasTalent && talentOverrides?.description
+    (hasTalent && talentOverrides.description
       ? `${talentOverrides.description}. Match this person's real-world appearance exactly.`
       : entry.physicalDescription);
 
@@ -295,7 +333,7 @@ ${characterFeatures}`;
   // Build reference image instruction
   let referenceInstruction = '';
   if (hasTalent && referenceUrls.length > 0) {
-    const talentNotes = talentOverrides?.description
+    const talentNotes = talentOverrides.description
       ? `\nTalent notes: ${talentOverrides.description}`
       : '';
     referenceInstruction = `
@@ -317,7 +355,11 @@ ${standardClothing}
 
 ${makeupStylingSection}`.trim();
 
-  const prompt = buildBaseSheetPrompt(identitySection, referenceInstruction);
+  const prompt = buildBaseSheetPrompt(
+    identitySection,
+    referenceInstruction,
+    styleConfig
+  );
 
   return { prompt, referenceUrls };
 };

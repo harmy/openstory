@@ -19,11 +19,23 @@ export function getVisualPrompt(frame: Frame): string | null {
 }
 
 /**
+ * Get motion prompt from frame - client-safe utility
+ * Prioritizes user-updated prompt over AI-generated prompt
+ */
+export function getMotionPrompt(frame: Frame): string | null {
+  if (frame.motionPrompt) {
+    return frame.motionPrompt;
+  }
+  const scene = frame.metadata;
+  return scene?.prompts?.motion?.fullPrompt || null;
+}
+
+/**
  * Get original script extract from frame
  */
 export function getSceneScript(frame: Frame): string | null {
   const scene = frame.metadata;
-  return scene?.originalScript?.extract || null;
+  return scene?.originalScript.extract || null;
 }
 
 type EvalSceneCellProps = {
@@ -63,6 +75,7 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
   }
 
   const prompt = getVisualPrompt(frame);
+  const motionPrompt = getMotionPrompt(frame);
   const script = getSceneScript(frame);
 
   const handleClick = () => onDialogOpenChange(true);
@@ -156,11 +169,65 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
     );
   }
 
-  // Prompts view (default)
-  if (!prompt) {
+  // Motion view (individual frame videos)
+  if (viewMode === 'motion') {
+    if (!frame.videoUrl) {
+      return (
+        <div className="border-b p-2 h-full flex items-center justify-center">
+          {frame.videoStatus === 'generating' ? (
+            <Skeleton className="w-full h-full" />
+          ) : (
+            <div className="text-xs text-muted-foreground text-center">
+              No video
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <button
+          type="button"
+          className="border-b p-2 cursor-pointer hover:bg-muted/50 transition-colors h-full flex flex-col min-h-0 overflow-hidden w-full text-left appearance-none bg-transparent"
+          onClick={handleClick}
+        >
+          <div className="flex-1 flex items-center min-h-0">
+            <video
+              src={frame.videoUrl}
+              className="w-full h-full object-cover rounded-md"
+              muted
+              loop
+              playsInline
+              onMouseEnter={(e) => void e.currentTarget.play()}
+              onMouseLeave={(e) => {
+                e.currentTarget.pause();
+                e.currentTarget.currentTime = 0;
+              }}
+            />
+          </div>
+        </button>
+        <EvalCellDialog
+          open={dialogOpen}
+          onOpenChange={onDialogOpenChange}
+          frame={frame}
+          sceneNumber={sceneNumber}
+          sequenceTitle={sequenceTitle}
+          initialViewMode={viewMode}
+          onNavigateLeft={onNavigateLeft}
+          onNavigateRight={onNavigateRight}
+          onNavigateUp={onNavigateUp}
+          onNavigateDown={onNavigateDown}
+        />
+      </>
+    );
+  }
+
+  // Prompts view (default) — shows both visual and motion prompts
+  if (!prompt && !motionPrompt) {
     return (
       <div className="border-b p-2 h-full flex items-center justify-center">
-        <div className="text-xs text-muted-foreground">No prompt</div>
+        <div className="text-xs text-muted-foreground">No prompts</div>
       </div>
     );
   }
@@ -173,9 +240,17 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
         onClick={handleClick}
       >
         <ScrollArea className="flex-1 w-full min-h-0">
-          <p className="text-xs leading-relaxed whitespace-pre-wrap pr-2">
-            {prompt}
-          </p>
+          {prompt && (
+            <p className="text-xs leading-relaxed whitespace-pre-wrap pr-2">
+              {prompt}
+            </p>
+          )}
+          {prompt && motionPrompt && <hr className="my-1.5 border-muted" />}
+          {motionPrompt && (
+            <p className="text-xs leading-relaxed whitespace-pre-wrap pr-2 text-muted-foreground">
+              {motionPrompt}
+            </p>
+          )}
         </ScrollArea>
       </button>
       <EvalCellDialog

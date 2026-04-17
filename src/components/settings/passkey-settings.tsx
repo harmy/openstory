@@ -39,7 +39,7 @@ export function PasskeySettings({ isSetupFlow }: PasskeySettingsProps) {
       if (result.error) {
         throw new Error(result.error.message || 'Failed to load passkeys');
       }
-      return result.data ?? [];
+      return result.data;
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -47,13 +47,13 @@ export function PasskeySettings({ isSetupFlow }: PasskeySettingsProps) {
   const addPasskeyMutation = useMutation({
     mutationFn: async () => {
       const result = await authClient.passkey.addPasskey();
-      if (result?.error) {
+      if (result.error) {
         throw new Error(
-          String(
-            typeof result.error === 'object' && 'message' in result.error
-              ? result.error.message
-              : result.error
-          ) || 'Failed to add passkey'
+          typeof result.error === 'object' &&
+            'message' in result.error &&
+            typeof result.error.message === 'string'
+            ? result.error.message
+            : 'Failed to add passkey'
         );
       }
       return result;
@@ -70,7 +70,7 @@ export function PasskeySettings({ isSetupFlow }: PasskeySettingsProps) {
   const deletePasskeyMutation = useMutation({
     mutationFn: async (id: string) => {
       const result = await authClient.passkey.deletePasskey({ id });
-      if (result?.error) {
+      if (result.error) {
         throw new Error(result.error.message || 'Failed to delete passkey');
       }
       return result;

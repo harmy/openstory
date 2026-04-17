@@ -4,6 +4,7 @@
  */
 
 import { sanitizeScriptContent } from '@/lib/ai/prompt-validation';
+import { resolveImageModels } from '@/lib/ai/resolve-image-models';
 import type { Scene } from '@/lib/ai/scene-analysis.schema';
 import { recordWorkflowTrace } from '@/lib/observability/langfuse';
 import { getGenerationChannel } from '@/lib/realtime';
@@ -44,6 +45,7 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
       styleConfig,
       analysisModelId,
       imageModel,
+      imageModels: imageModelsInput,
       videoModel,
       autoGenerateMotion = false,
       autoGenerateMusic = false,
@@ -51,6 +53,8 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
       suggestedTalentIds,
       suggestedLocationIds,
     } = input;
+
+    const imageModels = resolveImageModels(imageModelsInput, imageModel);
 
     const label = buildWorkflowLabel(sequenceId);
 
@@ -166,6 +170,7 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
           characterBible,
           talentMatches: talentCharacterMatches,
           imageModel,
+          styleConfig,
         },
         flowControl: getFalFlowControl(),
       }),
@@ -178,6 +183,7 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
           teamId: input.teamId,
           locationBible,
           libraryLocationMatches,
+          styleConfig,
         },
         flowControl: getFalFlowControl(),
       }),
@@ -233,6 +239,7 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
           locationsWithSheets,
           frameMapping,
           imageModel,
+          imageModels,
           aspectRatio,
         } satisfies FrameImagesWorkflowInput,
       }),

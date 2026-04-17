@@ -27,7 +27,11 @@ import {
 // NOTE: sequences imported without relations - defined below to avoid circular dependency
 import { sequences } from './sequences';
 
-import { frames, framesRelations } from './frames';
+// NOTE: frames imported without relations - defined below to avoid circular dependency
+// (frame-variants.ts imports frames for FK reference)
+import { frames } from './frames';
+
+import { frameVariants, frameVariantsRelations } from './frame-variants';
 
 import { characters, charactersRelations } from './characters';
 
@@ -113,6 +117,18 @@ export const sequencesRelations = relations(sequences, ({ one, many }) => ({
   locations: many(sequenceLocations),
 }));
 
+/**
+ * Frames relations - defined here because frame-variants.ts imports frames
+ * for FK reference, creating a circular dependency if defined in frames.ts
+ */
+export const framesRelations = relations(frames, ({ one, many }) => ({
+  sequence: one(sequences, {
+    fields: [frames.sequenceId],
+    references: [sequences.id],
+  }),
+  variants: many(frameVariants),
+}));
+
 // Better Auth tables
 export { account, passkey, session, user, verification };
 
@@ -141,6 +157,15 @@ export type { NewSequence, Sequence, SequenceStatus } from './sequences';
 export { frames };
 
 export type { Frame, NewFrame } from './frames';
+
+// Frame Variants
+export { frameVariants };
+
+export type {
+  FrameVariant,
+  NewFrameVariant,
+  VariantType,
+} from './frame-variants';
 
 // Characters (scripted roles)
 export { characters };
@@ -268,11 +293,13 @@ export const schema = {
   teamMembersRelations,
   teamInvitationsRelations,
 
-  // Sequences
+  // Sequences & Frames
   sequences,
   frames,
+  frameVariants,
   sequencesRelations,
   framesRelations,
+  frameVariantsRelations,
 
   // Characters (scripted roles extracted from script)
   characters,

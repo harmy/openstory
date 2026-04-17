@@ -2,7 +2,10 @@
  * Structured JSON log emitter for Cloudflare Workers.
  * Outputs JSON to console.log so Cloudflare captures it in workers_trace_events,
  * and Logpush sends it unredacted to R2.
+ * Warn/error logs are also sent to PostHog as `server_log` events.
  */
+
+import { getPostHogClient } from '@/lib/posthog-server';
 
 type StructuredLog = {
   level: 'info' | 'warn' | 'error';
@@ -93,4 +96,27 @@ export function emitLog(log: StructuredLog): void {
   }
 
   console.log(JSON.stringify(log));
+
+  if (log.level === 'warn' || log.level === 'error') {
+    const posthog = getPostHogClient();
+    if (posthog) {
+      posthog.capture({
+        distinctId: log.userId ?? 'system',
+        event: 'server_log',
+        properties: {
+          level: log.level,
+          source: log.source,
+          name: log.name,
+          method: log.method,
+          path: log.path,
+          durationMs: log.durationMs,
+          status: log.status,
+          ...(log.error && {
+            errorCode: log.error.code,
+            errorMessage: log.error.message,
+          }),
+        },
+      });
+    }
+  }
 }

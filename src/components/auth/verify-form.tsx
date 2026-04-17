@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/input-otp';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { authClient } from '@/lib/auth/client';
+import { usePostHog } from '@posthog/react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useState, useTransition } from 'react';
 
@@ -33,6 +34,7 @@ export function VerifyForm({
 }: VerifyFormProps) {
   const navigate = useNavigate();
   const hydrated = useHydrated();
+  const posthog = usePostHog();
   const [otp, setOtp] = useState('');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +56,9 @@ export function VerifyForm({
             setError(result.error.message || 'Invalid code');
             return;
           }
+
+          posthog.capture('user_signed_in', { method: 'email_otp' });
+
           await navigate({ to: redirectTo });
         } catch (err) {
           console.error('[VerifyForm] Verify OTP error:', err);
@@ -61,7 +66,7 @@ export function VerifyForm({
         }
       });
     },
-    [email, navigate, redirectTo]
+    [email, navigate, posthog, redirectTo]
   );
 
   // Auto-verify when OTP is complete (6 digits)

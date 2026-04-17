@@ -5,6 +5,8 @@ import {
   MusicModelBadge,
   VideoModelBadge,
 } from '@/components/model/model-badge';
+import { getSequenceImageModelsFn } from '@/functions/frames';
+import { frameKeys } from '@/hooks/use-frames';
 import {
   SequenceTabs,
   useSequenceTabItems,
@@ -16,9 +18,9 @@ import { sequenceKeys, useSequence } from '@/hooks/use-sequences';
 import { useSwipeNavigation } from '@/hooks/use-swipe-navigation';
 import { useUser } from '@/hooks/use-user';
 import { isValidId } from '@/lib/db/id';
+import { useQuery } from '@tanstack/react-query';
 import {
   createFileRoute,
-  isNotFound,
   notFound,
   Outlet,
   useRouterState,
@@ -31,16 +33,10 @@ export const Route = createFileRoute('/_protected/sequences/$id')({
       throw notFound();
     }
 
-    try {
-      const sequence = await queryClient.ensureQueryData({
-        queryKey: sequenceKeys.detail(params.id),
-        queryFn: () => getSequenceFn({ data: { sequenceId: params.id } }),
-      });
-      if (!sequence) throw notFound();
-    } catch (error) {
-      if (isNotFound(error)) throw error;
-      throw notFound();
-    }
+    await queryClient.ensureQueryData({
+      queryKey: sequenceKeys.detail(params.id),
+      queryFn: () => getSequenceFn({ data: { sequenceId: params.id } }),
+    });
   },
   errorComponent: (props) => (
     <RouteErrorFallback {...props} heading="Sequence error" />
@@ -53,6 +49,12 @@ function SequenceLayout() {
   useUser();
 
   const { data: sequence } = useSequence(sequenceId);
+
+  const { data: imageModels } = useQuery({
+    queryKey: frameKeys.imageModels(sequenceId),
+    queryFn: () => getSequenceImageModelsFn({ data: { sequenceId } }),
+    staleTime: 30_000,
+  });
 
   const tabs = useSequenceTabItems(sequenceId);
   const currentPath = useRouterState({
@@ -68,9 +70,12 @@ function SequenceLayout() {
       <div className="mx-auto w-full max-w-[1920px] shrink-0 space-y-1 px-6 pt-4">
         <PageHeader>
           <PageHeading>{sequence?.title}</PageHeading>
-          <div className="hidden md:flex flex-row flex-wrap gap-2">
+          <div className="hidden md:flex flex-row flex-wrap items-center gap-2">
             <ModelBadge model={sequence?.analysisModel} />
-            <ImageModelBadge model={sequence?.imageModel} />
+            <ImageModelBadge
+              models={imageModels}
+              model={sequence?.imageModel}
+            />
             <VideoModelBadge model={sequence?.videoModel} />
             <MusicModelBadge model={sequence?.musicModel ?? undefined} />
           </div>

@@ -93,13 +93,13 @@ Here's your caffeine fix. How's it going?
       // Now fill the textarea - React is hydrated since style click worked
       await scriptTextarea.fill(testScript);
 
-      // Wait for "Generate Sequence" button to become enabled - this proves:
+      // Wait for "Generate" button to become enabled - this proves:
       // 1. React hydration is complete (event handlers attached)
       // 2. Textarea fill was picked up by React state (script is set)
       // 3. Style was selected (from our click above)
-      await expect(
-        page.getByRole('button', { name: /Generate Sequence/i })
-      ).toBeEnabled({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: /Generate/i })).toBeEnabled(
+        { timeout: 10000 }
+      );
 
       // Open talent suggestion dialog
       const talentButton = page
@@ -128,7 +128,7 @@ Here's your caffeine fix. How's it going?
 
       // Verify submit button is ready (may have different text based on state)
       const submitButton = page.getByRole('button', {
-        name: /Generate Sequence/i,
+        name: /Generate/i,
       });
       await expect(submitButton).toBeVisible();
     }

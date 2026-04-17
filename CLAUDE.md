@@ -886,3 +886,47 @@ From `~/.claude/CLAUDE.md` (applies to all projects):
 - **Database migrations**: Use Drizzle Kit (`bun db:generate`), never manually write SQL
 - Use `type` instead of `interface`
 - Throw errors instead of returning success boolean
+
+<!-- intent-skills:start -->
+
+# Skill mappings - when working in these areas, load the linked skill file into context.
+
+skills:
+
+- task: "setting up or modifying TanStack Start project structure"
+  load: "node_modules/@tanstack/start-client-core/skills/start-core/SKILL.md"
+- task: "deploying to Cloudflare Workers or other platforms"
+  load: "node_modules/@tanstack/start-client-core/skills/start-core/deployment/SKILL.md"
+- task: "working with server functions (createServerFn)"
+  load: "node_modules/@tanstack/start-client-core/skills/start-core/server-functions/SKILL.md"
+- task: "creating or modifying API server routes"
+  load: "node_modules/@tanstack/start-client-core/skills/start-core/server-routes/SKILL.md"
+- task: "implementing middleware for server functions"
+  load: "node_modules/@tanstack/start-client-core/skills/start-core/middleware/SKILL.md"
+- task: "understanding client/server execution boundaries"
+  load: "node_modules/@tanstack/start-client-core/skills/start-core/execution-model/SKILL.md"
+- task: "configuring TanStack Router (route trees, createRouter)"
+  load: "node_modules/@tanstack/router-core/skills/router-core/SKILL.md"
+- task: "working with route data loading and loaders"
+  load: "node_modules/@tanstack/router-core/skills/router-core/data-loading/SKILL.md"
+- task: "implementing navigation, links, and preloading"
+  load: "node_modules/@tanstack/router-core/skills/router-core/navigation/SKILL.md"
+- task: "working with search params and URL state"
+  load: "node_modules/@tanstack/router-core/skills/router-core/search-params/SKILL.md"
+- task: "route protection and auth guards"
+  load: "node_modules/@tanstack/router-core/skills/router-core/auth-and-guards/SKILL.md"
+- task: "code splitting routes"
+  load: "node_modules/@tanstack/router-core/skills/router-core/code-splitting/SKILL.md"
+- task: "handling not-found and error states in routes"
+  load: "node_modules/@tanstack/router-core/skills/router-core/not-found-and-errors/SKILL.md"
+- task: "working with path params ($paramName)"
+  load: "node_modules/@tanstack/router-core/skills/router-core/path-params/SKILL.md"
+- task: "type-safe routing patterns"
+  load: "node_modules/@tanstack/router-core/skills/router-core/type-safety/SKILL.md"
+- task: "SSR and streaming"
+  load: "node_modules/@tanstack/router-core/skills/router-core/ssr/SKILL.md"
+- task: "configuring the router Vite plugin"
+  load: "node_modules/@tanstack/router-plugin/skills/router-plugin/SKILL.md"
+- task: "setting up TanStack Devtools"
+load: "node_modules/@tanstack/devtools/skills/devtools-app-setup/SKILL.md"
+<!-- intent-skills:end -->

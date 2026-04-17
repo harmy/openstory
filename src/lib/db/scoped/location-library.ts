@@ -103,6 +103,7 @@ export function createLocationsMethods(
       const result = await db
         .delete(locationLibrary)
         .where(eq(locationLibrary.id, id));
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
       return (result.rowsAffected ?? 0) > 0;
     },
 
@@ -110,6 +111,7 @@ export function createLocationsMethods(
       const result = await db
         .delete(locationLibrary)
         .where(eq(locationLibrary.teamId, teamId));
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
       return result.rowsAffected ?? 0;
     },
 
@@ -123,6 +125,7 @@ export function createLocationsMethods(
         .where(eq(locationLibrary.id, id))
         .returning();
 
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
       if (!location) {
         throw new Error(`LibraryLocation ${id} not found`);
       }
@@ -141,6 +144,7 @@ export function createLocationsMethods(
         .where(eq(locationLibrary.id, id))
         .returning();
 
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
       if (!location) {
         throw new Error(`LibraryLocation ${id} not found`);
       }
@@ -193,6 +197,7 @@ export function createLocationSheetsMethods(db: Database) {
         .where(eq(locationSheets.locationId, locationId))
         .limit(1);
 
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
       if (nextSheet) {
         await db
           .update(locationSheets)

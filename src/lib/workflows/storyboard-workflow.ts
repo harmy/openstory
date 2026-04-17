@@ -141,6 +141,7 @@ export const generateStoryboardWorkflow =
         styleConfig,
         analysisModelId,
         imageModel,
+        imageModels: input.imageModels ?? [imageModel],
         videoModel,
         autoGenerateMotion: input.autoGenerateMotion ?? false,
         autoGenerateMusic: input.autoGenerateMusic ?? false,

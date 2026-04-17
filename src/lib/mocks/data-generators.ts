@@ -51,9 +51,9 @@ const generateMockFrame = (overrides?: Partial<Frame>): Frame => {
     thumbnailGeneratedAt: faker.date.recent(),
     thumbnailError: null,
     imageModel: faker.helpers.arrayElement([
-      'flux_pro',
-      'flux_dev',
-      'nano_banana',
+      'nano_banana_2',
+      'nano_banana_pro',
+      'flux_2_dev',
     ]),
     imagePrompt: null,
     videoStatus: faker.helpers.arrayElement([
@@ -64,9 +64,9 @@ const generateMockFrame = (overrides?: Partial<Frame>): Frame => {
     ]),
     motionPrompt: null,
     motionModel: faker.helpers.arrayElement([
-      'veo3',
-      'kling_v2_5_turbo_pro',
-      'wan_i2v',
+      'veo3_1',
+      'kling_v3_pro',
+      'seedance_v1_5_pro',
     ]),
     videoWorkflowRunId: faker.string.ulid(),
     videoGeneratedAt: faker.date.recent(),

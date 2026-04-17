@@ -6,7 +6,7 @@ import {
 } from '@/lib/ai/models';
 import { useMemo } from 'react';
 
-const QUALITY_ORDER = ['good', 'better', 'best'] as const;
+const GROUP_ORDER = ['all'] as const;
 
 type MusicModelSelectorProps = {
   selectedModel: AudioModel;
@@ -27,10 +27,12 @@ export const MusicModelSelector: React.FC<MusicModelSelectorProps> = ({
           // Only show music models, not SFX
           return m.type === 'music';
         })
+        .sort(([, a], [, b]) => a.qualityRank - b.qualityRank)
         .map(([key, m]) => ({
           id: key,
           name: m.name,
-          group: m.performance.quality,
+          group: 'all',
+          badge: m.license,
         })),
     []
   );
@@ -39,7 +41,7 @@ export const MusicModelSelector: React.FC<MusicModelSelectorProps> = ({
     <BaseModelSelector
       label="Music Model"
       models={models}
-      groupOrder={QUALITY_ORDER}
+      groupOrder={GROUP_ORDER}
       selectedIds={[selectedModel]}
       onSelectionChange={(ids) => {
         const firstId = ids[0];

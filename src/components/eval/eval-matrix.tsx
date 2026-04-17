@@ -1,18 +1,21 @@
 import type React from 'react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Card } from '@/components/ui/card';
 import { EvalSequenceRow } from './eval-sequence-row';
 import type { SequenceWithFrames } from '@/hooks/use-sequences-with-frames';
 import type { ViewMode } from './eval-view';
 
-const ROW_HEIGHT = 160; // Cell height (128px) + padding (32px)
+const ROW_HEIGHT = 240;
 const METADATA_WIDTH = 280;
+const VIDEO_WIDTH = 200;
 const CELL_WIDTH = 200;
 
 type EvalMatrixProps = {
   sequences: SequenceWithFrames[];
   viewMode: ViewMode;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
 };
 
 type OpenDialogState = {
@@ -23,6 +26,8 @@ type OpenDialogState = {
 export const EvalMatrix: React.FC<EvalMatrixProps> = ({
   sequences,
   viewMode,
+  onLoadMore,
+  hasMore,
 }) => {
   const parentRef = useRef<HTMLDivElement>(null);
   const [openDialog, setOpenDialog] = useState<OpenDialogState>(null);
@@ -36,10 +41,21 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
     count: sequences.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_HEIGHT,
-    overscan: 3,
+    overscan: 5,
   });
 
-  const totalWidth = METADATA_WIDTH + maxSceneCount * CELL_WIDTH;
+  // Infinite scroll: fetch next page when last items are visible
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const lastItemIndex = virtualItems[virtualItems.length - 1]?.index;
+  useEffect(() => {
+    if (!onLoadMore || !hasMore) return;
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- lastItemIndex can be undefined when virtualItems is empty
+    if (lastItemIndex == null || lastItemIndex >= sequences.length - 5) {
+      onLoadMore();
+    }
+  }, [lastItemIndex, sequences.length, onLoadMore, hasMore]);
+
+  const totalWidth = METADATA_WIDTH + VIDEO_WIDTH + maxSceneCount * CELL_WIDTH;
 
   const handleNavigateToCell = (sequenceIndex: number, sceneIndex: number) => {
     // Validate bounds and check if frame exists
@@ -49,12 +65,7 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
       sceneIndex >= 0 &&
       sceneIndex < maxSceneCount
     ) {
-      const sequence = sequences[sequenceIndex];
-      const frame = sequence?.frames[sceneIndex];
-      // Only navigate if the target cell has a frame
-      if (frame) {
-        setOpenDialog({ sequenceIndex, sceneIndex });
-      }
+      setOpenDialog({ sequenceIndex, sceneIndex });
     }
   };
 
@@ -71,6 +82,12 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
             style={{ width: METADATA_WIDTH }}
           >
             Sequence
+          </div>
+          <div
+            className="sticky z-20 bg-background border-r p-4 font-medium text-sm shrink-0"
+            style={{ left: METADATA_WIDTH, width: VIDEO_WIDTH }}
+          >
+            Video
           </div>
           {Array.from({ length: maxSceneCount }, (_, idx) => idx + 1).map(
             (sceneNum) => (

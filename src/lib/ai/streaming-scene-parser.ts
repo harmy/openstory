@@ -94,7 +94,7 @@ export function createStreamingSceneParser() {
       for (let i = 0; i < lastEmittedSceneCount && i < scenes.length; i++) {
         const result = sceneSplittingSceneSchema.safeParse(scenes[i]);
         if (result.success) {
-          const currentTitle = result.data.metadata?.title || '';
+          const currentTitle = result.data.metadata.title || '';
           if (currentTitle !== emittedTitles.get(i)) {
             emittedTitles.set(i, currentTitle);
             events.push({
@@ -109,7 +109,7 @@ export function createStreamingSceneParser() {
       for (let i = lastEmittedSceneCount; i < scenes.length; i++) {
         const result = sceneSplittingSceneSchema.safeParse(scenes[i]);
         if (result.success) {
-          emittedTitles.set(i, result.data.metadata?.title || '');
+          emittedTitles.set(i, result.data.metadata.title || '');
           events.push({ type: 'scene', scene: result.data, index: i });
           lastEmittedSceneCount = i + 1;
         } else {

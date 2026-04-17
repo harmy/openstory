@@ -10,13 +10,14 @@ import {
 } from '@/lib/auth/action-utils';
 import { getAuth } from '@/lib/auth/config';
 import type { Session, User } from '@/lib/auth/config';
-import { requireSystemAdmin } from '@/lib/auth/system-admin';
+import { isSystemAdmin, requireSystemAdmin } from '@/lib/auth/system-admin';
 import { isStripeEnabled } from '@/lib/billing/constants';
 import { getStripeOrThrow, getStripeWebhookSecret } from '@/lib/billing/stripe';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import {
   createScopedDb,
   createSystemAdminScopedDb,
+  getSequenceByIdUnscoped,
   resolveUserTeam,
   type ScopedDb,
 } from '@/lib/db/scoped';
@@ -370,7 +371,16 @@ export const sequenceAccessMiddleware = createMiddleware({ type: 'function' })
   .middleware([authWithTeamMiddleware])
   .inputValidator(zodValidator(z.looseObject({ sequenceId: ulidSchema })))
   .server(async ({ next, context, data }) => {
-    const sequence = await context.scopedDb.sequences.getById(data.sequenceId);
+    let sequence = await context.scopedDb.sequences.getById(data.sequenceId);
+    let { teamId, scopedDb } = context;
+
+    if (!sequence && isSystemAdmin(context.user.email)) {
+      sequence = await getSequenceByIdUnscoped(data.sequenceId);
+      if (sequence) {
+        teamId = sequence.teamId;
+        scopedDb = createScopedDb(sequence.teamId, context.user.id);
+      }
+    }
 
     if (!sequence) {
       throw new NotFoundError('Sequence not found');
@@ -379,6 +389,8 @@ export const sequenceAccessMiddleware = createMiddleware({ type: 'function' })
     return next({
       context: {
         sequence,
+        teamId,
+        scopedDb,
       },
     });
   });
@@ -402,8 +414,14 @@ export const frameAccessMiddleware = createMiddleware({ type: 'function' })
       throw new NotFoundError('Frame not found in this sequence');
     }
 
+    let { teamId, scopedDb } = context;
+
     if (frameData.sequence.teamId !== context.teamId) {
-      throw new NotFoundError('Frame not found in this sequence');
+      if (!isSystemAdmin(context.user.email)) {
+        throw new NotFoundError('Frame not found in this sequence');
+      }
+      teamId = frameData.sequence.teamId;
+      scopedDb = createScopedDb(frameData.sequence.teamId, context.user.id);
     }
 
     // Extract sequence from frame data (using the partial sequence from the query)
@@ -419,6 +437,8 @@ export const frameAccessMiddleware = createMiddleware({ type: 'function' })
       context: {
         frame,
         sequence,
+        teamId,
+        scopedDb,
       },
     });
   });

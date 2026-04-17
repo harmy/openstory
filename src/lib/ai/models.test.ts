@@ -13,9 +13,9 @@ import {
 describe('Model Validation', () => {
   describe('isValidTextToImageModel', () => {
     it('returns true for valid model keys', () => {
-      expect(isValidTextToImageModel('flux_pro')).toBe(true);
+      expect(isValidTextToImageModel('nano_banana_2')).toBe(true);
       expect(isValidTextToImageModel('nano_banana_pro')).toBe(true);
-      expect(isValidTextToImageModel('flux_schnell')).toBe(true);
+      expect(isValidTextToImageModel('flux_2_dev')).toBe(true);
     });
 
     it('returns false for invalid model keys', () => {
@@ -32,9 +32,9 @@ describe('Model Validation', () => {
 
   describe('isValidImageToVideoModel', () => {
     it('returns true for valid model keys', () => {
-      expect(isValidImageToVideoModel('kling_v2_5_turbo_pro')).toBe(true);
       expect(isValidImageToVideoModel('kling_v3_pro')).toBe(true);
       expect(isValidImageToVideoModel('veo3_1')).toBe(true);
+      expect(isValidImageToVideoModel('seedance_v1_5_pro')).toBe(true);
     });
 
     it('returns false for invalid model keys', () => {
@@ -51,7 +51,7 @@ describe('Model Validation', () => {
 
   describe('safeTextToImageModel', () => {
     it('returns the model key when valid', () => {
-      expect(safeTextToImageModel('flux_pro')).toBe('flux_pro');
+      expect(safeTextToImageModel('nano_banana_2')).toBe('nano_banana_2');
       expect(safeTextToImageModel('nano_banana_pro')).toBe('nano_banana_pro');
     });
 
@@ -63,7 +63,7 @@ describe('Model Validation', () => {
     });
 
     it('uses custom fallback when provided', () => {
-      const customFallback = 'flux_schnell';
+      const customFallback = 'flux_2_dev';
       expect(safeTextToImageModel('invalid_model', customFallback)).toBe(
         customFallback
       );
@@ -78,10 +78,8 @@ describe('Model Validation', () => {
 
   describe('safeImageToVideoModel', () => {
     it('returns the model key when valid', () => {
-      expect(safeImageToVideoModel('kling_v2_5_turbo_pro')).toBe(
-        'kling_v2_5_turbo_pro'
-      );
       expect(safeImageToVideoModel('kling_v3_pro')).toBe('kling_v3_pro');
+      expect(safeImageToVideoModel('veo3_1')).toBe('veo3_1');
     });
 
     it('returns default when invalid', () => {
@@ -92,7 +90,7 @@ describe('Model Validation', () => {
     });
 
     it('uses custom fallback when provided', () => {
-      const customFallback = 'kling_v2_5_turbo_pro';
+      const customFallback = 'veo3_1';
       expect(safeImageToVideoModel('invalid_model', customFallback)).toBe(
         customFallback
       );
@@ -107,7 +105,7 @@ describe('Model Validation', () => {
 
   describe('Type Guards', () => {
     it('isValidTextToImageModel acts as a type guard', () => {
-      const maybeModel: string = 'flux_pro';
+      const maybeModel: string = 'nano_banana_2';
       if (isValidTextToImageModel(maybeModel)) {
         // TypeScript should infer maybeModel as TextToImageModel here
         const model = maybeModel;

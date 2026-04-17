@@ -143,8 +143,6 @@ function getPhase5Label(config: GenerationPhaseConfig): {
 export function createInitialState(
   config?: GenerationPhaseConfig
 ): GenerationStreamState {
-  const includePhase5 = config?.autoGenerateMotion || config?.autoGenerateMusic;
-
   const phases: GenerationPhase[] = PHASES.map((p, i) => ({
     phase: i + 1,
     phaseName: p.name,
@@ -152,7 +150,7 @@ export function createInitialState(
     status: 'pending' as const,
   }));
 
-  if (includePhase5 && config) {
+  if (config && (config.autoGenerateMotion || config.autoGenerateMusic)) {
     const label = getPhase5Label(config);
     phases.push({
       phase: 5,

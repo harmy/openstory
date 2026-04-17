@@ -50,6 +50,8 @@ Oh, hi Mom. Yeah, I'm fine. Just... working on a big project.`,
   posterUrl: null,
   autoGenerateMotion: false,
   autoGenerateMusic: false,
+  suggestedTalentIds: null,
+  suggestedLocationIds: null,
 };
 
 // Create a new QueryClient for each story to avoid state leakage

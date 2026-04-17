@@ -37,6 +37,8 @@ const baseSequence: Sequence = {
   posterUrl: null,
   autoGenerateMotion: false,
   autoGenerateMusic: false,
+  suggestedTalentIds: null,
+  suggestedLocationIds: null,
 };
 
 const meta: Meta<typeof TheatreView> = {

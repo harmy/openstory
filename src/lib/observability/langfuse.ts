@@ -1,15 +1,24 @@
 /**
- * Langfuse Observability Integration
- * OpenTelemetry-based tracing for LLM and media generation
+ * Tracing initialization and workflow trace recording.
+ * Uses standard OpenTelemetry with pluggable exporters:
+ * - Langfuse (LangfuseSpanProcessor) — optional
+ * - PostHog (PostHogTraceExporter) — optional
+ * Any OTel-compatible backend can be added as another span processor.
  */
 
 import { getEnv } from '#env';
 import { LangfuseSpanProcessor } from '@langfuse/otel';
-import { propagateAttributes, startActiveObservation } from '@langfuse/tracing';
-import { NodeSDK } from '@opentelemetry/sdk-node';
+import { trace } from '@opentelemetry/api';
+import {
+  BasicTracerProvider,
+  BatchSpanProcessor,
+} from '@opentelemetry/sdk-trace-base';
+import { PostHogTraceExporter } from '@posthog/ai/otel';
+import type { SpanProcessor } from '@opentelemetry/sdk-trace-base';
 
-let processor: LangfuseSpanProcessor | null = null;
-let sdk: NodeSDK | null = null;
+import { endSpanSuccess, startGenAISpan, withTraceContext } from './tracer';
+
+const processors: SpanProcessor[] = [];
 
 /** Whether Langfuse is enabled — derived from both keys being set. */
 export function isLangfuseEnabled(): boolean {
@@ -24,46 +33,67 @@ export function isLangfusePromptsEnabled(): boolean {
 }
 
 /**
- * Initialize Langfuse tracing.
+ * Initialize tracing with all configured exporters.
  * Call once at module load before any traced operations.
- * Silently skips if credentials are not configured.
+ * Silently skips if no exporters are configured.
  */
 export function initTracing(): void {
   const env = getEnv();
-  const publicKey = env.LANGFUSE_PUBLIC_KEY;
-  const secretKey = env.LANGFUSE_SECRET_KEY;
 
-  if (!publicKey || !secretKey) {
-    console.log('[Langfuse] Tracing disabled - credentials not configured');
+  // Langfuse exporter
+  const langfusePublicKey = env.LANGFUSE_PUBLIC_KEY;
+  const langfuseSecretKey = env.LANGFUSE_SECRET_KEY;
+
+  if (langfusePublicKey && langfuseSecretKey) {
+    processors.push(
+      new LangfuseSpanProcessor({
+        publicKey: langfusePublicKey,
+        secretKey: langfuseSecretKey,
+        baseUrl: env.LANGFUSE_BASE_URL,
+        exportMode: 'batched',
+      })
+    );
+    console.log('[Tracing] Langfuse exporter enabled');
+  }
+
+  // PostHog exporter
+  const posthogToken = env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN;
+
+  if (posthogToken) {
+    const host = env.VITE_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
+    processors.push(
+      new BatchSpanProcessor(
+        new PostHogTraceExporter({ apiKey: posthogToken, host })
+      )
+    );
+    console.log('[Tracing] PostHog exporter enabled');
+  }
+
+  if (processors.length === 0) {
+    console.log('[Tracing] Disabled — no exporters configured');
     return;
   }
 
-  processor = new LangfuseSpanProcessor({
-    publicKey,
-    secretKey,
-    baseUrl: env.LANGFUSE_BASE_URL ?? 'https://cloud.langfuse.com',
-  });
-
-  sdk = new NodeSDK({
-    spanProcessors: [processor],
-  });
-
-  sdk.start();
-  console.log('[Langfuse] Tracing initialized');
+  try {
+    const provider = new BasicTracerProvider({ spanProcessors: processors });
+    trace.setGlobalTracerProvider(provider);
+  } catch (error) {
+    console.error('[Tracing] Failed to register provider:', error);
+    return;
+  }
+  console.log('[Tracing] Initialized with %d exporter(s)', processors.length);
 }
 
 /**
- * Flush all pending traces to Langfuse.
+ * Flush all pending traces to configured exporters.
  * Call at the end of request handling in serverless environments.
  */
 export async function flushTracing(): Promise<void> {
-  if (processor) {
-    await processor.forceFlush();
-  }
+  await Promise.all(processors.map((p) => p.forceFlush()));
 }
 
 /**
- * Record a completed workflow trace to Langfuse.
+ * Record a completed workflow trace.
  * Call inside context.run() to ensure it only runs once (durable step).
  *
  * @param traceName - Name for the trace (e.g., 'analyzeScriptWorkflow')
@@ -71,41 +101,43 @@ export async function flushTracing(): Promise<void> {
  * @param output - Output data produced by the workflow
  * @param sequenceId - Used as the Langfuse sessionId to group traces
  * @param userId - Optional user ID for user attribution
- * @param options - Optional model and durationMs for the trace
+ * @param model - Optional model name
+ * @param startTime - Optional start time for the trace
  */
-export async function recordWorkflowTrace<TInput, TOutput>(
+export async function recordWorkflowTrace<TOutput>(
   traceName: string,
-  input: TInput,
+  _input: unknown,
   output: TOutput,
   sequenceId: string,
   userId: string | undefined,
   model?: string,
   startTime?: Date
 ): Promise<void> {
-  await propagateAttributes(
+  withTraceContext(
     {
       sessionId: sequenceId,
       ...(userId && { userId }),
-      ...(model && {
-        tags: model ? [`model:${model}`] : [],
-        metadata: {
-          ...(model && { model: model }),
-        },
-      }),
+      ...(model && { tags: [`model:${model}`] }),
     },
-    async () => {
-      await startActiveObservation(
-        traceName,
-        async (generation) => {
-          generation.update({
-            input,
-            output: typeof output === 'object' ? output : { result: output },
-            ...(model && { model: model }),
-            ...(startTime && { completionStartTime: startTime }),
-          });
-          // Note: Do NOT call .end() here - startActiveObservation ends automatically
-        },
-        { asType: 'generation', ...(startTime && { startTime }) }
+    () => {
+      const span = startGenAISpan(traceName, {
+        model: model ?? 'unknown',
+        operation: 'generate_content',
+        sessionId: sequenceId,
+        userId,
+        ...(model && { metadata: { model } }),
+      });
+
+      if (startTime) {
+        span.setAttribute(
+          'langfuse.observation.completion_start_time',
+          startTime.toISOString()
+        );
+      }
+
+      endSpanSuccess(
+        span,
+        typeof output === 'object' ? output : { result: output }
       );
     }
   );

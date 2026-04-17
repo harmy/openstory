@@ -141,9 +141,11 @@ export const motionBatchWorkflow =
               seq.getMusicStatus(),
             ]);
 
+            // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
             if (!videoStatus?.mergedVideoUrl) {
               throw new Error('Merge completed but no merged video URL found');
             }
+            // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
             if (!musicStatus?.musicUrl) {
               throw new Error('Music generation completed but no URL found');
             }

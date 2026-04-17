@@ -17,13 +17,19 @@ export const getBillingGateStatusFn = createServerFn({ method: 'GET' })
   .handler(async ({ context }) => {
     const { scopedDb } = context;
 
-    const [balance, hasFalKey, hasOpenRouterKey, billingSettings] =
-      await Promise.all([
-        scopedDb.billing.getBalance(),
-        scopedDb.apiKeys.hasKey('fal'),
-        scopedDb.apiKeys.hasKey('openrouter'),
-        scopedDb.billing.getBillingSettings(),
-      ]);
+    const [
+      balance,
+      hasFalKey,
+      hasOpenRouterKey,
+      billingSettings,
+      hasRedeemedGift,
+    ] = await Promise.all([
+      scopedDb.billing.getBalance(),
+      scopedDb.apiKeys.hasKey('fal'),
+      scopedDb.apiKeys.hasKey('openrouter'),
+      scopedDb.billing.getBillingSettings(),
+      scopedDb.billing.hasRedeemedGiftCode(),
+    ]);
 
     return {
       hasCredits: balance > 0,
@@ -33,5 +39,6 @@ export const getBillingGateStatusFn = createServerFn({ method: 'GET' })
       hasAutoTopUp:
         billingSettings.autoTopUpEnabled && !!billingSettings.stripeCustomerId,
       stripeEnabled: isStripeEnabled(),
+      hasRedeemedGift,
     };
   });

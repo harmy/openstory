@@ -85,6 +85,8 @@ const DEFAULT_ESTIMATED_SCENE_COUNT = 8;
  */
 export function estimateStoryboardCost(opts: {
   imageModel: TextToImageModel;
+  /** Number of image models selected (multiplies per-frame image cost) */
+  imageModelCount?: number;
   aspectRatio: AspectRatio;
   estimatedSceneCount?: number;
   autoGenerateMotion?: boolean;
@@ -92,6 +94,7 @@ export function estimateStoryboardCost(opts: {
   videoDurationSeconds?: number;
 }): Microdollars {
   const sceneCount = opts.estimatedSceneCount ?? DEFAULT_ESTIMATED_SCENE_COUNT;
+  const imageModelCount = opts.imageModelCount ?? 1;
 
   // LLM calls: script analysis + character bible + location bible (~3 calls)
   const llmCost = estimateLLMCost(3);
@@ -102,11 +105,10 @@ export function estimateStoryboardCost(opts: {
   // Location sheets (~3 locations on average, landscape_16_9)
   const locationSheetCost = estimateImageCost(opts.imageModel, '16:9', 3);
 
-  // Per-frame images
-  const frameCost = estimateImageCost(
-    opts.imageModel,
-    opts.aspectRatio,
-    sceneCount
+  // Per-frame images (multiplied by number of selected image models)
+  const frameCost = multiplyMicros(
+    estimateImageCost(opts.imageModel, opts.aspectRatio, sceneCount),
+    imageModelCount
   );
 
   let totalCost = addMicros(

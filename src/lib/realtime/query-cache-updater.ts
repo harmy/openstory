@@ -1,7 +1,7 @@
-import type { QueryClient } from '@tanstack/react-query';
-import type { Frame, Sequence } from '@/types/database';
 import { frameKeys } from '@/hooks/use-frames';
 import { sequenceKeys } from '@/hooks/use-sequences';
+import type { Frame, Sequence } from '@/types/database';
+import type { QueryClient } from '@tanstack/react-query';
 
 /**
  * Helper to safely extract typed values from event data.
@@ -29,7 +29,7 @@ function isSceneMetadata(value: unknown): value is Frame['metadata'] {
   if (typeof value !== 'object') return false;
   // Check for required Scene fields using 'in' operator for type narrowing
   return (
-    value !== null &&
+    typeof value === 'object' &&
     'sceneId' in value &&
     typeof value.sceneId === 'string' &&
     'sceneNumber' in value &&
@@ -140,6 +140,19 @@ export function updateQueryCacheFromEvent(
             : f
         )
       );
+      // Refresh variant data so model switcher and variant overlay stay current
+      if (status === 'completed') {
+        debouncedInvalidate(
+          queryClient,
+          ['sequence-image-variants', sequenceId],
+          `image-variants:${sequenceId}`
+        );
+        debouncedInvalidate(
+          queryClient,
+          ['sequence-image-models', sequenceId],
+          `image-models:${sequenceId}`
+        );
+      }
       break;
     }
 

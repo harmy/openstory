@@ -75,13 +75,23 @@ export const createSequenceSchema = createInsertSchema(sequences, {
       )
       .min(1, 'At least one model must be selected')
       .default([DEFAULT_ANALYSIS_MODEL]),
-    // Image model selection (model key, not full ID)
+    // Primary image model (model key, not full ID) — first of imageModels
     imageModel: z
       .string()
       .refine((val) => validImageModelKeys.includes(val), {
         message: 'Invalid image model',
       })
-      .default(DEFAULT_IMAGE_MODEL),
+      .default(DEFAULT_IMAGE_MODEL)
+      .optional(),
+    // Multiple image models for variant generation (first is primary)
+    imageModels: z
+      .array(
+        z.string().refine((val) => validImageModelKeys.includes(val), {
+          message: 'Invalid image model',
+        })
+      )
+      .min(1, 'At least one image model must be selected')
+      .default([DEFAULT_IMAGE_MODEL]),
     // Video model selection (model key, not full ID)
     videoModel: z
       .string()

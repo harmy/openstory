@@ -1,20 +1,30 @@
 import type React from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { EvalToolbar } from './eval-toolbar';
 import { EvalMatrix } from './eval-matrix';
 import {
   useSequencesWithFrames,
   type SequenceWithFrames,
 } from '@/hooks/use-sequences-with-frames';
+import { useAdminAllSequencesWithFrames } from '@/hooks/use-admin-support';
+import { isSystemAdminFn } from '@/functions/gift-tokens';
+import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { VideoIcon } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { ShieldCheck, VideoIcon } from 'lucide-react';
 
-export type ViewMode = 'script' | 'prompts' | 'images';
+export type ViewMode = 'script' | 'prompts' | 'images' | 'motion';
 
 export function isValidViewMode(value: string): value is ViewMode {
-  return value === 'script' || value === 'prompts' || value === 'images';
+  return (
+    value === 'script' ||
+    value === 'prompts' ||
+    value === 'images' ||
+    value === 'motion'
+  );
 }
 
 export function isValidSortField(
@@ -58,19 +68,59 @@ export const EvalView: React.FC = () => {
   const [sortCriteria, setSortCriteria] = useState<SortCriteria[]>([
     { field: 'createdAt', direction: 'desc' },
   ]);
+  const [supportMode, setSupportMode] = useState(false);
 
-  const { data: sequences, isLoading, error } = useSequencesWithFrames();
+  const { data: adminStatus } = useQuery({
+    queryKey: ['system-admin-status'],
+    queryFn: () => isSystemAdminFn(),
+    staleTime: 5 * 60 * 1000,
+  });
 
-  // Apply filters and sorting
-  const filteredAndSorted = applyFiltersAndSort(
-    sequences || [],
-    filters,
-    sortCriteria
+  const isAdmin = adminStatus?.isAdmin ?? false;
+
+  const ownData = useSequencesWithFrames();
+  const adminData = useAdminAllSequencesWithFrames(supportMode);
+
+  const sequences: SequenceWithFrames[] | undefined = supportMode
+    ? adminData.data
+    : ownData.data;
+  const isLoading = supportMode ? adminData.isLoading : ownData.isLoading;
+  const error = supportMode ? adminData.error : ownData.error;
+
+  // Client-side filtering for both modes
+  const filteredAndSorted = useMemo(
+    () => applyFiltersAndSort(sequences || [], filters, sortCriteria),
+    [sequences, filters, sortCriteria]
   );
+
+  const handleLoadMore = supportMode
+    ? () => {
+        if (adminData.hasNextPage && !adminData.isFetchingNextPage) {
+          void adminData.fetchNextPage();
+        }
+      }
+    : undefined;
+
+  const supportModeToggle = isAdmin ? (
+    <Card className="p-3">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+        <Label htmlFor="support-mode" className="text-sm font-medium">
+          Support Mode
+        </Label>
+        <Switch
+          id="support-mode"
+          checked={supportMode}
+          onCheckedChange={setSupportMode}
+        />
+      </div>
+    </Card>
+  ) : null;
 
   if (isLoading) {
     return (
       <div className="flex-1 overflow-hidden flex flex-col gap-4">
+        {supportModeToggle}
         <Card className="p-4">
           <div className="flex items-center gap-4">
             <Skeleton className="h-9 w-48" />
@@ -98,33 +148,29 @@ export const EvalView: React.FC = () => {
 
   if (error) {
     return (
-      <Card className="p-8 text-center">
-        <p className="text-destructive">
-          Failed to load sequences: {error.message}
-        </p>
-      </Card>
-    );
-  }
-
-  if (!sequences || sequences.length === 0) {
-    return (
-      <EmptyState
-        icon={<VideoIcon className="h-12 w-12" />}
-        title="No sequences yet"
-        description="Create some sequences to start evaluating prompts."
-      />
+      <div className="flex-1 overflow-hidden flex flex-col gap-4">
+        {supportModeToggle}
+        <Card className="p-8 text-center">
+          <p className="text-destructive">
+            Failed to load sequences: {error.message}
+          </p>
+        </Card>
+      </div>
     );
   }
 
   // Get unique workflows for filter dropdown
   const availableWorkflows = [
     ...new Set(
-      sequences?.map((s) => s.workflow).filter((w): w is string => w !== null)
+      (sequences ?? [])
+        .map((s) => s.workflow)
+        .filter((w): w is string => w !== null)
     ),
   ].sort();
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col gap-4">
+      {supportModeToggle}
       <EvalToolbar
         viewMode={viewMode}
         onViewModeChange={setViewMode}
@@ -133,15 +179,27 @@ export const EvalView: React.FC = () => {
         sortCriteria={sortCriteria}
         onSortChange={setSortCriteria}
         availableWorkflows={availableWorkflows}
+        supportMode={supportMode}
       />
       {filteredAndSorted.length === 0 ? (
-        <Card className="p-8 text-center">
-          <p className="text-muted-foreground">
-            No sequences match your filters.
-          </p>
-        </Card>
+        <EmptyState
+          icon={<VideoIcon className="h-12 w-12" />}
+          title={filters.search ? 'No matching sequences' : 'No sequences yet'}
+          description={
+            filters.search
+              ? `No sequences match "${filters.search}".`
+              : supportMode
+                ? 'No sequences found across any users.'
+                : 'Create some sequences to start evaluating prompts.'
+          }
+        />
       ) : (
-        <EvalMatrix sequences={filteredAndSorted} viewMode={viewMode} />
+        <EvalMatrix
+          sequences={filteredAndSorted}
+          viewMode={viewMode}
+          onLoadMore={handleLoadMore}
+          hasMore={supportMode ? adminData.hasNextPage : false}
+        />
       )}
     </div>
   );
@@ -157,7 +215,16 @@ function applyFiltersAndSort(
   // Apply filters
   if (filters.search) {
     const searchLower = filters.search.toLowerCase();
-    result = result.filter((s) => s.title.toLowerCase().includes(searchLower));
+    result = result.filter((s) => {
+      if (s.title.toLowerCase().includes(searchLower)) return true;
+      if (
+        'creatorName' in s &&
+        typeof s.creatorName === 'string' &&
+        s.creatorName.toLowerCase().includes(searchLower)
+      )
+        return true;
+      return false;
+    });
   }
 
   const { dateFrom, dateTo } = filters;

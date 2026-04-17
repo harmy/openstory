@@ -51,32 +51,28 @@ describe('Motion Service', () => {
       );
     });
 
-    it('should submit job with Seedance Pro model options', async () => {
+    it('should submit job with Seedance v1.5 Pro model options', async () => {
       mockGenerateVideo.mockResolvedValue({
         jobId: 'test-seedance-request-id',
-        model: 'fal-ai/bytedance/seedance/v1/pro/image-to-video',
+        model: 'fal-ai/bytedance/seedance/v1.5/pro/image-to-video',
       });
 
       const result = await submitMotionJob({
         imageUrl: 'https://example.com/image.jpg',
         prompt: 'Dynamic action sequence',
-        model: 'seedance_v1_pro',
+        model: 'seedance_v1_5_pro',
         duration: 5,
         fps: 25,
       });
 
       expect(result.jobId).toBe('test-seedance-request-id');
-      expect(result.modelKey).toBe('seedance_v1_pro');
+      expect(result.modelKey).toBe('seedance_v1_5_pro');
 
       expect(mockGenerateVideo).toHaveBeenCalledWith(
         expect.objectContaining({
           prompt: 'Dynamic action sequence',
           modelOptions: expect.objectContaining({
             image_url: 'https://example.com/image.jpg',
-            resolution: '1080p',
-            duration: '5',
-            camera_fixed: false,
-            enable_safety_checker: true,
           }),
         })
       );
@@ -94,28 +90,27 @@ describe('Motion Service', () => {
       ).rejects.toThrow('API error');
     });
 
-    it('should submit job with Kling O1 model options', async () => {
+    it('should submit job with Veo 3.1 model options', async () => {
       mockGenerateVideo.mockResolvedValue({
-        jobId: 'test-kling-o1-request-id',
-        model: 'fal-ai/kling-video/o1/image-to-video',
+        jobId: 'test-veo3-1-request-id',
+        model: 'fal-ai/veo3.1/image-to-video',
       });
 
       const result = await submitMotionJob({
         imageUrl: 'https://example.com/image.jpg',
         prompt: 'Smooth camera movement',
-        model: 'kling_o1',
-        duration: 10,
+        model: 'veo3_1',
+        duration: 8,
       });
 
-      expect(result.jobId).toBe('test-kling-o1-request-id');
-      expect(result.modelKey).toBe('kling_o1');
+      expect(result.jobId).toBe('test-veo3-1-request-id');
+      expect(result.modelKey).toBe('veo3_1');
 
       expect(mockGenerateVideo).toHaveBeenCalledWith(
         expect.objectContaining({
           prompt: 'Smooth camera movement',
           modelOptions: expect.objectContaining({
-            start_image_url: 'https://example.com/image.jpg',
-            duration: '10',
+            image_url: 'https://example.com/image.jpg',
           }),
         })
       );

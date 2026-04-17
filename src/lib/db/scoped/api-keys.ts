@@ -77,6 +77,7 @@ export function createApiKeysReadMethods(db: Database, teamId: string) {
       )
       .limit(1);
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
     if (row) {
       const decrypted = await decryptApiKey({
         encryptedKey: row.encryptedKey,
@@ -109,6 +110,7 @@ export function createApiKeysReadMethods(db: Database, teamId: string) {
       return { valid: false, error: `OpenRouter returned ${response.status}` };
     }
 
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: literal comparison in if/else chain
     if (provider === 'fal') {
       const response = await fetch(
         'https://queue.fal.run/fal-ai/flux/schnell',

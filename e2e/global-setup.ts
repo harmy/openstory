@@ -1,9 +1,11 @@
 import { execFileSync } from 'node:child_process';
+import { startAimockServer } from './mocks/aimock-server';
 
 /**
- * Playwright global setup - ensures test.db is migrated and seeded before tests run.
+ * Playwright global setup - ensures test.db is migrated and seeded,
+ * and starts the aimock server for LLM mocking before tests run.
  */
-export default function globalSetup() {
+export default async function globalSetup() {
   console.log('[e2e] Migrating test database...');
   execFileSync(
     'bun',
@@ -15,4 +17,6 @@ export default function globalSetup() {
   execFileSync('bun', ['--bun', 'scripts/seed.ts', '--test'], {
     stdio: 'inherit',
   });
+
+  await startAimockServer();
 }

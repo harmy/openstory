@@ -61,18 +61,19 @@ export type LLMRequestParams = {
  * https://openrouter.ai/docs/guides/features/structured-outputs
  */
 const STRUCTURED_OUTPUT_MODELS = new Set([
-  'bytedance-seed/seed-1.6-flash',
-  'minimax/minimax-m2',
-  'mistralai/mistral-small-3.2-24b-instruct',
   'x-ai/grok-4.1-fast',
-  'openai/gpt-5-mini',
-  'openai/gpt-5-nano',
-  'google/gemini-3-flash-preview',
-  'deepseek/deepseek-v3.2',
-  'google/gemini-3-pro-preview',
-  'openai/gpt-5.2',
   'anthropic/claude-sonnet-4.6',
+  'x-ai/grok-4.20-beta',
   'anthropic/claude-opus-4.6',
+  'deepseek/deepseek-v3.2',
+  'z-ai/glm-5',
+  'google/gemini-3.1-pro-preview',
+  'openai/gpt-5.4',
+  'google/gemini-3-flash-preview',
+  'mistralai/mistral-small-2603',
+  'openai/gpt-5.4-mini',
+  'bytedance-seed/seed-2.0-mini',
+  'openai/gpt-5.4-nano',
 ]);
 
 export function modelSupportsStructuredOutputs(model: string): boolean {

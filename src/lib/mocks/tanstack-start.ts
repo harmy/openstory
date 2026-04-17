@@ -53,7 +53,10 @@ export function getRequest() {
 export function json(data: any, init?: ResponseInit) {
   return new Response(JSON.stringify(data), {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...Object.fromEntries(new Headers(init?.headers).entries()),
+    },
   });
 }
 
