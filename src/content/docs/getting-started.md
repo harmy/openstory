@@ -66,4 +66,7 @@ bun db:migrate
 
 ## Next Steps
 
+- [Creating Sequences](/docs/user-guide/creating-sequences) — Create your first video sequence
+- [Working with Scenes](/docs/user-guide/scenes) — Edit and refine individual scenes
+- [AI Models](/docs/user-guide/ai-models) — Complete model reference
 - [Deploy to Cloudflare](/docs/deployment/cloudflare) — Production deployment guide
