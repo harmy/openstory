@@ -73,6 +73,7 @@ function createAuth() {
         clientId: runtimeEnv.GOOGLE_CLIENT_ID,
         clientSecret: runtimeEnv.GOOGLE_CLIENT_SECRET,
         enabled: true,
+        overrideUserInfoOnSignIn: true,
       },
     },
 
