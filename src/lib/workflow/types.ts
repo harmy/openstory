@@ -134,7 +134,6 @@ export type SceneSplitWorkflowInput = SequenceWorkflowContext & {
   styleConfig: StyleConfig;
   aspectRatio: AspectRatio;
   script: string;
-  autoGenerateMotion?: boolean;
 };
 
 export type SceneSplitWorkflowResult = {

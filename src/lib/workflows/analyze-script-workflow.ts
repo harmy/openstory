@@ -85,7 +85,6 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
         script: sanitizeScriptContent(script),
         styleConfig,
         modelId: analysisModelId,
-        autoGenerateMotion,
       },
     });
 

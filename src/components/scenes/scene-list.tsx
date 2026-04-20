@@ -16,6 +16,8 @@ type SceneListProps = {
   regeneratingMotion: Set<string>;
   onBatchGenerateMotion?: (includeMusic: boolean) => Promise<void>;
   musicPromptsReady: boolean;
+  /** Hide the batch motion button (e.g. while auto-generate motion is in flight). */
+  hideBatchButton?: boolean;
 };
 
 const isCompleted = (frame: Frame) => {
@@ -33,9 +35,12 @@ const SceneListComponent: React.FC<SceneListProps> = ({
   regeneratingMotion,
   onBatchGenerateMotion,
   musicPromptsReady,
+  hideBatchButton = false,
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [includeMusic, setIncludeMusic] = useState(true);
+
+  const totalFrames = frames?.length ?? 0;
 
   // Frames that need to be kicked off (not already generating)
   const notStartedFrames = useMemo(() => {
@@ -74,7 +79,8 @@ const SceneListComponent: React.FC<SceneListProps> = ({
   };
 
   const isMotionInProgress = regeneratingMotion.size > 0 || hasGeneratingFrames;
-  const showButton = notStartedFrames.length > 0 || isMotionInProgress;
+  const showButton =
+    !hideBatchButton && (notStartedFrames.length > 0 || isMotionInProgress);
   const isButtonDisabled =
     isGenerating ||
     notStartedFrames.length === 0 ||
@@ -151,8 +157,8 @@ const SceneListComponent: React.FC<SceneListProps> = ({
             ) : (
               <>
                 <Video className="mr-2 h-4 w-4" />
-                Generate Motion ({notStartedFrames.length}{' '}
-                {notStartedFrames.length === 1 ? 'frame' : 'frames'})
+                Generate {notStartedFrames.length} / {totalFrames}{' '}
+                {totalFrames === 1 ? 'frame' : 'frames'}
               </>
             )}
           </Button>

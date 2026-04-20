@@ -41,13 +41,7 @@ export const sceneSplitWorkflow = createScopedWorkflow<
 >(
   async (context, scopedDb) => {
     const input = context.requestPayload;
-    const {
-      sequenceId,
-      modelId,
-      styleConfig,
-      aspectRatio,
-      autoGenerateMotion = false,
-    } = input;
+    const { sequenceId, modelId, styleConfig, aspectRatio } = input;
 
     const phase = { number: 1, name: 'Analyzing script\u2026' };
     const name = 'scene-splitting';
@@ -156,7 +150,7 @@ export const sceneSplitWorkflow = createScopedWorkflow<
                     (event.scene.metadata?.durationSeconds || 3) * 1000
                   ),
                   thumbnailStatus: 'generating',
-                  videoStatus: autoGenerateMotion ? 'generating' : 'pending',
+                  videoStatus: 'pending',
                 } satisfies NewFrame);
               }
 
@@ -207,7 +201,7 @@ export const sceneSplitWorkflow = createScopedWorkflow<
                     (event.scene.metadata?.durationSeconds || 3) * 1000
                   ),
                   thumbnailStatus: 'generating',
-                  videoStatus: autoGenerateMotion ? 'generating' : 'pending',
+                  videoStatus: 'pending',
                 } satisfies NewFrame);
 
                 console.log(
@@ -346,7 +340,7 @@ export const sceneSplitWorkflow = createScopedWorkflow<
                 (scene.metadata?.durationSeconds || 3) * 1000
               ),
               thumbnailStatus: 'generating',
-              videoStatus: autoGenerateMotion ? 'generating' : 'pending',
+              videoStatus: 'pending',
             }) satisfies NewFrame
         );
 
