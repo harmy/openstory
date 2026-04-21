@@ -96,9 +96,9 @@ function capturePostHogGeneration(
       $ai_latency: latencySeconds,
       $ai_http_status: result.error ? 500 : 200,
       ...(result.error && { $ai_error: result.error, $ai_is_error: true }),
-      ...(state.meta.sessionId && { $session_id: state.meta.sessionId }),
+      ...(state.meta.sessionId && { $ai_session_id: state.meta.sessionId }),
       ...(state.meta.observationName && {
-        $ai_observation_name: state.meta.observationName,
+        $ai_span_name: state.meta.observationName,
       }),
       ...(state.meta.tags?.length && { $ai_tags: state.meta.tags }),
     },
