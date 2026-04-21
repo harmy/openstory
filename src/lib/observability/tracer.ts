@@ -11,17 +11,8 @@ import {
   context,
   trace,
 } from '@opentelemetry/api';
-import { AsyncLocalStorage } from 'node:async_hooks';
 
 const tracer = trace.getTracer('openstory');
-
-type TraceStore = { userId?: string; sessionId?: string; tags?: string[] };
-
-const traceStore = new AsyncLocalStorage<TraceStore>();
-
-function currentTraceStore(): TraceStore | undefined {
-  return traceStore.getStore();
-}
 
 type GenAISpanAttrs = {
   model: string;
@@ -47,9 +38,7 @@ type GenAISpanAttrs = {
 export function startGenAISpan(name: string, attrs: GenAISpanAttrs): Span {
   const operation = attrs.operation ?? 'generate_content';
   const spanName = `${operation} ${attrs.model}`;
-  const store = currentTraceStore();
-  const userId = attrs.userId ?? store?.userId;
-  const sessionId = attrs.sessionId ?? store?.sessionId;
+  const { userId, sessionId } = attrs;
 
   const span = tracer.startSpan(
     spanName,
@@ -165,7 +154,7 @@ export async function withTraceContextAsync<T>(
 
   const ctx = trace.setSpan(context.active(), rootSpan);
   try {
-    return await traceStore.run(attrs, () => context.with(ctx, fn));
+    return await context.with(ctx, fn);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     rootSpan.setStatus({ code: SpanStatusCode.ERROR, message });

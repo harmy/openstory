@@ -1,15 +1,21 @@
 /**
- * Side-effect boot module for tracing.
- * Importing this file once per isolate wires up the OTel tracer provider
- * (Langfuse + PostHog exporters) and the @tanstack/ai event bridge so that
- * chat() calls emit gen_ai spans.
+ * Server-only tracing boot.
  *
- * Both init functions are idempotent — importing this from multiple entry
- * points (server-function middleware, workflow routes) is safe.
+ * `ensureObservability()` initialises the OTel tracer provider (Langfuse +
+ * PostHog exporters) and the @tanstack/ai event bridge. Both inner init
+ * functions are idempotent, so repeated calls are safe.
+ *
+ * The wrapper is a `createServerOnlyFn` so invoking it from client code
+ * throws at runtime — callers must invoke it from inside a server-only
+ * execution path (e.g. a `createMiddleware(...).server(...)` callback).
  */
+
+import { createServerOnlyFn } from '@tanstack/react-start';
 
 import { initAIEventBridge } from './ai-event-bridge';
 import { initTracing } from './langfuse';
 
-initTracing();
-initAIEventBridge();
+export const ensureObservability = createServerOnlyFn(() => {
+  initTracing();
+  initAIEventBridge();
+});

@@ -5,7 +5,6 @@
  */
 
 import { createScopedDb, type ScopedDb } from '@/lib/db/scoped';
-import { withTraceContextAsync } from '@/lib/observability/tracer';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import type { UserWorkflowContext } from '@/lib/workflow/types';
 import type { WorkflowContext } from '@upstash/workflow';
@@ -62,15 +61,7 @@ export function createScopedWorkflow<
         context.requestPayload.teamId,
         context.requestPayload.userId
       );
-      const payload = context.requestPayload as T & { sequenceId?: string };
-      return withTraceContextAsync(
-        {
-          userId: payload.userId,
-          sessionId: payload.sequenceId,
-          tags: [`team:${payload.teamId}`],
-        },
-        () => fn(context, scopedDb)
-      );
+      return fn(context, scopedDb);
     },
     {
       middlewares: [teamIdValidation],
