@@ -58,6 +58,15 @@ export const teamApiKeys = sqliteTable(
     // Status
     isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),
 
+    // Validity — set false + invalidReason when a workflow or re-validation
+    // check finds the key rejected by the provider (e.g. 401/403). When
+    // invalid, resolveKey() skips the team key and falls back to platform.
+    isInvalid: integer('is_invalid', { mode: 'boolean' })
+      .default(false)
+      .notNull(),
+    invalidReason: text('invalid_reason'),
+    lastValidatedAt: integer('last_validated_at', { mode: 'timestamp' }),
+
     // Audit
     addedBy: text('added_by')
       .notNull()

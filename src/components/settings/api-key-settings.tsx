@@ -19,6 +19,7 @@ import {
   checkApiKeyStatusFn,
   deleteApiKeyFn,
   listApiKeysFn,
+  revalidateApiKeyFn,
   saveApiKeyFn,
 } from '@/functions/api-keys';
 import { initiateOpenRouterOAuthFn } from '@/functions/openrouter-oauth';
@@ -27,7 +28,13 @@ import { BILLING_GATE_KEY } from '@/hooks/use-billing-gate';
 import { usePostHog } from '@posthog/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { ExternalLink, Key, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  ExternalLink,
+  Key,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -153,10 +160,37 @@ function ApiKeySettingsContent({
     },
   });
 
+  const revalidateMutation = useMutation({
+    mutationFn: (provider: 'openrouter' | 'fal') =>
+      revalidateApiKeyFn({ data: { teamId, provider } }),
+    onSuccess: (result, provider) => {
+      invalidateKeys();
+      if (result.valid) {
+        toast.success('Key re-validated', {
+          description: `Your ${provider === 'openrouter' ? 'OpenRouter' : 'Fal.ai'} key is valid again.`,
+        });
+      }
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'Failed to re-validate');
+    },
+  });
+
   const isLoading = keysLoading || statusLoading;
 
   const openrouterKey = apiKeys?.find((k) => k.provider === 'openrouter');
   const falKey = apiKeys?.find((k) => k.provider === 'fal');
+
+  // Re-validate stored team keys on mount so opening the settings page
+  // refreshes their validity without waiting for the next workflow failure.
+  const revalidatedRef = useRef(false);
+  useEffect(() => {
+    if (revalidatedRef.current) return;
+    if (!openrouterKey) return;
+    revalidatedRef.current = true;
+    revalidateMutation.mutate('openrouter');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openrouterKey?.id]);
 
   const handleSaveFalKey = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -220,6 +254,10 @@ function ApiKeySettingsContent({
               </div>
               {isLoading ? (
                 <Skeleton className="h-5 w-20" />
+              ) : openrouterKey?.isInvalid ? (
+                <Badge variant="destructive" className="text-xs">
+                  Invalid
+                </Badge>
               ) : (
                 <StatusBadge source={keyStatus?.openrouter} />
               )}
@@ -228,30 +266,83 @@ function ApiKeySettingsContent({
             {isLoading ? (
               <Skeleton className="h-10 w-full" />
             ) : openrouterKey ? (
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div className="flex items-center gap-3">
-                  <Key className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">
-                      Connected via{' '}
-                      {openrouterKey.source === 'oauth'
-                        ? 'OAuth'
-                        : 'manual entry'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Key ending in {openrouterKey.keyHint}
-                    </p>
+              <div className="space-y-2">
+                <div
+                  className={`flex items-center justify-between rounded-lg border p-3 ${
+                    openrouterKey.isInvalid ? 'border-destructive' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Key className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">
+                        Connected via{' '}
+                        {openrouterKey.source === 'oauth'
+                          ? 'OAuth'
+                          : 'manual entry'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Key ending in {openrouterKey.keyHint}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {openrouterKey.isInvalid && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => revalidateMutation.mutate('openrouter')}
+                        disabled={revalidateMutation.isPending}
+                        aria-label="Re-validate OpenRouter key"
+                      >
+                        <RotateCcw
+                          className={`h-4 w-4 ${revalidateMutation.isPending ? 'animate-spin' : ''}`}
+                        />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteMutation.mutate('openrouter')}
+                      disabled={deleteMutation.isPending}
+                      aria-label="Delete OpenRouter key"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => deleteMutation.mutate('openrouter')}
-                  disabled={deleteMutation.isPending}
-                  aria-label="Delete OpenRouter key"
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                {openrouterKey.isInvalid && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      {openrouterKey.invalidReason ||
+                        'OpenRouter rejected this key.'}{' '}
+                      Re-validate, or reconnect via OAuth to replace it.
+                      <div className="mt-2 flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            revalidateMutation.mutate('openrouter')
+                          }
+                          disabled={revalidateMutation.isPending}
+                        >
+                          {revalidateMutation.isPending
+                            ? 'Checking…'
+                            : 'Re-validate'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => oauthMutation.mutate()}
+                          disabled={oauthMutation.isPending}
+                        >
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          Reconnect
+                        </Button>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
             ) : (
               <Button

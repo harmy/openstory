@@ -25,6 +25,8 @@ type MobileSceneDrawerProps = {
   regeneratingMotion: Set<string>;
   onBatchGenerateMotion?: (includeMusic: boolean) => Promise<void>;
   musicPromptsReady: boolean;
+  /** Hide the batch motion button (e.g. while auto-generate motion is in flight). */
+  hideBatchButton?: boolean;
 };
 
 const isCompleted = (frame: Frame) => {
@@ -42,10 +44,13 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
   regeneratingMotion,
   onBatchGenerateMotion,
   musicPromptsReady,
+  hideBatchButton = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [includeMusic, setIncludeMusic] = useState(false);
+
+  const totalFrames = frames?.length ?? 0;
 
   // Get the currently selected frame
   const selectedFrame = useMemo(
@@ -99,7 +104,8 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
 
   const hasEligibleFrames = eligibleFrames.length > 0;
   const isMotionInProgress = regeneratingMotion.size > 0;
-  const showFooter = hasEligibleFrames || isMotionInProgress;
+  const showFooter =
+    !hideBatchButton && (hasEligibleFrames || isMotionInProgress);
   const isButtonDisabled =
     isGenerating ||
     isMotionInProgress ||
@@ -199,8 +205,8 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
                 ) : (
                   <>
                     <Video className="mr-2 h-4 w-4" />
-                    Generate Motion ({eligibleFrames.length}{' '}
-                    {eligibleFrames.length === 1 ? 'frame' : 'frames'})
+                    Generate {eligibleFrames.length} / {totalFrames}{' '}
+                    {totalFrames === 1 ? 'frame' : 'frames'}
                   </>
                 )}
               </Button>

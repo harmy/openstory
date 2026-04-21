@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { sanitizeFailResponse } from './sanitize-fail-response';
+import {
+  isOpenRouterAuthError,
+  sanitizeFailResponse,
+} from './sanitize-fail-response';
 
 describe('sanitizeFailResponse', () => {
   test('passes through a normal error string unchanged', () => {
@@ -47,5 +50,32 @@ describe('sanitizeFailResponse', () => {
   test('handles non-string values', () => {
     expect(sanitizeFailResponse(42)).toBe('42');
     expect(sanitizeFailResponse({ error: 'bad' })).toBe('{"error":"bad"}');
+  });
+});
+
+describe('isOpenRouterAuthError', () => {
+  test('detects 401 / Unauthorized', () => {
+    expect(isOpenRouterAuthError('LLM stream error: 401 Unauthorized')).toBe(
+      true
+    );
+    expect(isOpenRouterAuthError('OpenRouter returned 401')).toBe(true);
+  });
+
+  test('detects 403 / Forbidden', () => {
+    expect(isOpenRouterAuthError('403 Forbidden')).toBe(true);
+  });
+
+  test('detects OpenRouter no-auth-credentials message', () => {
+    expect(isOpenRouterAuthError('No auth credentials found')).toBe(true);
+  });
+
+  test('detects invalid-api-key message case-insensitively', () => {
+    expect(isOpenRouterAuthError('Invalid API key: sk-or-...')).toBe(true);
+  });
+
+  test('does not match unrelated errors', () => {
+    expect(isOpenRouterAuthError('Request timed out')).toBe(false);
+    expect(isOpenRouterAuthError('500 Internal Server Error')).toBe(false);
+    expect(isOpenRouterAuthError('Rate limit exceeded')).toBe(false);
   });
 });

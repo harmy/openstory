@@ -111,3 +111,24 @@ export const checkApiKeyStatusFn = createServerFn({ method: 'GET' })
       fal: hasFal ? 'team' : 'platform',
     } as const;
   });
+
+// ============================================================================
+// Revalidate API Key
+// ============================================================================
+
+const revalidateApiKeyInputSchema = z.object({
+  teamId: z.string(),
+  provider: providerSchema,
+});
+
+/**
+ * Re-run the provider's validation check against the currently stored team
+ * key. Persists the result (isInvalid + invalidReason) on the team_api_keys
+ * row so subsequent billing-gate reads reflect the current state.
+ */
+export const revalidateApiKeyFn = createServerFn({ method: 'POST' })
+  .middleware([teamAdminAccessMiddleware])
+  .inputValidator(zodValidator(revalidateApiKeyInputSchema))
+  .handler(async ({ data, context }) => {
+    return context.scopedDb.apiKeys.revalidateStoredKey(data.provider);
+  });

@@ -138,7 +138,6 @@ export type SceneSplitWorkflowInput = SequenceWorkflowContext & {
   styleConfig: StyleConfig;
   aspectRatio: AspectRatio;
   script: string;
-  autoGenerateMotion?: boolean;
   /** User-uploaded elements to make the model aware of uppercase tokens */
   elements?: SequenceElementMinimal[];
 };

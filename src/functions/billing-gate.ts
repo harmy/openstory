@@ -21,12 +21,14 @@ export const getBillingGateStatusFn = createServerFn({ method: 'GET' })
       balance,
       hasFalKey,
       hasOpenRouterKey,
+      openRouterKeyInvalid,
       billingSettings,
       hasRedeemedGift,
     ] = await Promise.all([
       scopedDb.billing.getBalance(),
       scopedDb.apiKeys.hasKey('fal'),
       scopedDb.apiKeys.hasKey('openrouter'),
+      scopedDb.apiKeys.hasInvalidKey('openrouter'),
       scopedDb.billing.getBillingSettings(),
       scopedDb.billing.hasRedeemedGiftCode(),
     ]);
@@ -35,6 +37,7 @@ export const getBillingGateStatusFn = createServerFn({ method: 'GET' })
       hasCredits: balance > 0,
       hasFalKey,
       hasOpenRouterKey,
+      openRouterKeyInvalid,
       balance: microsToUsd(balance),
       hasAutoTopUp:
         billingSettings.autoTopUpEnabled && !!billingSettings.stripeCustomerId,

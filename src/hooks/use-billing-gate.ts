@@ -14,6 +14,7 @@ type BillingGateStatus = {
   hasCredits: boolean;
   hasFalKey: boolean;
   hasOpenRouterKey: boolean;
+  openRouterKeyInvalid: boolean;
   balance: number;
   hasAutoTopUp: boolean;
   stripeEnabled: boolean;
@@ -72,6 +73,7 @@ export function useBillingGate(mode: 'all' | 'fal' = 'all') {
     needsBillingSetup,
     hasFalKey: data?.hasFalKey ?? false,
     hasOpenRouterKey: data?.hasOpenRouterKey ?? false,
+    openRouterKeyInvalid: data?.openRouterKeyInvalid ?? false,
     hasCredits: data?.hasCredits ?? true,
     hasAutoTopUp: data?.hasAutoTopUp ?? false,
     stripeEnabled: data?.stripeEnabled ?? true,

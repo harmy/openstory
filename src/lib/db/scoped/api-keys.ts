@@ -20,6 +20,9 @@ type ApiKeyInfo = {
   keyHint: string;
   source: 'oauth' | 'manual';
   isActive: boolean;
+  isInvalid: boolean;
+  invalidReason: string | null;
+  lastValidatedAt: Date | null;
   addedBy: string;
   createdAt: Date;
 };
@@ -33,13 +36,16 @@ export function createApiKeysReadMethods(db: Database, teamId: string) {
         keyHint: teamApiKeys.keyHint,
         source: teamApiKeys.source,
         isActive: teamApiKeys.isActive,
+        isInvalid: teamApiKeys.isInvalid,
+        invalidReason: teamApiKeys.invalidReason,
+        lastValidatedAt: teamApiKeys.lastValidatedAt,
         addedBy: teamApiKeys.addedBy,
         createdAt: teamApiKeys.createdAt,
       })
       .from(teamApiKeys)
       .where(eq(teamApiKeys.teamId, teamId));
 
-    return rows as ApiKeyInfo[];
+    return rows;
   }
 
   async function hasKey(provider: ApiKeyProvider): Promise<boolean> {
@@ -58,6 +64,23 @@ export function createApiKeysReadMethods(db: Database, teamId: string) {
     return !!row;
   }
 
+  async function hasInvalidKey(provider: ApiKeyProvider): Promise<boolean> {
+    const [row] = await db
+      .select({ id: teamApiKeys.id })
+      .from(teamApiKeys)
+      .where(
+        and(
+          eq(teamApiKeys.teamId, teamId),
+          eq(teamApiKeys.provider, provider),
+          eq(teamApiKeys.isActive, true),
+          eq(teamApiKeys.isInvalid, true)
+        )
+      )
+      .limit(1);
+
+    return !!row;
+  }
+
   async function resolveKey(
     provider: ApiKeyProvider
   ): Promise<{ key: string; source: 'team' | 'platform' }> {
@@ -66,6 +89,7 @@ export function createApiKeysReadMethods(db: Database, teamId: string) {
         encryptedKey: teamApiKeys.encryptedKey,
         keyIv: teamApiKeys.keyIv,
         keyTag: teamApiKeys.keyTag,
+        isInvalid: teamApiKeys.isInvalid,
       })
       .from(teamApiKeys)
       .where(
@@ -77,14 +101,39 @@ export function createApiKeysReadMethods(db: Database, teamId: string) {
       )
       .limit(1);
 
-    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
-    if (row) {
-      const decrypted = await decryptApiKey({
-        encryptedKey: row.encryptedKey,
-        keyIv: row.keyIv,
-        keyTag: row.keyTag,
-      });
-      return { key: decrypted, source: 'team' };
+    // Skip team key if previously marked invalid — fall back to platform
+    // so generations keep working while the user fixes the key.
+    if (row && !row.isInvalid) {
+      try {
+        const decrypted = await decryptApiKey({
+          encryptedKey: row.encryptedKey,
+          keyIv: row.keyIv,
+          keyTag: row.keyTag,
+        });
+        return { key: decrypted, source: 'team' };
+      } catch (err) {
+        // Decryption failed — encryption secret rotated or ciphertext corrupt.
+        // Mark the row invalid inline so the banner surfaces and subsequent
+        // calls skip straight to the platform key.
+        const reason =
+          err instanceof Error
+            ? `Could not decrypt stored key: ${err.message}`
+            : 'Could not decrypt stored key';
+        await db
+          .update(teamApiKeys)
+          .set({
+            isInvalid: true,
+            invalidReason: reason,
+            lastValidatedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(teamApiKeys.teamId, teamId),
+              eq(teamApiKeys.provider, provider)
+            )
+          );
+      }
     }
 
     const env = getEnv();
@@ -135,6 +184,7 @@ export function createApiKeysReadMethods(db: Database, teamId: string) {
   return {
     listKeys,
     hasKey,
+    hasInvalidKey,
     resolveKey,
     validateKey,
   };
@@ -145,8 +195,93 @@ export function createApiKeysMethods(
   teamId: string,
   userId: string
 ) {
+  const readMethods = createApiKeysReadMethods(db, teamId);
+
+  const markKeyInvalid = async (
+    provider: ApiKeyProvider,
+    reason: string
+  ): Promise<void> => {
+    await db
+      .update(teamApiKeys)
+      .set({
+        isInvalid: true,
+        invalidReason: reason,
+        lastValidatedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(teamApiKeys.teamId, teamId), eq(teamApiKeys.provider, provider))
+      );
+  };
+
+  const markKeyValid = async (provider: ApiKeyProvider): Promise<void> => {
+    await db
+      .update(teamApiKeys)
+      .set({
+        isInvalid: false,
+        invalidReason: null,
+        lastValidatedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(teamApiKeys.teamId, teamId), eq(teamApiKeys.provider, provider))
+      );
+  };
+
+  const revalidateStoredKey = async (
+    provider: ApiKeyProvider
+  ): Promise<{ valid: boolean; error?: string; hasKey: boolean }> => {
+    const [row] = await db
+      .select({
+        encryptedKey: teamApiKeys.encryptedKey,
+        keyIv: teamApiKeys.keyIv,
+        keyTag: teamApiKeys.keyTag,
+      })
+      .from(teamApiKeys)
+      .where(
+        and(
+          eq(teamApiKeys.teamId, teamId),
+          eq(teamApiKeys.provider, provider),
+          eq(teamApiKeys.isActive, true)
+        )
+      )
+      .limit(1);
+
+    if (!row) return { valid: false, hasKey: false };
+
+    let decrypted: string;
+    try {
+      decrypted = await decryptApiKey({
+        encryptedKey: row.encryptedKey,
+        keyIv: row.keyIv,
+        keyTag: row.keyTag,
+      });
+    } catch (err) {
+      const reason =
+        err instanceof Error
+          ? `Could not decrypt stored key: ${err.message}`
+          : 'Could not decrypt stored key';
+      await markKeyInvalid(provider, reason);
+      return { valid: false, error: reason, hasKey: true };
+    }
+
+    const result = await readMethods.validateKey(provider, decrypted);
+
+    if (result.valid) {
+      await markKeyValid(provider);
+    } else {
+      await markKeyInvalid(provider, result.error ?? 'Validation failed');
+    }
+
+    return { ...result, hasKey: true };
+  };
+
   return {
-    ...createApiKeysReadMethods(db, teamId),
+    ...readMethods,
+
+    markKeyInvalid,
+    markKeyValid,
+    revalidateStoredKey,
 
     saveKey: async (params: {
       provider: ApiKeyProvider;
@@ -177,6 +312,9 @@ export function createApiKeysMethods(
           keyHint: hint,
           source: params.source ?? 'manual',
           isActive: true,
+          isInvalid: false,
+          invalidReason: null,
+          lastValidatedAt: now,
           addedBy: userId,
           createdAt: now,
           updatedAt: now,
@@ -189,6 +327,9 @@ export function createApiKeysMethods(
         keyHint: row.keyHint,
         source: row.source,
         isActive: row.isActive,
+        isInvalid: row.isInvalid,
+        invalidReason: row.invalidReason,
+        lastValidatedAt: row.lastValidatedAt,
         addedBy: row.addedBy,
         createdAt: row.createdAt,
       };

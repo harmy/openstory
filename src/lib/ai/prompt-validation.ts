@@ -1,6 +1,7 @@
 // Security: Prompt injection protection patterns
 // These patterns detect injection attempts for logging/alerting only.
-// sanitizeScriptContent performs safe, line-scoped replacements.
+// sanitizeScriptContent performs safe, line-scoped replacements and unwraps
+// markdown code fences (users sometimes paste scripts inside ```...```).
 export const INJECTION_PATTERNS = [
   /ignore\s+(all\s+)?previous\s+instructions?/gi,
   /forget\s+(all\s+)?previous\s+instructions?/gi,
@@ -21,8 +22,13 @@ export const INJECTION_PATTERNS = [
 export const sanitizeScriptContent = (input: string): string => {
   let sanitized = input;
 
-  // Handle code blocks (these are unlikely in screenplays and could contain injection)
-  sanitized = sanitized.replace(/```[\s\S]*?```/gi, '[technical content]');
+  // Unwrap triple-backtick fences — users sometimes paste screenplays inside
+  // markdown code blocks. Keep the inner content so the injection-pattern
+  // replacements below still scan it. See issue #455.
+  sanitized = sanitized.replace(
+    /```(?:[a-zA-Z0-9_-]*)?\n?([\s\S]*?)\n?```/g,
+    '$1'
+  );
 
   // Handle explicit injection attempts (line-scoped: .* not [\s\S]*$)
   sanitized = sanitized.replace(

@@ -10,7 +10,10 @@ import { recordWorkflowTrace } from '@/lib/observability/langfuse';
 import { getGenerationChannel } from '@/lib/realtime';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
-import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
+import {
+  isOpenRouterAuthError,
+  sanitizeFailResponse,
+} from '@/lib/workflow/sanitize-fail-response';
 import type {
   AnalyzeScriptWorkflowInput,
   BatchMotionMusicWorkflowInput,
@@ -123,7 +126,6 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
         script: sanitizeScriptContent(script),
         styleConfig,
         modelId: analysisModelId,
-        autoGenerateMotion,
         elements: elementsMinimal,
       },
     });
@@ -405,9 +407,20 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
 
       const error = sanitizeFailResponse(failResponse);
       console.error('[AnalyzeScriptWorkflow] Failure:', error);
-      await scopedDb.sequence(sequenceId).updateStatus('failed', error);
+
+      let userMessage = error;
+      if (
+        isOpenRouterAuthError(error) &&
+        (await scopedDb.apiKeys.hasKey('openrouter'))
+      ) {
+        await scopedDb.apiKeys.markKeyInvalid('openrouter', error);
+        userMessage =
+          'Your OpenRouter API key is invalid — update it in Settings.';
+      }
+
+      await scopedDb.sequence(sequenceId).updateStatus('failed', userMessage);
       await getGenerationChannel(sequenceId).emit('generation.failed', {
-        message: error,
+        message: userMessage,
       });
 
       return `Analysis workflow failed: ${error}`;

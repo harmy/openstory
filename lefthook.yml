@@ -14,7 +14,7 @@ pre-commit:
       run: bun run --bun oxlint --type-aware --quiet {staged_files}
       stage_fixed: true
     format:
-      glob: '*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx}'
+      glob: '*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,sql,json,md}'
       exclude:
         - src/routeTree.gen.ts
         - public/mockServiceWorker.js

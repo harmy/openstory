@@ -427,33 +427,39 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
 
   const musicPromptsReady = !!(sequence?.musicPrompt && sequence.musicTags);
 
+  // Script-analysis workflow owns the UI (phases 1–5, including auto-motion)
+  // whenever it is running; standalone motion gen only wins after analysis.
+  const isGenerationActive = isProcessing || generationState.currentPhase > 0;
+
   return (
     <div className="flex h-full flex-col">
       {/* Generation progress banner */}
-      {(isProcessing || generationState.currentPhase > 0) &&
-        motionBannerState === null && (
-          <div className="pl-4 pr-4 pt-4 md:pr-8">
-            <GenerationProgressBanner
-              generationState={generationState}
-              isProcessing={isProcessing}
-              startedAt={sequence?.updatedAt}
-              script={sequence?.script ?? undefined}
-            />
-          </div>
-        )}
-
-      {/* Motion generation progress banner */}
-      {motionBannerState !== null && sequence && frames && (
+      {isGenerationActive && (
         <div className="pl-4 pr-4 pt-4 md:pr-8">
-          <MotionProgressBanner
-            frames={frames}
-            sequence={sequence}
-            includeMusic={motionBannerState.includeMusic}
-            startedAt={motionBannerState.startedAt}
-            onComplete={resetGenerationStream}
+          <GenerationProgressBanner
+            generationState={generationState}
+            isProcessing={isProcessing}
+            startedAt={sequence?.updatedAt}
+            script={sequence?.script ?? undefined}
           />
         </div>
       )}
+
+      {/* Motion generation progress banner */}
+      {!isGenerationActive &&
+        motionBannerState !== null &&
+        sequence &&
+        frames && (
+          <div className="pl-4 pr-4 pt-4 md:pr-8">
+            <MotionProgressBanner
+              frames={frames}
+              sequence={sequence}
+              includeMusic={motionBannerState.includeMusic}
+              startedAt={motionBannerState.startedAt}
+              onComplete={resetGenerationStream}
+            />
+          </div>
+        )}
 
       {/* Failure summary with smart retry */}
       {failureSummary?.hasFailed && (
@@ -477,6 +483,9 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
             regeneratingMotion={regeneratingMotion}
             onBatchGenerateMotion={handleBatchMotionGeneration}
             musicPromptsReady={musicPromptsReady}
+            hideBatchButton={
+              phaseConfig.autoGenerateMotion && isGenerationActive
+            }
           />
         </div>
 
@@ -491,6 +500,9 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
             regeneratingMotion={regeneratingMotion}
             onBatchGenerateMotion={handleBatchMotionGeneration}
             musicPromptsReady={musicPromptsReady}
+            hideBatchButton={
+              phaseConfig.autoGenerateMotion && isGenerationActive
+            }
           />
         </div>
 
