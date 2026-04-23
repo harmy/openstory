@@ -1,16 +1,20 @@
 import type React from 'react';
 import { EvalSequenceMetadata } from './eval-sequence-metadata';
 import { EvalSceneCell } from './eval-scene-cell';
+import type { DialogTab } from './eval-cell-dialog';
 import type { SequenceWithFrames } from '@/hooks/use-sequences-with-frames';
+import type { AspectRatio } from '@/lib/constants/aspect-ratios';
+import { DEFAULT_ASPECT_RATIO } from '@/lib/constants/aspect-ratios';
 import type { ViewMode } from './eval-view';
 
 const METADATA_WIDTH = 280;
-const VIDEO_WIDTH = 200;
+const VIDEO_WIDTH = 400;
 const CELL_WIDTH = 200;
 
 type OpenDialogState = {
   sequenceIndex: number;
   sceneIndex: number;
+  initialTab?: DialogTab;
 } | null;
 
 type EvalSequenceRowProps = {
@@ -18,9 +22,11 @@ type EvalSequenceRowProps = {
   viewMode: ViewMode;
   maxSceneCount: number;
   sequenceIndex: number;
+  framesLoading: boolean;
   openDialog: OpenDialogState;
   onOpenDialogChange: (state: OpenDialogState) => void;
   onNavigateToCell: (sequenceIndex: number, sceneIndex: number) => void;
+  onOpenTheatre: (sequenceIndex: number) => void;
 };
 
 export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
@@ -28,10 +34,15 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
   viewMode,
   maxSceneCount,
   sequenceIndex,
+  framesLoading,
   openDialog,
   onOpenDialogChange,
   onNavigateToCell,
+  onOpenTheatre,
 }) => {
+  const aspectRatio: AspectRatio =
+    (sequence.aspectRatio as AspectRatio | null) ?? DEFAULT_ASPECT_RATIO;
+
   return (
     <>
       <div
@@ -45,14 +56,27 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
         style={{ left: METADATA_WIDTH, width: VIDEO_WIDTH }}
       >
         {sequence.mergedVideoUrl ? (
-          <video
-            src={sequence.mergedVideoUrl}
-            className="w-full h-full object-contain rounded-md"
-            muted
-            loop
-            playsInline
-            controls
-          />
+          <button
+            type="button"
+            onClick={() => onOpenTheatre(sequenceIndex)}
+            aria-label={`Play ${sequence.title || 'sequence'} in theatre`}
+            className="w-full h-full flex items-center justify-center cursor-pointer appearance-none bg-transparent border-0 p-0"
+          >
+            <video
+              src={sequence.mergedVideoUrl}
+              poster={sequence.posterUrl ?? undefined}
+              className="max-w-full max-h-full object-contain rounded-md"
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              onMouseEnter={(e) => void e.currentTarget.play()}
+              onMouseLeave={(e) => {
+                e.currentTarget.pause();
+                e.currentTarget.currentTime = 0;
+              }}
+            />
+          </button>
         ) : (
           <div className="text-xs text-muted-foreground text-center">
             No video
@@ -65,6 +89,9 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
         const isDialogOpen =
           openDialog?.sequenceIndex === sequenceIndex &&
           openDialog.sceneIndex === sceneIndex;
+        const dialogInitialTab = isDialogOpen
+          ? openDialog?.initialTab
+          : undefined;
 
         return (
           <div
@@ -78,7 +105,12 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
               viewMode={viewMode}
               sceneNumber={i + 1}
               sequenceTitle={sequence.title}
+              aspectRatio={aspectRatio}
+              framesLoading={framesLoading}
+              mergedVideoUrl={sequence.mergedVideoUrl}
+              mergedVideoPoster={sequence.posterUrl}
               dialogOpen={isDialogOpen}
+              dialogInitialTab={dialogInitialTab}
               onDialogOpenChange={(open) => {
                 if (open) {
                   onOpenDialogChange({ sequenceIndex, sceneIndex });

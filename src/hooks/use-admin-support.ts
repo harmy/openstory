@@ -11,7 +11,8 @@ const PAGE_SIZE = 50;
 
 export const adminSupportKeys = {
   all: ['admin-support'] as const,
-  sequences: () => [...adminSupportKeys.all, 'sequences'] as const,
+  sequences: (search?: string) =>
+    [...adminSupportKeys.all, 'sequences', search ?? ''] as const,
   frames: (sequenceId: string) =>
     [...adminSupportKeys.all, 'frames', sequenceId] as const,
 };
@@ -21,7 +22,12 @@ export type AdminSequenceWithFrames = SequenceWithFrames & {
   creatorEmail: string | null;
 };
 
-export function useAdminAllSequencesWithFrames(enabled: boolean) {
+export function useAdminAllSequencesWithFrames(
+  enabled: boolean,
+  search?: string
+) {
+  const trimmedSearch = search?.trim() || undefined;
+
   const {
     data: infiniteData,
     isLoading: seqLoading,
@@ -30,12 +36,13 @@ export function useAdminAllSequencesWithFrames(enabled: boolean) {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: adminSupportKeys.sequences(),
+    queryKey: adminSupportKeys.sequences(trimmedSearch),
     queryFn: ({ pageParam }) =>
       getAllAdminSequencesFn({
         data: {
           limit: PAGE_SIZE,
           offset: pageParam * PAGE_SIZE,
+          search: trimmedSearch,
         },
       }),
     initialPageParam: 0,
@@ -77,15 +84,21 @@ export function useAdminAllSequencesWithFrames(enabled: boolean) {
     );
   }, [allSequences, framesQueries]);
 
-  const isLoading =
-    seqLoading ||
-    (allSequences.length > 0 && framesQueries.some((q) => q.isLoading));
+  const framesLoadingMap = useMemo<Record<string, boolean>>(() => {
+    const map: Record<string, boolean> = {};
+    allSequences.forEach((seq, i) => {
+      const q = framesQueries[i];
+      map[seq.id] = Boolean(q?.isLoading);
+    });
+    return map;
+  }, [allSequences, framesQueries]);
 
   const error = seqError || framesQueries.find((q) => q.error)?.error;
 
   return {
-    data: isLoading ? undefined : data,
-    isLoading,
+    data,
+    isLoading: seqLoading,
+    framesLoadingMap,
     error,
     fetchNextPage,
     hasNextPage,

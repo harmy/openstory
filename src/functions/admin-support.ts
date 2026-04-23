@@ -11,6 +11,7 @@ export const getAllAdminSequencesFn = createServerFn({ method: 'GET' })
       z.object({
         limit: z.number().int().min(1).max(200).optional(),
         offset: z.number().int().min(0).optional(),
+        search: z.string().max(200).optional(),
       })
     )
   )

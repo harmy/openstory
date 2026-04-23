@@ -12,9 +12,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { ShieldCheck, VideoIcon } from 'lucide-react';
+import { VideoIcon } from 'lucide-react';
+import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 
 export type ViewMode = 'script' | 'prompts' | 'images' | 'motion';
 
@@ -46,6 +45,8 @@ export type FilterState = {
   analysisModel: string | null;
   imageModel: string | null;
   workflow: string | null;
+  aspectRatio: AspectRatio | null;
+  hasMergedVideo: boolean;
 };
 
 export type SortCriteria = {
@@ -60,6 +61,8 @@ const defaultFilters: FilterState = {
   analysisModel: null,
   imageModel: null,
   workflow: null,
+  aspectRatio: null,
+  hasMergedVideo: false,
 };
 
 type EvalViewProps = {
@@ -92,23 +95,30 @@ export const EvalView: React.FC<EvalViewProps> = ({ initialUserFilter }) => {
   );
 
   const ownData = useSequencesWithFrames();
-  const adminData = useAdminAllSequencesWithFrames(supportMode);
+  const adminData = useAdminAllSequencesWithFrames(
+    supportMode,
+    supportMode ? filters.search : undefined
+  );
 
-  const sequences: SequenceWithFrames[] | undefined = supportMode
+  const sequences: SequenceWithFrames[] = supportMode
     ? adminData.data
     : ownData.data;
   const isLoading = supportMode ? adminData.isLoading : ownData.isLoading;
+  const framesLoadingMap = supportMode
+    ? adminData.framesLoadingMap
+    : ownData.framesLoadingMap;
   const error = supportMode ? adminData.error : ownData.error;
 
   // Deep link wins: when a specific user is requested, never hide them.
   const effectiveHideInternal =
     hideInternal && !initialUserFilter && internalDomains.length > 0;
 
-  // Client-side filtering for both modes
+  // Client-side filtering for both modes. In support mode the server also
+  // filters by search so this is a no-op; keeping it for own-data mode.
   const filteredAndSorted = useMemo(
     () =>
       applyFiltersAndSort(
-        sequences || [],
+        sequences,
         filters,
         sortCriteria,
         effectiveHideInternal ? internalDomains : []
@@ -124,50 +134,44 @@ export const EvalView: React.FC<EvalViewProps> = ({ initialUserFilter }) => {
       }
     : undefined;
 
-  const supportModeToggle = isAdmin ? (
-    <Card className="p-3">
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-          <Label htmlFor="support-mode" className="text-sm font-medium">
-            Support Mode
-          </Label>
-          <Switch
-            id="support-mode"
-            checked={supportMode}
-            onCheckedChange={setSupportMode}
-          />
-        </div>
-        {supportMode && internalDomains.length > 0 && (
-          <div className="flex items-center gap-2">
-            <Label htmlFor="hide-internal" className="text-sm font-medium">
-              Hide internal
-            </Label>
-            <Switch
-              id="hide-internal"
-              checked={hideInternal}
-              onCheckedChange={setHideInternal}
-              disabled={Boolean(initialUserFilter)}
-            />
-          </div>
-        )}
-      </div>
-    </Card>
-  ) : null;
-
-  if (isLoading) {
+  if (error) {
     return (
       <div className="flex-1 overflow-hidden flex flex-col gap-4">
-        {supportModeToggle}
-        <Card className="p-4">
-          <div className="flex items-center gap-4">
-            <Skeleton className="h-9 w-48" />
-            <Skeleton className="h-9 w-32" />
-            <Skeleton className="h-9 w-32" />
-            <div className="flex-1" />
-            <Skeleton className="h-9 w-40" />
-          </div>
+        <Card className="p-8 text-center">
+          <p className="text-destructive">
+            Failed to load sequences: {error.message}
+          </p>
         </Card>
+      </div>
+    );
+  }
+
+  // Unique workflows for filter dropdown — computed from loaded sequences.
+  const availableWorkflows = [
+    ...new Set(
+      sequences.map((s) => s.workflow).filter((w): w is string => w !== null)
+    ),
+  ].sort();
+
+  return (
+    <div className="flex-1 overflow-hidden flex flex-col gap-4">
+      <EvalToolbar
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        filters={filters}
+        onFiltersChange={setFilters}
+        sortCriteria={sortCriteria}
+        onSortChange={setSortCriteria}
+        availableWorkflows={availableWorkflows}
+        supportMode={supportMode}
+        isAdmin={isAdmin}
+        onSupportModeChange={setSupportMode}
+        hideInternal={hideInternal}
+        onHideInternalChange={setHideInternal}
+        hideInternalAvailable={internalDomains.length > 0}
+        hideInternalLocked={Boolean(initialUserFilter)}
+      />
+      {isLoading ? (
         <Card className="flex-1 p-4">
           <div className="space-y-4">
             {[1, 2, 3].map((n) => (
@@ -180,46 +184,7 @@ export const EvalView: React.FC<EvalViewProps> = ({ initialUserFilter }) => {
             ))}
           </div>
         </Card>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex-1 overflow-hidden flex flex-col gap-4">
-        {supportModeToggle}
-        <Card className="p-8 text-center">
-          <p className="text-destructive">
-            Failed to load sequences: {error.message}
-          </p>
-        </Card>
-      </div>
-    );
-  }
-
-  // Get unique workflows for filter dropdown
-  const availableWorkflows = [
-    ...new Set(
-      (sequences ?? [])
-        .map((s) => s.workflow)
-        .filter((w): w is string => w !== null)
-    ),
-  ].sort();
-
-  return (
-    <div className="flex-1 overflow-hidden flex flex-col gap-4">
-      {supportModeToggle}
-      <EvalToolbar
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        filters={filters}
-        onFiltersChange={setFilters}
-        sortCriteria={sortCriteria}
-        onSortChange={setSortCriteria}
-        availableWorkflows={availableWorkflows}
-        supportMode={supportMode}
-      />
-      {filteredAndSorted.length === 0 ? (
+      ) : filteredAndSorted.length === 0 ? (
         <EmptyState
           icon={<VideoIcon className="h-12 w-12" />}
           title={filters.search ? 'No matching sequences' : 'No sequences yet'}
@@ -235,6 +200,7 @@ export const EvalView: React.FC<EvalViewProps> = ({ initialUserFilter }) => {
         <EvalMatrix
           sequences={filteredAndSorted}
           viewMode={viewMode}
+          framesLoadingMap={framesLoadingMap}
           onLoadMore={handleLoadMore}
           hasMore={supportMode ? adminData.hasNextPage : false}
         />
@@ -302,6 +268,14 @@ function applyFiltersAndSort(
 
   if (filters.workflow) {
     result = result.filter((s) => s.workflow === filters.workflow);
+  }
+
+  if (filters.aspectRatio) {
+    result = result.filter((s) => s.aspectRatio === filters.aspectRatio);
+  }
+
+  if (filters.hasMergedVideo) {
+    result = result.filter((s) => Boolean(s.mergedVideoUrl));
   }
 
   // Apply multi-criteria sort

@@ -7,8 +7,16 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { VideoPlayer } from '@/components/motion/video-player';
 import type { Frame } from '@/types/database';
-import { Clapperboard, FileTextIcon, ImageIcon, TextIcon } from 'lucide-react';
+import type { AspectRatio } from '@/lib/constants/aspect-ratios';
+import {
+  Clapperboard,
+  FileTextIcon,
+  ImageIcon,
+  Film,
+  TextIcon,
+} from 'lucide-react';
 import { Image } from '@unpic/react';
 import type React from 'react';
 import { useEffect } from 'react';
@@ -19,13 +27,18 @@ import {
 } from './eval-scene-cell';
 import type { ViewMode } from './eval-view';
 
+export type DialogTab = ViewMode | 'theatre';
+
 type EvalCellDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   frame: Frame;
   sceneNumber: number;
   sequenceTitle: string;
-  initialViewMode: ViewMode;
+  aspectRatio: AspectRatio;
+  initialTab: DialogTab;
+  mergedVideoUrl?: string | null;
+  mergedVideoPoster?: string | null;
   onNavigateLeft?: () => void;
   onNavigateRight?: () => void;
   onNavigateUp?: () => void;
@@ -38,12 +51,16 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
   frame,
   sceneNumber,
   sequenceTitle,
-  initialViewMode,
+  aspectRatio,
+  initialTab,
+  mergedVideoUrl,
+  mergedVideoPoster,
   onNavigateLeft,
   onNavigateRight,
   onNavigateUp,
   onNavigateDown,
 }) => {
+  const hasTheatre = Boolean(mergedVideoUrl);
   const prompt = getVisualPrompt(frame);
   const motionPrompt = getMotionPrompt(frame);
   const script = getSceneScript(frame);
@@ -105,7 +122,7 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
         </DialogHeader>
 
         <Tabs
-          defaultValue={initialViewMode}
+          defaultValue={initialTab}
           className="w-full flex-1 flex flex-col min-h-0"
         >
           <div className="flex justify-center mb-4">
@@ -123,6 +140,12 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
                 }
               }}
             >
+              {hasTheatre && (
+                <TabsTrigger value="theatre">
+                  <Film className="h-4 w-4 mr-2" />
+                  Theatre
+                </TabsTrigger>
+              )}
               <TabsTrigger value="script">
                 <FileTextIcon className="h-4 w-4 mr-2" />
                 Script
@@ -141,6 +164,21 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
               </TabsTrigger>
             </TabsList>
           </div>
+
+          {hasTheatre && (
+            <TabsContent value="theatre" className="flex-1 min-h-0 mt-0">
+              <div className="flex justify-center items-center h-full w-full">
+                <div className="w-full max-w-5xl">
+                  <VideoPlayer
+                    src={mergedVideoUrl ?? ''}
+                    posterSrc={mergedVideoPoster}
+                    aspectRatio={aspectRatio}
+                    className="rounded-lg"
+                  />
+                </div>
+              </div>
+            </TabsContent>
+          )}
 
           <TabsContent value="script" className="flex-1 min-h-0 mt-0">
             {!script ? (
@@ -212,15 +250,15 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
                 No video available
               </div>
             ) : (
-              <div className="flex justify-center items-center h-full">
-                <video
-                  src={frame.videoUrl}
-                  controls
-                  loop
-                  muted
-                  playsInline
-                  className="max-w-full max-h-full rounded-lg"
-                />
+              <div className="flex justify-center items-center h-full w-full">
+                <div className="w-full max-w-4xl">
+                  <VideoPlayer
+                    src={frame.videoUrl}
+                    posterSrc={frame.thumbnailUrl}
+                    aspectRatio={aspectRatio}
+                    className="rounded-lg"
+                  />
+                </div>
               </div>
             )}
           </TabsContent>

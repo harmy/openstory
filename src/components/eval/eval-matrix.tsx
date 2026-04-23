@@ -5,15 +5,17 @@ import { Card } from '@/components/ui/card';
 import { EvalSequenceRow } from './eval-sequence-row';
 import type { SequenceWithFrames } from '@/hooks/use-sequences-with-frames';
 import type { ViewMode } from './eval-view';
+import type { DialogTab } from './eval-cell-dialog';
 
 const ROW_HEIGHT = 240;
 const METADATA_WIDTH = 280;
-const VIDEO_WIDTH = 200;
+const VIDEO_WIDTH = 400;
 const CELL_WIDTH = 200;
 
 type EvalMatrixProps = {
   sequences: SequenceWithFrames[];
   viewMode: ViewMode;
+  framesLoadingMap: Record<string, boolean>;
   onLoadMore?: () => void;
   hasMore?: boolean;
 };
@@ -21,11 +23,13 @@ type EvalMatrixProps = {
 type OpenDialogState = {
   sequenceIndex: number;
   sceneIndex: number;
+  initialTab?: DialogTab;
 } | null;
 
 export const EvalMatrix: React.FC<EvalMatrixProps> = ({
   sequences,
   viewMode,
+  framesLoadingMap,
   onLoadMore,
   hasMore,
 }) => {
@@ -67,6 +71,10 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
     ) {
       setOpenDialog({ sequenceIndex, sceneIndex });
     }
+  };
+
+  const handleOpenTheatre = (sequenceIndex: number) => {
+    setOpenDialog({ sequenceIndex, sceneIndex: 0, initialTab: 'theatre' });
   };
 
   return (
@@ -128,9 +136,11 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
                   viewMode={viewMode}
                   maxSceneCount={maxSceneCount}
                   sequenceIndex={virtualRow.index}
+                  framesLoading={framesLoadingMap[sequence.id] ?? false}
                   openDialog={openDialog}
                   onOpenDialogChange={setOpenDialog}
                   onNavigateToCell={handleNavigateToCell}
+                  onOpenTheatre={handleOpenTheatre}
                 />
               </div>
             );

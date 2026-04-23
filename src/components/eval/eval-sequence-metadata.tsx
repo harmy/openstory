@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   Calendar,
   ImageIcon,
+  Mail,
   Timer,
   User,
   Workflow,
@@ -39,14 +40,8 @@ export const EvalSequenceMetadata: React.FC<EvalSequenceMetadataProps> = ({
         {sequence.title || 'Untitled Sequence'}
       </Link>
 
-      {/* Creator Name (in support mode) */}
-      {'creatorName' in sequence &&
-        typeof sequence.creatorName === 'string' && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <User className="h-3 w-3" />
-            <span className="truncate">{sequence.creatorName}</span>
-          </div>
-        )}
+      {/* Creator identity (in support mode) */}
+      <CreatorIdentity sequence={sequence} />
 
       {/* Analysis Model */}
       <ModelBadge model={sequence.analysisModel} />
@@ -103,6 +98,44 @@ export const EvalSequenceMetadata: React.FC<EvalSequenceMetadataProps> = ({
 
       {/* Errors */}
       <SequenceErrors sequence={sequence} />
+    </div>
+  );
+};
+
+const CreatorIdentity: React.FC<{ sequence: SequenceWithFrames }> = ({
+  sequence,
+}) => {
+  const name =
+    'creatorName' in sequence && typeof sequence.creatorName === 'string'
+      ? sequence.creatorName
+      : null;
+  const email =
+    'creatorEmail' in sequence && typeof sequence.creatorEmail === 'string'
+      ? sequence.creatorEmail
+      : null;
+
+  if (!name && !email) return null;
+
+  if (name) {
+    return (
+      <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1">
+          <User className="h-3 w-3 shrink-0" />
+          <span className="truncate">{name}</span>
+        </div>
+        {email && (
+          <div className="flex items-center gap-1 pl-4">
+            <span className="truncate">{email}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+      <Mail className="h-3 w-3 shrink-0" />
+      <span className="truncate">{email}</span>
     </div>
   );
 };

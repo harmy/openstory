@@ -1,9 +1,10 @@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Frame } from '@/types/database';
+import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { Image } from '@unpic/react';
 import type React from 'react';
-import { EvalCellDialog } from './eval-cell-dialog';
+import { EvalCellDialog, type DialogTab } from './eval-cell-dialog';
 import type { ViewMode } from './eval-view';
 
 /**
@@ -43,7 +44,12 @@ type EvalSceneCellProps = {
   viewMode: ViewMode;
   sceneNumber: number;
   sequenceTitle: string;
+  aspectRatio: AspectRatio;
+  framesLoading?: boolean;
+  mergedVideoUrl?: string | null;
+  mergedVideoPoster?: string | null;
   dialogOpen: boolean;
+  dialogInitialTab?: DialogTab;
   onDialogOpenChange: (open: boolean) => void;
   onNavigateLeft?: () => void;
   onNavigateRight?: () => void;
@@ -56,15 +62,29 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
   viewMode,
   sceneNumber,
   sequenceTitle,
+  aspectRatio,
+  framesLoading = false,
+  mergedVideoUrl,
+  mergedVideoPoster,
   dialogOpen,
+  dialogInitialTab,
   onDialogOpenChange,
   onNavigateLeft,
   onNavigateRight,
   onNavigateUp,
   onNavigateDown,
 }) => {
-  // Empty cell for missing frames
+  const initialTab: DialogTab = dialogInitialTab ?? viewMode;
+  // Empty cell for missing frames — show skeleton while frames are still
+  // loading, otherwise show the "No scene N" placeholder.
   if (!frame) {
+    if (framesLoading) {
+      return (
+        <div className="border-b p-2 h-full">
+          <Skeleton className="w-full h-full" />
+        </div>
+      );
+    }
     return (
       <div className="border-b p-2 flex items-center justify-center h-full">
         <div className="w-full h-full border-2 border-dashed border-muted rounded-md flex items-center justify-center text-xs text-muted-foreground">
@@ -103,11 +123,11 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
           className="border-b p-2 cursor-pointer hover:bg-muted/50 transition-colors h-full flex flex-col min-h-0 overflow-hidden w-full text-left appearance-none bg-transparent"
           onClick={handleClick}
         >
-          <div className="flex-1 flex items-center min-h-0">
+          <div className="flex-1 flex items-center justify-center min-h-0">
             <Image
               src={frame.thumbnailUrl}
               alt={`Scene ${sceneNumber}`}
-              className="w-full h-full object-cover rounded-md"
+              className="max-w-full max-h-full object-contain rounded-md"
               loading="lazy"
               width={1000}
               height={1000}
@@ -120,7 +140,10 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
           frame={frame}
           sceneNumber={sceneNumber}
           sequenceTitle={sequenceTitle}
-          initialViewMode={viewMode}
+          aspectRatio={aspectRatio}
+          initialTab={initialTab}
+          mergedVideoUrl={mergedVideoUrl}
+          mergedVideoPoster={mergedVideoPoster}
           onNavigateLeft={onNavigateLeft}
           onNavigateRight={onNavigateRight}
           onNavigateUp={onNavigateUp}
@@ -159,7 +182,10 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
           frame={frame}
           sceneNumber={sceneNumber}
           sequenceTitle={sequenceTitle}
-          initialViewMode={viewMode}
+          aspectRatio={aspectRatio}
+          initialTab={initialTab}
+          mergedVideoUrl={mergedVideoUrl}
+          mergedVideoPoster={mergedVideoPoster}
           onNavigateLeft={onNavigateLeft}
           onNavigateRight={onNavigateRight}
           onNavigateUp={onNavigateUp}
@@ -192,10 +218,11 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
           className="border-b p-2 cursor-pointer hover:bg-muted/50 transition-colors h-full flex flex-col min-h-0 overflow-hidden w-full text-left appearance-none bg-transparent"
           onClick={handleClick}
         >
-          <div className="flex-1 flex items-center min-h-0">
+          <div className="flex-1 flex items-center justify-center min-h-0">
             <video
               src={frame.videoUrl}
-              className="w-full h-full object-cover rounded-md"
+              poster={frame.thumbnailUrl ?? undefined}
+              className="max-w-full max-h-full object-contain rounded-md"
               muted
               loop
               playsInline
@@ -213,7 +240,10 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
           frame={frame}
           sceneNumber={sceneNumber}
           sequenceTitle={sequenceTitle}
-          initialViewMode={viewMode}
+          aspectRatio={aspectRatio}
+          initialTab={initialTab}
+          mergedVideoUrl={mergedVideoUrl}
+          mergedVideoPoster={mergedVideoPoster}
           onNavigateLeft={onNavigateLeft}
           onNavigateRight={onNavigateRight}
           onNavigateUp={onNavigateUp}
@@ -259,7 +289,10 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
         frame={frame}
         sceneNumber={sceneNumber}
         sequenceTitle={sequenceTitle}
-        initialViewMode={viewMode}
+        aspectRatio={aspectRatio}
+        initialTab={initialTab}
+        mergedVideoUrl={mergedVideoUrl}
+        mergedVideoPoster={mergedVideoPoster}
         onNavigateLeft={onNavigateLeft}
         onNavigateRight={onNavigateRight}
         onNavigateUp={onNavigateUp}

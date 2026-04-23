@@ -32,7 +32,7 @@ function AdminNav() {
   const matchRoute = useMatchRoute();
 
   return (
-    <nav className="flex items-center gap-2 pb-6">
+    <nav className="flex items-center gap-2 pb-3">
       {NAV_LINKS.map(({ to, label, icon: Icon }) => {
         const isActive = matchRoute({ to, fuzzy: true });
         return (

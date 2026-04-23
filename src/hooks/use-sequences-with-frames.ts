@@ -9,7 +9,8 @@ export type SequenceWithFrames = Sequence & { frames: Frame[] };
 
 /**
  * Fetches all sequences and their frames in parallel.
- * Used for the evaluation view where we need all frames for all sequences.
+ * Returns sequences as soon as they resolve so the UI can render rows
+ * progressively; frames are reported via `framesLoadingMap` per sequence.
  */
 export function useSequencesWithFrames() {
   const {
@@ -18,7 +19,6 @@ export function useSequencesWithFrames() {
     error: seqError,
   } = useSequences();
 
-  // Fetch frames for all sequences in parallel
   const framesQueries = useQueries({
     queries: (sequences || []).map((seq: Sequence) => ({
       queryKey: frameKeys.list(seq.id),
@@ -26,12 +26,11 @@ export function useSequencesWithFrames() {
         const data = await getFramesFn({ data: { sequenceId: seq.id } });
         return data;
       },
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000,
       enabled: !!sequences && sequences.length > 0,
     })),
   });
 
-  // Combine sequences with their frames
   const data = useMemo<SequenceWithFrames[]>(() => {
     if (!sequences) return [];
 
@@ -41,19 +40,21 @@ export function useSequencesWithFrames() {
     }));
   }, [sequences, framesQueries]);
 
-  // Loading state: sequences loading OR any frames query still loading
-  const isLoading =
-    seqLoading ||
-    (sequences &&
-      sequences.length > 0 &&
-      framesQueries.some((q) => q.isLoading));
+  const framesLoadingMap = useMemo<Record<string, boolean>>(() => {
+    const map: Record<string, boolean> = {};
+    (sequences ?? []).forEach((seq, i) => {
+      const q = framesQueries[i];
+      map[seq.id] = Boolean(q?.isLoading);
+    });
+    return map;
+  }, [sequences, framesQueries]);
 
-  // Error state: sequence error or first frames error
   const error = seqError || framesQueries.find((q) => q.error)?.error;
 
   return {
-    data: isLoading ? undefined : data,
-    isLoading,
+    data,
+    isLoading: seqLoading,
+    framesLoadingMap,
     error,
   };
 }

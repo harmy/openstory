@@ -1,17 +1,23 @@
 import type React from 'react';
+import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Select } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { SCRIPT_ANALYSIS_MODELS } from '@/lib/ai/models.config';
 import { IMAGE_MODELS } from '@/lib/ai/models';
+import { ASPECT_RATIOS } from '@/lib/constants/aspect-ratios';
 import {
   Clapperboard,
   ImageIcon,
   TextIcon,
   FileTextIcon,
+  ShieldCheck,
   X,
   ArrowUpDown,
   Plus,
@@ -33,6 +39,13 @@ type EvalToolbarProps = {
   onSortChange: (criteria: SortCriteria[]) => void;
   availableWorkflows: string[];
   supportMode?: boolean;
+  // Support-mode controls (rendered inline when isAdmin is true)
+  isAdmin?: boolean;
+  onSupportModeChange?: (value: boolean) => void;
+  hideInternal?: boolean;
+  onHideInternalChange?: (value: boolean) => void;
+  hideInternalAvailable?: boolean;
+  hideInternalLocked?: boolean;
 };
 
 const SORT_FIELDS: { value: SortCriteria['field']; label: string }[] = [
@@ -52,9 +65,31 @@ export const EvalToolbar: React.FC<EvalToolbarProps> = ({
   onSortChange,
   availableWorkflows,
   supportMode,
+  isAdmin,
+  onSupportModeChange,
+  hideInternal,
+  onHideInternalChange,
+  hideInternalAvailable,
+  hideInternalLocked,
 }) => {
+  const [searchDraft, setSearchDraft] = useState(filters.search);
+
+  // Reset draft when the committed search changes from outside (e.g. Clear).
+  useEffect(() => {
+    setSearchDraft(filters.search);
+  }, [filters.search]);
+
+  // Debounce draft → committed search to avoid a server roundtrip per keystroke.
+  useEffect(() => {
+    if (searchDraft === filters.search) return;
+    const t = setTimeout(() => {
+      onFiltersChange({ ...filters, search: searchDraft });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [searchDraft, filters, onFiltersChange]);
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onFiltersChange({ ...filters, search: e.target.value });
+    setSearchDraft(e.target.value);
   };
 
   const handleAnalysisModelChange = (value: string) => {
@@ -78,6 +113,14 @@ export const EvalToolbar: React.FC<EvalToolbarProps> = ({
     });
   };
 
+  const handleAspectRatioChange = (value: string) => {
+    const match = ASPECT_RATIOS.find((r) => r.value === value);
+    onFiltersChange({
+      ...filters,
+      aspectRatio: match ? match.value : null,
+    });
+  };
+
   const clearFilters = () => {
     onFiltersChange({
       search: '',
@@ -86,6 +129,8 @@ export const EvalToolbar: React.FC<EvalToolbarProps> = ({
       analysisModel: null,
       imageModel: null,
       workflow: null,
+      aspectRatio: null,
+      hasMergedVideo: false,
     });
   };
 
@@ -94,6 +139,8 @@ export const EvalToolbar: React.FC<EvalToolbarProps> = ({
     filters.analysisModel ||
     filters.imageModel ||
     filters.workflow ||
+    filters.aspectRatio ||
+    filters.hasMergedVideo ||
     filters.dateFrom ||
     filters.dateTo;
 
@@ -156,150 +203,203 @@ export const EvalToolbar: React.FC<EvalToolbarProps> = ({
     })),
   ];
 
+  const aspectRatioOptions = [
+    { value: 'all', label: 'All Aspect Ratios' },
+    ...ASPECT_RATIOS.map((r) => ({ value: r.value, label: r.label })),
+  ];
+
   return (
-    <Card className="p-4">
-      <div className="flex flex-wrap items-center gap-4">
-        {/* Search */}
-        <Input
-          placeholder={
-            supportMode
-              ? 'Search by title or name\u2026'
-              : 'Search by title\u2026'
-          }
-          value={filters.search}
-          onChange={handleSearchChange}
-          className="w-48"
-        />
-
-        {/* Analysis Model Filter */}
-        <Select
-          options={analysisModelOptions}
-          value={filters.analysisModel || 'all'}
-          onChange={handleAnalysisModelChange}
-          placeholder="Analysis Model"
-          className="w-44"
-        />
-
-        {/* Image Model Filter */}
-        <Select
-          options={imageModelOptions}
-          value={filters.imageModel || 'all'}
-          onChange={handleImageModelChange}
-          placeholder="Image Model"
-          className="w-44"
-        />
-
-        {/* Workflow Filter */}
-        {availableWorkflows.length > 0 && (
-          <Select
-            options={workflowOptions}
-            value={filters.workflow || 'all'}
-            onChange={handleWorkflowChange}
-            placeholder="Workflow"
-            className="w-52"
+    <Card className="p-3">
+      <div className="flex flex-col gap-3">
+        {/* Row 1: filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            placeholder={
+              supportMode
+                ? 'Search by title, name, or email…'
+                : 'Search by title…'
+            }
+            value={searchDraft}
+            onChange={handleSearchChange}
+            className="w-48"
           />
-        )}
-
-        {/* Clear Filters */}
-        {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters}>
-            <X className="h-4 w-4 mr-1" />
-            Clear
-          </Button>
-        )}
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Sort Controls */}
-        <div className="flex items-center gap-2">
-          <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
-          {sortCriteria.map((criteria, index) => {
-            const usedFields = new Set(
-              sortCriteria.filter((_, i) => i !== index).map((c) => c.field)
-            );
-            const sortFieldOptions = SORT_FIELDS.filter(
-              (f) => !usedFields.has(f.value) || f.value === criteria.field
-            ).map((f) => ({ value: f.value, label: f.label }));
-
-            return (
-              <Badge
-                key={criteria.field}
-                variant="secondary"
-                className="flex items-center gap-1 px-2 py-1"
-              >
-                <Select
-                  options={sortFieldOptions}
-                  value={criteria.field}
-                  onChange={(value) => {
-                    if (isValidSortField(value)) {
-                      updateSortField(index, value);
-                    }
-                  }}
-                  className="h-auto p-0 border-0 bg-transparent w-auto min-w-16"
-                  size="sm"
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-4 w-4 p-0"
-                  onClick={() => toggleSortDirection(index)}
-                >
-                  {criteria.direction === 'asc' ? '↑' : '↓'}
-                </Button>
-                {sortCriteria.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-4 w-4 p-0"
-                    onClick={() => removeSortCriteria(index)}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                )}
-              </Badge>
-            );
-          })}
-          {sortCriteria.length < 3 && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={addSortCriteria}
-            >
-              <Plus className="h-4 w-4" />
+          <Select
+            options={analysisModelOptions}
+            value={filters.analysisModel || 'all'}
+            onChange={handleAnalysisModelChange}
+            placeholder="Analysis Model"
+            className="w-44"
+          />
+          <Select
+            options={imageModelOptions}
+            value={filters.imageModel || 'all'}
+            onChange={handleImageModelChange}
+            placeholder="Image Model"
+            className="w-44"
+          />
+          {availableWorkflows.length > 0 && (
+            <Select
+              options={workflowOptions}
+              value={filters.workflow || 'all'}
+              onChange={handleWorkflowChange}
+              placeholder="Workflow"
+              className="w-52"
+            />
+          )}
+          <Select
+            options={aspectRatioOptions}
+            value={filters.aspectRatio || 'all'}
+            onChange={handleAspectRatioChange}
+            placeholder="Aspect Ratio"
+            className="w-36"
+          />
+          <label
+            htmlFor="filter-has-merged-video"
+            className="flex items-center gap-2 text-sm cursor-pointer select-none"
+          >
+            <Checkbox
+              id="filter-has-merged-video"
+              checked={filters.hasMergedVideo}
+              onCheckedChange={(checked) =>
+                onFiltersChange({
+                  ...filters,
+                  hasMergedVideo: checked === true,
+                })
+              }
+            />
+            Has video
+          </label>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="h-4 w-4 mr-1" />
+              Clear
             </Button>
           )}
         </div>
 
-        {/* View Toggle */}
-        <ToggleGroup
-          type="single"
-          value={viewMode}
-          onValueChange={(value) => {
-            if (value && isValidViewMode(value)) {
-              onViewModeChange(value);
-            }
-          }}
-          variant="outline"
-        >
-          <ToggleGroupItem value="script" aria-label="Show script">
-            <FileTextIcon className="h-4 w-4 mr-2" />
-            Script
-          </ToggleGroupItem>
-          <ToggleGroupItem value="prompts" aria-label="Show prompts">
-            <TextIcon className="h-4 w-4 mr-2" />
-            Prompts
-          </ToggleGroupItem>
-          <ToggleGroupItem value="images" aria-label="Show images">
-            <ImageIcon className="h-4 w-4 mr-2" />
-            Images
-          </ToggleGroupItem>
-          <ToggleGroupItem value="motion" aria-label="Show frame videos">
-            <Clapperboard className="h-4 w-4 mr-2" />
-            Motion
-          </ToggleGroupItem>
-        </ToggleGroup>
+        {/* Row 2: view toggle, sort, support mode */}
+        <div className="flex flex-wrap items-center gap-3">
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(value) => {
+              if (value && isValidViewMode(value)) {
+                onViewModeChange(value);
+              }
+            }}
+            variant="outline"
+          >
+            <ToggleGroupItem value="script" aria-label="Show script">
+              <FileTextIcon className="h-4 w-4 mr-2" />
+              Script
+            </ToggleGroupItem>
+            <ToggleGroupItem value="prompts" aria-label="Show prompts">
+              <TextIcon className="h-4 w-4 mr-2" />
+              Prompts
+            </ToggleGroupItem>
+            <ToggleGroupItem value="images" aria-label="Show images">
+              <ImageIcon className="h-4 w-4 mr-2" />
+              Images
+            </ToggleGroupItem>
+            <ToggleGroupItem value="motion" aria-label="Show frame videos">
+              <Clapperboard className="h-4 w-4 mr-2" />
+              Motion
+            </ToggleGroupItem>
+          </ToggleGroup>
+
+          <div className="flex items-center gap-2">
+            <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+            {sortCriteria.map((criteria, index) => {
+              const usedFields = new Set(
+                sortCriteria.filter((_, i) => i !== index).map((c) => c.field)
+              );
+              const sortFieldOptions = SORT_FIELDS.filter(
+                (f) => !usedFields.has(f.value) || f.value === criteria.field
+              ).map((f) => ({ value: f.value, label: f.label }));
+
+              return (
+                <Badge
+                  key={criteria.field}
+                  variant="secondary"
+                  className="flex items-center gap-1 px-2 py-1"
+                >
+                  <Select
+                    options={sortFieldOptions}
+                    value={criteria.field}
+                    onChange={(value) => {
+                      if (isValidSortField(value)) {
+                        updateSortField(index, value);
+                      }
+                    }}
+                    className="h-auto p-0 border-0 bg-transparent w-auto min-w-16"
+                    size="sm"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 p-0"
+                    onClick={() => toggleSortDirection(index)}
+                  >
+                    {criteria.direction === 'asc' ? '↑' : '↓'}
+                  </Button>
+                  {sortCriteria.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4 p-0"
+                      onClick={() => removeSortCriteria(index)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </Badge>
+              );
+            })}
+            {sortCriteria.length < 3 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={addSortCriteria}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+
+          {/* Support Mode (admin only) — pushed to end of row */}
+          {isAdmin && (
+            <div className="ml-auto flex items-center gap-4">
+              {supportMode && hideInternalAvailable && (
+                <div className="flex items-center gap-2">
+                  <Label
+                    htmlFor="hide-internal"
+                    className="text-sm font-medium"
+                  >
+                    Hide internal
+                  </Label>
+                  <Switch
+                    id="hide-internal"
+                    checked={Boolean(hideInternal)}
+                    onCheckedChange={(v) => onHideInternalChange?.(v)}
+                    disabled={Boolean(hideInternalLocked)}
+                  />
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                <Label htmlFor="support-mode" className="text-sm font-medium">
+                  Support
+                </Label>
+                <Switch
+                  id="support-mode"
+                  checked={Boolean(supportMode)}
+                  onCheckedChange={(v) => onSupportModeChange?.(v)}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </Card>
   );

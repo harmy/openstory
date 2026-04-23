@@ -16,7 +16,7 @@ import { sequences } from '@/lib/db/schema/sequences';
 import type { Frame, Sequence } from '@/lib/db/schema';
 import { teamMembers, teams } from '@/lib/db/schema/teams';
 import { ValidationError } from '@/lib/errors';
-import { asc, count, desc, eq, not, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, like, not, or, sql } from 'drizzle-orm';
 
 // Ambiguity-free alphabet (no 0/O/1/I) -- 32 chars -> 32^6 ~ 1B combinations
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -139,8 +139,18 @@ export function createAdminMethods(db: Database) {
   async function getAllSequences(opts?: {
     limit?: number;
     offset?: number;
+    search?: string;
   }): Promise<SequenceWithCreator[]> {
-    const { limit = 50, offset = 0 } = opts ?? {};
+    const { limit = 50, offset = 0, search } = opts ?? {};
+
+    const trimmed = search?.trim().toLowerCase();
+    const searchClause = trimmed
+      ? or(
+          like(sql`lower(${sequences.title})`, `%${trimmed}%`),
+          like(sql`lower(${user.name})`, `%${trimmed}%`),
+          like(sql`lower(${user.email})`, `%${trimmed}%`)
+        )
+      : undefined;
 
     const rows = await db
       .select({
@@ -150,7 +160,7 @@ export function createAdminMethods(db: Database) {
       })
       .from(sequences)
       .leftJoin(user, eq(sequences.createdBy, user.id))
-      .where(not(eq(sequences.status, 'archived')))
+      .where(and(not(eq(sequences.status, 'archived')), searchClause))
       .orderBy(desc(sequences.createdAt))
       .limit(limit)
       .offset(offset);
