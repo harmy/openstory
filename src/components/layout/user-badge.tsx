@@ -3,7 +3,14 @@
  * Displays user authentication state with login/logout actions
  */
 
-import { BarChart3, LogOut, Settings, User, Wallet } from 'lucide-react';
+import {
+  BarChart3,
+  FlaskConical,
+  LogOut,
+  Settings,
+  User,
+  Wallet,
+} from 'lucide-react';
 import { Route as sequencesRoute } from '@/routes/_protected/sequences/index';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -121,12 +128,24 @@ function AdminMenuItem() {
   if (!adminStatus?.isAdmin) return null;
 
   return (
-    <DropdownMenuItem asChild>
-      <Link to="/admin/usage">
-        <BarChart3 className="mr-2 h-4 w-4" />
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
         Admin
-      </Link>
-    </DropdownMenuItem>
+      </DropdownMenuLabel>
+      <DropdownMenuItem asChild>
+        <Link to="/admin/usage">
+          <BarChart3 className="mr-2 h-4 w-4" />
+          Usage
+        </Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link to="/admin/eval">
+          <FlaskConical className="mr-2 h-4 w-4" />
+          Eval
+        </Link>
+      </DropdownMenuItem>
+    </>
   );
 }
 
