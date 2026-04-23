@@ -33,7 +33,9 @@ import { Route as talentRoute } from '@/routes/_protected/talent/index';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
+  BarChart3,
   ChevronsUpDown,
+  FlaskConical,
   LogOut,
   MapPin,
   Plus,
@@ -229,16 +231,20 @@ function AdminMenuItem() {
 
   return (
     <>
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+        Admin
+      </DropdownMenuLabel>
       <DropdownMenuItem asChild>
-        <Link to="/settings">
-          <Settings className="mr-2 h-4 w-4" />
-          Settings
+        <Link to="/admin/usage">
+          <BarChart3 className="mr-2 h-4 w-4" />
+          Usage
         </Link>
       </DropdownMenuItem>
       <DropdownMenuItem asChild>
-        <Link to="/credits">
-          <Wallet className="mr-2 h-4 w-4" />
-          Credits
+        <Link to="/admin/eval">
+          <FlaskConical className="mr-2 h-4 w-4" />
+          Eval
         </Link>
       </DropdownMenuItem>
     </>
