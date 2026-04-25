@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/_protected/sequences/$id/scenes')({
   component: ScenesPage,
+  staticData: { breadcrumb: 'Scenes' },
 });
 
 function ScenesPage() {

@@ -4,7 +4,6 @@ import { TalentLibraryList } from '@/components/talent-library/talent-library-li
 import { PageContainer } from '@/components/layout/page-container';
 import { PageDescription } from '@/components/typography/page-description';
 import { PageHeader } from '@/components/typography/page-header';
-import { PageHeading } from '@/components/typography/page-heading';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useTalent } from '@/hooks/use-talent';
 import { createFileRoute } from '@tanstack/react-router';
@@ -18,6 +17,7 @@ const searchParamsSchema = z.object({
 export const Route = createFileRoute('/_protected/talent/')({
   validateSearch: searchParamsSchema,
   component: TalentPage,
+  staticData: { breadcrumb: 'Talent' },
 });
 
 function TalentPage() {
@@ -33,8 +33,8 @@ function TalentPage() {
   return (
     <div className="h-full overflow-auto">
       <PageContainer>
+        <h1 className="sr-only">Talent Library</h1>
         <PageHeader actions={<AddTalentDialog />}>
-          <PageHeading>Talent Library</PageHeading>
           <PageDescription>
             Manage your team's talent library for consistent AI-generated
             content.

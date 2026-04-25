@@ -21,11 +21,17 @@ type TabItem = {
   icon: React.ReactNode;
 };
 
+// Landing tab when no sub-path is specified. `useSequenceTabItems` returns
+// this as `tabs[0]`; keep them in sync.
+export function getDefaultSequenceTabPath(sequenceId: string): string {
+  return `/sequences/${sequenceId}/script`;
+}
+
 function useSequenceTabItems(sequenceId: string): TabItem[] {
   return [
     {
       label: 'Script',
-      href: `/sequences/${sequenceId}/script`,
+      href: getDefaultSequenceTabPath(sequenceId),
       icon: <FileText className="h-4 w-4" />,
     },
     {

@@ -23,6 +23,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute('/_protected/credits')({
   validateSearch: searchSchema,
   component: CreditsPage,
+  staticData: { breadcrumb: 'Credits' },
   errorComponent: (props) => (
     <RouteErrorFallback {...props} heading="Credits error" />
   ),

@@ -4,7 +4,6 @@ import { LocationLibraryList } from '@/components/location-library/location-libr
 import { PageContainer } from '@/components/layout/page-container';
 import { PageDescription } from '@/components/typography/page-description';
 import { PageHeader } from '@/components/typography/page-header';
-import { PageHeading } from '@/components/typography/page-heading';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useLibraryLocations } from '@/hooks/use-sequence-locations';
 import { createFileRoute } from '@tanstack/react-router';
@@ -18,6 +17,7 @@ const searchParamsSchema = z.object({
 export const Route = createFileRoute('/_protected/locations/')({
   validateSearch: searchParamsSchema,
   component: LocationsPage,
+  staticData: { breadcrumb: 'Locations' },
 });
 
 function LocationsPage() {
@@ -41,8 +41,8 @@ function LocationsPage() {
   return (
     <div className="h-full overflow-auto">
       <PageContainer>
+        <h1 className="sr-only">Location Library</h1>
         <PageHeader actions={<AddLocationDialog />}>
-          <PageHeading>Location Library</PageHeading>
           <PageDescription>
             Browse and manage location references across all your sequences.
             Upload custom references to maintain visual consistency.

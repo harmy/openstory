@@ -28,6 +28,12 @@ function dismissBillingPrompt() {
 
 export const Route = createFileRoute('/_protected/sequences/new')({
   component: NewSequencePage,
+  staticData: {
+    breadcrumb: [
+      { label: 'Sequences', to: '/sequences' },
+      { label: 'New sequence' },
+    ],
+  },
 });
 
 function NewSequencePage() {

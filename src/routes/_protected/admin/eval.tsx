@@ -9,6 +9,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute('/_protected/admin/eval')({
   validateSearch: searchSchema,
   component: EvalPage,
+  staticData: { breadcrumb: 'Eval' },
 });
 
 function EvalPage() {

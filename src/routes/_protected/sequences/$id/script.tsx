@@ -4,6 +4,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/_protected/sequences/$id/script')({
   component: ScriptPage,
+  staticData: { breadcrumb: 'Script' },
 });
 
 function ScriptPage() {

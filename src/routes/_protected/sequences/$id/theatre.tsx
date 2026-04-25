@@ -6,6 +6,7 @@ import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/_protected/sequences/$id/theatre')({
   component: TheatrePage,
+  staticData: { breadcrumb: 'Theatre' },
 });
 
 // Constrain player to fit viewport. Header+tabs ≈ 10rem, so available ≈ 100dvh - 11rem.

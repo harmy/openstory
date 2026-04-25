@@ -1,9 +1,9 @@
+import { routeParams } from '@/components/layout/breadcrumbs';
 import { PageContainer } from '@/components/layout/page-container';
 import { EditLocationDialog } from '@/components/location-library/edit-location-dialog';
 import { LocationMediaUpload } from '@/components/location-library/location-media-upload';
 import { PageDescription } from '@/components/typography/page-description';
 import { PageHeader } from '@/components/typography/page-header';
-import { PageHeading } from '@/components/typography/page-heading';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,8 +26,22 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 
+function LibraryLocationCrumbLabel({ id }: { id: string }) {
+  const { data } = useLibraryLocationById(id);
+  return <>{data?.name ?? '…'}</>;
+}
+
 export const Route = createFileRoute('/_protected/locations/$locationId')({
   component: LocationDetailPage,
+  staticData: {
+    breadcrumb: (match) => {
+      const { locationId } = routeParams<{ locationId: string }>(match);
+      return [
+        { label: 'Locations', to: '/locations' },
+        { label: <LibraryLocationCrumbLabel id={locationId} /> },
+      ];
+    },
+  },
 });
 
 function LocationDetailPage() {
@@ -151,7 +165,7 @@ function LocationDetailPage() {
             </div>
           }
         >
-          <PageHeading>{location.name}</PageHeading>
+          <h1 className="sr-only">{location.name}</h1>
           {location.description && (
             <PageDescription>{location.description}</PageDescription>
           )}

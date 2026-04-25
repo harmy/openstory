@@ -20,6 +20,7 @@ import { Suspense, useMemo, useState } from 'react';
 
 export const Route = createFileRoute('/_protected/admin/usage')({
   component: AdminUsagePage,
+  staticData: { breadcrumb: 'Usage' },
 });
 
 type SortField =
@@ -38,12 +39,10 @@ type SortDirection = 'asc' | 'desc';
 function AdminUsagePage() {
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold">User Activity</h1>
-        <p className="text-muted-foreground">
-          Overview of all users, their sequences, and credit activity.
-        </p>
-      </div>
+      <h1 className="sr-only">User Activity</h1>
+      <p className="text-muted-foreground">
+        Overview of all users, their sequences, and credit activity.
+      </p>
       <Suspense fallback={<PageSkeleton />}>
         <UsageContent />
       </Suspense>

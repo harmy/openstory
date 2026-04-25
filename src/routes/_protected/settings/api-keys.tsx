@@ -15,6 +15,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute('/_protected/settings/api-keys')({
   validateSearch: searchSchema,
   component: ApiKeysPage,
+  staticData: { breadcrumb: 'API Keys' },
 });
 
 function ApiKeysPage() {

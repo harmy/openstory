@@ -15,6 +15,7 @@ import { Fingerprint, Key } from 'lucide-react';
 
 export const Route = createFileRoute('/_protected/settings')({
   component: SettingsLayout,
+  staticData: { breadcrumb: { label: 'Settings', to: '/settings' } },
   errorComponent: (props) => (
     <RouteErrorFallback {...props} heading="Settings error" />
   ),

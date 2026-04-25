@@ -2,7 +2,6 @@ import { VideoIcon } from '@/components/icons/video-icon';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageDescription } from '@/components/typography/page-description';
 import { PageHeader } from '@/components/typography/page-header';
-import { PageHeading } from '@/components/typography/page-heading';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SequencesList } from '@/components/sequence/sequences-list';
@@ -13,6 +12,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/_protected/sequences/')({
   component: SequencesPage,
+  staticData: { breadcrumb: 'Sequences' },
   beforeLoad: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData({
       queryKey: sequenceKeys.list(),
@@ -28,6 +28,7 @@ function SequencesPage() {
   return (
     <div className="h-full overflow-auto">
       <PageContainer>
+        <h1 className="sr-only">Your Sequences</h1>
         <PageHeader
           actions={
             <Button asChild>
@@ -35,7 +36,6 @@ function SequencesPage() {
             </Button>
           }
         >
-          <PageHeading>Your Sequences</PageHeading>
           <PageDescription>
             Manage and view all your video sequences in one place.
           </PageDescription>

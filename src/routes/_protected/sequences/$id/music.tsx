@@ -11,6 +11,7 @@ import type { Sequence } from '@/types/database';
 
 export const Route = createFileRoute('/_protected/sequences/$id/music')({
   component: MusicPage,
+  staticData: { breadcrumb: 'Music' },
 });
 
 function MusicPage() {

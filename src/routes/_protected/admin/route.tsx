@@ -11,6 +11,7 @@ export const Route = createFileRoute('/_protected/admin')({
     }
   },
   component: AdminLayout,
+  staticData: { breadcrumb: { label: 'Admin', to: '/admin/usage' } },
   errorComponent: (props) => (
     <RouteErrorFallback {...props} heading="Admin error" />
   ),
