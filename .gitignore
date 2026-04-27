@@ -102,7 +102,6 @@ doppler.json
 
 # schemas
 scripts/schemas/
-docs/architecture/scoped-db-context-implementation.md
 
 .tanstack
 
