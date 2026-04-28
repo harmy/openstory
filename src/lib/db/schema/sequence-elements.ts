@@ -4,11 +4,7 @@
  * referenced in scripts by uppercase token.
  */
 
-import {
-  type InferInsertModel,
-  type InferSelectModel,
-  relations,
-} from 'drizzle-orm';
+import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import {
   index,
   integer,
@@ -75,16 +71,6 @@ export const sequenceElements = sqliteTable(
       table.token
     ),
   ]
-);
-
-export const sequenceElementsRelations = relations(
-  sequenceElements,
-  ({ one }) => ({
-    sequence: one(sequences, {
-      fields: [sequenceElements.sequenceId],
-      references: [sequences.id],
-    }),
-  })
 );
 
 export type SequenceElement = InferSelectModel<typeof sequenceElements>;

@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
+import { createInsertSchema, createUpdateSchema } from 'drizzle-orm/zod';
 import { frames, FRAME_GENERATION_STATUSES } from '@/lib/db/schema/frames';
 import { IMAGE_MODELS, IMAGE_TO_VIDEO_MODELS } from '@/lib/ai/models';
+import { sceneSchema } from '@/lib/ai/scene-analysis.schema';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 
 /**
@@ -16,6 +17,7 @@ import { ulidSchema } from '@/lib/schemas/id.schemas';
 const createFrameSchema = createInsertSchema(frames, {
   description: (schema) => schema.min(1).max(5000),
   durationMs: (schema) => schema.min(1),
+  metadata: () => sceneSchema.nullable().optional(),
   thumbnailStatus: () =>
     z.enum(FRAME_GENERATION_STATUSES).nullable().optional(),
   videoStatus: () => z.enum(FRAME_GENERATION_STATUSES).nullable().optional(),
@@ -31,6 +33,7 @@ const createFrameSchema = createInsertSchema(frames, {
 export const updateFrameSchema = createUpdateSchema(frames, {
   description: (schema) => schema.min(1).max(5000),
   durationMs: (schema) => schema.min(1),
+  metadata: () => sceneSchema.nullable().optional(),
   thumbnailStatus: () =>
     z.enum(FRAME_GENERATION_STATUSES).nullable().optional(),
   videoStatus: () => z.enum(FRAME_GENERATION_STATUSES).nullable().optional(),

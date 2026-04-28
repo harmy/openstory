@@ -3,11 +3,7 @@
  * Scripted characters (roles) extracted from scripts, linked to talent for casting
  */
 
-import {
-  type InferInsertModel,
-  type InferSelectModel,
-  relations,
-} from 'drizzle-orm';
+import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import {
   index,
   integer,
@@ -89,18 +85,6 @@ export const characters = sqliteTable(
     ),
   ]
 );
-
-// Relations defined in index.ts to avoid circular dependencies
-export const charactersRelations = relations(characters, ({ one }) => ({
-  sequence: one(sequences, {
-    fields: [characters.sequenceId],
-    references: [sequences.id],
-  }),
-  talent: one(talent, {
-    fields: [characters.talentId],
-    references: [talent.id],
-  }),
-}));
 
 // Type exports
 export type Character = InferSelectModel<typeof characters>;

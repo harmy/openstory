@@ -4,12 +4,10 @@
  */
 
 import { createClient } from '@libsql/client';
-import { drizzle, LibSQLDatabase } from 'drizzle-orm/libsql';
-import { schema } from './schema';
+import { drizzle } from 'drizzle-orm/libsql';
+import { relations } from './schema/relations';
 
 console.log('[db-local] Loading client');
-
-type Database = LibSQLDatabase<typeof schema>;
 
 const dbUrl = process.env.DATABASE_URL || 'file:local.db';
 const client = createClient({ url: dbUrl });
@@ -24,10 +22,11 @@ client.execute('PRAGMA busy_timeout = 5000').catch(() => {
  * Uses the libSQL client and includes all schema definitions
  * Configured to use snake_case in database and camelCase in application
  */
-const _db: Database = drizzle(client, {
-  schema,
+const _db = drizzle({
+  client,
+  relations,
   logger: false,
   casing: 'snake_case',
 });
 
-export const getDb = (): Database => _db;
+export const getDb = () => _db;

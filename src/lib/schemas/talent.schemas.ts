@@ -1,5 +1,6 @@
+import { characterBibleEntrySchema } from '@/lib/ai/scene-analysis.schema';
 import { talent, talentMedia, talentSheets } from '@/lib/db/schema';
-import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
+import { createInsertSchema, createUpdateSchema } from 'drizzle-orm/zod';
 import { z } from 'zod';
 
 /**
@@ -33,13 +34,16 @@ export const updateTalentSchema = createUpdateSchema(talent).omit({
 // Talent sheet schemas
 export const createTalentSheetSchema = createInsertSchema(talentSheets, {
   name: z.string().min(1).max(255),
+  metadata: () => characterBibleEntrySchema.nullish(),
 }).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const updateTalentSheetSchema = createUpdateSchema(talentSheets).omit({
+export const updateTalentSheetSchema = createUpdateSchema(talentSheets, {
+  metadata: () => characterBibleEntrySchema.nullish(),
+}).omit({
   id: true,
   talentId: true,
   createdAt: true,

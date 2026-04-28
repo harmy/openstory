@@ -166,28 +166,25 @@ function createTalentReadMethods(db: Database, teamId: string) {
 
     getById: async (talentId: string): Promise<Talent | undefined> => {
       return db.query.talent.findFirst({
-        where: and(
-          eq(talent.id, talentId),
-          or(eq(talent.teamId, teamId), eq(talent.isPublic, true))
-        ),
+        where: {
+          id: talentId,
+          OR: [{ teamId }, { isPublic: true }],
+        },
       });
     },
 
     getWithRelations: async (talentId: string) => {
       return db.query.talent.findFirst({
-        where: and(
-          eq(talent.id, talentId),
-          or(eq(talent.teamId, teamId), eq(talent.isPublic, true))
-        ),
+        where: {
+          id: talentId,
+          OR: [{ teamId }, { isPublic: true }],
+        },
         with: {
           sheets: {
-            orderBy: [
-              desc(talentSheets.isDefault),
-              desc(talentSheets.createdAt),
-            ],
+            orderBy: { isDefault: 'desc', createdAt: 'desc' },
           },
           media: {
-            orderBy: [desc(talentMedia.createdAt)],
+            orderBy: { createdAt: 'desc' },
           },
         },
       });
@@ -196,7 +193,7 @@ function createTalentReadMethods(db: Database, teamId: string) {
     sheets: {
       getById: async (sheetId: string): Promise<TalentSheet | undefined> => {
         return db.query.talentSheets.findFirst({
-          where: eq(talentSheets.id, sheetId),
+          where: { id: sheetId },
         });
       },
     },
@@ -206,7 +203,7 @@ function createTalentReadMethods(db: Database, teamId: string) {
         mediaId: string
       ): Promise<TalentMediaRecord | undefined> => {
         return db.query.talentMedia.findFirst({
-          where: eq(talentMedia.id, mediaId),
+          where: { id: mediaId },
         });
       },
     },
@@ -257,7 +254,7 @@ export function createTalentMethods(
 
     toggleFavorite: async (talentId: string): Promise<Talent | undefined> => {
       const existing = await db.query.talent.findFirst({
-        where: eq(talent.id, talentId),
+        where: { id: talentId },
       });
       if (!existing || existing.teamId !== teamId) return undefined;
 
@@ -301,7 +298,7 @@ export function createTalentMethods(
       ): Promise<TalentSheet | undefined> => {
         if (data.isDefault) {
           const sheet = await db.query.talentSheets.findFirst({
-            where: eq(talentSheets.id, sheetId),
+            where: { id: sheetId },
           });
           if (sheet) {
             await db
@@ -322,7 +319,7 @@ export function createTalentMethods(
 
       delete: async (sheetId: string): Promise<boolean> => {
         const sheet = await db.query.talentSheets.findFirst({
-          where: eq(talentSheets.id, sheetId),
+          where: { id: sheetId },
         });
         if (!sheet) return false;
 

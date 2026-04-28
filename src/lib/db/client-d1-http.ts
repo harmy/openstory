@@ -8,7 +8,7 @@
  */
 
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
-import { schema } from './schema';
+import { relations } from './schema/relations';
 
 type D1RawResponse = {
   success: boolean;
@@ -54,5 +54,5 @@ export function createD1HttpClient(opts: {
     return { rows: rawResult.rows };
   };
 
-  return drizzle(remoteCallback, { schema, casing: 'snake_case' });
+  return drizzle(remoteCallback, { relations, casing: 'snake_case' });
 }

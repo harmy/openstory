@@ -4,11 +4,7 @@
  * (e.g., same office but at night, during a party, after destruction)
  */
 
-import {
-  type InferInsertModel,
-  type InferSelectModel,
-  relations,
-} from 'drizzle-orm';
+import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { generateId } from '../id';
 import { locationLibrary } from './location-library';
@@ -56,14 +52,6 @@ export const locationSheets = sqliteTable(
     index('idx_location_sheets_is_default').on(table.isDefault),
   ]
 );
-
-// Relations
-export const locationSheetsRelations = relations(locationSheets, ({ one }) => ({
-  location: one(locationLibrary, {
-    fields: [locationSheets.locationId],
-    references: [locationLibrary.id],
-  }),
-}));
 
 // Type exports
 export type LocationSheet = InferSelectModel<typeof locationSheets>;

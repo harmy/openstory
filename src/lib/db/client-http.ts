@@ -5,14 +5,13 @@
 
 import { getEnv } from '#env';
 import { createClient } from '@libsql/client/http';
-import { drizzle, LibSQLDatabase } from 'drizzle-orm/libsql';
-import { schema } from './schema';
+import { drizzle } from 'drizzle-orm/libsql';
+import { relations } from './schema/relations';
 // @ts-ignore - resolved via package.json imports
 
 console.log('[db-http] Loading client');
 
-// Define the database type explicitly
-type Database = LibSQLDatabase<typeof schema>;
+type Database = ReturnType<typeof buildDb>;
 
 let _db: Database | undefined;
 
@@ -42,11 +41,16 @@ export const getDb = (): Database => {
    * Uses the libSQL client and includes all schema definitions
    * Configured to use snake_case in database and camelCase in application
    */
-  _db = drizzle(client, {
-    schema,
-    logger: getEnv().NODE_ENV === 'development',
-    casing: 'snake_case',
-  });
+  _db = buildDb(client);
 
   return _db;
 };
+
+function buildDb(client: ReturnType<typeof createClient>) {
+  return drizzle({
+    client,
+    relations,
+    logger: getEnv().NODE_ENV === 'development',
+    casing: 'snake_case',
+  });
+}

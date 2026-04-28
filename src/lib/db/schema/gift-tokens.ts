@@ -1,8 +1,4 @@
-import {
-  type InferInsertModel,
-  type InferSelectModel,
-  relations,
-} from 'drizzle-orm';
+import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import {
   integer,
   sqliteTable,
@@ -67,34 +63,6 @@ export const giftTokenRedemptions = sqliteTable(
     index('idx_gift_token_redemptions_token').on(table.giftTokenId),
     index('idx_gift_token_redemptions_team').on(table.teamId),
   ]
-);
-
-export const giftTokensRelations = relations(giftTokens, ({ one, many }) => ({
-  createdBy: one(user, {
-    fields: [giftTokens.createdByUserId],
-    references: [user.id],
-    relationName: 'giftTokens_createdBy',
-  }),
-  redemptions: many(giftTokenRedemptions),
-}));
-
-export const giftTokenRedemptionsRelations = relations(
-  giftTokenRedemptions,
-  ({ one }) => ({
-    giftToken: one(giftTokens, {
-      fields: [giftTokenRedemptions.giftTokenId],
-      references: [giftTokens.id],
-    }),
-    team: one(teams, {
-      fields: [giftTokenRedemptions.teamId],
-      references: [teams.id],
-    }),
-    user: one(user, {
-      fields: [giftTokenRedemptions.userId],
-      references: [user.id],
-      relationName: 'giftTokenRedemptions_user',
-    }),
-  })
 );
 
 export type GiftToken = InferSelectModel<typeof giftTokens>;

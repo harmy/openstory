@@ -1,9 +1,4 @@
-import {
-  type InferInsertModel,
-  type InferSelectModel,
-  relations,
-  sql,
-} from 'drizzle-orm';
+import { type InferInsertModel, type InferSelectModel, sql } from 'drizzle-orm';
 import {
   check,
   index,
@@ -133,46 +128,6 @@ export const creditBatches = sqliteTable(
     index('idx_credit_batches_expires_at').on(table.expiresAt),
   ]
 );
-
-// Relations
-export const creditsRelations = relations(credits, ({ one }) => ({
-  team: one(teams, {
-    fields: [credits.teamId],
-    references: [teams.id],
-  }),
-}));
-
-export const transactionsRelations = relations(transactions, ({ one }) => ({
-  team: one(teams, {
-    fields: [transactions.teamId],
-    references: [teams.id],
-  }),
-  user: one(user, {
-    fields: [transactions.userId],
-    references: [user.id],
-  }),
-}));
-
-export const teamBillingSettingsRelations = relations(
-  teamBillingSettings,
-  ({ one }) => ({
-    team: one(teams, {
-      fields: [teamBillingSettings.teamId],
-      references: [teams.id],
-    }),
-  })
-);
-
-export const creditBatchesRelations = relations(creditBatches, ({ one }) => ({
-  team: one(teams, {
-    fields: [creditBatches.teamId],
-    references: [teams.id],
-  }),
-  transaction: one(transactions, {
-    fields: [creditBatches.transactionId],
-    references: [transactions.id],
-  }),
-}));
 
 // Type exports
 export type Credit = InferSelectModel<typeof credits>;

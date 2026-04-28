@@ -8,11 +8,11 @@
 
 import { drizzle, type DrizzleD1Database } from 'drizzle-orm/d1';
 import { getEnv } from '../env/cloudflare';
-import { schema } from './schema';
+import { relations } from './schema/relations';
 
 console.log('[db-d1] Loading client');
 
-type Database = DrizzleD1Database<typeof schema>;
+type Database = DrizzleD1Database<Record<string, never>, typeof relations>;
 
 let _db: Database | undefined;
 
@@ -27,9 +27,9 @@ export const getDb = (): Database => {
   }
 
   _db = drizzle(d1, {
-    schema,
+    relations,
     casing: 'snake_case',
-  });
+  }) as Database;
 
   return _db;
 };

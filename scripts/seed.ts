@@ -80,13 +80,13 @@ async function seed() {
     client = createClient({
       url: 'file:test.db',
     });
-    db = drizzle(client);
+    db = drizzle({ client });
   } else if (local) {
     console.log('🗄️  Using local SQLite database (file:local.db)\n');
     client = createClient({
       url: 'file:local.db',
     });
-    db = drizzle(client);
+    db = drizzle({ client });
   } else {
     const tursoUrl = process.env.TURSO_DATABASE_URL;
     const tursoToken = process.env.TURSO_AUTH_TOKEN;
@@ -102,7 +102,7 @@ async function seed() {
       url: tursoUrl,
       ...(tursoToken && { authToken: tursoToken }),
     });
-    db = drizzle(client);
+    db = drizzle({ client });
   }
 
   try {
