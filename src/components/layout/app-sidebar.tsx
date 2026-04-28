@@ -34,6 +34,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import {
   BarChart3,
+  BookOpen,
   ChevronsUpDown,
   FlaskConical,
   LogOut,
@@ -106,6 +107,14 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Guide">
+              <Link to="/docs">
+                <BookOpen />
+                <span>Guide</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <UserFooter />
           </SidebarMenuItem>
