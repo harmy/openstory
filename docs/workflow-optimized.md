@@ -1,6 +1,6 @@
 # Optimized Analyze-Script Workflow
 
-Companion to [`workflow.md`](./workflow.md). Documents implemented and planned optimizations to the analyze-script pipeline.
+Companion to [`developer-guide/workflow.md`](./developer-guide/workflow.md). Documents implemented and planned optimizations to the analyze-script pipeline.
 
 ## Implemented Optimizations
 
