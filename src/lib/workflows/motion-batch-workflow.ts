@@ -4,7 +4,6 @@
  * then merges videos and optionally muxes audio onto the final output.
  */
 
-import { getGenerationChannel } from '@/lib/realtime';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
@@ -42,18 +41,7 @@ export const motionBatchWorkflow =
         );
       }
 
-      // Step 1: Emit phase start for UI progress
-      await context.run('phase-start', async () => {
-        const phaseName = includeMusic
-          ? 'Generating motion & music\u2026'
-          : 'Generating motion\u2026';
-        await getGenerationChannel(sequenceId).emit('generation.phase:start', {
-          phase: 5,
-          phaseName,
-        });
-      });
-
-      // Step 2: Invoke all motion workflows + optional music workflow in parallel
+      // Step 1: Invoke all motion workflows + optional music workflow in parallel
       const motionInvocations = input.frames.map((frame, index) =>
         context.invoke(`motion-${index}`, {
           workflow: generateMotionWorkflow,
@@ -102,7 +90,7 @@ export const motionBatchWorkflow =
         ...(musicInvocation ? [musicInvocation] : []),
       ]);
 
-      // Step 3: Collect video URLs from DB (authoritative order)
+      // Step 2: Collect video URLs from DB (authoritative order)
       const videoUrls = await context.run('collect-video-urls', async () => {
         const frames = await scopedDb.frames.listBySequence(sequenceId);
         return frames
@@ -117,7 +105,7 @@ export const motionBatchWorkflow =
         );
       }
 
-      // Step 4: Merge all frame videos into one
+      // Step 3: Merge all frame videos into one
       await context.invoke('merge-video', {
         workflow: mergeVideoWorkflow,
         label,
@@ -129,7 +117,7 @@ export const motionBatchWorkflow =
         } satisfies MergeVideoWorkflowInput,
       });
 
-      // Step 5: If music was generated, mux audio onto merged video
+      // Step 4: If music was generated, mux audio onto merged video
       if (includeMusic) {
         // Get URLs from DB (authoritative, set by child workflows)
         const mergeAndMusicUrls = await context.run(
@@ -178,17 +166,6 @@ export const motionBatchWorkflow =
       failureFunction: async ({ context, failResponse }) => {
         const input = context.requestPayload;
         const error = sanitizeFailResponse(failResponse);
-
-        if (input.sequenceId) {
-          try {
-            await getGenerationChannel(input.sequenceId).emit(
-              'generation.phase:start',
-              { phase: 5, phaseName: 'Generation failed' }
-            );
-          } catch {
-            // Ignore emit errors in failure handler
-          }
-        }
 
         console.error(
           `[MotionBatchWorkflow] Failed for sequence ${input.sequenceId}: ${error}`

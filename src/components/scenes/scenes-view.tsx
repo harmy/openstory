@@ -427,9 +427,13 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
 
   const musicPromptsReady = !!(sequence?.musicPrompt && sequence.musicTags);
 
-  // Script-analysis workflow owns the UI (phases 1–5, including auto-motion)
-  // whenever it is running; standalone motion gen only wins after analysis.
-  const isGenerationActive = isProcessing || generationState.currentPhase > 0;
+  // GenerationProgressBanner is owned by the script-analysis pipeline
+  // (sequence.status === 'processing'). Standalone motion gen runs when the
+  // sequence is already 'completed' / 'ready', so it must render via the
+  // dedicated MotionProgressBanner — never the 5-stage banner. Trusting
+  // generationState.currentPhase here would let leftover phase events from
+  // past runs hijack the UI back to the 5-stage banner.
+  const isGenerationActive = isProcessing;
 
   return (
     <div className="flex h-full flex-col">
