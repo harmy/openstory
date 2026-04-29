@@ -4,6 +4,7 @@
  * then merges videos and optionally muxes audio onto the final output.
  */
 
+import { getGenerationChannel } from '@/lib/realtime';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
@@ -166,6 +167,20 @@ export const motionBatchWorkflow =
       failureFunction: async ({ context, failResponse }) => {
         const input = context.requestPayload;
         const error = sanitizeFailResponse(failResponse);
+
+        if (input.sequenceId) {
+          try {
+            await getGenerationChannel(input.sequenceId).emit(
+              'generation.failed',
+              { message: error }
+            );
+          } catch (emitError) {
+            console.error(
+              `[MotionBatchWorkflow] Failed to emit generation.failed for sequence ${input.sequenceId}:`,
+              emitError
+            );
+          }
+        }
 
         console.error(
           `[MotionBatchWorkflow] Failed for sequence ${input.sequenceId}: ${error}`

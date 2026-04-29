@@ -385,7 +385,7 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
       });
 
       // Phase 5: single orchestrator for motion + optional music + merge
-      await context.invoke('motion-batch', {
+      const motionBatchResult = await context.invoke('motion-batch', {
         workflow: motionBatchWorkflow,
         label,
         body: {
@@ -404,6 +404,9 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
             : undefined,
         } satisfies BatchMotionMusicWorkflowInput,
       });
+
+      if (motionBatchResult.isFailed || motionBatchResult.isCanceled)
+        throw new Error('Motion/music batch failed');
     }
 
     if (sequenceId) {
