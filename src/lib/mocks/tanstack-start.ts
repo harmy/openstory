@@ -65,12 +65,13 @@ export function createIsomorphicFn() {
 }
 
 // `createServerOnlyFn(fn)` wraps a function that should only run on the server.
-// In Storybook (browser) the handler typically returns `process.env`, which
-// throws because `process` isn't defined. Substitute Vite's `import.meta.env`
-// so VITE_-prefixed vars (read by location/style template generators) resolve.
+// In Storybook we just run the handler — `process.env` is polyfilled in
+// .storybook/preview.tsx so handlers reading env vars work. Handlers that
+// touch genuinely server-only things (db, fs, …) will fail at call time,
+// which is the same failure mode as on the real client.
 export function createServerOnlyFn(handler?: (...args: any[]) => any) {
   if (typeof handler === 'function') {
-    return () => import.meta.env;
+    return handler;
   }
   return createBuilder();
 }

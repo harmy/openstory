@@ -1,16 +1,9 @@
-import { getEnv } from '#env';
 import type { Style } from '@/types/database';
 
-/**
- * Get the R2 public assets domain from environment
- */
-function getPublicAssetsDomain(): string {
-  return getEnv().VITE_R2_PUBLIC_ASSETS_DOMAIN;
-}
+// VITE_-prefixed vars are client-safe and inlined by Vite — no need to go
+// through #env (which is for server-only secrets via createServerOnlyFn).
+const PUBLIC_ASSETS_DOMAIN = import.meta.env.VITE_R2_PUBLIC_ASSETS_DOMAIN ?? '';
 
-/**
- * Generate preview URL for a style
- */
 function getStylePreviewUrl(styleName: string): string {
   const sanitized = styleName
     .toLowerCase()
@@ -20,7 +13,7 @@ function getStylePreviewUrl(styleName: string): string {
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '');
 
-  return `https://${getPublicAssetsDomain()}/styles/${sanitized}/thumbnail.webp`;
+  return `https://${PUBLIC_ASSETS_DOMAIN}/styles/${sanitized}/thumbnail.webp`;
 }
 
 // Default style templates that can be imported into any team
