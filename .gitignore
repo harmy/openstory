@@ -108,6 +108,9 @@ scripts/schemas/
 # claude code local state
 .claude/*.lock
 
+# agent harness
+.claude-harness/
+
 # previews
 preview*/
 
