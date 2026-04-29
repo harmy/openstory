@@ -5,11 +5,7 @@
  * enabling users to compare outputs from different AI models.
  */
 
-import {
-  type InferInsertModel,
-  type InferSelectModel,
-  relations,
-} from 'drizzle-orm';
+import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import {
   index,
   integer,
@@ -93,17 +89,6 @@ export const frameVariants = sqliteTable(
     ),
   ]
 );
-
-export const frameVariantsRelations = relations(frameVariants, ({ one }) => ({
-  frame: one(frames, {
-    fields: [frameVariants.frameId],
-    references: [frames.id],
-  }),
-  sequence: one(sequences, {
-    fields: [frameVariants.sequenceId],
-    references: [sequences.id],
-  }),
-}));
 
 export type FrameVariant = InferSelectModel<typeof frameVariants>;
 export type NewFrameVariant = InferInsertModel<typeof frameVariants>;

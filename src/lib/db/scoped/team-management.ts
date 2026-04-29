@@ -105,7 +105,7 @@ export function createTeamManagementReadMethods(db: Database, teamId: string) {
     params: AcceptInvitationParams
   ): Promise<string> {
     const invitation = await db.query.teamInvitations.findFirst({
-      where: eq(teamInvitations.token, params.token),
+      where: { token: params.token },
     });
 
     if (!invitation) {
@@ -126,10 +126,7 @@ export function createTeamManagementReadMethods(db: Database, teamId: string) {
     }
 
     const existingMember = await db.query.teamMembers.findFirst({
-      where: and(
-        eq(teamMembers.teamId, invitation.teamId),
-        eq(teamMembers.userId, params.userId)
-      ),
+      where: { teamId: invitation.teamId, userId: params.userId },
       columns: { userId: true },
     });
 
@@ -183,16 +180,13 @@ export function createTeamManagementMethods(
     role: 'member' | 'admin' | 'viewer';
   }): Promise<TeamInvitation> {
     const existingAuthUser = await db.query.user.findFirst({
-      where: eq(user.email, params.email),
+      where: { email: params.email },
       columns: { id: true },
     });
 
     if (existingAuthUser) {
       const existingMember = await db.query.teamMembers.findFirst({
-        where: and(
-          eq(teamMembers.teamId, teamId),
-          eq(teamMembers.userId, existingAuthUser.id)
-        ),
+        where: { teamId, userId: existingAuthUser.id },
         columns: { userId: true },
       });
 
@@ -202,11 +196,7 @@ export function createTeamManagementMethods(
     }
 
     const existingInvitation = await db.query.teamInvitations.findFirst({
-      where: and(
-        eq(teamInvitations.teamId, teamId),
-        eq(teamInvitations.email, params.email),
-        eq(teamInvitations.status, 'pending')
-      ),
+      where: { teamId, email: params.email, status: 'pending' },
       columns: { id: true },
     });
 

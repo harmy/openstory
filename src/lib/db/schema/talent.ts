@@ -4,11 +4,7 @@
  */
 
 import type { CharacterBibleEntry } from '@/lib/ai/scene-analysis.schema';
-import {
-  type InferInsertModel,
-  type InferSelectModel,
-  relations,
-} from 'drizzle-orm';
+import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { generateId } from '../id';
 import { user } from './auth';
@@ -139,37 +135,6 @@ export const talentMedia = sqliteTable(
     index('idx_talent_media_type').on(table.type),
   ]
 );
-
-// ============================================================================
-// Relations (roles relation added in roles.ts to avoid circular dependency)
-// ============================================================================
-
-export const talentRelations = relations(talent, ({ one, many }) => ({
-  team: one(teams, {
-    fields: [talent.teamId],
-    references: [teams.id],
-  }),
-  createdByUser: one(user, {
-    fields: [talent.createdBy],
-    references: [user.id],
-  }),
-  sheets: many(talentSheets),
-  media: many(talentMedia),
-}));
-
-export const talentSheetsRelations = relations(talentSheets, ({ one }) => ({
-  talent: one(talent, {
-    fields: [talentSheets.talentId],
-    references: [talent.id],
-  }),
-}));
-
-export const talentMediaRelations = relations(talentMedia, ({ one }) => ({
-  talent: one(talent, {
-    fields: [talentMedia.talentId],
-    references: [talent.id],
-  }),
-}));
 
 // ============================================================================
 // Type Exports

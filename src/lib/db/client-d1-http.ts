@@ -8,13 +8,17 @@
  */
 
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
-import { schema } from './schema';
+import { relations } from './schema/relations';
 
+// Inner fields are typed optional to reflect that the external D1 HTTP API
+// can return shapes that don't match the documented contract (empty result
+// array for unsupported methods, missing results on partial failures). The
+// runtime guard below enforces what the type can't.
 type D1RawResponse = {
   success: boolean;
   errors: Array<{ code: number; message: string }>;
-  result: Array<{
-    results: { columns: string[]; rows: unknown[][] };
+  result?: Array<{
+    results?: { columns: string[]; rows: unknown[][] };
     success: boolean;
   }>;
 };
@@ -39,13 +43,19 @@ export function createD1HttpClient(opts: {
       },
       body: JSON.stringify({ sql, params }),
     });
+    if (!res.ok) {
+      throw new Error(`D1 HTTP ${res.status}: ${await res.text()}`);
+    }
     const data: D1RawResponse = await res.json();
     if (!data.success) {
       throw new Error(
         data.errors.map((e) => `${e.code}: ${e.message}`).join('\n')
       );
     }
-    const rawResult = data.result[0].results;
+    const rawResult = data.result?.[0]?.results;
+    if (!rawResult) {
+      throw new Error('D1 HTTP: response missing result[0].results');
+    }
     if (method === 'run') {
       return { rows: [] as unknown[] };
     }
@@ -54,5 +64,5 @@ export function createD1HttpClient(opts: {
     return { rows: rawResult.rows };
   };
 
-  return drizzle(remoteCallback, { schema, casing: 'snake_case' });
+  return drizzle(remoteCallback, { relations, casing: 'snake_case' });
 }

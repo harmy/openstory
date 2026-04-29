@@ -211,7 +211,7 @@ export function createFramesMethods(db: Database) {
       frameId: string
     ): Promise<FrameWithSequence | null> => {
       const result = await db.query.frames.findFirst({
-        where: eq(frames.id, frameId),
+        where: { id: frameId },
         with: {
           sequence: {
             columns: {
@@ -227,10 +227,8 @@ export function createFramesMethods(db: Database) {
         },
       });
 
-      if (!result) return null;
-      // Drizzle relational query returns the correct shape but with a wider type
-      const { sequence, ...frame } = result;
-      return { ...frame, sequence } as FrameWithSequence;
+      if (!result || !result.sequence) return null;
+      return { ...result, sequence: result.sequence };
     },
   };
 }

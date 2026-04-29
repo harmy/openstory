@@ -3,11 +3,7 @@
  * Team-level location templates for visual consistency across sequences
  */
 
-import {
-  type InferInsertModel,
-  type InferSelectModel,
-  relations,
-} from 'drizzle-orm';
+import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { generateId } from '../id';
 import { user } from './auth';
@@ -49,21 +45,6 @@ export const locationLibrary = sqliteTable(
     index('idx_location_library_team_id').on(table.teamId),
     index('idx_location_library_name').on(table.name),
   ]
-);
-
-// Relations
-export const locationLibraryRelations = relations(
-  locationLibrary,
-  ({ one }) => ({
-    team: one(teams, {
-      fields: [locationLibrary.teamId],
-      references: [teams.id],
-    }),
-    createdByUser: one(user, {
-      fields: [locationLibrary.createdBy],
-      references: [user.id],
-    }),
-  })
 );
 
 // Type exports

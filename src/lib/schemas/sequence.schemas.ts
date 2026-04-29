@@ -12,7 +12,7 @@ import {
 import { aspectRatioSchema } from '@/lib/constants/aspect-ratios';
 import { sequences } from '@/lib/db/schema/sequences';
 import { ulidSchemaOptional } from '@/lib/schemas/id.schemas';
-import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
+import { createInsertSchema, createUpdateSchema } from 'drizzle-orm/zod';
 import { z } from 'zod';
 
 /**

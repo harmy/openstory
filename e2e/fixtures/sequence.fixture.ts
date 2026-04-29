@@ -176,7 +176,7 @@ export async function getTestFrame(frameId: string): Promise<{
   variantImageStatus: string | null;
 } | null> {
   const result = await testDb.query.frames.findFirst({
-    where: eq(frames.id, frameId),
+    where: { id: frameId },
     columns: {
       id: true,
       thumbnailUrl: true,
@@ -203,7 +203,7 @@ export async function getTestCharacter(characterId: string): Promise<{
   sheetStatus: string | null;
 } | null> {
   const result = await testDb.query.characters.findFirst({
-    where: eq(characters.id, characterId),
+    where: { id: characterId },
     columns: {
       id: true,
       name: true,

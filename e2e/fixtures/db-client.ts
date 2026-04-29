@@ -5,7 +5,7 @@
 
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
-import { schema } from '@/lib/db/schema';
+import { relations } from '@/lib/db/schema/relations';
 
 const client = createClient({ url: 'file:test.db' });
 
@@ -18,10 +18,11 @@ const initPromise = (async () => {
 /**
  * Drizzle database instance for e2e tests
  * Uses test.db (same as e2e dev server)
- * Configured with same schema/casing as production
+ * Configured with same relations/casing as production
  */
-export const testDb = drizzle(client, {
-  schema,
+export const testDb = drizzle({
+  client,
+  relations,
   casing: 'snake_case',
 });
 

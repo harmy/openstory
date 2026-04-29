@@ -3,11 +3,7 @@
  * Locations extracted from scripts for visual consistency within a sequence
  */
 
-import {
-  type InferInsertModel,
-  type InferSelectModel,
-  relations,
-} from 'drizzle-orm';
+import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import {
   index,
   integer,
@@ -96,21 +92,6 @@ export const sequenceLocations = sqliteTable(
       table.locationId
     ),
   ]
-);
-
-// Relations
-export const sequenceLocationsRelations = relations(
-  sequenceLocations,
-  ({ one }) => ({
-    sequence: one(sequences, {
-      fields: [sequenceLocations.sequenceId],
-      references: [sequences.id],
-    }),
-    libraryLocation: one(locationLibrary, {
-      fields: [sequenceLocations.libraryLocationId],
-      references: [locationLibrary.id],
-    }),
-  })
 );
 
 // Type exports

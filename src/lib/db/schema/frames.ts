@@ -119,9 +119,6 @@ export const frames = sqliteTable(
   ]
 );
 
-// NOTE: framesRelations defined in index.ts to avoid circular dependency
-// (frame-variants.ts imports frames for FK reference)
-
 // Override the inferred Frame type to use Scene for metadata
 type InferredFrame = InferSelectModel<typeof frames>;
 export type Frame = Omit<InferredFrame, 'metadata'> & {

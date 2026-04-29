@@ -1,140 +1,48 @@
 /**
  * Drizzle ORM Schema Index
- * Central export point for all database schemas and relations
+ * Central export point for all database schemas.
+ *
+ * Relations are defined separately in ./relations.ts using defineRelations()
+ * (Drizzle Relations v2 — single consolidated definition, no per-table relations() calls).
  */
 
-import { relations } from 'drizzle-orm';
+import { account, passkey, session, user, verification } from './auth';
 
-// Import all schema components first (required for schema object)
-import {
-  account,
-  passkey,
-  passkeyRelations,
-  session,
-  user,
-  verification,
-} from './auth';
+import { teamInvitations, teamMembers, teams } from './teams';
 
-import {
-  teamInvitations,
-  teamInvitationsRelations,
-  teamMembers,
-  teamMembersRelations,
-  teams,
-  teamsRelations,
-} from './teams';
-
-// NOTE: sequences imported without relations - defined below to avoid circular dependency
 import { sequences } from './sequences';
 
-// NOTE: frames imported without relations - defined below to avoid circular dependency
-// (frame-variants.ts imports frames for FK reference)
 import { frames } from './frames';
 
-import { frameVariants, frameVariantsRelations } from './frame-variants';
+import { frameVariants } from './frame-variants';
 
-import { characters, charactersRelations } from './characters';
+import { characters } from './characters';
 
 // Location Library (team-level templates)
-import { locationLibrary, locationLibraryRelations } from './location-library';
+import { locationLibrary } from './location-library';
 
 // Sequence Locations (script-extracted)
-import {
-  sequenceLocations,
-  sequenceLocationsRelations,
-} from './sequence-locations';
+import { sequenceLocations } from './sequence-locations';
 
-import { locationSheets, locationSheetsRelations } from './location-sheets';
+import { locationSheets } from './location-sheets';
 
 // Sequence Elements (user-uploaded reference images)
-import {
-  sequenceElements,
-  sequenceElementsRelations,
-} from './sequence-elements';
+import { sequenceElements } from './sequence-elements';
 
-import {
-  talent,
-  talentMedia,
-  talentMediaRelations,
-  talentSheets,
-  talentSheetsRelations,
-  talentRelations,
-} from './talent';
+import { talent, talentMedia, talentSheets } from './talent';
 
-import {
-  audio,
-  audioRelations,
-  StyleConfigSchema,
-  styles,
-  stylesRelations,
-  vfx,
-  vfxRelations,
-} from './libraries';
+import { audio, StyleConfigSchema, styles, vfx } from './libraries';
 
 import {
   creditBatches,
-  creditBatchesRelations,
   credits,
-  creditsRelations,
   teamBillingSettings,
-  teamBillingSettingsRelations,
   transactions,
-  transactionsRelations,
 } from './credits';
 
-import { teamApiKeys, teamApiKeysRelations } from './team-api-keys';
+import { teamApiKeys } from './team-api-keys';
 
-import {
-  giftTokenRedemptions,
-  giftTokenRedemptionsRelations,
-  giftTokens,
-  giftTokensRelations,
-} from './gift-tokens';
-
-// ============================================================================
-// Relations defined here to avoid circular dependencies
-// ============================================================================
-
-/**
- * Sequences relations - defined here because frames.ts imports sequences
- * for FK reference, creating a circular dependency if defined in sequences.ts
- */
-export const sequencesRelations = relations(sequences, ({ one, many }) => ({
-  team: one(teams, {
-    fields: [sequences.teamId],
-    references: [teams.id],
-  }),
-  user_createdBy: one(user, {
-    fields: [sequences.createdBy],
-    references: [user.id],
-    relationName: 'sequences_createdBy_users_id',
-  }),
-  user_updatedBy: one(user, {
-    fields: [sequences.updatedBy],
-    references: [user.id],
-    relationName: 'sequences_updatedBy_users_id',
-  }),
-  style: one(styles, {
-    fields: [sequences.styleId],
-    references: [styles.id],
-  }),
-  frames: many(frames),
-  characters: many(characters),
-  locations: many(sequenceLocations),
-  elements: many(sequenceElements),
-}));
-
-/**
- * Frames relations - defined here because frame-variants.ts imports frames
- * for FK reference, creating a circular dependency if defined in frames.ts
- */
-export const framesRelations = relations(frames, ({ one, many }) => ({
-  sequence: one(sequences, {
-    fields: [frames.sequenceId],
-    references: [sequences.id],
-  }),
-  variants: many(frameVariants),
-}));
+import { giftTokenRedemptions, giftTokens } from './gift-tokens';
 
 // Better Auth tables
 export { account, passkey, session, user, verification };
@@ -290,8 +198,8 @@ export type {
 } from './gift-tokens';
 
 /**
- * Complete schema object for Drizzle client initialization
- * Import this when creating your Drizzle instance
+ * Complete schema object for Drizzle client initialization (tables only).
+ * Relations are defined separately in ./relations.ts using defineRelations().
  */
 export const schema = {
   // Better Auth
@@ -300,77 +208,52 @@ export const schema = {
   account,
   verification,
   passkey,
-  passkeyRelations,
 
   // Teams
   teams,
   teamMembers,
   teamInvitations,
-  teamsRelations,
-  teamMembersRelations,
-  teamInvitationsRelations,
 
-  // Sequences & Frames
+  // Sequences
   sequences,
   frames,
   frameVariants,
-  sequencesRelations,
-  framesRelations,
-  frameVariantsRelations,
 
   // Characters (scripted roles extracted from script)
   characters,
-  charactersRelations,
 
   // Location Library (team-level templates)
   locationLibrary,
-  locationLibraryRelations,
 
   // Sequence Locations (extracted from script)
   sequenceLocations,
-  sequenceLocationsRelations,
 
   // Location Sheets (location-specific variations for library locations)
   locationSheets,
-  locationSheetsRelations,
 
   // Sequence Elements (user-uploaded reference images)
   sequenceElements,
-  sequenceElementsRelations,
 
   // Talent Library
   talent,
-  talentRelations,
   talentSheets,
-  talentSheetsRelations,
   talentMedia,
-  talentMediaRelations,
 
   // Libraries
   styles,
   vfx,
   audio,
-  stylesRelations,
-  vfxRelations,
-  audioRelations,
 
   // Credits & Billing
   credits,
   creditBatches,
   transactions,
   teamBillingSettings,
-  creditsRelations,
-  creditBatchesRelations,
-  transactionsRelations,
-  teamBillingSettingsRelations,
 
   // Team API Keys
   teamApiKeys,
-  teamApiKeysRelations,
 
   // Gift Tokens
   giftTokens,
-  giftTokensRelations,
   giftTokenRedemptions,
-  giftTokenRedemptionsRelations,
 };

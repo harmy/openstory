@@ -152,7 +152,7 @@ export async function ensureUserAndTeam(authUser: {
     const db = getDb();
 
     const foundUser = await db.query.user.findFirst({
-      where: eq(user.id, authUser.id),
+      where: { id: authUser.id },
     });
 
     if (foundUser) {
@@ -198,7 +198,7 @@ export async function ensureUserAndTeam(authUser: {
     });
 
     const createdUser = await db.query.user.findFirst({
-      where: eq(user.id, authUser.id),
+      where: { id: authUser.id },
     });
 
     if (!createdUser) throw new Error('Failed to retrieve created user');

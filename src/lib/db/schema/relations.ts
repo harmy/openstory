@@ -1,0 +1,228 @@
+/**
+ * Drizzle Relations v2
+ * Unified relation definitions using defineRelations()
+ */
+
+import { defineRelations } from 'drizzle-orm';
+import { schema } from './index';
+
+export const relations = defineRelations(schema, (r) => ({
+  // ---- Auth ----
+  user: {
+    sessions: r.many.session(),
+    accounts: r.many.account(),
+    passkeys: r.many.passkey(),
+  },
+  session: {
+    user: r.one.user({ from: r.session.userId, to: r.user.id }),
+  },
+  account: {
+    user: r.one.user({ from: r.account.userId, to: r.user.id }),
+  },
+  passkey: {
+    user: r.one.user({ from: r.passkey.userId, to: r.user.id }),
+  },
+
+  // ---- Teams ----
+  teams: {
+    members: r.many.teamMembers(),
+    invitations: r.many.teamInvitations(),
+  },
+  teamMembers: {
+    team: r.one.teams({ from: r.teamMembers.teamId, to: r.teams.id }),
+    user: r.one.user({ from: r.teamMembers.userId, to: r.user.id }),
+  },
+  teamInvitations: {
+    team: r.one.teams({ from: r.teamInvitations.teamId, to: r.teams.id }),
+    user: r.one.user({ from: r.teamInvitations.invitedBy, to: r.user.id }),
+  },
+
+  // ---- Sequences ----
+  sequences: {
+    team: r.one.teams({ from: r.sequences.teamId, to: r.teams.id }),
+    user_createdBy: r.one.user({
+      from: r.sequences.createdBy,
+      to: r.user.id,
+      alias: 'sequences_createdBy_users_id',
+    }),
+    user_updatedBy: r.one.user({
+      from: r.sequences.updatedBy,
+      to: r.user.id,
+      alias: 'sequences_updatedBy_users_id',
+    }),
+    style: r.one.styles({ from: r.sequences.styleId, to: r.styles.id }),
+    frames: r.many.frames(),
+    characters: r.many.characters(),
+    locations: r.many.sequenceLocations(),
+    elements: r.many.sequenceElements(),
+  },
+
+  // ---- Frames ----
+  frames: {
+    sequence: r.one.sequences({
+      from: r.frames.sequenceId,
+      to: r.sequences.id,
+    }),
+    variants: r.many.frameVariants(),
+  },
+
+  // ---- Frame Variants ----
+  frameVariants: {
+    frame: r.one.frames({
+      from: r.frameVariants.frameId,
+      to: r.frames.id,
+    }),
+    sequence: r.one.sequences({
+      from: r.frameVariants.sequenceId,
+      to: r.sequences.id,
+    }),
+  },
+
+  // ---- Characters ----
+  characters: {
+    sequence: r.one.sequences({
+      from: r.characters.sequenceId,
+      to: r.sequences.id,
+    }),
+    talent: r.one.talent({
+      from: r.characters.talentId,
+      to: r.talent.id,
+    }),
+  },
+
+  // ---- Location Library ----
+  locationLibrary: {
+    team: r.one.teams({
+      from: r.locationLibrary.teamId,
+      to: r.teams.id,
+    }),
+    createdByUser: r.one.user({
+      from: r.locationLibrary.createdBy,
+      to: r.user.id,
+    }),
+  },
+
+  // ---- Sequence Locations ----
+  sequenceLocations: {
+    sequence: r.one.sequences({
+      from: r.sequenceLocations.sequenceId,
+      to: r.sequences.id,
+    }),
+    libraryLocation: r.one.locationLibrary({
+      from: r.sequenceLocations.libraryLocationId,
+      to: r.locationLibrary.id,
+    }),
+  },
+
+  // ---- Location Sheets ----
+  locationSheets: {
+    location: r.one.locationLibrary({
+      from: r.locationSheets.locationId,
+      to: r.locationLibrary.id,
+    }),
+  },
+
+  // ---- Sequence Elements ----
+  sequenceElements: {
+    sequence: r.one.sequences({
+      from: r.sequenceElements.sequenceId,
+      to: r.sequences.id,
+    }),
+  },
+
+  // ---- Talent ----
+  talent: {
+    team: r.one.teams({ from: r.talent.teamId, to: r.teams.id }),
+    createdByUser: r.one.user({
+      from: r.talent.createdBy,
+      to: r.user.id,
+    }),
+    sheets: r.many.talentSheets(),
+    media: r.many.talentMedia(),
+  },
+  talentSheets: {
+    talent: r.one.talent({
+      from: r.talentSheets.talentId,
+      to: r.talent.id,
+    }),
+  },
+  talentMedia: {
+    talent: r.one.talent({
+      from: r.talentMedia.talentId,
+      to: r.talent.id,
+    }),
+  },
+
+  // ---- Libraries ----
+  styles: {
+    team: r.one.teams({ from: r.styles.teamId, to: r.teams.id }),
+    user: r.one.user({ from: r.styles.createdBy, to: r.user.id }),
+  },
+  vfx: {
+    team: r.one.teams({ from: r.vfx.teamId, to: r.teams.id }),
+    user: r.one.user({ from: r.vfx.createdBy, to: r.user.id }),
+  },
+  audio: {
+    team: r.one.teams({ from: r.audio.teamId, to: r.teams.id }),
+    user: r.one.user({ from: r.audio.createdBy, to: r.user.id }),
+  },
+
+  // ---- Credits & Billing ----
+  credits: {
+    team: r.one.teams({ from: r.credits.teamId, to: r.teams.id }),
+  },
+  transactions: {
+    team: r.one.teams({ from: r.transactions.teamId, to: r.teams.id }),
+    user: r.one.user({ from: r.transactions.userId, to: r.user.id }),
+  },
+  teamBillingSettings: {
+    team: r.one.teams({
+      from: r.teamBillingSettings.teamId,
+      to: r.teams.id,
+    }),
+  },
+  creditBatches: {
+    team: r.one.teams({
+      from: r.creditBatches.teamId,
+      to: r.teams.id,
+    }),
+    transaction: r.one.transactions({
+      from: r.creditBatches.transactionId,
+      to: r.transactions.id,
+    }),
+  },
+
+  // ---- Team API Keys ----
+  teamApiKeys: {
+    team: r.one.teams({ from: r.teamApiKeys.teamId, to: r.teams.id }),
+    addedByUser: r.one.user({
+      from: r.teamApiKeys.addedBy,
+      to: r.user.id,
+    }),
+  },
+
+  // ---- Gift Tokens ----
+  giftTokens: {
+    createdBy: r.one.user({
+      from: r.giftTokens.createdByUserId,
+      to: r.user.id,
+      alias: 'giftTokens_createdBy',
+    }),
+    redemptions: r.many.giftTokenRedemptions(),
+  },
+  giftTokenRedemptions: {
+    giftToken: r.one.giftTokens({
+      from: r.giftTokenRedemptions.giftTokenId,
+      to: r.giftTokens.id,
+    }),
+    team: r.one.teams({
+      from: r.giftTokenRedemptions.teamId,
+      to: r.teams.id,
+    }),
+    user: r.one.user({
+      from: r.giftTokenRedemptions.userId,
+      to: r.user.id,
+      alias: 'giftTokenRedemptions_user',
+    }),
+  },
+}));

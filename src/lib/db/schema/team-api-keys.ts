@@ -6,11 +6,7 @@
  * environment variables, separate from the database.
  */
 
-import {
-  type InferInsertModel,
-  type InferSelectModel,
-  relations,
-} from 'drizzle-orm';
+import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import {
   integer,
   sqliteTable,
@@ -87,18 +83,6 @@ export const teamApiKeys = sqliteTable(
     index('idx_team_api_keys_team_id').on(table.teamId),
   ]
 );
-
-// Relations
-export const teamApiKeysRelations = relations(teamApiKeys, ({ one }) => ({
-  team: one(teams, {
-    fields: [teamApiKeys.teamId],
-    references: [teams.id],
-  }),
-  addedByUser: one(user, {
-    fields: [teamApiKeys.addedBy],
-    references: [user.id],
-  }),
-}));
 
 // Type exports
 export type TeamApiKey = InferSelectModel<typeof teamApiKeys>;

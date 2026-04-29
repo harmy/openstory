@@ -67,31 +67,24 @@ export function createSequencesReadMethods(db: Database, teamId: string) {
       sequenceId: string
     ): Promise<SequenceWithFrames | null> => {
       const result = await db.query.sequences.findFirst({
-        where: and(eq(sequences.id, sequenceId), eq(sequences.teamId, teamId)),
+        where: { id: sequenceId, teamId },
         with: {
           frames: {
-            orderBy: (frames, { asc }) => [asc(frames.orderIndex)],
+            orderBy: { orderIndex: 'asc' },
           },
           style: true,
         },
       });
       if (!result) return null;
-      // Drizzle relational query returns the correct shape but with a wider type
-      const { frames: seqFrames, style, ...sequence } = result;
       return {
-        ...sequence,
-        frames: seqFrames,
-        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
-        style: style ?? null,
-      } as SequenceWithFrames;
+        ...result,
+        style: result.style ?? null,
+      };
     },
 
     getForUser: async (params: { sequenceId: string }): Promise<Sequence> => {
       const sequence = await db.query.sequences.findFirst({
-        where: and(
-          eq(sequences.id, params.sequenceId),
-          eq(sequences.teamId, teamId)
-        ),
+        where: { id: params.sequenceId, teamId },
       });
       if (!sequence) {
         throw new ValidationError('Sequence not found');

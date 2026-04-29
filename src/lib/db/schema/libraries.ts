@@ -3,11 +3,7 @@
  * Styles, characters, VFX, and audio assets for teams
  */
 
-import {
-  type InferInsertModel,
-  type InferSelectModel,
-  relations,
-} from 'drizzle-orm';
+import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import z from 'zod';
 import { generateId } from '../id';
@@ -135,40 +131,6 @@ export const audio = sqliteTable(
     index('idx_audio_team_id').on(table.teamId),
   ]
 );
-
-// Relations
-export const stylesRelations = relations(styles, ({ one }) => ({
-  team: one(teams, {
-    fields: [styles.teamId],
-    references: [teams.id],
-  }),
-  user: one(user, {
-    fields: [styles.createdBy],
-    references: [user.id],
-  }),
-}));
-
-export const vfxRelations = relations(vfx, ({ one }) => ({
-  team: one(teams, {
-    fields: [vfx.teamId],
-    references: [teams.id],
-  }),
-  user: one(user, {
-    fields: [vfx.createdBy],
-    references: [user.id],
-  }),
-}));
-
-export const audioRelations = relations(audio, ({ one }) => ({
-  team: one(teams, {
-    fields: [audio.teamId],
-    references: [teams.id],
-  }),
-  user: one(user, {
-    fields: [audio.createdBy],
-    references: [user.id],
-  }),
-}));
 
 // Type exports
 export type Style = InferSelectModel<typeof styles>;

@@ -3,11 +3,7 @@
  * Team management, members, and invitations
  */
 
-import {
-  type InferInsertModel,
-  type InferSelectModel,
-  relations,
-} from 'drizzle-orm';
+import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import {
   integer,
   sqliteTable,
@@ -123,37 +119,6 @@ export const teamInvitations = sqliteTable(
     // Enforce unique pending invitations in application logic or trigger
     index('idx_team_invitations_unique_pending').on(table.teamId, table.email),
   ]
-);
-
-// Relations
-export const teamsRelations = relations(teams, ({ many }) => ({
-  members: many(teamMembers),
-  invitations: many(teamInvitations),
-}));
-
-export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
-  team: one(teams, {
-    fields: [teamMembers.teamId],
-    references: [teams.id],
-  }),
-  user: one(user, {
-    fields: [teamMembers.userId],
-    references: [user.id],
-  }),
-}));
-
-export const teamInvitationsRelations = relations(
-  teamInvitations,
-  ({ one }) => ({
-    team: one(teams, {
-      fields: [teamInvitations.teamId],
-      references: [teams.id],
-    }),
-    user: one(user, {
-      fields: [teamInvitations.invitedBy],
-      references: [user.id],
-    }),
-  })
 );
 
 // Type exports

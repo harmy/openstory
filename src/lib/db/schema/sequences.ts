@@ -142,9 +142,6 @@ export const sequences = sqliteTable(
   ]
 );
 
-// NOTE: sequencesRelations is defined in index.ts to avoid circular dependency
-// (frames.ts imports sequences for FK reference, sequences needs frames for relations)
-
 // Type exports
 export type Sequence = InferSelectModel<typeof sequences>;
 export type NewSequence = InferInsertModel<typeof sequences>;

@@ -6,13 +6,13 @@
  * The D1 binding is accessed via the `cloudflare:workers` env module.
  */
 
-import { drizzle, type DrizzleD1Database } from 'drizzle-orm/d1';
+import { drizzle } from 'drizzle-orm/d1';
 import { getEnv } from '../env/cloudflare';
-import { schema } from './schema';
+import { relations } from './schema/relations';
 
 console.log('[db-d1] Loading client');
 
-type Database = DrizzleD1Database<typeof schema>;
+type Database = ReturnType<typeof buildDb>;
 
 let _db: Database | undefined;
 
@@ -26,10 +26,14 @@ export const getDb = (): Database => {
     );
   }
 
-  _db = drizzle(d1, {
-    schema,
-    casing: 'snake_case',
-  });
+  _db = buildDb(d1);
 
   return _db;
 };
+
+function buildDb(d1: D1Database) {
+  return drizzle(d1, {
+    relations,
+    casing: 'snake_case',
+  });
+}
