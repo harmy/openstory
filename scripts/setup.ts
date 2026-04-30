@@ -292,6 +292,82 @@ function bucketHasDomain(bucket: string, domain: string): boolean {
   }
 }
 
+type CorsRule = {
+  allowed: { origins: string[]; methods: string[]; headers: string[] };
+  expose?: string[];
+  maxAge?: number;
+};
+
+function configureBucketCors(bucketName: string, rules: CorsRule[]): boolean {
+  const tmpFile = resolve(process.cwd(), '.cors-tmp.json');
+  try {
+    writeFileSync(tmpFile, JSON.stringify({ rules }, null, 2));
+    execFileSync(
+      'bunx',
+      [
+        'wrangler',
+        'r2',
+        'bucket',
+        'cors',
+        'set',
+        bucketName,
+        '--file',
+        tmpFile,
+        '--force',
+      ],
+      { stdio: 'pipe' }
+    );
+    return true;
+  } catch {
+    return false;
+  } finally {
+    try {
+      unlinkSync(tmpFile);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+async function getCloudflareWorkersSubdomain(
+  accountId: string,
+  apiToken: string
+): Promise<string | undefined> {
+  try {
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/subdomain`,
+      { headers: { Authorization: `Bearer ${apiToken}` } }
+    );
+    const data: { success?: boolean; result?: { name?: string } } =
+      await res.json();
+    if (data.success && data.result?.name) return data.result.name;
+  } catch {
+    // fall through
+  }
+  return undefined;
+}
+
+// Wildcard origin patterns matching each hosting platform's PR preview URLs.
+// PR preview URLs are ephemeral and unique per PR, so we use platform-specific
+// wildcards to cover all of them with a single CORS rule.
+function derivePreviewOriginPatterns(opts: {
+  platform: string | undefined;
+  workersSubdomain?: string;
+}): string[] {
+  switch (opts.platform) {
+    case 'cloudflare':
+      return opts.workersSubdomain
+        ? [`https://pr-*.${opts.workersSubdomain}.workers.dev`]
+        : [];
+    case 'vercel':
+      return ['https://*.vercel.app'];
+    case 'railway':
+      return ['https://*.up.railway.app'];
+    default:
+      return [];
+  }
+}
+
 async function prPreviewSetup() {
   p.intro(chalk.bold('OpenStory PR Preview Setup'));
   p.log.info(
@@ -568,6 +644,99 @@ async function prPreviewSetup() {
         }
       } else {
         p.log.warn('No zone ID — skipping domain attachment.');
+      }
+    }
+  }
+
+  // 6c. Configure CORS on the staging bucket. Each PR deploy gets a unique
+  // URL so we use a wildcard origin matching the hosting platform's preview
+  // pattern. GET/HEAD only — staging buckets don't accept browser uploads.
+  const stgBucketName = merged.get('R2_BUCKET_NAME');
+  if (stgBucketName) {
+    const platform =
+      merged.get('DEPLOY_PLATFORM') ??
+      (merged.has('CLOUDFLARE_API_TOKEN') ? 'cloudflare' : undefined);
+
+    let workersSubdomain: string | undefined;
+    if (platform === 'cloudflare') {
+      const accountId = merged.get('CLOUDFLARE_ACCOUNT_ID');
+      const apiToken = merged.get('CLOUDFLARE_API_TOKEN');
+      if (accountId && apiToken) {
+        const subSpinner = p.spinner();
+        subSpinner.start('Looking up Cloudflare Workers subdomain');
+        workersSubdomain = await getCloudflareWorkersSubdomain(
+          accountId,
+          apiToken
+        );
+        if (workersSubdomain) {
+          subSpinner.stop(`Workers subdomain: ${workersSubdomain}`);
+        } else {
+          subSpinner.stop('Could not auto-detect Workers subdomain');
+        }
+      }
+
+      if (!workersSubdomain) {
+        const manual = await p.text({
+          message:
+            'Workers subdomain (the part before .workers.dev in your preview URL)',
+          placeholder: 'e.g. myaccount',
+        });
+        if (!p.isCancel(manual) && manual.trim()) {
+          workersSubdomain = manual.trim();
+        }
+      }
+    }
+
+    const previewOrigins = derivePreviewOriginPatterns({
+      platform,
+      workersSubdomain,
+    });
+
+    if (previewOrigins.length === 0) {
+      p.log.warn(
+        `No preview origin pattern available for platform "${platform ?? 'unknown'}".\n` +
+          `Configure CORS manually in Cloudflare Dashboard:\n` +
+          `  R2 → ${stgBucketName} → Settings → CORS Policy`
+      );
+    } else {
+      const setupStgCors = await p.confirm({
+        message: `Configure CORS on staging bucket ${chalk.bold(stgBucketName)}?`,
+        initialValue: true,
+      });
+
+      if (p.isCancel(setupStgCors)) {
+        p.cancel('PR preview setup cancelled.');
+        process.exit(0);
+      }
+
+      if (setupStgCors) {
+        const rules: CorsRule[] = [
+          {
+            allowed: {
+              origins: previewOrigins,
+              methods: ['GET', 'HEAD'],
+              headers: ['content-type', 'range'],
+            },
+            expose: ['ETag', 'Content-Length'],
+            maxAge: 3600,
+          },
+        ];
+
+        const corsSpinner = p.spinner();
+        corsSpinner.start(`Configuring CORS on ${stgBucketName}`);
+
+        if (configureBucketCors(stgBucketName, rules)) {
+          corsSpinner.stop(
+            `CORS configured on ${stgBucketName} (${previewOrigins.join(', ')})`
+          );
+        } else {
+          corsSpinner.stop('CORS configuration failed');
+          p.log.warn(
+            'Configure manually in Cloudflare Dashboard:\n' +
+              `  R2 → ${stgBucketName} → Settings → CORS Policy\n\n` +
+              JSON.stringify({ rules }, null, 2)
+          );
+        }
       }
     }
   }
@@ -1473,33 +1642,6 @@ async function main() {
           p.log.warn(`Could not attach ${domain} to ${bucket}`);
         }
       }
-    } else {
-      const enableDevUrl = checkCancel(
-        await p.confirm({
-          message:
-            'Enable r2.dev public URLs instead? (rate-limited, dev only)',
-          initialValue: false,
-        })
-      );
-
-      if (enableDevUrl) {
-        const storageBucket = vars.get('R2_BUCKET_NAME') ?? 'openstory-storage';
-        const assetsBucket =
-          vars.get('R2_PUBLIC_ASSETS_BUCKET') ?? 'openstory-public-assets';
-
-        for (const bucket of [storageBucket, assetsBucket]) {
-          try {
-            execFileSync(
-              'bunx',
-              ['wrangler', 'r2', 'bucket', 'dev-url', 'enable', bucket],
-              { stdio: 'inherit' }
-            );
-            p.log.success(`Enabled r2.dev URL for ${bucket}`);
-          } catch {
-            p.log.warn(`Could not enable r2.dev URL for ${bucket}`);
-          }
-        }
-      }
     }
   }
 
@@ -2084,6 +2226,18 @@ async function main() {
         `VITE_R2_PUBLIC_ASSETS_DOMAIN  = ${vars.get('VITE_R2_PUBLIC_ASSETS_DOMAIN')}`
       );
     }
+
+    // Bucket names — needed for CORS configuration. Cloudflare runtime uses
+    // native bindings from wrangler.jsonc, but wrangler CLI commands like
+    // `r2 bucket cors set` need the bucket name explicitly.
+    if (!vars.has('R2_BUCKET_NAME')) {
+      vars.set('R2_BUCKET_NAME', 'openstory-storage');
+      saveProgress();
+    }
+    if (!vars.has('R2_PUBLIC_ASSETS_BUCKET')) {
+      vars.set('R2_PUBLIC_ASSETS_BUCKET', 'openstory-public-assets');
+      saveProgress();
+    }
   } else {
     const setupStorage = checkCancel(
       await p.confirm({
@@ -2129,7 +2283,12 @@ async function main() {
   //   - Browser-side fetches from JS (e.g. browser-merge in #638) on every
   //     deployment, including Cloudflare. Native HTML elements (<video>,
   //     <img>, <a>) load R2 cross-origin without CORS, but `fetch()` does not.
-  if (vars.has('R2_BUCKET_NAME') && vars.has('R2_ACCESS_KEY_ID')) {
+  // Wrangler authenticates via CLOUDFLARE_API_TOKEN (or global wrangler login);
+  // R2_ACCESS_KEY_ID is for runtime signed URLs, not for setting CORS.
+  if (
+    vars.has('R2_BUCKET_NAME') &&
+    (vars.has('CLOUDFLARE_API_TOKEN') || vars.has('R2_ACCESS_KEY_ID'))
+  ) {
     const setupCors = checkCancel(
       await p.confirm({
         message:
@@ -2148,55 +2307,30 @@ async function main() {
       const origins = new Set(['http://localhost:3000']);
       if (appUrl !== 'http://localhost:3000') origins.add(appUrl);
 
-      const corsConfig = {
-        rules: [
-          {
-            allowed: {
-              origins: [...origins],
-              methods: ['GET', 'PUT', 'HEAD'],
-              headers: ['content-type'],
-            },
-            expose: ['ETag'],
-            maxAge: 3600,
+      const rules: CorsRule[] = [
+        {
+          allowed: {
+            origins: [...origins],
+            methods: ['GET', 'PUT', 'HEAD'],
+            headers: ['content-type'],
           },
-        ],
-      };
+          expose: ['ETag'],
+          maxAge: 3600,
+        },
+      ];
 
       const corsSpinner = p.spinner();
       corsSpinner.start(`Configuring CORS on ${bucketName}`);
 
-      const tmpFile = resolve(process.cwd(), '.cors-tmp.json');
-      try {
-        writeFileSync(tmpFile, JSON.stringify(corsConfig, null, 2));
-        execFileSync(
-          'bunx',
-          [
-            'wrangler',
-            'r2',
-            'bucket',
-            'cors',
-            'set',
-            bucketName,
-            '--file',
-            tmpFile,
-            '--force',
-          ],
-          { stdio: 'pipe' }
-        );
+      if (configureBucketCors(bucketName, rules)) {
         corsSpinner.stop(`CORS configured on ${bucketName}`);
-      } catch {
+      } else {
         corsSpinner.stop('CORS configuration failed');
         p.log.warn(
           'Configure manually in Cloudflare Dashboard:\n' +
             `  R2 → ${bucketName} → Settings → CORS Policy\n\n` +
-            JSON.stringify(corsConfig, null, 2)
+            JSON.stringify({ rules }, null, 2)
         );
-      } finally {
-        try {
-          unlinkSync(tmpFile);
-        } catch {
-          // ignore
-        }
       }
     }
   }
