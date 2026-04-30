@@ -19,12 +19,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button, buttonVariants } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from '@/components/ui/card';
+import { CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { PremiumCard } from '@/components/cards/premium-card';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import {
   Popover,
@@ -551,8 +547,7 @@ export const ScriptView: FC<{
   });
 
   return (
-    <Card
-      variant="premium"
+    <PremiumCard
       className={cn(
         'relative flex flex-col min-h-0 max-h-full',
         flat && 'border-none'
@@ -902,6 +897,6 @@ export const ScriptView: FC<{
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </PremiumCard>
   );
 };

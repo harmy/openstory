@@ -3,7 +3,13 @@ import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Select } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -224,35 +230,67 @@ export const EvalToolbar: React.FC<EvalToolbarProps> = ({
             className="w-48"
           />
           <Select
-            options={analysisModelOptions}
             value={filters.analysisModel || 'all'}
-            onChange={handleAnalysisModelChange}
-            placeholder="Analysis Model"
-            className="w-44"
-          />
+            onValueChange={handleAnalysisModelChange}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Analysis Model" />
+            </SelectTrigger>
+            <SelectContent>
+              {analysisModelOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select
-            options={imageModelOptions}
             value={filters.imageModel || 'all'}
-            onChange={handleImageModelChange}
-            placeholder="Image Model"
-            className="w-44"
-          />
+            onValueChange={handleImageModelChange}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Image Model" />
+            </SelectTrigger>
+            <SelectContent>
+              {imageModelOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {availableWorkflows.length > 0 && (
             <Select
-              options={workflowOptions}
               value={filters.workflow || 'all'}
-              onChange={handleWorkflowChange}
-              placeholder="Workflow"
-              className="w-52"
-            />
+              onValueChange={handleWorkflowChange}
+            >
+              <SelectTrigger className="w-52">
+                <SelectValue placeholder="Workflow" />
+              </SelectTrigger>
+              <SelectContent>
+                {workflowOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
           <Select
-            options={aspectRatioOptions}
             value={filters.aspectRatio || 'all'}
-            onChange={handleAspectRatioChange}
-            placeholder="Aspect Ratio"
-            className="w-36"
-          />
+            onValueChange={handleAspectRatioChange}
+          >
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Aspect Ratio" />
+            </SelectTrigger>
+            <SelectContent>
+              {aspectRatioOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <label
             htmlFor="filter-has-merged-video"
             className="flex items-center gap-2 text-sm cursor-pointer select-none"
@@ -324,16 +362,27 @@ export const EvalToolbar: React.FC<EvalToolbarProps> = ({
                   className="flex items-center gap-1 px-2 py-1"
                 >
                   <Select
-                    options={sortFieldOptions}
                     value={criteria.field}
-                    onChange={(value) => {
+                    onValueChange={(value) => {
                       if (isValidSortField(value)) {
                         updateSortField(index, value);
                       }
                     }}
-                    className="h-auto p-0 border-0 bg-transparent w-auto min-w-16"
-                    size="sm"
-                  />
+                  >
+                    <SelectTrigger
+                      size="sm"
+                      className="h-auto p-0 border-0 bg-transparent w-auto min-w-16"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sortFieldOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button
                     variant="ghost"
                     size="icon"

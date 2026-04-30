@@ -3,7 +3,13 @@ import { ImageModelSelector } from '@/components/model/image-model-selector';
 import { MotionModelSelector } from '@/components/model/motion-model-selector';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -576,21 +582,25 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
       <div className="md:hidden">
         <Select
           value={selectedTab}
-          onChange={(value) => {
+          onValueChange={(value) => {
             if (isValidTabValue(value)) {
               onTabChange(value);
             }
           }}
-          options={[
-            { value: 'scene-variants', label: 'Variants' },
-            { value: 'script', label: 'Script' },
-            { value: 'cast', label: 'Cast' },
-            { value: 'location', label: 'Location' },
-            { value: 'elements', label: 'Elements' },
-            { value: 'image-prompt', label: 'Image' },
-            { value: 'motion-prompt', label: 'Motion' },
-          ]}
-        />
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="scene-variants">Variants</SelectItem>
+            <SelectItem value="script">Script</SelectItem>
+            <SelectItem value="cast">Cast</SelectItem>
+            <SelectItem value="location">Location</SelectItem>
+            <SelectItem value="elements">Elements</SelectItem>
+            <SelectItem value="image-prompt">Image</SelectItem>
+            <SelectItem value="motion-prompt">Motion</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Desktop: Tab buttons */}
