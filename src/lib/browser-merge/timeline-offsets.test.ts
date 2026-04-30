@@ -1,27 +1,10 @@
 /**
  * Unit test for the scene timeline arithmetic used by `merge-sequence.ts`.
  * Pure math; no Mediabunny or WebCodecs surface needed.
- *
- * Mirrors the offset-accumulation that happens in concatVideoTracks +
- * mergeSequence: given each scene's actual encoded duration (NOT
- * frame.durationMs — see issue #638 Q1), the per-scene start offsets are the
- * running cumulative sum.
  */
 
 import { describe, expect, test } from 'bun:test';
-
-function computeSceneOffsets(durations: number[]): {
-  offsets: number[];
-  total: number;
-} {
-  const offsets: number[] = [];
-  let acc = 0;
-  for (const d of durations) {
-    offsets.push(acc);
-    acc += d;
-  }
-  return { offsets, total: acc };
-}
+import { computeSceneOffsets } from './timeline-offsets';
 
 describe('scene timeline offsets', () => {
   test('empty list yields zero total and empty offsets', () => {

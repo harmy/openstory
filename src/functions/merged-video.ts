@@ -62,10 +62,10 @@ export const requestMergedUploadUrlFn = createServerFn({ method: 'POST' })
         mergedVideoError: null,
       });
 
-    void getGenerationChannel(context.sequence.id).emit(
-      'generation.merge:progress',
-      { step: 'video', status: 'merging' }
-    );
+    await emitMergeProgress(context.sequence.id, {
+      step: 'video',
+      status: 'merging',
+    });
 
     return {
       uploadUrl: upload.uploadUrl,
@@ -118,14 +118,11 @@ export const commitMergedVideoFn = createServerFn({ method: 'POST' })
         mergedVideoError: null,
       });
 
-    void getGenerationChannel(context.sequence.id).emit(
-      'generation.merge:progress',
-      {
-        step: 'audio-video',
-        status: 'completed',
-        mergedVideoUrl: publicUrl,
-      }
-    );
+    await emitMergeProgress(context.sequence.id, {
+      step: 'audio-video',
+      status: 'completed',
+      mergedVideoUrl: publicUrl,
+    });
 
     return { mergedVideoUrl: publicUrl, mergedVideoPath: data.path };
   });
@@ -134,6 +131,10 @@ export const commitMergedVideoFn = createServerFn({ method: 'POST' })
  * Record a browser-merge failure (capability probe failure, network error
  * mid-upload, encode failure, abort, etc.) and emit the matching realtime
  * event so the existing `theatre-view.tsx` failure branch can render.
+ *
+ * Guarded so a stale call cannot clobber a row that already reached
+ * `'completed'` (e.g. server-side ffmpeg merge finished while the browser-side
+ * pipeline was still attempting and then errored).
  */
 export const failMergedVideoFn = createServerFn({ method: 'POST' })
   .middleware([sequenceAccessMiddleware])
@@ -146,6 +147,17 @@ export const failMergedVideoFn = createServerFn({ method: 'POST' })
     )
   )
   .handler(async ({ context, data }) => {
+    if (context.sequence.mergedVideoStatus !== 'merging') {
+      console.warn(
+        `failMergedVideoFn: ignoring failure for sequence ${context.sequence.id} in status "${context.sequence.mergedVideoStatus}"`
+      );
+      return { ok: false, reason: 'not-merging' as const };
+    }
+
+    console.error(
+      `Browser merge failed for sequence ${context.sequence.id}: ${data.error}`
+    );
+
     await context.scopedDb
       .sequence(context.sequence.id)
       .updateMergedVideoFields({
@@ -153,10 +165,41 @@ export const failMergedVideoFn = createServerFn({ method: 'POST' })
         mergedVideoError: data.error,
       });
 
-    void getGenerationChannel(context.sequence.id).emit(
-      'generation.merge:progress',
-      { step: 'video', status: 'failed' }
-    );
+    await emitMergeProgress(context.sequence.id, {
+      step: 'video',
+      status: 'failed',
+    });
 
-    return { ok: true };
+    return { ok: true as const };
   });
+
+type MergeProgressEvent =
+  | { step: 'video'; status: 'merging' | 'failed' }
+  | {
+      step: 'audio-video';
+      status: 'completed';
+      mergedVideoUrl: string;
+    };
+
+/**
+ * Emit a merge-progress event and surface (rather than swallow) realtime
+ * failures: a silent emit failure leaves the client UI hung in 'merging' even
+ * when the DB row is correct, so the only safe behavior is to log and let the
+ * caller treat it as a hard error if they need at-least-once delivery.
+ */
+async function emitMergeProgress(
+  sequenceId: string,
+  event: MergeProgressEvent
+): Promise<void> {
+  try {
+    await getGenerationChannel(sequenceId).emit(
+      'generation.merge:progress',
+      event
+    );
+  } catch (error) {
+    console.error(
+      `Failed to emit merge:progress for sequence ${sequenceId}`,
+      error
+    );
+  }
+}

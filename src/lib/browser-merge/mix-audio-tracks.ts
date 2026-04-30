@@ -67,7 +67,7 @@ export async function mixAndEncodeAudio(args: {
   const sceneBuffers: Array<AudioBuffer | null> = [];
   for (let i = 0; i < sceneBlobs.length; i++) {
     if (signal?.aborted) throw new Error('Browser merge aborted');
-    const buffer = await decodeSceneAudio(sceneBlobs[i]);
+    const buffer = await decodeSceneAudio(sceneBlobs[i], i);
     sceneBuffers.push(buffer);
     onProgress?.({
       phase: 'decode-scenes',
@@ -101,7 +101,10 @@ export async function mixAndEncodeAudio(args: {
   });
 }
 
-async function decodeSceneAudio(blob: Blob): Promise<AudioBuffer | null> {
+async function decodeSceneAudio(
+  blob: Blob,
+  sceneIndex: number
+): Promise<AudioBuffer | null> {
   const input = new Input({
     formats: ALL_FORMATS,
     source: new BlobSource(blob),
@@ -110,35 +113,83 @@ async function decodeSceneAudio(blob: Blob): Promise<AudioBuffer | null> {
   if (!audioTrack) return null;
 
   const decoderConfig = await audioTrack.getDecoderConfig();
-  if (!decoderConfig) return null;
+  if (!decoderConfig) {
+    throw new Error(
+      `Scene ${sceneIndex} has an audio track but no decoder config`
+    );
+  }
 
   const sampleRate = await audioTrack.getSampleRate();
   const numberOfChannels = Math.max(1, await audioTrack.getNumberOfChannels());
 
   const decoded: AudioData[] = [];
+  // WebCodecs invokes `error` async on its own task; throwing from the callback
+  // does NOT reject the surrounding `await flush()`. Capture and rethrow.
+  let decoderError: Error | null = null;
   const decoder = new AudioDecoder({
     output: (data) => decoded.push(data),
     error: (e) => {
-      throw e;
+      decoderError = e instanceof Error ? e : new Error(String(e));
     },
   });
   decoder.configure(decoderConfig);
 
   const sink = new EncodedPacketSink(audioTrack);
   for await (const packet of sink.packets()) {
+    if (decoderError) throw decoderError;
     decoder.decode(packet.toEncodedAudioChunk());
   }
   await decoder.flush();
   decoder.close();
+  if (decoderError) throw decoderError;
 
-  // Size the buffer from actual decoded frames, not the muxed track duration.
-  // AAC priming/padding makes the decoder emit ~2k more frames than
-  // `computeDuration` reports; sizing from the muxed duration overflows the
-  // typed array and `Float32Array.set(arr, offset)` throws "offset is out of
-  // bounds" once the write cursor passes that pre-allocated length.
+  const { channelData, totalFrames } = assembleChannelData(
+    decoded,
+    numberOfChannels
+  );
+  if (totalFrames === 0) {
+    throw new Error(
+      `Scene ${sceneIndex} audio decoder produced zero frames; the source MP4 may be corrupt`
+    );
+  }
+
+  const buffer = new AudioBuffer({
+    length: totalFrames,
+    numberOfChannels,
+    sampleRate,
+  });
+  for (let c = 0; c < numberOfChannels; c++) {
+    buffer.copyToChannel(toArrayBufferBacked(channelData[c]), c);
+  }
+  return buffer;
+}
+
+/**
+ * Channel-buffer assembly from decoded AudioData frames. Sizing is from the
+ * actual frame count, NOT the muxed track duration: AAC priming/padding makes
+ * the decoder emit ~2k more frames than `computeDuration` reports, and sizing
+ * from duration overflows the typed array (`Float32Array.set` throws "offset
+ * is out of bounds" once the write cursor passes the pre-allocated length).
+ *
+ * Exposed so the priming/padding-overflow regression has a unit test that
+ * exercises the actual production code path.
+ */
+type DecodedAudioFrame = {
+  readonly numberOfFrames: number;
+  readonly numberOfChannels: number;
+  copyTo(
+    dest: Float32Array,
+    opts: { planeIndex: number; format: 'f32-planar' }
+  ): void;
+  close(): void;
+};
+
+export function assembleChannelData(
+  decoded: ReadonlyArray<DecodedAudioFrame>,
+  numberOfChannels: number
+): { channelData: Float32Array[]; totalFrames: number } {
   let totalFrames = 0;
   for (const data of decoded) totalFrames += data.numberOfFrames;
-  if (totalFrames === 0) return null;
 
   const channelData: Float32Array[] = [];
   for (let c = 0; c < numberOfChannels; c++) {
@@ -161,15 +212,7 @@ async function decodeSceneAudio(blob: Blob): Promise<AudioBuffer | null> {
     data.close();
   }
 
-  const buffer = new AudioBuffer({
-    length: totalFrames,
-    numberOfChannels,
-    sampleRate,
-  });
-  for (let c = 0; c < numberOfChannels; c++) {
-    buffer.copyToChannel(toArrayBufferBacked(channelData[c]), c);
-  }
-  return buffer;
+  return { channelData, totalFrames };
 }
 
 async function decodeAndNormalizeMusic(blob: Blob): Promise<AudioBuffer> {
@@ -282,6 +325,9 @@ async function encodeAacAndPushPackets(args: {
 
   let firstPacketEmitted = false;
   const pendingAdds: Promise<void>[] = [];
+  // See `decodeSceneAudio` — WebCodecs error callbacks fire async and a `throw`
+  // there does not propagate through `flush()`. Capture and rethrow.
+  let encoderError: Error | null = null;
 
   const encoder = new AudioEncoder({
     output: (chunk, meta) => {
@@ -294,7 +340,7 @@ async function encodeAacAndPushPackets(args: {
       }
     },
     error: (e) => {
-      throw e;
+      encoderError = e instanceof Error ? e : new Error(String(e));
     },
   });
   encoder.configure({
@@ -306,11 +352,11 @@ async function encodeAacAndPushPackets(args: {
 
   for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
     if (signal?.aborted) throw new Error('Browser merge aborted');
+    if (encoderError) throw encoderError;
     const start = chunkIndex * chunkFrames;
     const end = Math.min(start + chunkFrames, totalFrames);
     const frames = end - start;
 
-    // Build interleaved f32 PCM for this chunk.
     const interleaved = new Float32Array(frames * numberOfChannels);
     for (let f = 0; f < frames; f++) {
       for (let c = 0; c < numberOfChannels; c++) {
@@ -337,6 +383,7 @@ async function encodeAacAndPushPackets(args: {
 
   await encoder.flush();
   encoder.close();
+  if (encoderError) throw encoderError;
   await Promise.all(pendingAdds);
   onProgress?.(totalChunks, totalChunks);
 }

@@ -3,9 +3,8 @@
  * scene video (in order) plus a single music URL, produces a Blob containing
  * a finalized MP4 (H.264 + AAC) ready to upload to R2.
  *
- * Hard-caps total duration at 5 minutes for the first cut — past that point,
- * BufferTarget memory pressure can OOM mobile browsers. A future iteration
- * can switch to StreamTarget piped directly into the presigned upload.
+ * Hard-caps total duration at 5 minutes — past that point, BufferTarget
+ * memory pressure can OOM mobile browsers.
  */
 
 import {
@@ -19,6 +18,7 @@ import {
 import { concatVideoTracks } from './concat-video-tracks';
 import { mixAndEncodeAudio } from './mix-audio-tracks';
 import { probeBrowserMergeCapabilities } from './probe';
+import { computeSceneOffsets } from './timeline-offsets';
 import type {
   MergeProgressCallback,
   MergeSequenceInput,
@@ -85,12 +85,9 @@ export async function mergeSequence(
       );
     }
 
-    const sceneOffsetsSeconds: number[] = [];
-    let acc = 0;
-    for (const dur of concatResult.sceneDurationsSeconds) {
-      sceneOffsetsSeconds.push(acc);
-      acc += dur;
-    }
+    const { offsets: sceneOffsetsSeconds } = computeSceneOffsets(
+      concatResult.sceneDurationsSeconds
+    );
 
     await mixAndEncodeAudio({
       sceneBlobs,

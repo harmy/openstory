@@ -88,9 +88,7 @@ export function useBrowserMerge(sequence: Sequence): BrowserMergeState {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        const message =
-          error instanceof Error ? error.message : 'Browser merge failed';
-        toast.error(message);
+        toast.error(toMergeErrorMessage(error));
         posthog.captureException(error, { sequence_id: sequence.id });
       })
       .finally(() => {
@@ -140,11 +138,35 @@ async function runMerge(args: {
       data: { sequenceId, path: reservation.path },
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Browser merge failed';
-    await failMergedVideoFn({ data: { sequenceId, error: message } }).catch(
-      () => {}
-    );
+    const message = toMergeErrorMessage(error);
+    try {
+      await failMergedVideoFn({ data: { sequenceId, error: message } });
+    } catch (failError) {
+      // Server didn't accept the failure record — the DB row stays in
+      // 'merging' until something else clears it. Log so we can detect
+      // stranded reservations; rethrow the original error so the caller
+      // surfaces the *root* cause to the user, not the secondary failure.
+      console.error(
+        'failMergedVideoFn rejected; sequence may be stuck in "merging"',
+        { sequenceId, originalError: error, failError }
+      );
+    }
     throw error;
   }
+}
+
+const MAX_MERGE_ERROR_LENGTH = 500;
+
+function toMergeErrorMessage(error: unknown): string {
+  const raw =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : 'Browser merge failed';
+  // Server-side Zod schema caps error at 500 chars; truncate so the fail call
+  // doesn't bounce on stack-bearing or 4xx-body messages from R2/network.
+  return raw.length <= MAX_MERGE_ERROR_LENGTH
+    ? raw
+    : `${raw.slice(0, MAX_MERGE_ERROR_LENGTH - 1)}…`;
 }

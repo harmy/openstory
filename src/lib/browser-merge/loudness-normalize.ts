@@ -15,9 +15,6 @@
  * Filter coefficients are taken from BS.1770-4 (48 kHz reference). We resample
  * by re-deriving the bilinear coefficients for the input sample rate so it
  * works on whatever rate the source AudioBuffer happens to be at.
- *
- * The constant DEFAULT_MUSIC_LOUDNESS_LUFS = −24 mirrors the value in the
- * about-to-be-deleted server file `src/lib/audio/loudness-normalize.ts:21`.
  */
 
 export const DEFAULT_MUSIC_LOUDNESS_LUFS = -24;
