@@ -1,34 +1,25 @@
 /**
- * Drizzle Database Client
- * Centralized database client using libSQL (Turso)
+ * Drizzle Database Client — local development
+ * Uses Bun's native sqlite for zero external dependencies.
  */
 
-import { createClient } from '@libsql/client';
-import { drizzle } from 'drizzle-orm/libsql';
+import { Database } from 'bun:sqlite';
+import { drizzle } from 'drizzle-orm/bun-sqlite';
 import { relations } from './schema/relations';
 
 console.log('[db-local] Loading client');
 
 const dbUrl = process.env.DATABASE_URL || 'file:local.db';
-const client = createClient({ url: dbUrl });
+const filename = dbUrl.startsWith('file:')
+  ? dbUrl.slice('file:'.length)
+  : dbUrl;
+const sqlite = new Database(filename, { create: true });
 
-// Set busy_timeout so concurrent queries wait for locks instead of failing with SQLITE_BUSY.
-// Remote Turso connections don't support PRAGMAs and will reject this with a "not supported"
-// error — that's expected and benign. Anything else (broken DATABASE_URL, missing file perms)
-// gets logged so we have a breadcrumb instead of silent failures at first query time.
-client.execute('PRAGMA busy_timeout = 5000').catch((err: unknown) => {
-  const message = err instanceof Error ? err.message : String(err);
-  if (/not supported|pragma/i.test(message)) return;
-  console.warn('[db-local] PRAGMA busy_timeout failed:', message);
-});
+// Wait for locks instead of failing with SQLITE_BUSY when concurrent queries collide.
+sqlite.prepare('PRAGMA busy_timeout = 5000').run();
 
-/**
- * Drizzle database instance
- * Uses the libSQL client and includes all schema definitions
- * Configured to use snake_case in database and camelCase in application
- */
 const _db = drizzle({
-  client,
+  client: sqlite,
   relations,
   logger: false,
   casing: 'snake_case',

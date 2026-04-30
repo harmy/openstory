@@ -9,9 +9,11 @@ OpenStory is an open-source AI video production platform. This guide walks you t
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) (v1.2+)
+- [Bun](https://bun.com/docs/installation) >= 1.3.0
 - [Git](https://git-scm.com)
-- A [Turso](https://turso.tech) account (for the database)
+- [Docker](https://www.docker.com) — for the QStash workflow emulator ([OrbStack](https://orbstack.dev) recommended on macOS)
+
+No external database is required for local development — `bun setup` configures a local SQLite file (`local.db`) automatically.
 
 ## Quick Start
 
@@ -23,38 +25,28 @@ cd openstory
 # Install dependencies
 bun install
 
-# Auto-configure local dev environment
+# Interactive setup — checks prerequisites, generates BETTER_AUTH_SECRET,
+# and configures local SQLite + QStash defaults in .env.local
 bun setup
-
-# Set up the database
-bun db:setup
 ```
 
 ## Running the Dev Server
-
-OpenStory requires two terminals during development:
-
-**Terminal 1 — Async job processing:**
-
-```bash
-bun qstash:dev
-```
-
-**Terminal 2 — Dev server:**
 
 ```bash
 bun dev
 ```
 
+This single command runs everything in parallel: database migration and seeding, the dev server, the QStash workflow emulator (Docker), and the Stripe listener.
+
 The app will be available at [http://localhost:3000](http://localhost:3000).
 
 ## Environment Variables
 
-Run `bun setup` to automatically configure your local `.env` file. See `.env.example` for the full list of available environment variables.
+`bun setup` writes a working `.env.local` for you. See [`.env.example`](https://github.com/openstory-so/openstory/blob/main/.env.example) for the full list of available environment variables, including optional services like AI keys, storage, and OAuth providers.
 
 ## Database
 
-OpenStory uses [Turso](https://turso.tech) (libSQL/SQLite) with [Drizzle ORM](https://orm.drizzle.team).
+Local development uses a SQLite file (`local.db`) via the [libSQL](https://github.com/tursodatabase/libsql) client and [Drizzle ORM](https://orm.drizzle.team) — no account or remote service required.
 
 ```bash
 # Generate migrations from schema changes
@@ -62,7 +54,12 @@ bun db:generate
 
 # Apply migrations
 bun db:migrate
+
+# Open Drizzle Studio
+bun db:studio
 ```
+
+Production deployments use Cloudflare D1 (default) or Turso. See the [Cloudflare deployment guide](/docs/deployment/cloudflare) for details.
 
 ## Next Steps
 
