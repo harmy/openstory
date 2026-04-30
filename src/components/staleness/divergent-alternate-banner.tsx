@@ -1,5 +1,10 @@
 import { Info } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type {
@@ -77,24 +82,25 @@ export const DivergentAlternateBanner: React.FC<
       data-variant-id={variantId}
       data-artifact={artifact}
       data-entity-type={entityType}
-      className={cn('flex flex-row items-center gap-3', className)}
+      className={className}
     >
       <Info aria-hidden="true" />
-      <AlertDescription className="col-start-2 flex-1 self-center">
+      <AlertTitle>Alternate version available</AlertTitle>
+      <AlertDescription>
         An alternate {ARTIFACT_LABEL[artifact]} was generated with the inputs
         you had at the time.
       </AlertDescription>
-      <div className="ml-auto flex shrink-0 items-center gap-2">
+      <AlertAction className="flex items-center gap-1">
         <Button type="button" size="sm" variant="outline" onClick={onCompare}>
           Compare
         </Button>
-        <Button type="button" size="sm" variant="default" onClick={onPromote}>
+        <Button type="button" size="sm" onClick={onPromote}>
           Promote
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={onDiscard}>
           Discard
         </Button>
-      </div>
+      </AlertAction>
     </Alert>
   );
 };

@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -92,15 +97,16 @@ export const StalenessIndicator: React.FC<StalenessIndicatorProps> = ({
       data-artifact={artifact}
       data-entity-type={entityType}
       className={cn(
-        'flex flex-row items-center gap-3 border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-50',
+        'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-50',
         className
       )}
     >
       <AlertTriangle aria-hidden="true" />
-      <AlertDescription className="col-start-2 flex-1 self-center">
-        Inputs changed since this {ARTIFACT_LABEL[artifact]} was generated.
+      <AlertTitle>Inputs changed</AlertTitle>
+      <AlertDescription>
+        This {ARTIFACT_LABEL[artifact]} was generated from earlier inputs.
       </AlertDescription>
-      <div className="ml-auto flex shrink-0 items-center gap-2">
+      <AlertAction className="flex items-center gap-1">
         <Button
           type="button"
           size="sm"
@@ -120,7 +126,7 @@ export const StalenessIndicator: React.FC<StalenessIndicatorProps> = ({
             <X aria-hidden="true" />
           </Button>
         )}
-      </div>
+      </AlertAction>
     </Alert>
   );
 };
