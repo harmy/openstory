@@ -21,6 +21,8 @@ import {
   Link,
   Download,
 } from 'lucide-react';
+import { useBrowserMerge } from '@/components/theatre/use-browser-merge';
+import type { MergeProgress } from '@/lib/browser-merge';
 import { usePostHog } from '@posthog/react';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
@@ -39,6 +41,7 @@ export const TheatreView: React.FC<TheatreViewProps> = ({
   const { mergedVideoStatus, mergedVideoUrl, mergedVideoError, aspectRatio } =
     sequence;
   const posthog = usePostHog();
+  const browserMerge = useBrowserMerge(sequence);
 
   const handleCopyVideoUrl = useCallback(async () => {
     if (!mergedVideoUrl) return;
@@ -72,7 +75,11 @@ export const TheatreView: React.FC<TheatreViewProps> = ({
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-16">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <p className="text-muted-foreground">Merging video segments…</p>
+        <p className="text-muted-foreground">
+          {browserMerge.isRunning && browserMerge.progress
+            ? formatMergeProgress(browserMerge.progress)
+            : 'Merging video segments…'}
+        </p>
       </div>
     );
   }
@@ -101,6 +108,19 @@ export const TheatreView: React.FC<TheatreViewProps> = ({
               <Download className="h-4 w-4" />
               Download video
             </DropdownMenuItem>
+            {browserMerge.isEnabled && (
+              <DropdownMenuItem
+                onClick={browserMerge.start}
+                disabled={browserMerge.isRunning}
+              >
+                {browserMerge.isRunning ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Film className="h-4 w-4" />
+                )}
+                Re-merge in browser (beta)
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
         <VideoPlayer src={mergedVideoUrl} aspectRatio={aspectRatio} />
@@ -119,18 +139,36 @@ export const TheatreView: React.FC<TheatreViewProps> = ({
             {mergedVideoError}
           </p>
         )}
-        {onGenerateMergedVideo && (
-          <Button onClick={onGenerateMergedVideo} disabled={isGenerating}>
-            {isGenerating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Retrying…
-              </>
-            ) : (
-              'Retry Merge'
-            )}
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {onGenerateMergedVideo && (
+            <Button onClick={onGenerateMergedVideo} disabled={isGenerating}>
+              {isGenerating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Retrying…
+                </>
+              ) : (
+                'Retry Merge'
+              )}
+            </Button>
+          )}
+          {browserMerge.isEnabled && (
+            <Button
+              variant="outline"
+              onClick={browserMerge.start}
+              disabled={browserMerge.isRunning}
+            >
+              {browserMerge.isRunning ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Merging in browser…
+                </>
+              ) : (
+                'Merge in browser (beta)'
+              )}
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
@@ -144,25 +182,62 @@ export const TheatreView: React.FC<TheatreViewProps> = ({
         The merged video will be generated automatically once all motion
         segments are complete.
       </p>
-      {onGenerateMergedVideo && (
-        <Button
-          variant="outline"
-          onClick={onGenerateMergedVideo}
-          disabled={isGenerating}
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Generating…
-            </>
-          ) : (
-            'Generate Now'
-          )}
-        </Button>
-      )}
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {onGenerateMergedVideo && (
+          <Button
+            variant="outline"
+            onClick={onGenerateMergedVideo}
+            disabled={isGenerating}
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Generating…
+              </>
+            ) : (
+              'Generate Now'
+            )}
+          </Button>
+        )}
+        {browserMerge.isEnabled && (
+          <Button
+            variant="outline"
+            onClick={browserMerge.start}
+            disabled={browserMerge.isRunning}
+          >
+            {browserMerge.isRunning ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Merging in browser…
+              </>
+            ) : (
+              'Merge in browser (beta)'
+            )}
+          </Button>
+        )}
+      </div>
     </div>
   );
 };
+
+function formatMergeProgress(progress: MergeProgress): string {
+  const phaseLabel: Record<MergeProgress['phase'], string> = {
+    fetch: 'Downloading scenes',
+    decode: 'Stitching video',
+    mix: 'Mixing audio',
+    encode: 'Encoding audio',
+    finalize: 'Finalizing',
+  };
+  const label = phaseLabel[progress.phase];
+  if (progress.total > 0) {
+    const pct = Math.min(
+      100,
+      Math.round((progress.completed / progress.total) * 100)
+    );
+    return `${label}… ${pct}%`;
+  }
+  return `${label}…`;
+}
 
 export const TheatreViewSkeleton: React.FC = () => (
   <Skeleton className="aspect-video w-full" />

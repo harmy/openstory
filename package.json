@@ -165,6 +165,7 @@
     "html-react-parser": "^6.0.1",
     "input-otp": "^1.4.2",
     "lucide-react": "^1.8.0",
+    "mediabunny": "^1.42.0",
     "mermaid": "^11.14.0",
     "nitro": "^3.0.260415-beta",
     "partial-json": "^0.1.7",

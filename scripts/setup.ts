@@ -2124,13 +2124,12 @@ async function main() {
     }
   }
 
-  // Configure CORS on R2 bucket for presigned uploads (local dev & non-CF deploys)
-  // Cloudflare Workers use R2 bindings server-side, so CORS is not needed there.
-  if (
-    vars.has('R2_BUCKET_NAME') &&
-    vars.has('R2_ACCESS_KEY_ID') &&
-    vars.get('DEPLOY_PLATFORM') !== 'cloudflare'
-  ) {
+  // Configure CORS on R2 bucket. Needed for:
+  //   - Presigned PUT uploads from the browser (S3-style deployments).
+  //   - Browser-side fetches from JS (e.g. browser-merge in #638) on every
+  //     deployment, including Cloudflare. Native HTML elements (<video>,
+  //     <img>, <a>) load R2 cross-origin without CORS, but `fetch()` does not.
+  if (vars.has('R2_BUCKET_NAME') && vars.has('R2_ACCESS_KEY_ID')) {
     const setupCors = checkCancel(
       await p.confirm({
         message:
