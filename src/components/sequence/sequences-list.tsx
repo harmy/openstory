@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useSequences } from '@/hooks/use-sequences';
 import { getAspectRatioData } from '@/lib/constants/aspect-ratios';
-import { formatDistanceToNow } from '@/lib/utils';
+import { formatDistanceToNow } from '@/lib/format-date';
 import { formatDuration } from '@/lib/utils/format-duration';
 import { Route as sequencesScenesRoute } from '@/routes/_protected/sequences/$id/scenes';
 import { Calendar, Clock, Timer, VideoIcon } from 'lucide-react';

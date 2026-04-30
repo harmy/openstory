@@ -1,6 +1,12 @@
 import { Link, useMatchRoute, useNavigate } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
-import { Select } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   FileText,
   Film,
@@ -108,9 +114,19 @@ export const SequenceTabs: React.FC<SequenceTabsProps> = ({ sequenceId }) => {
       <div className="md:hidden py-2">
         <Select
           value={activeHref}
-          onChange={(value) => void navigate({ to: value })}
-          options={tabs.map((tab) => ({ value: tab.href, label: tab.label }))}
-        />
+          onValueChange={(value) => void navigate({ to: value })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {tabs.map((tab) => (
+              <SelectItem key={tab.href} value={tab.href}>
+                {tab.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </>
   );

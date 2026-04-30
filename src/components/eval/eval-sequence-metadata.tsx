@@ -4,7 +4,7 @@ import { ModelBadge } from '@/components/model/model-badge';
 import type { SequenceWithFrames } from '@/hooks/use-sequences-with-frames';
 import { getImageModelById } from '@/lib/ai/models';
 import { getAspectRatioData } from '@/lib/constants/aspect-ratios';
-import { formatDistanceToNow } from '@/lib/utils';
+import { formatDistanceToNow } from '@/lib/format-date';
 import { formatDuration } from '@/lib/utils/format-duration';
 import { Route as sequencesScenesRoute } from '@/routes/_protected/sequences/$id/scenes';
 import { Link } from '@tanstack/react-router';

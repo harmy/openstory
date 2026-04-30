@@ -19,12 +19,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button, buttonVariants } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from '@/components/ui/card';
+import { CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { PremiumCard } from '@/components/cards/premium-card';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import {
   Popover,
@@ -551,8 +547,7 @@ export const ScriptView: FC<{
   });
 
   return (
-    <Card
-      variant="premium"
+    <PremiumCard
       className={cn(
         'relative flex flex-col min-h-0 max-h-full',
         flat && 'border-none'
@@ -752,7 +747,7 @@ export const ScriptView: FC<{
           </div>
         </CardContent>
 
-        <CardFooter className="shrink-0 flex-col gap-4 border-t py-4 border-border/30">
+        <CardFooter className="shrink-0 flex-col gap-4 border-t border-border/30 bg-transparent px-6 py-4">
           {/* Footer row - stacks on mobile, inline on desktop */}
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             {/* Meta info - hidden on mobile */}
@@ -902,6 +897,6 @@ export const ScriptView: FC<{
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </PremiumCard>
   );
 };
