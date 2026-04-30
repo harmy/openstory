@@ -61,7 +61,10 @@ export function createBillingReadMethods(db: Database, teamId: string) {
 
     // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
     if (!row) {
-      await db.insert(credits).values({ teamId, balance: 0 });
+      await db
+        .insert(credits)
+        .values({ teamId, balance: 0 })
+        .onConflictDoNothing();
       return ZERO_MICROS;
     }
 
@@ -132,15 +135,23 @@ export function createBillingReadMethods(db: Database, teamId: string) {
       .limit(1);
 
     // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined
-    if (!row) {
-      const [created] = await db
-        .insert(teamBillingSettings)
-        .values({ teamId })
-        .returning();
-      return created;
-    }
+    if (row) return row;
 
-    return row;
+    const [inserted] = await db
+      .insert(teamBillingSettings)
+      .values({ teamId })
+      .onConflictDoNothing()
+      .returning();
+
+    if (inserted) return inserted;
+
+    // Lost the race — peer inserted between our SELECT and INSERT.
+    const [existing] = await db
+      .select()
+      .from(teamBillingSettings)
+      .where(eq(teamBillingSettings.teamId, teamId))
+      .limit(1);
+    return existing;
   }
 
   async function hasRedeemedGiftCode(): Promise<boolean> {
