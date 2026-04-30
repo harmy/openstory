@@ -34,7 +34,7 @@
     "setup:previews": "bun scripts/generate-style-previews.ts && bun scripts/upload-style-previews-to-r2.ts",
     "setup:system-previews": "bun scripts/generate-system-previews.ts && bun scripts/upload-system-previews-to-r2.ts",
     "upload:prompts": "bun --bun scripts/upload-all-prompts.ts",
-    "agent-harness": "bun --bun scripts/agent-harness/index.ts",
+    "agent-harness": "bunx --bun github:tombeckenham/agent-harness",
     "dev": "bun run --parallel dev:db stripe:dev qstash:dev",
     "dev:db": "bun --bun --sequential db:migrate:local db:seed:local dev:e2e",
     "dev:e2e": "bun --bun vite dev",
