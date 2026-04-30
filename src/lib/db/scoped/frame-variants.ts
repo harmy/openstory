@@ -16,6 +16,10 @@ export function createFrameVariantsMethods(db: Database) {
       variantType: VariantType,
       model: string
     ): Promise<FrameVariant | null> => {
+      // Scoped to the primary row (divergedAt IS NULL). Without this filter the
+      // partial-index split lets divergent alternates share the (frame, type,
+      // model) triple, so a bare select would non-deterministically return
+      // either the primary or one of the alternates.
       const result = await db
         .select()
         .from(frameVariants)
@@ -23,7 +27,8 @@ export function createFrameVariantsMethods(db: Database) {
           and(
             eq(frameVariants.frameId, frameId),
             eq(frameVariants.variantType, variantType),
-            eq(frameVariants.model, model)
+            eq(frameVariants.model, model),
+            sql`${frameVariants.divergedAt} IS NULL`
           )
         );
       return result[0] ?? null;
@@ -84,6 +89,10 @@ export function createFrameVariantsMethods(db: Database) {
             frameVariants.variantType,
             frameVariants.model,
           ],
+          // Targets the primary partial unique index; divergent alternates
+          // (divergedAt IS NOT NULL) sit in a separate index and are never
+          // touched by upsert.
+          targetWhere: sql`${frameVariants.divergedAt} IS NULL`,
           set: {
             url: sql.raw(`excluded."url"`),
             storagePath: sql.raw(`excluded."storage_path"`),
@@ -123,6 +132,8 @@ export function createFrameVariantsMethods(db: Database) {
       model: string,
       data: Partial<NewFrameVariant>
     ): Promise<FrameVariant | null> => {
+      // Scoped to the primary row (divergedAt IS NULL) so divergent alternates
+      // sharing the same (frame, type, model) triple are never overwritten.
       const result = await db
         .update(frameVariants)
         .set({ ...data, updatedAt: new Date() })
@@ -130,11 +141,47 @@ export function createFrameVariantsMethods(db: Database) {
           and(
             eq(frameVariants.frameId, frameId),
             eq(frameVariants.variantType, variantType),
-            eq(frameVariants.model, model)
+            eq(frameVariants.model, model),
+            sql`${frameVariants.divergedAt} IS NULL`
           )
         )
         .returning();
       return result.at(0) ?? null;
+    },
+
+    /**
+     * Insert a divergent alternate row. Idempotent on (frame, type, model,
+     * inputHash) within the divergent partial unique index so QStash retries
+     * of the same reconcile step don't collide on a row already inserted on a
+     * previous attempt. Returns null when the row already exists (caller has
+     * no use for the row beyond knowing the insert succeeded once).
+     *
+     * Pre-checks existence rather than `onConflictDoNothing` because drizzle's
+     * SQLite `onConflictDoNothing` does not emit the partial-index `WHERE`
+     * predicate after the target column list — without it SQLite cannot match
+     * the divergent partial unique index, and the conflict raises instead of
+     * being absorbed.
+     */
+    insertDivergent: async (
+      data: NewFrameVariant & { inputHash: string; divergedAt: Date }
+    ): Promise<FrameVariant | null> => {
+      const existing = await db
+        .select()
+        .from(frameVariants)
+        .where(
+          and(
+            eq(frameVariants.frameId, data.frameId),
+            eq(frameVariants.variantType, data.variantType),
+            eq(frameVariants.model, data.model),
+            eq(frameVariants.inputHash, data.inputHash),
+            sql`${frameVariants.divergedAt} IS NOT NULL`
+          )
+        );
+      if (existing.length > 0) {
+        return null;
+      }
+      const [variant] = await db.insert(frameVariants).values(data).returning();
+      return variant;
     },
 
     isStale: async (

@@ -1,0 +1,3 @@
+DROP INDEX IF EXISTS `frame_variants_frame_type_model_key`;--> statement-breakpoint
+CREATE UNIQUE INDEX `frame_variants_primary_key` ON `frame_variants` (`frame_id`,`variant_type`,`model`) WHERE "frame_variants"."diverged_at" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `frame_variants_divergent_key` ON `frame_variants` (`frame_id`,`variant_type`,`model`,`input_hash`) WHERE "frame_variants"."diverged_at" IS NOT NULL;

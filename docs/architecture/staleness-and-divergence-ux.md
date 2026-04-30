@@ -150,15 +150,17 @@ Not in v1. Listed here so it has a documented home when we pick it up.
 
 ## Backend prerequisites the UI assumes
 
-Two implementation details from the architecture doc that need to land before any of the divergence UI works correctly:
+Backend implementation details that need to be in place before the divergence UI works correctly:
 
-1. **`frame_variants` unique constraint.** Today: `(frameId, variantType, model)` (`src/lib/db/schema/frame-variants.ts:85`). Divergence routes into the same table tagged with the model, so a same-model divergent write would collide. #614 / #615 must either:
-   - drop and re-add the constraint to include `input_hash` (allowing many variants per model when inputs differ), or
-   - define a same-model overwrite policy (last-write-wins on the variant slot for that model).
-     The UI design _assumes the first_ (a frame can have multiple alternates of the same model that differ only in inputs). If the second is chosen, the comparison dialog still works but the corner dot needs to count `diverged_at IS NOT NULL` rows, not all variants.
-2. **`promptHash` vs `input_hash`.** `frame_variants.promptHash` already exists (`frame-variants.ts:67`). Either reuse it as the new `input_hash` (rename) or add `input_hash` as a separate column — #614's call. The UI reads through the scoped getter, so as long as one of them is the canonical staleness signal, the UI is unaffected.
+1. **`frame_variants` unique indexes** (resolved in #615). The schema now carries two partial unique indexes instead of a single `(frameId, variantType, model)` constraint:
+   - `frame_variants_primary_key` on `(frameId, variantType, model)` WHERE `diverged_at IS NULL` — at most one primary slot per model. `image-workflow`'s speculative upsert and convergent reconcile both target this index.
+   - `frame_variants_divergent_key` on `(frameId, variantType, model, input_hash)` WHERE `diverged_at IS NOT NULL` — divergent alternates distinguished by input-hash, so multiple divergences of the same model can coexist.
 
-These need a one-line clarification on the backend tickets before #614 starts.
+   Implication for the UI: the corner-dot count and the comparison dialog both query `diverged_at IS NOT NULL` rows. A frame can have multiple divergent alternates of the same model (one per distinct `input_hash`), and the dialog should list them in `diverged_at` order.
+
+2. **`promptHash` vs `input_hash`.** `frame_variants.promptHash` already exists (`frame-variants.ts`). Either reuse it as the new `input_hash` (rename) or add `input_hash` as a separate column — #614's call. The UI reads through the scoped getter, so as long as one of them is the canonical staleness signal, the UI is unaffected.
+
+   _Status_: Stage 1 added `input_hash` as a separate column alongside `promptHash`. `input_hash` is the canonical staleness signal; `promptHash` is unchanged.
 
 ## Out of scope for v1
 

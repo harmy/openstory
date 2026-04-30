@@ -30,8 +30,8 @@ import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import type {
   ImageWorkflowInput,
   StoryboardWorkflowInput,
-  UpscaleVariantWorkflowInput,
-  VariantWorkflowInput,
+  ShotVariantWorkflowInput,
+  UpscaleShotVariantWorkflowInput,
 } from '@/lib/workflow/types';
 import {
   matchCharactersToScene,
@@ -246,7 +246,7 @@ export const generateFrameVariantsFn = createServerFn({ method: 'POST' })
 
     const gridConfig = getVariantGridConfig(sequence.aspectRatio);
 
-    const workflowInput: VariantWorkflowInput = {
+    const workflowInput: ShotVariantWorkflowInput = {
       userId: user.id,
       teamId: sequence.teamId,
       sequenceId: sequence.id,
@@ -363,7 +363,7 @@ export const selectFrameVariantFn = createServerFn({ method: 'POST' })
       { errorMessage: 'Insufficient credits for variant upscale' }
     );
 
-    const workflowInput: UpscaleVariantWorkflowInput = {
+    const workflowInput: UpscaleShotVariantWorkflowInput = {
       userId: user.id,
       teamId: sequence.teamId,
       sequenceId: sequence.id,

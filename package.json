@@ -37,7 +37,7 @@
     "agent-harness": "bunx --bun github:tombeckenham/agent-harness",
     "dev": "bun run --parallel dev:db stripe:dev qstash:dev",
     "dev:db": "bun --bun --sequential db:migrate:local db:seed:local dev:e2e",
-    "dev:e2e": "bun --bun vite dev",
+    "dev:e2e": "bun --bun scripts/build-content-collections.ts && bun --bun vite dev",
     "stripe:dev": "source .env.local 2>/dev/null; [ -z \"${STRIPE_SECRET_KEY}\" ] && echo 'Skipping Stripe (no STRIPE_SECRET_KEY)' && exit 0; stripe listen --forward-to localhost:3000/api/billing/webhook --api-key=${STRIPE_SECRET_KEY}",
     "qstash:dev": "docker run -p 8080:8080 public.ecr.aws/upstash/qstash:latest qstash dev",
     "build": "vite build",

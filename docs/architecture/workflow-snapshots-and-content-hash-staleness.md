@@ -160,8 +160,16 @@ if (currentInputHash === context.snapshot.snapshotInputHash) {
 
 ### Where diverged results land
 
-- **Per-frame image/video/audio**: insert into `frame_variants` (`src/lib/db/schema/frame-variants.ts`) tagged with the model that produced them and the `snapshotInputHash` that scoped them. The variant table already supports `'image' | 'video' | 'audio'` types — no schema change beyond `input_hash` and `diverged_at` is needed for stage 1. The user sees an "alternate available" affordance and can promote it or regenerate from current inputs.
+- **Per-frame image/video/audio**: insert into `frame_variants` (`src/lib/db/schema/frame-variants.ts`) tagged with the model that produced them and the `snapshotInputHash` that scoped them. The user sees an "alternate available" affordance and can promote it or regenerate from current inputs.
+
+  The table carries two partial unique indexes:
+  - `frame_variants_primary_key` on `(frameId, variantType, model)` WHERE `diverged_at IS NULL` — at most one primary row per model. `image-workflow`'s speculative pre-write and convergent reconcile both target this slot.
+  - `frame_variants_divergent_key` on `(frameId, variantType, model, input_hash)` WHERE `diverged_at IS NOT NULL` — divergent alternates are inserted (not updated) and distinguished by `input_hash`, so multiple divergences of the same model coexist.
+
+  On divergence, the workflow performs three writes (revert frame thumbnail, revert primary variant row's speculative URL, insert divergent alternate). These should land in a transaction once `scopedDb` exposes one — see the "Outstanding hardening" notes on PR #633.
+
 - **Frame variant artifacts** (already-variant rows being regenerated): leave the row as-is but do not promote it to the frame's primary thumbnail/video/audio. The `diverged_at` timestamp marks the divergence for the UI.
+
 - **Sheet entities** (character, location, library location, talent), **sequence-level merged video**, **sequence-level music**, **prompts**: no variants infrastructure today. For stage 1 we **discard and re-queue**: log the divergence, emit a realtime event, trigger a new workflow with the current inputs. Each of these gets a proper variants table in later stages (see below).
 
 ### Realtime event
@@ -185,7 +193,7 @@ This gives the UI a single event to listen for across all four entity types with
 - **Scoped DB** (`src/lib/db/scoped/*`) is the only entry point. Staleness reads go through scoped getters; hash computation helpers accept a `ScopedDb` and use it. No code path bypasses team scoping.
 - **`createScopedWorkflow`** gains the optional `snapshot` extension described above — existing workflows keep working unchanged until they opt in.
 - **Status columns** stay `pending | generating | completed | failed`. Staleness does not become a fifth value. The UI composes `status === 'completed' && isStale(entity)` when it needs "completed but stale".
-- **`frame_variants`** becomes the divergence sink for frame artifacts, in addition to its existing role for per-model alternates. One column added (`diverged_at`), one column renamed if needed for clarity (`input_hash` already proposed).
+- **`frame_variants`** is the divergence sink for frame artifacts in addition to its existing role for per-model alternates. The unique key was split into two partial indexes (primary slot vs divergent alternates keyed by `input_hash`) so primaries and alternates of the same model coexist without overwriting each other. `input_hash` and `diverged_at` are columns on this table.
 
 ## Future stages
 
@@ -258,7 +266,7 @@ Answering every row of the original doc's decision table for our stack:
 Recommended build order for stage 1, each step independently shippable:
 
 1. `src/lib/ai/input-hash.ts` with the per-artifact helpers and their unit tests. No schema changes yet.
-2. Add `input_hash` and `diverged_at` columns to `frame_variants`, plus `input_hash` to the sheet tables. Backfill is unnecessary — null means "unknown, treat as non-stale".
+2. Add `input_hash` and `diverged_at` columns to `frame_variants`, plus `input_hash` to the sheet tables. Backfill is unnecessary — null means "unknown, treat as non-stale". Split the existing `(frameId, variantType, model)` unique index into `frame_variants_primary_key` (WHERE `diverged_at IS NULL`) and `frame_variants_divergent_key` on `(frameId, variantType, model, input_hash)` (WHERE `diverged_at IS NOT NULL`) so divergent alternates can coexist with the primary slot.
 3. Add the four `*_input_hash` columns to `frames`.
 4. Extend `createScopedWorkflow` with the optional `snapshot` config.
 5. Migrate **one** workflow end-to-end (`regenerateFramesWorkflow` is the highest-value target given it's the concrete bug described in the problem statement). Prove the pattern, including the divergence path into `frame_variants`.

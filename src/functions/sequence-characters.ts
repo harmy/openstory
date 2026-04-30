@@ -17,6 +17,21 @@ import type { RecastCharacterWorkflowInput } from '@/lib/workflow/types';
 
 import { authWithTeamMiddleware, sequenceAccessMiddleware } from './middleware';
 
+/**
+ * Recast accepts talents owned by the requesting team OR public talents.
+ * Mirrors the read-side ACL in `talent.getWithRelations`. Extracted for unit
+ * testing because this is a permission boundary and silent regressions here
+ * would let one team trigger recasts using another team's private talent.
+ */
+export function assertTalentAccessible(
+  talent: { teamId: string; isPublic: boolean | null },
+  contextTeamId: string
+): void {
+  if (talent.teamId !== contextTeamId && !talent.isPublic) {
+    throw new Error('Talent does not belong to your team');
+  }
+}
+
 /** Get all characters for a sequence with their assigned talent */
 export const getSequenceCharactersFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
@@ -69,9 +84,7 @@ export const recastCharacterFn = createServerFn({ method: 'POST' })
     if (!talentWithSheets) {
       throw new Error('Talent not found');
     }
-    if (talentWithSheets.teamId !== context.teamId) {
-      throw new Error('Talent does not belong to your team');
-    }
+    assertTalentAccessible(talentWithSheets, context.teamId);
 
     const defaultSheet =
       // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard

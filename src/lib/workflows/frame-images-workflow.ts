@@ -18,7 +18,7 @@ import type {
   FrameImagesWorkflowInput,
   FrameImagesWorkflowResult,
   ImageWorkflowInput,
-  VariantWorkflowInput,
+  ShotVariantWorkflowInput,
 } from '@/lib/workflow/types';
 import { getFalFlowControl } from './constants';
 import { generateImageWorkflow } from './image-workflow';
@@ -27,7 +27,7 @@ import {
   matchElementsToScene,
   matchLocationsToScene,
 } from './scene-matching';
-import { generateVariantWorkflow } from './variant-workflow';
+import { generateShotVariantWorkflow } from './shot-variant-workflow';
 
 export const frameImagesWorkflow = createScopedWorkflow<
   FrameImagesWorkflowInput,
@@ -163,7 +163,7 @@ export const frameImagesWorkflow = createScopedWorkflow<
 
             // Invoke variant (shot grid) workflow for this model's output
             await context.invoke(`variant-image-${scene.sceneId}-${model}`, {
-              workflow: generateVariantWorkflow,
+              workflow: generateShotVariantWorkflow,
               label,
               body: {
                 userId: input.userId,
@@ -180,7 +180,7 @@ export const frameImagesWorkflow = createScopedWorkflow<
                   elementRefs.length > 0 ? elementRefs : undefined,
                 aspectRatio,
                 model,
-              } satisfies VariantWorkflowInput,
+              } satisfies ShotVariantWorkflowInput,
               retries: 3,
               retryDelay: 'pow(2, retried) * 1000',
               flowControl: getFalFlowControl(),

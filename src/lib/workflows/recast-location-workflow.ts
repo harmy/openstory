@@ -6,17 +6,22 @@
  * 2. Regenerate all frames at this location
  */
 
+import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
 import { getGenerationChannel } from '@/lib/realtime';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
 import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
 import type { RecastLocationWorkflowInput } from '@/lib/workflow/types';
 import { locationSheetWorkflow } from './location-sheet-workflow';
+import {
+  buildRegenerateFrameSnapshot,
+  computeRegenerateFramesBatchHash,
+} from './regenerate-frames-snapshot';
 import { regenerateFramesWorkflow } from './regenerate-frames-workflow';
 
 export const recastLocationWorkflow =
   createScopedWorkflow<RecastLocationWorkflowInput>(
-    async (context, _scopedDb) => {
+    async (context, scopedDb) => {
       const input = context.requestPayload;
       const label = buildWorkflowLabel(input.sequenceId);
 
@@ -63,35 +68,98 @@ export const recastLocationWorkflow =
       let framesFailed = 0;
 
       if (input.affectedFrameIds.length > 0) {
+        const sequenceId = input.sequenceId;
+        if (!sequenceId) {
+          throw new Error(
+            '[RecastLocationWorkflow] sequenceId is required to regenerate frames'
+          );
+        }
+        const imageModel = input.imageModel ?? DEFAULT_IMAGE_MODEL;
+        const regenerateBody = await context.run(
+          'build-regenerate-snapshot',
+          async () => {
+            const sequence = await scopedDb.sequences.getById(sequenceId);
+            if (!sequence) {
+              throw new Error(
+                `[RecastLocationWorkflow] Sequence ${sequenceId} not found`
+              );
+            }
+            const [characters, locations, frames] = await Promise.all([
+              scopedDb.characters.listWithSheets(sequenceId),
+              scopedDb.sequenceLocations.listWithReferences(sequenceId),
+              scopedDb.frames.getByIds(input.affectedFrameIds),
+            ]);
+            // Reject silent drops: getByIds returns only existing rows, so a
+            // missing frame would shrink frameSnapshots below frameIds without
+            // any signal. Surface the gap so the caller can fix data drift
+            // instead of zero-counting frames that never ran.
+            if (frames.length !== input.affectedFrameIds.length) {
+              const found = new Set(frames.map((f) => f.id));
+              const missing = input.affectedFrameIds.filter(
+                (id) => !found.has(id)
+              );
+              throw new Error(
+                `[RecastLocationWorkflow] Missing frames for ${input.locationName}: ${missing.join(', ')}`
+              );
+            }
+            const aspectRatio = sequence.aspectRatio;
+            const frameSnapshots = await Promise.all(
+              frames.map((frame) =>
+                buildRegenerateFrameSnapshot({
+                  frame,
+                  characters,
+                  locations,
+                  imageModel,
+                  aspectRatio,
+                })
+              )
+            );
+            const partial = {
+              sequenceId,
+              imageModel,
+              aspectRatio,
+              frameSnapshots,
+            };
+            const snapshotInputHash =
+              await computeRegenerateFramesBatchHash(partial);
+            return {
+              userId: input.userId,
+              teamId: input.teamId,
+              sequenceId,
+              frameIds: input.affectedFrameIds,
+              triggerKind: 'location' as const,
+              triggerId: input.locationDbId,
+              imageModel,
+              aspectRatio,
+              frameSnapshots,
+              snapshotInputHash,
+            };
+          }
+        );
+
         const { body: regenerateResult, isFailed: regenerateFailed } =
           await context.invoke('regenerate-frames', {
             workflow: regenerateFramesWorkflow,
             label,
-            body: {
-              sequenceId: input.sequenceId,
-              userId: input.userId,
-              teamId: input.teamId,
-              frameIds: input.affectedFrameIds,
-              triggeringCharacterId: input.locationDbId,
-              imageModel: input.imageModel,
-            },
+            body: regenerateBody,
           });
 
         if (regenerateFailed) {
-          console.error(
-            '[RecastLocationWorkflow]',
-            `Frame regeneration failed for ${input.locationName}`
-          );
-        } else {
-          // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
-          framesRegenerated = regenerateResult?.successCount ?? 0;
-          // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
-          framesFailed = regenerateResult?.failedFrames?.length ?? 0;
-          console.log(
-            '[RecastLocationWorkflow]',
-            `Regenerated ${framesRegenerated} frames for ${input.locationName}`
+          // The child workflow's failureFunction has already emitted
+          // recast-location:failed. Throw so the parent's failureFunction
+          // also fires rather than returning zeroed counts as success.
+          throw new Error(
+            `[RecastLocationWorkflow] Frame regeneration failed for ${input.locationName}; reference was generated but no frames were updated`
           );
         }
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
+        framesRegenerated = regenerateResult?.successCount ?? 0;
+        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
+        framesFailed = regenerateResult?.failedFrames?.length ?? 0;
+        console.log(
+          '[RecastLocationWorkflow]',
+          `Regenerated ${framesRegenerated} frames for ${input.locationName}`
+        );
       }
 
       return {

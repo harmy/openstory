@@ -5,7 +5,7 @@
  * enabling users to compare outputs from different AI models.
  */
 
-import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
+import { sql, type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import {
   index,
   integer,
@@ -88,11 +88,16 @@ export const frameVariants = sqliteTable(
       table.sequenceId,
       table.variantType
     ),
-    uniqueIndex('frame_variants_frame_type_model_key').on(
-      table.frameId,
-      table.variantType,
-      table.model
-    ),
+    // Primary slot: at most one non-divergent row per (frame, type, model).
+    // image-workflow's speculative upsert and convergent reconcile both write here.
+    uniqueIndex('frame_variants_primary_key')
+      .on(table.frameId, table.variantType, table.model)
+      .where(sql`${table.divergedAt} IS NULL`),
+    // Divergent alternates: distinguished by input_hash, so multiple
+    // divergences of the same model can coexist without overwriting each other.
+    uniqueIndex('frame_variants_divergent_key')
+      .on(table.frameId, table.variantType, table.model, table.inputHash)
+      .where(sql`${table.divergedAt} IS NOT NULL`),
   ]
 );
 

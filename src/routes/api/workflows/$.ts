@@ -36,8 +36,8 @@ import { regenerateFramesWorkflow } from '@/lib/workflows/regenerate-frames-work
 import { sceneSplitWorkflow } from '@/lib/workflows/scene-split-workflow';
 import { generateStoryboardWorkflow } from '@/lib/workflows/storyboard-workflow';
 import { talentMatchingWorkflow } from '@/lib/workflows/talent-matching-workflow';
-import { upscaleVariantWorkflow } from '@/lib/workflows/upscale-variant-workflow';
-import { generateVariantWorkflow } from '@/lib/workflows/variant-workflow';
+import { upscaleShotVariantWorkflow } from '@/lib/workflows/upscale-shot-variant-workflow';
+import { generateShotVariantWorkflow } from '@/lib/workflows/shot-variant-workflow';
 import { visualPromptSceneWorkflow } from '@/lib/workflows/visual-prompt-scene-workflow';
 import { visualPromptWorkflow } from '@/lib/workflows/visual-prompt-workflow';
 import { createFileRoute } from '@tanstack/react-router';
@@ -76,8 +76,8 @@ function getHandler() {
         'regenerate-frames': regenerateFramesWorkflow,
         storyboard: generateStoryboardWorkflow,
         'talent-matching': talentMatchingWorkflow,
-        'upscale-variant': upscaleVariantWorkflow,
-        'variant-image': generateVariantWorkflow,
+        'upscale-variant': upscaleShotVariantWorkflow,
+        'variant-image': generateShotVariantWorkflow,
         'visual-prompt-scene': visualPromptSceneWorkflow,
         'visual-prompts': visualPromptWorkflow,
       },

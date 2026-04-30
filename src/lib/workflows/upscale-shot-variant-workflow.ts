@@ -12,8 +12,8 @@ import { getGenerationChannel } from '@/lib/realtime';
 import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
 import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
 import type {
-  UpscaleVariantWorkflowInput,
-  UpscaleVariantWorkflowResult,
+  UpscaleShotVariantWorkflowInput,
+  UpscaleShotVariantWorkflowResult,
 } from '@/lib/workflow/types';
 import { WorkflowValidationError } from '../workflow/errors';
 
@@ -42,9 +42,9 @@ OUTPUT
 - Resolution: upscale to animation-ready quality.
 - No text overlays, borders, watermarks, or new graphics added by the model.`;
 
-export const upscaleVariantWorkflow = createScopedWorkflow<
-  UpscaleVariantWorkflowInput,
-  UpscaleVariantWorkflowResult
+export const upscaleShotVariantWorkflow = createScopedWorkflow<
+  UpscaleShotVariantWorkflowInput,
+  UpscaleShotVariantWorkflowResult
 >(
   async (context, scopedDb) => {
     const input = context.requestPayload;
@@ -55,7 +55,7 @@ export const upscaleVariantWorkflow = createScopedWorkflow<
     }
 
     console.log(
-      '[UpscaleVariantWorkflow]',
+      '[UpscaleShotVariantWorkflow]',
       `Starting upscale for frame ${frameId}`
     );
 
@@ -76,7 +76,7 @@ export const upscaleVariantWorkflow = createScopedWorkflow<
 
       if (!frame) {
         console.log(
-          '[UpscaleVariantWorkflow]',
+          '[UpscaleShotVariantWorkflow]',
           `Frame ${frameId} was deleted, skipping workflow`
         );
         return null;
@@ -135,7 +135,7 @@ export const upscaleVariantWorkflow = createScopedWorkflow<
         usedOwnKey: upscaleResult.usedOwnKey,
         description: 'Variant upscale (nano_banana_2)',
         metadata: { frameId: input.frameId, sequenceId: input.sequenceId },
-        workflowName: 'UpscaleVariantWorkflow',
+        workflowName: 'UpscaleShotVariantWorkflow',
       });
     });
 
@@ -168,7 +168,7 @@ export const upscaleVariantWorkflow = createScopedWorkflow<
 
       if (!updatedFrame) {
         console.log(
-          '[UpscaleVariantWorkflow]',
+          '[UpscaleShotVariantWorkflow]',
           `Frame ${input.frameId} was deleted, skipping final update`
         );
         return;
@@ -184,7 +184,7 @@ export const upscaleVariantWorkflow = createScopedWorkflow<
       );
 
       console.log(
-        '[UpscaleVariantWorkflow]',
+        '[UpscaleShotVariantWorkflow]',
         `Upscale completed for frame ${input.frameId}`
       );
     });
@@ -192,7 +192,7 @@ export const upscaleVariantWorkflow = createScopedWorkflow<
     return {
       upscaledUrl: storageResult.url,
       upscaledPath: storageResult.path || '',
-    } satisfies UpscaleVariantWorkflowResult;
+    } satisfies UpscaleShotVariantWorkflowResult;
   },
   {
     failureFunction: async ({ context, scopedDb, failResponse }) => {
@@ -200,7 +200,7 @@ export const upscaleVariantWorkflow = createScopedWorkflow<
       const error = sanitizeFailResponse(failResponse);
 
       console.error(
-        '[UpscaleVariantWorkflow]',
+        '[UpscaleShotVariantWorkflow]',
         `Upscale failed for frame ${input.frameId}: ${error}`
       );
 

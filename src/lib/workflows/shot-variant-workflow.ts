@@ -22,13 +22,13 @@ import { WorkflowValidationError } from '@/lib/workflow/errors';
 import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
 import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
 import type {
-  VariantWorkflowInput,
-  VariantWorkflowResult,
+  ShotVariantWorkflowInput,
+  ShotVariantWorkflowResult,
 } from '@/lib/workflow/types';
 
-export const generateVariantWorkflow = createScopedWorkflow<
-  VariantWorkflowInput,
-  VariantWorkflowResult
+export const generateShotVariantWorkflow = createScopedWorkflow<
+  ShotVariantWorkflowInput,
+  ShotVariantWorkflowResult
 >(
   async (context, scopedDb) => {
     const input = context.requestPayload;
@@ -45,7 +45,7 @@ export const generateVariantWorkflow = createScopedWorkflow<
         }
 
         console.log(
-          '[VariantWorkflow]',
+          '[ShotVariantWorkflow]',
           `Starting variant image generation workflow for user ${input.userId}`
         );
 
@@ -69,7 +69,7 @@ export const generateVariantWorkflow = createScopedWorkflow<
 
           if (!frame) {
             console.log(
-              '[VariantWorkflow]',
+              '[ShotVariantWorkflow]',
               `Frame ${input.frameId} was deleted, skipping workflow`
             );
             return null; // Signal to skip
@@ -147,7 +147,7 @@ export const generateVariantWorkflow = createScopedWorkflow<
     // Step 2: Generate image
     const imageResult = await context.run('generate-image', async () => {
       console.log(
-        '[VariantWorkflow]',
+        '[ShotVariantWorkflow]',
         `Generating variant image ${input.frameId} with model ${generationParams.model}`
       );
 
@@ -166,7 +166,7 @@ export const generateVariantWorkflow = createScopedWorkflow<
           frameId: input.frameId,
           sequenceId: input.sequenceId,
         },
-        workflowName: 'VariantWorkflow',
+        workflowName: 'ShotVariantWorkflow',
       });
     });
 
@@ -209,7 +209,7 @@ export const generateVariantWorkflow = createScopedWorkflow<
 
         if (!updatedFrame) {
           console.log(
-            '[VariantWorkflow]',
+            '[ShotVariantWorkflow]',
             `Frame ${input.frameId} was deleted, skipping final update`
           );
           return { url: result.url, path: result.path };
@@ -239,17 +239,17 @@ export const generateVariantWorkflow = createScopedWorkflow<
         );
 
         console.log(
-          '[VariantWorkflow]',
+          '[ShotVariantWorkflow]',
           `Image uploaded to storage: ${result.path}`
         );
         return { url: result.url, path: result.path };
       });
     }
 
-    console.log('[VariantWorkflow]', 'Image generation workflow completed');
+    console.log('[ShotVariantWorkflow]', 'Image generation workflow completed');
 
     // Return workflow result
-    const result: VariantWorkflowResult = {
+    const result: ShotVariantWorkflowResult = {
       variantImageUrl: imageUrl,
     };
 
@@ -298,7 +298,7 @@ export const generateVariantWorkflow = createScopedWorkflow<
         }
 
         console.error(
-          '[VariantWorkflow]',
+          '[ShotVariantWorkflow]',
           `Image generation failed for frame ${input.frameId}: ${error}`
         );
       }
