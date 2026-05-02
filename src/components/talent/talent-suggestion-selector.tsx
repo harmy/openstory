@@ -168,7 +168,11 @@ export const TalentSuggestionSelector: React.FC<
           className="gap-2 text-muted-foreground"
         >
           <Users className="h-4 w-4" />
-          <span>Talent</span>
+          <span>
+            {selectedTalentIds.length > 0
+              ? `${selectedTalentIds.length} cast · auto for rest`
+              : 'Auto-cast talent'}
+          </span>
         </Button>
 
         {/* Selected talent avatars */}
@@ -203,17 +207,20 @@ export const TalentSuggestionSelector: React.FC<
           >
             <DialogHeader>
               <DialogTitle>
-                Select Talent for Casting
+                Pre-cast specific talent{' '}
+                <span className="text-sm font-normal text-muted-foreground">
+                  (optional)
+                </span>
                 {selectedTalentIds.length > 0 && (
                   <span className="ml-2 text-sm font-normal text-muted-foreground">
-                    ({selectedTalentIds.length} selected)
+                    — {selectedTalentIds.length} selected
                   </span>
                 )}
               </DialogTitle>
               <DialogDescription>
-                Pick talent here only when you want a specific person cast in a
-                role. Any characters you don't pre-cast are auto-extracted from
-                your script and given AI-generated portraits.
+                Skip this and the AI will auto-cast every role from your script
+                with AI-generated portraits. Pick people here only when you want
+                a specific person cast.
               </DialogDescription>
             </DialogHeader>
 

@@ -171,7 +171,11 @@ export const LocationSuggestionSelector: React.FC<
           className="gap-2 text-muted-foreground"
         >
           <MapPin className="h-4 w-4" />
-          <span>Locations</span>
+          <span>
+            {selectedLocationIds.length > 0
+              ? `${selectedLocationIds.length} picked · auto for rest`
+              : 'Auto-pick locations'}
+          </span>
         </Button>
 
         {/* Selected location thumbnails */}
@@ -206,17 +210,20 @@ export const LocationSuggestionSelector: React.FC<
           >
             <DialogHeader>
               <DialogTitle>
-                Select Locations
+                Pre-pick specific locations{' '}
+                <span className="text-sm font-normal text-muted-foreground">
+                  (optional)
+                </span>
                 {selectedLocationIds.length > 0 && (
                   <span className="ml-2 text-sm font-normal text-muted-foreground">
-                    ({selectedLocationIds.length} selected)
+                    — {selectedLocationIds.length} selected
                   </span>
                 )}
               </DialogTitle>
               <DialogDescription>
-                Pick locations here only when you want a specific reference. Any
-                locations you don't pre-pick are auto-extracted from your script
-                and given AI-generated reference shots.
+                Skip this and the AI will auto-extract every location from your
+                script with AI-generated reference shots. Pick locations here
+                only when you want a specific reference.
               </DialogDescription>
             </DialogHeader>
 

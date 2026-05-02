@@ -595,12 +595,6 @@ export const ScriptView: FC<{
             styleCategory={styleCategory}
           />
           <div className="flex items-center gap-2">
-            {selectedTalentIds.length === 0 &&
-              selectedLocationIds.length === 0 && (
-                <span className="text-[10px] text-muted-foreground/40 mr-0.5">
-                  optional
-                </span>
-              )}
             <TalentSuggestionSelector
               selectedTalentIds={selectedTalentIds}
               onSelectionChange={(v) =>
