@@ -205,14 +205,7 @@ export const LocationSuggestionSelector: React.FC<
             className="flex flex-col gap-4"
           >
             <DialogHeader>
-              <DialogTitle>
-                Select Locations
-                {selectedLocationIds.length > 0 && (
-                  <span className="ml-2 text-sm font-normal text-muted-foreground">
-                    ({selectedLocationIds.length} selected)
-                  </span>
-                )}
-              </DialogTitle>
+              <DialogTitle>Select Locations</DialogTitle>
               <DialogDescription>
                 Pick locations here only when you want a specific reference. Any
                 locations you don't pre-pick are auto-extracted from your script

@@ -202,14 +202,7 @@ export const TalentSuggestionSelector: React.FC<
             className="flex flex-col gap-4"
           >
             <DialogHeader>
-              <DialogTitle>
-                Select Talent for Casting
-                {selectedTalentIds.length > 0 && (
-                  <span className="ml-2 text-sm font-normal text-muted-foreground">
-                    ({selectedTalentIds.length} selected)
-                  </span>
-                )}
-              </DialogTitle>
+              <DialogTitle>Select Talent for Casting</DialogTitle>
               <DialogDescription>
                 Pick talent here only when you want a specific person cast in a
                 role. Any characters you don't pre-cast are auto-extracted from
