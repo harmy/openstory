@@ -286,16 +286,19 @@ export const TalentSuggestionSelector: React.FC<
                   </Button>
                 }
               />
-              <div className="flex flex-col items-end gap-1">
+              {selectedTalentIds.length > 0 ? (
                 <Button type="submit">
-                  {selectedTalentIds.length > 0 ? 'Cast Talent' : 'Continue'}
+                  Cast {selectedTalentIds.length} role
+                  {selectedTalentIds.length === 1 ? '' : 's'}
                 </Button>
-                <span className="text-[10px] text-muted-foreground">
-                  {selectedTalentIds.length > 0
-                    ? `cast ${selectedTalentIds.length} role${selectedTalentIds.length === 1 ? '' : 's'}`
-                    : 'without casting'}
-                </span>
-              </div>
+              ) : (
+                <div className="flex flex-col items-center gap-1">
+                  <Button type="submit">Continue</Button>
+                  <span className="text-[10px] text-muted-foreground">
+                    without casting
+                  </span>
+                </div>
+              )}
             </div>
           </form>
         </DialogContent>
