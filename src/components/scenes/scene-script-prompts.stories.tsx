@@ -14,6 +14,8 @@ const mockFrame = {
   variantImageUrl: null,
   variantImageStatus: 'pending',
   variantWorkflowRunId: null,
+  variantImageGeneratedAt: null,
+  variantImageError: null,
   videoUrl: null,
   videoPath: null,
   thumbnailStatus: 'completed',

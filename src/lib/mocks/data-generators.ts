@@ -34,6 +34,8 @@ const generateMockFrame = (overrides?: Partial<Frame>): Frame => {
     variantImageUrl: null,
     variantImageStatus: 'pending',
     variantWorkflowRunId: null,
+    variantImageGeneratedAt: null,
+    variantImageError: null,
     videoUrl: faker.datatype.boolean()
       ? `${faker.internet.url()}/video.mp4`
       : null,

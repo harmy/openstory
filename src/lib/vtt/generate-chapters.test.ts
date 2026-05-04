@@ -37,6 +37,8 @@ const createTestFrame = (overrides: Partial<Frame>): Frame => ({
   variantImageUrl: null,
   variantImageStatus: 'pending',
   variantWorkflowRunId: null,
+  variantImageGeneratedAt: null,
+  variantImageError: null,
   videoError: null,
   motionModel: 'veo3',
   motionPrompt: null,

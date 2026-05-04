@@ -12,7 +12,7 @@ export const getFalFlowControl = (): FlowControl => {
     : 20;
 
   return {
-    key: 'fal-requests',
+    key: 'fal-requests-2',
     parallelism: concurrencyLimit,
   };
 };

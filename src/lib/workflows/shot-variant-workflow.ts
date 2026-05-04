@@ -260,13 +260,13 @@ export const generateShotVariantWorkflow = createScopedWorkflow<
       const input = context.requestPayload;
       const error = sanitizeFailResponse(failResponse);
 
-      // Set frame thumbnail status to 'failed' after all retries exhausted
+      // Set frame variant status to 'failed' after all retries exhausted
       if (input.frameId && input.teamId) {
         await scopedDb.frames.update(
           input.frameId,
           {
-            thumbnailStatus: 'failed',
-            thumbnailError: error,
+            variantImageStatus: 'failed',
+            variantImageError: error,
           },
           { throwOnMissing: false }
         );

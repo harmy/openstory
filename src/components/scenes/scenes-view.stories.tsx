@@ -132,6 +132,8 @@ const mockFrameBase = {
   variantImageUrl: null,
   variantImageStatus: 'pending' as const,
   variantWorkflowRunId: null,
+  variantImageGeneratedAt: null,
+  variantImageError: null,
   previewThumbnailUrl: null,
   metadata: {
     sceneId: 'scene-1',

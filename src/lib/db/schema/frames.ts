@@ -56,6 +56,10 @@ export const frames = sqliteTable(
       .$type<FrameGenerationStatus>()
       .default('pending'),
     variantWorkflowRunId: text('variant_workflow_run_id'),
+    variantImageGeneratedAt: integer('variant_image_generated_at', {
+      mode: 'timestamp',
+    }),
+    variantImageError: text('variant_image_error'),
     videoUrl: text('video_url'),
     videoPath: text('video_path'), // R2 storage path (not signed URL)
     // Thumbnail generation status tracking

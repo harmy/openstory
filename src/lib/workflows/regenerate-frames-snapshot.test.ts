@@ -63,6 +63,8 @@ function makeFrame(overrides: Partial<Frame> = {}): Frame {
     variantImageUrl: null,
     variantImageStatus: 'pending',
     variantWorkflowRunId: null,
+    variantImageGeneratedAt: null,
+    variantImageError: null,
     videoUrl: null,
     videoPath: null,
     thumbnailStatus: 'pending',
