@@ -12,7 +12,7 @@ import { ZERO_MICROS } from '@/lib/billing/money';
 import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { getChatPrompt } from '@/lib/prompts';
-import { chat } from '@tanstack/ai';
+import { chat, convertSchemaToJsonSchema } from '@tanstack/ai';
 import type { WorkflowContext } from '@upstash/workflow';
 import { z } from 'zod';
 
@@ -114,8 +114,17 @@ export async function durableLLMCall<TInput, TSchema extends z.ZodType>(
     const abortController = new AbortController();
     const timeout = setTimeout(() => abortController.abort(), 300_000);
 
+    // Pass the schema via modelOptions.responseFormat (not chat()'s outputSchema).
+    // outputSchema triggers @tanstack/ai's agentic-loop pre-pass, which fires a
+    // separate streaming chatStream call before the structured-output call —
+    // both share the same userMessage, so aimock's recorder collapses them onto
+    // one fixture and the schema-constrained call never reaches the upstream.
+    const strictSchema = convertSchemaToJsonSchema(config.responseSchema, {
+      forStructuredOutput: true,
+    });
+
     try {
-      const result = await chat({
+      const text = await chat({
         adapter,
         messages: chatMessages,
         systemPrompts,
@@ -130,11 +139,21 @@ export async function durableLLMCall<TInput, TSchema extends z.ZodType>(
           sessionId: callContext.sequenceId,
           userId: callContext.userId,
         },
-        outputSchema: config.responseSchema,
+        modelOptions: {
+          responseFormat: {
+            type: 'json_schema',
+            jsonSchema: {
+              name: 'structured_output',
+              schema: strictSchema,
+              strict: true,
+            },
+          },
+        },
+        debug: true,
       });
 
       console.log(`[LLM:${logName}] Call succeeded`);
-      return result;
+      return JSON.parse(text);
     } finally {
       clearTimeout(timeout);
     }

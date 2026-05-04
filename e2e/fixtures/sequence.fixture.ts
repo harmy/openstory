@@ -42,7 +42,7 @@ const TEST_IMAGES = {
 /**
  * Create a test style for the team (required by sequence)
  */
-async function createTestStyle(teamId: string): Promise<string> {
+export async function createTestStyle(teamId: string): Promise<string> {
   const styleId = ulid();
   const now = new Date();
 
@@ -165,6 +165,39 @@ export async function createTestCharacter(
   });
 
   return { id, sequenceId, characterId, name };
+}
+
+/**
+ * Get all frames for a sequence ordered by orderIndex.
+ * Used by the full-sequence spec to poll until every frame has its
+ * thumbnail/video/music URLs set during the e2e workflow run.
+ */
+export async function getTestSequenceFrames(sequenceId: string): Promise<
+  Array<{
+    id: string;
+    orderIndex: number;
+    thumbnailUrl: string | null;
+    thumbnailStatus: string | null;
+    videoUrl: string | null;
+    videoStatus: string | null;
+    audioUrl: string | null;
+    audioStatus: string | null;
+  }>
+> {
+  const rows = await testDb.query.frames.findMany({
+    where: { sequenceId },
+    columns: {
+      id: true,
+      orderIndex: true,
+      thumbnailUrl: true,
+      thumbnailStatus: true,
+      videoUrl: true,
+      videoStatus: true,
+      audioUrl: true,
+      audioStatus: true,
+    },
+  });
+  return rows.sort((a, b) => a.orderIndex - b.orderIndex);
 }
 
 /**

@@ -3,6 +3,7 @@
  * Serves all QStash workflows for async AI task processing
  */
 
+import { configureFalProxyFromEnv } from '@/lib/ai/fal-config';
 import { withApiLogging } from '@/lib/observability/api-logger';
 import { flushTracing } from '@/lib/observability/langfuse';
 import {
@@ -47,6 +48,7 @@ let _handler: ReturnType<typeof serveMany> | null = null;
 function getHandler() {
   if (!_handler) {
     initMemoryProfiler();
+    configureFalProxyFromEnv();
 
     _handler = serveMany(
       {

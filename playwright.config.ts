@@ -59,8 +59,15 @@ export default defineConfig({
   ],
 
   webServer: {
-    command:
-      'E2E_TEST=true PORT=3001 DATABASE_URL=file:test.db VITE_APP_URL=http://localhost:3001 OPENROUTER_BASE_URL=http://localhost:4010 VITE_DISABLE_DEVTOOLS=true bun dev:e2e',
+    // E2E_FULL_PIPELINE opts the server into running real workflows + routing
+    // fal traffic through the aimock fal handler. Off by default so existing
+    // hermetic specs keep using browser-side route mocks. Set
+    // PLAYWRIGHT_FULL_PIPELINE=true (e.g. for the full-sequence spec) to flip.
+    command: `E2E_TEST=true${
+      process.env.PLAYWRIGHT_FULL_PIPELINE === 'true'
+        ? ' E2E_FULL_PIPELINE=true FAL_PROXY_URL=http://localhost:4010/fal'
+        : ''
+    } PORT=3001 DATABASE_URL=file:test.db VITE_APP_URL=http://localhost:3001 OPENROUTER_BASE_URL=http://localhost:4010 VITE_DISABLE_DEVTOOLS=true bun dev:e2e`,
     url: 'http://localhost:3001',
     reuseExistingServer: true,
     timeout: 300_000,

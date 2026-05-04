@@ -107,12 +107,30 @@ bun test:coverage     # With coverage report
 ### End-to-End Tests
 
 ```bash
-bun test:e2e          # Run Playwright tests
+bun test:e2e          # Run Playwright tests (hermetic — workflows skipped)
 bun test:e2e:ui       # Interactive Playwright UI
+bun test:e2e:full     # Full pipeline: real workflows, qstash, fal+LLM via aimock fixtures
 ```
 
 - Location: `e2e/tests/`
 - Uses Playwright with a dedicated test database
+- LLM (OpenRouter) and fal.ai traffic is served by [aimock](https://github.com/CopilotKit/aimock) on port 4010 — fal.ai goes through a custom handler mounted at `/fal`
+
+#### Refreshing recorded e2e fixtures
+
+The full-pipeline test (`e2e/tests/full-sequence.spec.ts`) replays AI responses from `e2e/fixtures/recorded/`. To capture or refresh them:
+
+```bash
+# 1. Start qstash locally
+bun qstash:dev
+
+# 2. With real keys in .env.local (FAL_KEY, OPENROUTER_KEY), run the recorder
+bun scripts/record-e2e-fixtures.ts
+```
+
+The recorder retries the spec up to `E2E_RECORD_PASSES` times (default 8). Each pass records the AI call that broke the previous one — aimock buffers responses while recording, which breaks streaming RPCs, but once a fixture exists on disk subsequent runs replay it as a proper stream. Tracked upstream in [CopilotKit/aimock#152](https://github.com/CopilotKit/aimock/issues/152).
+
+Commit the generated fixtures alongside any code change that alters AI prompts or model selection.
 
 > See the [Testing](CLAUDE.md#testing) section in CLAUDE.md for mock patterns and database testing conventions.
 

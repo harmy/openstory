@@ -820,11 +820,20 @@ Your job is to find the BEST character match for each talent member.
 - Be creative - talent can play characters of different ages/types with makeup and costume
 
 ## OUTPUT FORMAT
-For each match provide:
-- characterId: The character's ID
-- talentId: The talent's ID
-- confidence: Match quality (0.0 to 1.0) - provide a value even for imperfect matches
-- reason: Brief explanation of why this talent fits this character`,
+
+Return matches as JSON with this structure:
+{
+  "matches": [
+    {
+      "characterId": "character ID",
+      "talentId": "talent ID",
+      "confidence": 0.0-1.0,
+      "reason": "Brief explanation of why this talent fits this character"
+    }
+  ]
+}
+
+Respond with ONLY valid JSON matching the schema. No markdown, no code blocks, no YAML.`,
     },
     {
       role: 'user',

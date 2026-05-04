@@ -104,3 +104,85 @@ jobs:
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
           R2_PUBLIC_STORAGE_DOMAIN: ${{ vars.R2_PUBLIC_STORAGE_DOMAIN }}
           GITHUB_RUN_ID: ${{ github.run_id }}
+
+  e2e-full-pipeline:
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: Setup test database
+        run: bun test:e2e:setup
+
+      - name: Start QStash
+        run: |
+          docker run -d --name qstash \
+            --add-host=host.docker.internal:host-gateway \
+            -p 8080:8080 \
+            public.ecr.aws/upstash/qstash:latest qstash dev
+          timeout 30 sh -c 'until curl -sf -X POST "http://localhost:8080/v2/publish/http://localhost:3001/__health" \
+            -H "Authorization: Bearer eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=" \
+            >/dev/null 2>&1; do sleep 1; done'
+
+      - name: Run full-pipeline E2E test
+        run: bun test:e2e:full
+        env:
+          PLAYWRIGHT_FULL_PIPELINE: 'true'
+          E2E_TEST: 'true'
+          E2E_FULL_PIPELINE: 'true'
+          DATABASE_URL: file:test.db
+          BETTER_AUTH_URL: http://localhost:3001
+          # QStash - local Docker service started above
+          QSTASH_TOKEN: eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=
+          QSTASH_URL: http://localhost:8080
+          QSTASH_CURRENT_SIGNING_KEY: sig_7kYjw48mhY7kAjqNGcy6cr29RJ6r
+          QSTASH_NEXT_SIGNING_KEY: sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs
+          # R2 Storage - preview environment
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_PUBLIC_STORAGE_DOMAIN: ${{ vars.R2_PUBLIC_STORAGE_DOMAIN }}
+          R2_PUBLIC_ASSETS_BUCKET: ${{ secrets.R2_PUBLIC_ASSETS_BUCKET }}
+          VITE_R2_PUBLIC_ASSETS_DOMAIN: ${{ secrets.VITE_R2_PUBLIC_ASSETS_DOMAIN }}
+          # Redis - preview environment
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          # Auth - preview environment
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          # AI services — both LLM and fal.ai go through aimock (port 4010)
+          FAL_KEY: test-mock-key
+          FAL_PROXY_URL: http://localhost:4010/fal
+          OPENROUTER_KEY: test-mock-key
+          OPENROUTER_BASE_URL: http://localhost:4010
+          # Email - preview environment
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+
+      - name: Upload E2E report to R2
+        if: ${{ !cancelled() }}
+        run: bun scripts/upload-e2e-report.ts
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_PUBLIC_STORAGE_DOMAIN: ${{ vars.R2_PUBLIC_STORAGE_DOMAIN }}
+          GITHUB_RUN_ID: ${{ github.run_id }}

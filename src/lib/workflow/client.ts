@@ -75,7 +75,8 @@ export async function triggerWorkflow<
 ): Promise<string> {
   console.log('[TriggerWorkflow]', { url: urlPath, body, options });
 
-  if (getEnv().E2E_TEST === 'true') {
+  const env = getEnv();
+  if (env.E2E_TEST === 'true' && env.E2E_FULL_PIPELINE !== 'true') {
     const mockId = options?.deduplicationId ?? `mock-${Date.now()}`;
     console.log(
       `[E2E] Skipping workflow trigger: ${urlPath} (mock ID: ${mockId})`
