@@ -24,6 +24,7 @@ import type {
   SequenceLocation,
 } from '@/lib/db/schema';
 import { matchLocationsToFrame } from '@/lib/db/scoped/sequence-locations';
+import { buildDivergentRevertWrites } from './divergence-writes';
 import { buildCharacterReferenceImages } from '@/lib/prompts/character-prompt';
 import { buildLocationReferenceImages } from '@/lib/prompts/location-prompt';
 import { getGenerationChannel } from '@/lib/realtime';
@@ -208,19 +209,11 @@ export function buildConvergentWrites(snapshotInputHash: string): {
 }
 
 /**
- * Writes to apply when current inputs no longer match the snapshot.
- *
- *   - `frame`: revert the speculative primary thumbnail on the frame row
- *     back to `pending` so the next reconciliation regenerates from current
- *     inputs.
- *   - `primaryRevert`: clear the speculative URL/status that image-workflow
- *     pre-wrote to the primary variant row, so the primary slot stops
- *     pointing at diverged work.
- *   - `divergentRow`: partial payload for an INSERT that preserves the
- *     diverged result as an alternate. The workflow supplies frameId,
- *     sequenceId, variantType, model, and the speculative url; this helper
- *     supplies the divergence-specific fields so the alternate is
- *     identifiable in the divergent partial unique index.
+ * `divergentRow` is a partial payload for an INSERT that preserves the
+ * diverged result as an alternate. The workflow supplies frameId, sequenceId,
+ * variantType, model, and the speculative url; this helper supplies the
+ * divergence-specific fields so the alternate is identifiable in the
+ * divergent partial unique index.
  */
 export function buildDivergentWrites(
   snapshotInputHash: string,
@@ -234,25 +227,7 @@ export function buildDivergentWrites(
   };
 } {
   return {
-    frame: {
-      thumbnailUrl: null,
-      thumbnailPath: null,
-      thumbnailStatus: 'pending',
-      thumbnailWorkflowRunId: null,
-      thumbnailGeneratedAt: null,
-      thumbnailError: null,
-      thumbnailInputHash: null,
-    },
-    primaryRevert: {
-      url: null,
-      storagePath: null,
-      previewUrl: null,
-      status: 'pending',
-      workflowRunId: null,
-      generatedAt: null,
-      error: null,
-      inputHash: null,
-    },
+    ...buildDivergentRevertWrites(),
     divergentRow: {
       inputHash: snapshotInputHash,
       divergedAt,

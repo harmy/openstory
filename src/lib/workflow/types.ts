@@ -57,6 +57,21 @@ export interface ImageWorkflowInput extends SequenceWorkflowContext {
   referenceImages?: ReferenceImageDescription[];
   /** Skip R2 upload and store fal.ai CDN URL directly (for ephemeral preview images) */
   skipStorage?: boolean;
+  /**
+   * Per-scene snapshot for divergence detection. When present, the workflow
+   * re-resolves character/location/element sheet hashes at write time and
+   * routes divergent results into `frame_variants` instead of overwriting
+   * the primary thumbnail. Optional: omit for callers that handle their own
+   * divergence (e.g. `regenerateFramesWorkflow`) or for preview-mode runs.
+   */
+  sceneSnapshot?: FrameImageSceneSnapshot;
+  /**
+   * Aspect ratio frozen at trigger time. Required when `sceneSnapshot` is
+   * present so write-time hash recomputation matches the trigger-time hash.
+   */
+  aspectRatio?: AspectRatio;
+  /** Hash over `(prompt, model, aspectRatio, sceneSnapshot)`; validated at start. */
+  snapshotInputHash?: string;
 }
 
 /**
