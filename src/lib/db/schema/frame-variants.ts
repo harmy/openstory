@@ -99,12 +99,9 @@ export const frameVariants = sqliteTable(
       .where(sql`${table.divergedAt} IS NULL`),
     // Divergent alternates: distinguished by input_hash, so multiple
     // divergences of the same model can coexist without overwriting each other.
-    // Invariant (enforced at application layer in scoped methods): a primary
-    // variant — divergedAt IS NULL — must never have discardedAt set;
-    // discardedAt is the user-dismissal marker for divergent alternates only.
-    // A schema-level CHECK constraint is a planned follow-up (the table
-    // rebuild required to add it post-hoc was deferred to keep this PR's
-    // migration clean).
+    // Invariant (enforced in the scoped methods): a primary variant —
+    // divergedAt IS NULL — must never have discardedAt set; discardedAt is
+    // the user-dismissal marker for divergent alternates only.
     uniqueIndex('frame_variants_divergent_key')
       .on(table.frameId, table.variantType, table.model, table.inputHash)
       .where(sql`${table.divergedAt} IS NOT NULL`),

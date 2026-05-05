@@ -106,13 +106,14 @@ export const DivergenceCompareDialog: React.FC<
   const busy = isPromoting || isDiscarding;
 
   // Two-click confirm: promote replaces the live primary and (for image)
-  // clears downstream video. CLAUDE.md requires a confirmation step or undo
-  // window for destructive ops; two-click avoids nested modals here.
+  // clears downstream video. Destructive ops need a confirmation step or
+  // undo window; two-click avoids nested modals here.
   const [confirmingPromote, setConfirmingPromote] = useState(false);
-  // Reset the confirm state whenever the dialog re-opens or the variant
-  // changes, so a fresh open never starts mid-confirm.
+  // Reset whenever the dialog opens/closes or the variant swaps, so a
+  // fresh open (or a caller swapping variants while open) never starts
+  // mid-confirm.
   useEffect(() => {
-    if (!open) setConfirmingPromote(false);
+    setConfirmingPromote(false);
   }, [open, variant.id]);
 
   const handlePromoteClick = () => {

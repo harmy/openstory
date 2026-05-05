@@ -265,14 +265,14 @@ export function createFrameVariantsMethods(db: Database) {
 
     /**
      * Atomically replace the live primary on `frames` with the variant's
-     * fields and soft-delete the variant. Both writes go through a single
-     * `db.batch()` so a partial failure cannot leave the live primary updated
-     * while the variant still appears in the divergent list (or vice versa).
+     * fields and soft-delete the variant. Both writes run in a single
+     * `db.batch()` (one libSQL transaction) so partial failure isn't
+     * possible at the SQL layer.
      *
-     * Pre-checks existence rather than relying on returning(), because
-     * libSQL `batch()` commits both UPDATEs even when the WHERE matches no
-     * rows — a JS-side throw after commit would still leave one side
-     * mutated.
+     * Pre-checks existence so a missing frame or variant fails fast with a
+     * specific error before the batch runs. Without the pre-check, a
+     * zero-row UPDATE silently succeeds inside the batch, forcing ambiguous
+     * post-batch reasoning about which side was missing.
      */
     promoteAtomically: async (
       frameId: string,
@@ -305,11 +305,19 @@ export function createFrameVariantsMethods(db: Database) {
         .set({ discardedAt: now, updatedAt: now })
         .where(eq(frameVariants.id, variantId))
         .returning();
-      const [frameRows] = await db.batch([updateFrame, discardVariant]);
-      // Existence was checked above; an empty result here would mean the row
-      // was deleted between the pre-check and the batch — surface it.
+      const [frameRows, variantRows] = await db.batch([
+        updateFrame,
+        discardVariant,
+      ]);
+      // Existence was checked above. A zero-row result on either side means
+      // the row was deleted between the pre-check and the batch — surface
+      // it so the caller sees the inconsistency rather than silently
+      // discarding a nonexistent variant or "promoting" with no live frame.
       if (frameRows.length === 0) {
         throw new Error(`Frame ${frameId} disappeared during promote`);
+      }
+      if (variantRows.length === 0) {
+        throw new Error(`FrameVariant ${variantId} disappeared during promote`);
       }
       return { frame: frameRows[0], discardedAt: now };
     },
