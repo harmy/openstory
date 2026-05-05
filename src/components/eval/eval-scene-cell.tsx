@@ -198,9 +198,54 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
   // Motion view (individual frame videos)
   if (viewMode === 'motion') {
     if (!frame.videoUrl) {
+      const isGenerating = frame.videoStatus === 'generating';
+
+      if (frame.thumbnailUrl) {
+        return (
+          <>
+            <button
+              type="button"
+              className="border-b p-2 cursor-pointer hover:bg-muted/50 transition-colors h-full flex flex-col min-h-0 overflow-hidden w-full text-left appearance-none bg-transparent"
+              onClick={handleClick}
+            >
+              <div className="relative flex-1 flex items-center justify-center min-h-0">
+                <Image
+                  src={frame.thumbnailUrl}
+                  alt={`Scene ${sceneNumber} preview`}
+                  className="max-w-full max-h-full object-contain rounded-md opacity-60"
+                  loading="lazy"
+                  width={1000}
+                  height={1000}
+                />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="text-xs font-medium text-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded-md border">
+                    {isGenerating ? 'Generating video…' : 'No video yet'}
+                  </span>
+                </div>
+              </div>
+            </button>
+            <EvalCellDialog
+              open={dialogOpen}
+              onOpenChange={onDialogOpenChange}
+              frame={frame}
+              sceneNumber={sceneNumber}
+              sequenceTitle={sequenceTitle}
+              aspectRatio={aspectRatio}
+              initialTab={initialTab}
+              mergedVideoUrl={mergedVideoUrl}
+              mergedVideoPoster={mergedVideoPoster}
+              onNavigateLeft={onNavigateLeft}
+              onNavigateRight={onNavigateRight}
+              onNavigateUp={onNavigateUp}
+              onNavigateDown={onNavigateDown}
+            />
+          </>
+        );
+      }
+
       return (
         <div className="border-b p-2 h-full flex items-center justify-center">
-          {frame.videoStatus === 'generating' ? (
+          {isGenerating ? (
             <Skeleton className="w-full h-full" />
           ) : (
             <div className="text-xs text-muted-foreground text-center">

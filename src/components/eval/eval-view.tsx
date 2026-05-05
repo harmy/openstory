@@ -7,12 +7,16 @@ import {
   type SequenceWithFrames,
 } from '@/hooks/use-sequences-with-frames';
 import { useAdminAllSequencesWithFrames } from '@/hooks/use-admin-support';
+import { useTeamDivergentSequenceVariants } from '@/hooks/use-sequence-variants';
 import { isSystemAdminFn } from '@/functions/gift-tokens';
 import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { VideoIcon } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { Route as sequencesNewRoute } from '@/routes/_protected/sequences/new';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 
 export type ViewMode = 'script' | 'prompts' | 'images' | 'motion';
@@ -109,6 +113,22 @@ export const EvalView: React.FC<EvalViewProps> = ({ initialUserFilter }) => {
     : ownData.framesLoadingMap;
   const error = supportMode ? adminData.error : ownData.error;
 
+  // Team-scoped divergence flags so own-data rows show a "variants available"
+  // dot. In support mode rows belong to other teams, so the flag is irrelevant.
+  const { data: divergentByTeam } = useTeamDivergentSequenceVariants(
+    !supportMode && sequences.length > 0
+  );
+  const divergenceMap = useMemo(() => {
+    const map = new Map<string, { hasVideo: boolean; hasMusic: boolean }>();
+    for (const row of divergentByTeam ?? []) {
+      map.set(row.sequenceId, {
+        hasVideo: row.hasVideo,
+        hasMusic: row.hasMusic,
+      });
+    }
+    return map;
+  }, [divergentByTeam]);
+
   // Deep link wins: when a specific user is requested, never hide them.
   const effectiveHideInternal =
     hideInternal && !initialUserFilter && internalDomains.length > 0;
@@ -193,7 +213,16 @@ export const EvalView: React.FC<EvalViewProps> = ({ initialUserFilter }) => {
               ? `No sequences match "${filters.search}".`
               : supportMode
                 ? 'No sequences found across any users.'
-                : 'Create some sequences to start evaluating prompts.'
+                : 'Get started by creating your first video sequence. Transform your script into professional video content with AI assistance.'
+          }
+          action={
+            !filters.search && !supportMode ? (
+              <Button asChild size="lg">
+                <Link to={sequencesNewRoute.fullPath}>
+                  Create Your First Sequence
+                </Link>
+              </Button>
+            ) : undefined
           }
         />
       ) : (
@@ -201,6 +230,7 @@ export const EvalView: React.FC<EvalViewProps> = ({ initialUserFilter }) => {
           sequences={filteredAndSorted}
           viewMode={viewMode}
           framesLoadingMap={framesLoadingMap}
+          divergenceMap={divergenceMap}
           onLoadMore={handleLoadMore}
           hasMore={supportMode ? adminData.hasNextPage : false}
         />

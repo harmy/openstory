@@ -382,10 +382,10 @@ const UserRow: React.FC<{ row: UserActivityRow }> = ({ row }) => {
       </td>
       <td className="px-4 py-3">
         <Link
-          to="/admin/eval"
+          to="/sequences"
           search={{ user: row.email }}
           className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-          aria-label={`Open eval support view for ${row.email}`}
+          aria-label={`Open support view for ${row.email}`}
         >
           <LifeBuoy className="h-4 w-4" />
           Support
@@ -429,7 +429,7 @@ function toCsv(rows: UserActivityRow[], origin: string): string {
       row.avgAnalysisDurationMs === null
         ? null
         : Math.round(row.avgAnalysisDurationMs / 1000);
-    const supportUrl = `${origin}/admin/eval?user=${encodeURIComponent(row.email)}`;
+    const supportUrl = `${origin}/sequences?user=${encodeURIComponent(row.email)}`;
     const values: Array<string | number | null> = [
       row.userId,
       row.name,

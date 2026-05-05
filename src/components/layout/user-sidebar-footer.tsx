@@ -16,7 +16,6 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import {
   BarChart3,
   ChevronsUpDown,
-  FlaskConical,
   LogIn,
   LogOut,
   Settings,
@@ -167,12 +166,6 @@ function AdminMenuItem() {
         <Link to="/admin/usage">
           <BarChart3 className="mr-2 h-4 w-4" />
           Usage
-        </Link>
-      </DropdownMenuItem>
-      <DropdownMenuItem asChild>
-        <Link to="/admin/eval">
-          <FlaskConical className="mr-2 h-4 w-4" />
-          Eval
         </Link>
       </DropdownMenuItem>
     </>

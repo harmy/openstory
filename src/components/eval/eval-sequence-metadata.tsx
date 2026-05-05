@@ -20,21 +20,39 @@ import {
 
 type EvalSequenceMetadataProps = {
   sequence: SequenceWithFrames;
+  divergence?: { hasVideo: boolean; hasMusic: boolean };
 };
 
 export const EvalSequenceMetadata: React.FC<EvalSequenceMetadataProps> = ({
   sequence,
+  divergence,
 }) => {
   const ratioData = getAspectRatioData(sequence.aspectRatio);
   const imageModel = getImageModelById(sequence.imageModel);
+  const dotTitle =
+    divergence?.hasVideo && divergence.hasMusic
+      ? 'Alternate merged video and music available — click to compare'
+      : divergence?.hasVideo
+        ? 'Alternate merged video available — click to compare'
+        : divergence?.hasMusic
+          ? 'Alternate music track available — click to compare'
+          : null;
 
   return (
-    <div className="h-full border-r border-b p-3 flex flex-col gap-2 overflow-y-auto">
+    <div className="relative h-full border-r border-b p-3 flex flex-col gap-2 overflow-y-auto">
+      {dotTitle && (
+        <span
+          aria-label={dotTitle}
+          title={dotTitle}
+          data-slot="sequence-metadata-divergent-dot"
+          className="absolute top-2 right-2 inline-flex h-2 w-2 items-center justify-center rounded-full bg-sky-500 ring-2 ring-sky-500/30"
+        />
+      )}
       {/* Title */}
       <Link
         to={sequencesScenesRoute.fullPath}
         params={{ id: sequence.id }}
-        className="font-medium text-sm text-foreground line-clamp-2 hover:underline shrink-0"
+        className="font-medium text-sm text-foreground line-clamp-2 hover:underline shrink-0 pr-4"
         title={sequence.title || 'Untitled Sequence'}
       >
         {sequence.title || 'Untitled Sequence'}

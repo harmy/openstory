@@ -16,6 +16,7 @@ type EvalMatrixProps = {
   sequences: SequenceWithFrames[];
   viewMode: ViewMode;
   framesLoadingMap: Record<string, boolean>;
+  divergenceMap?: Map<string, { hasVideo: boolean; hasMusic: boolean }>;
   onLoadMore?: () => void;
   hasMore?: boolean;
 };
@@ -30,6 +31,7 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
   sequences,
   viewMode,
   framesLoadingMap,
+  divergenceMap,
   onLoadMore,
   hasMore,
 }) => {
@@ -137,6 +139,7 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
                   maxSceneCount={maxSceneCount}
                   sequenceIndex={virtualRow.index}
                   framesLoading={framesLoadingMap[sequence.id] ?? false}
+                  divergence={divergenceMap?.get(sequence.id)}
                   openDialog={openDialog}
                   onOpenDialogChange={setOpenDialog}
                   onNavigateToCell={handleNavigateToCell}

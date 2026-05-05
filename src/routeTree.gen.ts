@@ -49,7 +49,6 @@ import { Route as ProtectedSettingsApiKeysRouteImport } from './routes/_protecte
 import { Route as ProtectedSequencesNewRouteImport } from './routes/_protected/sequences/new'
 import { Route as ProtectedLocationsLocationIdRouteImport } from './routes/_protected/locations/$locationId'
 import { Route as ProtectedAdminUsageRouteImport } from './routes/_protected/admin/usage'
-import { Route as ProtectedAdminEvalRouteImport } from './routes/_protected/admin/eval'
 import { Route as ProtectedSequencesIdRouteRouteImport } from './routes/_protected/sequences/$id/route'
 import { Route as ProtectedSequencesIdTheatreRouteImport } from './routes/_protected/sequences/$id/theatre'
 import { Route as ProtectedSequencesIdScriptRouteImport } from './routes/_protected/sequences/$id/script'
@@ -261,11 +260,6 @@ const ProtectedAdminUsageRoute = ProtectedAdminUsageRouteImport.update({
   path: '/usage',
   getParentRoute: () => ProtectedAdminRouteRoute,
 } as any)
-const ProtectedAdminEvalRoute = ProtectedAdminEvalRouteImport.update({
-  id: '/eval',
-  path: '/eval',
-  getParentRoute: () => ProtectedAdminRouteRoute,
-} as any)
 const ProtectedSequencesIdRouteRoute =
   ProtectedSequencesIdRouteRouteImport.update({
     id: '/sequences/$id',
@@ -349,7 +343,6 @@ export interface FileRoutesByFullPath {
   '/meta/og-linkedin': typeof MetaOgLinkedinRoute
   '/docs/': typeof DocsIndexRoute
   '/sequences/$id': typeof ProtectedSequencesIdRouteRouteWithChildren
-  '/admin/eval': typeof ProtectedAdminEvalRoute
   '/admin/usage': typeof ProtectedAdminUsageRoute
   '/locations/$locationId': typeof ProtectedLocationsLocationIdRoute
   '/sequences/new': typeof ProtectedSequencesNewRoute
@@ -397,7 +390,6 @@ export interface FileRoutesByTo {
   '/meta/og-linkedin': typeof MetaOgLinkedinRoute
   '/docs': typeof DocsIndexRoute
   '/sequences/$id': typeof ProtectedSequencesIdRouteRouteWithChildren
-  '/admin/eval': typeof ProtectedAdminEvalRoute
   '/admin/usage': typeof ProtectedAdminUsageRoute
   '/locations/$locationId': typeof ProtectedLocationsLocationIdRoute
   '/sequences/new': typeof ProtectedSequencesNewRoute
@@ -451,7 +443,6 @@ export interface FileRoutesById {
   '/_marketing/': typeof MarketingIndexRoute
   '/docs/': typeof DocsIndexRoute
   '/_protected/sequences/$id': typeof ProtectedSequencesIdRouteRouteWithChildren
-  '/_protected/admin/eval': typeof ProtectedAdminEvalRoute
   '/_protected/admin/usage': typeof ProtectedAdminUsageRoute
   '/_protected/locations/$locationId': typeof ProtectedLocationsLocationIdRoute
   '/_protected/sequences/new': typeof ProtectedSequencesNewRoute
@@ -503,7 +494,6 @@ export interface FileRouteTypes {
     | '/meta/og-linkedin'
     | '/docs/'
     | '/sequences/$id'
-    | '/admin/eval'
     | '/admin/usage'
     | '/locations/$locationId'
     | '/sequences/new'
@@ -551,7 +541,6 @@ export interface FileRouteTypes {
     | '/meta/og-linkedin'
     | '/docs'
     | '/sequences/$id'
-    | '/admin/eval'
     | '/admin/usage'
     | '/locations/$locationId'
     | '/sequences/new'
@@ -604,7 +593,6 @@ export interface FileRouteTypes {
     | '/_marketing/'
     | '/docs/'
     | '/_protected/sequences/$id'
-    | '/_protected/admin/eval'
     | '/_protected/admin/usage'
     | '/_protected/locations/$locationId'
     | '/_protected/sequences/new'
@@ -937,13 +925,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedAdminUsageRouteImport
       parentRoute: typeof ProtectedAdminRouteRoute
     }
-    '/_protected/admin/eval': {
-      id: '/_protected/admin/eval'
-      path: '/eval'
-      fullPath: '/admin/eval'
-      preLoaderRoute: typeof ProtectedAdminEvalRouteImport
-      parentRoute: typeof ProtectedAdminRouteRoute
-    }
     '/_protected/sequences/$id': {
       id: '/_protected/sequences/$id'
       path: '/sequences/$id'
@@ -1032,12 +1013,10 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 )
 
 interface ProtectedAdminRouteRouteChildren {
-  ProtectedAdminEvalRoute: typeof ProtectedAdminEvalRoute
   ProtectedAdminUsageRoute: typeof ProtectedAdminUsageRoute
 }
 
 const ProtectedAdminRouteRouteChildren: ProtectedAdminRouteRouteChildren = {
-  ProtectedAdminEvalRoute: ProtectedAdminEvalRoute,
   ProtectedAdminUsageRoute: ProtectedAdminUsageRoute,
 }
 

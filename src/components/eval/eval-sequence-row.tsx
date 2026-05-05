@@ -1,4 +1,5 @@
 import type React from 'react';
+import { Image } from '@unpic/react';
 import { EvalSequenceMetadata } from './eval-sequence-metadata';
 import { EvalSceneCell } from './eval-scene-cell';
 import type { DialogTab } from './eval-cell-dialog';
@@ -23,6 +24,7 @@ type EvalSequenceRowProps = {
   maxSceneCount: number;
   sequenceIndex: number;
   framesLoading: boolean;
+  divergence?: { hasVideo: boolean; hasMusic: boolean };
   openDialog: OpenDialogState;
   onOpenDialogChange: (state: OpenDialogState) => void;
   onNavigateToCell: (sequenceIndex: number, sceneIndex: number) => void;
@@ -35,6 +37,7 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
   maxSceneCount,
   sequenceIndex,
   framesLoading,
+  divergence,
   openDialog,
   onOpenDialogChange,
   onNavigateToCell,
@@ -49,7 +52,7 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
         className="sticky left-0 z-10 bg-background shrink-0 h-full"
         style={{ width: METADATA_WIDTH }}
       >
-        <EvalSequenceMetadata sequence={sequence} />
+        <EvalSequenceMetadata sequence={sequence} divergence={divergence} />
       </div>
       <div
         className="sticky z-10 bg-background shrink-0 h-full border-r border-b p-2 flex items-center justify-center"
@@ -77,6 +80,26 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
               }}
             />
           </button>
+        ) : sequence.posterUrl ? (
+          <div className="relative w-full h-full flex items-center justify-center">
+            <Image
+              src={sequence.posterUrl}
+              alt={`${sequence.title || 'Sequence'} preview`}
+              className="max-w-full max-h-full object-contain rounded-md opacity-60"
+              loading="lazy"
+              width={1000}
+              height={1000}
+            />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="text-xs font-medium text-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded-md border">
+                {sequence.mergedVideoStatus === 'merging'
+                  ? 'Merging video…'
+                  : sequence.mergedVideoStatus === 'failed'
+                    ? 'Merge failed'
+                    : 'No merged video yet'}
+              </span>
+            </div>
+          </div>
         ) : (
           <div className="text-xs text-muted-foreground text-center">
             No video

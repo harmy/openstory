@@ -246,9 +246,30 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
 
           <TabsContent value="motion" className="flex-1 min-h-0 mt-0">
             {!frame.videoUrl ? (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                No video available
-              </div>
+              frame.thumbnailUrl ? (
+                <div className="flex justify-center items-center h-full w-full">
+                  <div className="relative w-full max-w-4xl">
+                    <Image
+                      src={frame.thumbnailUrl}
+                      alt={`Scene ${sceneNumber} preview`}
+                      className="w-full h-auto object-contain rounded-lg opacity-60"
+                      width={1920}
+                      height={1080}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <span className="text-sm font-medium text-foreground bg-background/85 backdrop-blur-sm px-3 py-1.5 rounded-md border">
+                        {frame.videoStatus === 'generating'
+                          ? 'Generating video…'
+                          : 'No video yet'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  No video available
+                </div>
+              )
             ) : (
               <div className="flex justify-center items-center h-full w-full">
                 <div className="w-full max-w-4xl">
