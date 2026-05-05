@@ -1,3 +1,4 @@
+import { SheetStalenessBanners } from '@/components/sheets/sheet-staleness-banners';
 import { Card } from '@/components/ui/card';
 import type { LibraryLocation } from '@/lib/db/schema';
 import { cn } from '@/lib/utils';
@@ -7,12 +8,14 @@ type LocationLibraryCardProps = {
   location: LibraryLocation;
   isGenerating?: boolean;
   onClick?: () => void;
+  divergentVariantId?: string;
 };
 
 export const LocationLibraryCard: React.FC<LocationLibraryCardProps> = ({
   location,
   isGenerating = false,
   onClick,
+  divergentVariantId,
 }) => {
   const previewUrl = location.referenceImageUrl;
 
@@ -52,6 +55,21 @@ export const LocationLibraryCard: React.FC<LocationLibraryCardProps> = ({
         {location.isPublic && (
           <div className="absolute top-2 left-2 rounded bg-background/80 px-2 py-1 text-xs font-medium text-muted-foreground backdrop-blur-sm">
             System
+          </div>
+        )}
+
+        {divergentVariantId && (
+          <div
+            className="absolute right-2 top-2 z-10"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            <SheetStalenessBanners
+              density="corner-dot"
+              entityType="library-location"
+              divergentVariantId={divergentVariantId}
+            />
           </div>
         )}
       </div>

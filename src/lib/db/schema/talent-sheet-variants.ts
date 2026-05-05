@@ -1,11 +1,8 @@
 /**
- * Talent Sheet Variants Schema
- * Stores divergent talent sheet outputs (Stage 2 of workflow snapshots).
- *
- * Mirrors `frame_variants`: parent FK is `talent_sheets.id` so each variant
- * is scoped to a specific talent sheet (a talent may have many sheets — e.g.
- * "casual outfit", "formal wear" — and each can have its own divergent
- * alternates per model).
+ * Stores divergent talent-sheet outputs. Parent FK is `talent_sheets.id` so
+ * each variant is scoped to a specific sheet — a talent may have many sheets
+ * (e.g. "casual outfit", "formal wear"), each with its own divergent
+ * alternates per model.
  */
 
 import { sql, type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
@@ -54,6 +51,8 @@ export const talentSheetVariants = sqliteTable(
 
     inputHash: text('input_hash'),
     divergedAt: integer('diverged_at', { mode: 'timestamp' }),
+    // Soft-delete marker; preserves the artifact for the toast Undo.
+    discardedAt: integer('discarded_at', { mode: 'timestamp' }),
 
     createdAt: integer('created_at', { mode: 'timestamp' })
       .$defaultFn(() => new Date())

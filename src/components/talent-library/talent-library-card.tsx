@@ -1,3 +1,4 @@
+import { SheetStalenessBanners } from '@/components/sheets/sheet-staleness-banners';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToggleTalentFavorite } from '@/hooks/use-talent';
@@ -10,12 +11,14 @@ type TalentLibraryCardProps = {
   talent: TalentWithSheets;
   isGenerating?: boolean;
   onClick?: () => void;
+  divergentVariantId?: string;
 };
 
 export const TalentLibraryCard: React.FC<TalentLibraryCardProps> = ({
   talent,
   isGenerating = false,
   onClick,
+  divergentVariantId,
 }) => {
   const toggleFavorite = useToggleTalentFavorite();
   // Prefer talent headshot (square), fall back to default sheet
@@ -94,6 +97,23 @@ export const TalentLibraryCard: React.FC<TalentLibraryCardProps> = ({
           <div className="absolute top-2 left-2 px-2 py-1 bg-background/80 backdrop-blur-sm rounded text-xs font-medium flex items-center gap-1">
             <Sparkles className="h-3 w-3" />
             AI
+          </div>
+        )}
+
+        {divergentVariantId && (
+          <div
+            className="absolute right-12 top-2 z-10"
+            // The favourite star already occupies `right-2`; offset to its
+            // left so both indicators are visible.
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            <SheetStalenessBanners
+              density="corner-dot"
+              entityType="talent"
+              divergentVariantId={divergentVariantId}
+            />
           </div>
         )}
       </div>

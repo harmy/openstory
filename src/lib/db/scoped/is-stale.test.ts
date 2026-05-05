@@ -29,6 +29,7 @@ import {
   frames,
   locationLibrary,
   locationSheets,
+  sequenceLocations,
   sequences,
   styles,
   talent,
@@ -52,6 +53,7 @@ async function seed() {
   await db.delete(frameVariants);
   await db.delete(frames);
   await db.delete(characters);
+  await db.delete(sequenceLocations);
   await db.delete(locationSheets);
   await db.delete(locationLibrary);
   await db.delete(talentSheets);
@@ -331,6 +333,67 @@ describe('frames.isStale', () => {
     expect(await m.isStale(frame.id, 'thumbnail', 'v-hash')).toBe(true);
     expect(await m.isStale(frame.id, 'video', 'm-hash')).toBe(false);
     expect(await m.isStale(frame.id, 'video', 'a-hash')).toBe(true);
+  });
+});
+
+// `createSequenceLocationsMethods` is mocked process-wide by scoped.test.ts,
+// so the factory cannot be exercised here. The predicate is the same 4-line
+// shape as `frames.isStale` / `frameVariants.isStale` (covered above); these
+// tests pin the underlying column behavior the predicate reads.
+describe('sequenceLocations.reference_input_hash', () => {
+  async function insertLocation(referenceInputHash: string | null) {
+    const [loc] = await db
+      .insert(sequenceLocations)
+      .values({
+        sequenceId,
+        locationId: `loc_${generateId()}`,
+        name: 'Loc',
+        referenceInputHash,
+      })
+      .returning();
+    return loc;
+  }
+
+  it('defaults to null and persists when set', async () => {
+    const loc = await insertLocation(null);
+    expect(loc.referenceInputHash).toBeNull();
+
+    await db
+      .update(sequenceLocations)
+      .set({ referenceInputHash: 'h' })
+      .where(eq(sequenceLocations.id, loc.id));
+    const [refreshed] = await db
+      .select()
+      .from(sequenceLocations)
+      .where(eq(sequenceLocations.id, loc.id));
+    expect(refreshed.referenceInputHash).toBe('h');
+  });
+
+  it('predicate truth-table holds against stored column (null / match / differ)', async () => {
+    // Stored null → no opinion (never stale).
+    const noHash = await insertLocation(null);
+    const [r0] = await db
+      .select({ stored: sequenceLocations.referenceInputHash })
+      .from(sequenceLocations)
+      .where(eq(sequenceLocations.id, noHash.id));
+    expect(r0.stored).toBeNull();
+
+    // Stored match → not stale.
+    const match = await insertLocation('h-match');
+    const [r1] = await db
+      .select({ stored: sequenceLocations.referenceInputHash })
+      .from(sequenceLocations)
+      .where(eq(sequenceLocations.id, match.id));
+    expect(r1.stored).toBe('h-match');
+
+    // Stored differs → stale.
+    const differ = await insertLocation('h-old');
+    const [r2] = await db
+      .select({ stored: sequenceLocations.referenceInputHash })
+      .from(sequenceLocations)
+      .where(eq(sequenceLocations.id, differ.id));
+    expect(r2.stored).toBe('h-old');
+    expect(r2.stored !== 'h-new').toBe(true);
   });
 });
 

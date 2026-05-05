@@ -1,6 +1,15 @@
+import { SheetComparisonDialog } from '@/components/sheets/sheet-comparison-dialog';
+import { SheetStalenessBanners } from '@/components/sheets/sheet-staleness-banners';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  locationSheetVariantKeys,
+  useDiscardSequenceLocationSheetVariant,
+  usePromoteSequenceLocationSheetVariant,
+  useSequenceLocationDivergentVariants,
+  useUndiscardSequenceLocationSheetVariant,
+} from '@/hooks/use-location-sheet-variants';
 import {
   sequenceLocationKeys,
   type TeamLibraryLocation,
@@ -8,12 +17,15 @@ import {
   useRecastLocation,
   useSequenceLocations,
 } from '@/hooks/use-sequence-locations';
+import type { LocationSheetVariant } from '@/lib/db/schema';
 import { useRealtime } from '@/lib/realtime/client';
+import { useSheetStaleDetected } from '@/lib/realtime/use-sheet-stale-detected';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { ArrowLeft, Loader2, MapPin, RefreshCw, Sparkles } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { LocationPickerDialog } from './location-picker-dialog';
 import { LocationRecastConfirmDialog } from './location-recast-confirm-dialog';
 
@@ -109,6 +121,85 @@ export const LocationDetailView: React.FC<LocationDetailViewProps> = ({
     onData: handleRealtimeEvent,
     enabled: !!sequenceId,
   });
+
+  const { data: divergentVariants } =
+    useSequenceLocationDivergentVariants(sequenceId);
+  const invalidateDivergentKeys = useCallback(
+    () => [locationSheetVariantKeys.divergentBySequence(sequenceId)],
+    [sequenceId]
+  );
+  useSheetStaleDetected({
+    channelId: sequenceId,
+    entityTypes: ['location'],
+    invalidateKeys: invalidateDivergentKeys,
+  });
+  const promoteVariant = usePromoteSequenceLocationSheetVariant();
+  const discardVariant = useDiscardSequenceLocationSheetVariant();
+  const undiscardVariant = useUndiscardSequenceLocationSheetVariant();
+  const [compareVariant, setCompareVariant] =
+    useState<LocationSheetVariant | null>(null);
+
+  const locationDivergentVariant = useMemo(() => {
+    if (!divergentVariants) return undefined;
+    return divergentVariants.find((v) => v.parentId === locationId);
+  }, [divergentVariants, locationId]);
+
+  const handleDiscardWithUndo = useCallback(
+    (variant: LocationSheetVariant) => {
+      const restore = () =>
+        undiscardVariant.mutate(
+          { sequenceId, variantId: variant.id },
+          {
+            onSuccess: () => toast.success('Alternate restored'),
+            onError: (error) => {
+              toast.error('Failed to restore alternate', {
+                description:
+                  error instanceof Error ? error.message : 'Unknown error',
+              });
+            },
+          }
+        );
+      discardVariant.mutate(
+        { sequenceId, variantId: variant.id },
+        {
+          onSuccess: () => {
+            setCompareVariant(null);
+            toast('Alternate discarded', {
+              action: { label: 'Undo', onClick: restore },
+            });
+          },
+          onError: (error) => {
+            toast.error('Failed to discard alternate', {
+              description:
+                error instanceof Error ? error.message : 'Unknown error',
+            });
+          },
+        }
+      );
+    },
+    [sequenceId, discardVariant, undiscardVariant]
+  );
+
+  const handlePromote = useCallback(
+    (variant: LocationSheetVariant) => {
+      promoteVariant.mutate(
+        { sequenceId, variantId: variant.id },
+        {
+          onSuccess: () => {
+            setCompareVariant(null);
+            toast.success('Alternate promoted');
+          },
+          onError: (error) => {
+            toast.error('Failed to promote alternate', {
+              description:
+                error instanceof Error ? error.message : 'Unknown error',
+            });
+          },
+        }
+      );
+    },
+    [sequenceId, promoteVariant]
+  );
 
   const location = locations?.find((l) => l.id === locationId);
 
@@ -209,6 +300,20 @@ export const LocationDetailView: React.FC<LocationDetailViewProps> = ({
 
       <ScrollArea className="flex-1 min-h-0">
         <div className="space-y-6 p-4">
+          {locationDivergentVariant && (
+            <SheetStalenessBanners
+              entityType="location"
+              divergentVariantId={locationDivergentVariant.id}
+              onCompareDivergent={() =>
+                setCompareVariant(locationDivergentVariant)
+              }
+              onPromoteDivergent={() => handlePromote(locationDivergentVariant)}
+              onDiscardDivergent={() =>
+                handleDiscardWithUndo(locationDivergentVariant)
+              }
+            />
+          )}
+
           {/* Location reference image - 16:9 aspect ratio */}
           <div className="relative aspect-video overflow-hidden rounded-lg bg-muted">
             {location.referenceImageUrl && !isSheetGenerating ? (
@@ -356,6 +461,23 @@ export const LocationDetailView: React.FC<LocationDetailViewProps> = ({
           </dl>
         </div>
       </ScrollArea>
+
+      {compareVariant && (
+        <SheetComparisonDialog
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setCompareVariant(null);
+          }}
+          entityType="location"
+          livePrimaryUrl={location.referenceImageUrl}
+          variantUrl={compareVariant.url}
+          variantId={compareVariant.id}
+          onPromote={() => handlePromote(compareVariant)}
+          onDiscard={() => handleDiscardWithUndo(compareVariant)}
+          isPromoting={promoteVariant.isPending}
+          isDiscarding={discardVariant.isPending}
+        />
+      )}
     </div>
   );
 };

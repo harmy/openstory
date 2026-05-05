@@ -13,9 +13,19 @@ import type {
   LocationSheetVariantParentType,
   NewLocationSheetVariant,
 } from '@/lib/db/schema';
-import { locationSheetVariants } from '@/lib/db/schema';
-import { and, eq, sql } from 'drizzle-orm';
+import {
+  locationLibrary,
+  locationSheetVariants,
+  sequenceLocations,
+} from '@/lib/db/schema';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { insertDivergentRaceTolerant } from './divergent-insert';
+
+type PromoteLocationUpdate = {
+  referenceImageUrl: string | null;
+  referenceImagePath: string | null;
+  referenceInputHash: string | null;
+};
 
 export function createLocationSheetVariantsMethods(db: Database) {
   return {
@@ -48,6 +58,58 @@ export function createLocationSheetVariantsMethods(db: Database) {
             sql`${locationSheetVariants.divergedAt} IS NOT NULL`
           )
         );
+    },
+
+    /**
+     * Active (non-discarded) divergent alternates for a parent. UI banner /
+     * corner-dot read through this so the surfaces clear once the user
+     * promotes or discards.
+     */
+    listDivergentActiveByParent: async (
+      parentType: LocationSheetVariantParentType,
+      parentId: string
+    ): Promise<LocationSheetVariant[]> => {
+      return db
+        .select()
+        .from(locationSheetVariants)
+        .where(
+          and(
+            eq(locationSheetVariants.parentType, parentType),
+            eq(locationSheetVariants.parentId, parentId),
+            sql`${locationSheetVariants.divergedAt} IS NOT NULL`,
+            sql`${locationSheetVariants.discardedAt} IS NULL`
+          )
+        )
+        .orderBy(locationSheetVariants.divergedAt);
+    },
+
+    listDivergentActiveByParents: async (
+      parentType: LocationSheetVariantParentType,
+      parentIds: string[]
+    ): Promise<LocationSheetVariant[]> => {
+      if (parentIds.length === 0) return [];
+      return db
+        .select()
+        .from(locationSheetVariants)
+        .where(
+          and(
+            eq(locationSheetVariants.parentType, parentType),
+            inArray(locationSheetVariants.parentId, parentIds),
+            sql`${locationSheetVariants.divergedAt} IS NOT NULL`,
+            sql`${locationSheetVariants.discardedAt} IS NULL`
+          )
+        )
+        .orderBy(locationSheetVariants.divergedAt);
+    },
+
+    getById: async (
+      variantId: string
+    ): Promise<LocationSheetVariant | null> => {
+      const result = await db
+        .select()
+        .from(locationSheetVariants)
+        .where(eq(locationSheetVariants.id, variantId));
+      return result[0] ?? null;
     },
 
     insert: async (
@@ -96,10 +158,114 @@ export function createLocationSheetVariantsMethods(db: Database) {
       });
     },
 
-    discard: async (id: string): Promise<void> => {
-      await db
-        .delete(locationSheetVariants)
-        .where(eq(locationSheetVariants.id, id));
+    /** Soft-delete a divergent alternate; preserves the row for the toast Undo. */
+    discard: async (variantId: string): Promise<Date> => {
+      const discardedAt = new Date();
+      const result = await db
+        .update(locationSheetVariants)
+        .set({ discardedAt, updatedAt: discardedAt })
+        .where(eq(locationSheetVariants.id, variantId))
+        .returning();
+      if (result.length === 0) {
+        throw new Error(`LocationSheetVariant ${variantId} not found`);
+      }
+      return discardedAt;
+    },
+
+    undiscard: async (variantId: string): Promise<void> => {
+      const result = await db
+        .update(locationSheetVariants)
+        .set({ discardedAt: null, updatedAt: new Date() })
+        .where(eq(locationSheetVariants.id, variantId))
+        .returning();
+      if (result.length === 0) {
+        throw new Error(`LocationSheetVariant ${variantId} not found`);
+      }
+    },
+
+    /**
+     * Atomically copy variant fields onto the live parent (`sequence_locations`
+     * or `location_library`) and soft-delete the variant. Single batch so a
+     * partial failure cannot leave the live primary updated with the variant
+     * still appearing as divergent.
+     */
+    promoteAtomically: async (
+      parentType: LocationSheetVariantParentType,
+      parentId: string,
+      parentUpdate: PromoteLocationUpdate,
+      variantId: string
+    ): Promise<{ discardedAt: Date }> => {
+      const [existingVariant] = await db
+        .select({
+          id: locationSheetVariants.id,
+          parentType: locationSheetVariants.parentType,
+          parentId: locationSheetVariants.parentId,
+        })
+        .from(locationSheetVariants)
+        .where(eq(locationSheetVariants.id, variantId));
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
+      if (!existingVariant) {
+        throw new Error(`LocationSheetVariant ${variantId} not found`);
+      }
+      if (
+        existingVariant.parentType !== parentType ||
+        existingVariant.parentId !== parentId
+      ) {
+        throw new Error(
+          `LocationSheetVariant ${variantId} parent (${existingVariant.parentType}:${existingVariant.parentId}) does not match promote target (${parentType}:${parentId})`
+        );
+      }
+
+      const existingParent =
+        parentType === 'sequence_location'
+          ? (
+              await db
+                .select({ id: sequenceLocations.id })
+                .from(sequenceLocations)
+                .where(eq(sequenceLocations.id, parentId))
+            )[0]
+          : (
+              await db
+                .select({ id: locationLibrary.id })
+                .from(locationLibrary)
+                .where(eq(locationLibrary.id, parentId))
+            )[0];
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
+      if (!existingParent) {
+        throw new Error(`${parentType} ${parentId} not found`);
+      }
+
+      const now = new Date();
+      const updateParent =
+        parentType === 'sequence_location'
+          ? db
+              .update(sequenceLocations)
+              .set({ ...parentUpdate, updatedAt: now })
+              .where(eq(sequenceLocations.id, parentId))
+              .returning({ id: sequenceLocations.id })
+          : db
+              .update(locationLibrary)
+              .set({ ...parentUpdate, updatedAt: now })
+              .where(eq(locationLibrary.id, parentId))
+              .returning({ id: locationLibrary.id });
+      const discardVariant = db
+        .update(locationSheetVariants)
+        .set({ discardedAt: now, updatedAt: now })
+        .where(eq(locationSheetVariants.id, variantId))
+        .returning({ id: locationSheetVariants.id });
+      const [parentRows, variantRows] = await db.batch([
+        updateParent,
+        discardVariant,
+      ]);
+      if (parentRows.length === 0) {
+        throw new Error(`${parentType} ${parentId} disappeared during promote`);
+      }
+      if (variantRows.length === 0) {
+        throw new Error(
+          `LocationSheetVariant ${variantId} disappeared during promote`
+        );
+      }
+      return { discardedAt: now };
     },
   };
 }

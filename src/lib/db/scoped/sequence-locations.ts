@@ -235,6 +235,27 @@ export function createSequenceLocationsMethods(db: Database) {
       });
     },
 
+    /**
+     * True iff `currentHash` differs from the stored `referenceInputHash`.
+     * Returns false when no hash has been recorded yet (legacy artifact, no
+     * opinion). Mirrors `characters.isStale` and `locationLibrary.isStale`.
+     */
+    isStale: async (
+      locationId: string,
+      currentHash: string
+    ): Promise<boolean> => {
+      const result = await db
+        .select({ hash: sequenceLocations.referenceInputHash })
+        .from(sequenceLocations)
+        .where(eq(sequenceLocations.id, locationId));
+      if (result.length === 0) {
+        throw new Error(`SequenceLocation ${locationId} not found`);
+      }
+      const stored = result[0].hash;
+      if (stored === null) return false;
+      return currentHash !== stored;
+    },
+
     getNeedingReferences: async (
       sequenceId: string
     ): Promise<SequenceLocation[]> => {

@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "0b8f3e2c-93dd-49df-8b76-e2b779bed9d5",
+  "id": "4a4a5c72-b314-48ac-aedf-fc3720696dc3",
   "prevIds": [
     "9605b368-2d17-427f-a234-bd13adddf76a",
     "606ba03e-4bad-4be8-9399-a2279dc4f11e"
@@ -2893,16 +2893,6 @@
     },
     {
       "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "discarded_at",
-      "entityType": "columns",
-      "table": "sequence_music_variants"
-    },
-    {
-      "type": "integer",
       "notNull": true,
       "autoincrement": false,
       "default": null,
@@ -3028,16 +3018,6 @@
       "default": null,
       "generated": null,
       "name": "diverged_at",
-      "entityType": "columns",
-      "table": "sequence_video_variants"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "discarded_at",
       "entityType": "columns",
       "table": "sequence_video_variants"
     },

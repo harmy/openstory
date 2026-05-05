@@ -2,9 +2,11 @@ import { TalentLibraryCard } from '@/components/talent-library/talent-library-ca
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useTalentSheetsRealtime } from '@/hooks/use-talent-sheets-realtime';
+import { useTeamTalentDivergentVariants } from '@/hooks/use-talent-sheet-variants';
 import type { TalentWithSheets } from '@/lib/db/schema';
 import { useNavigate } from '@tanstack/react-router';
 import type React from 'react';
+import { useMemo } from 'react';
 
 type TalentLibraryListProps = {
   talent?: TalentWithSheets[];
@@ -22,6 +24,27 @@ export const TalentLibraryList: React.FC<TalentLibraryListProps> = ({
   // Subscribe to realtime events for all talent
   const talentIds = talent?.map((t) => t.id) ?? [];
   const { isGenerating } = useTalentSheetsRealtime(talentIds);
+
+  // Collapse divergent variants to one dot per talent (oldest divergence wins).
+  const { data: divergentVariants } = useTeamTalentDivergentVariants();
+  const sheetIdToTalentId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of talent ?? []) {
+      for (const sheet of t.sheets) {
+        map.set(sheet.id, t.id);
+      }
+    }
+    return map;
+  }, [talent]);
+  const divergentByTalentId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of divergentVariants ?? []) {
+      const talentId = sheetIdToTalentId.get(v.talentSheetId);
+      if (!talentId) continue;
+      if (!map.has(talentId)) map.set(talentId, v.id);
+    }
+    return map;
+  }, [divergentVariants, sheetIdToTalentId]);
 
   if (isLoading) {
     return (
@@ -62,6 +85,7 @@ export const TalentLibraryList: React.FC<TalentLibraryListProps> = ({
           talent={t}
           isGenerating={isGenerating(t.id)}
           onClick={() => void navigate({ to: `/talent/${t.id}` })}
+          divergentVariantId={divergentByTalentId.get(t.id)}
         />
       ))}
     </div>

@@ -1,6 +1,15 @@
+import { SheetComparisonDialog } from '@/components/sheets/sheet-comparison-dialog';
+import { SheetStalenessBanners } from '@/components/sheets/sheet-staleness-banners';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  characterSheetVariantKeys,
+  useCharacterDivergentVariants,
+  useDiscardCharacterSheetVariant,
+  usePromoteCharacterSheetVariant,
+  useUndiscardCharacterSheetVariant,
+} from '@/hooks/use-character-sheet-variants';
 import {
   sequenceCharacterKeys,
   useAddCharacterToLibrary,
@@ -8,8 +17,9 @@ import {
   useRecastCharacter,
   useSequenceCharacters,
 } from '@/hooks/use-sequence-characters';
-import type { TalentWithSheets } from '@/lib/db/schema';
+import type { CharacterSheetVariant, TalentWithSheets } from '@/lib/db/schema';
 import { useRealtime } from '@/lib/realtime/client';
+import { useSheetStaleDetected } from '@/lib/realtime/use-sheet-stale-detected';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -21,7 +31,8 @@ import {
   Sparkles,
   User,
 } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { RecastConfirmDialog } from './recast-confirm-dialog';
 import { TalentPickerDialog } from './talent-picker-dialog';
 
@@ -120,6 +131,84 @@ export const CharacterDetailView: React.FC<CharacterDetailViewProps> = ({
     enabled: !!sequenceId,
   });
 
+  const { data: divergentVariants } = useCharacterDivergentVariants(sequenceId);
+  const invalidateDivergentKeys = useCallback(
+    () => [characterSheetVariantKeys.divergentBySequence(sequenceId)],
+    [sequenceId]
+  );
+  useSheetStaleDetected({
+    channelId: sequenceId,
+    entityTypes: ['character'],
+    invalidateKeys: invalidateDivergentKeys,
+  });
+  const promoteVariant = usePromoteCharacterSheetVariant();
+  const discardVariant = useDiscardCharacterSheetVariant();
+  const undiscardVariant = useUndiscardCharacterSheetVariant();
+  const [compareVariant, setCompareVariant] =
+    useState<CharacterSheetVariant | null>(null);
+
+  const characterDivergentVariant = useMemo(() => {
+    if (!divergentVariants) return undefined;
+    return divergentVariants.find((v) => v.characterId === characterId);
+  }, [divergentVariants, characterId]);
+
+  const handleDiscardWithUndo = useCallback(
+    (variant: CharacterSheetVariant) => {
+      const restore = () =>
+        undiscardVariant.mutate(
+          { sequenceId, variantId: variant.id },
+          {
+            onSuccess: () => toast.success('Alternate restored'),
+            onError: (error) => {
+              toast.error('Failed to restore alternate', {
+                description:
+                  error instanceof Error ? error.message : 'Unknown error',
+              });
+            },
+          }
+        );
+      discardVariant.mutate(
+        { sequenceId, variantId: variant.id },
+        {
+          onSuccess: () => {
+            setCompareVariant(null);
+            toast('Alternate discarded', {
+              action: { label: 'Undo', onClick: restore },
+            });
+          },
+          onError: (error) => {
+            toast.error('Failed to discard alternate', {
+              description:
+                error instanceof Error ? error.message : 'Unknown error',
+            });
+          },
+        }
+      );
+    },
+    [sequenceId, discardVariant, undiscardVariant]
+  );
+
+  const handlePromote = useCallback(
+    (variant: CharacterSheetVariant) => {
+      promoteVariant.mutate(
+        { sequenceId, variantId: variant.id },
+        {
+          onSuccess: () => {
+            setCompareVariant(null);
+            toast.success('Alternate promoted');
+          },
+          onError: (error) => {
+            toast.error('Failed to promote alternate', {
+              description:
+                error instanceof Error ? error.message : 'Unknown error',
+            });
+          },
+        }
+      );
+    },
+    [sequenceId, promoteVariant]
+  );
+
   const character = characters?.find((c) => c.id === characterId);
 
   // Determine if currently regenerating (from realtime or mutation pending)
@@ -210,6 +299,22 @@ export const CharacterDetailView: React.FC<CharacterDetailViewProps> = ({
 
       <ScrollArea className="flex-1 min-h-0">
         <div className="space-y-6 p-4">
+          {characterDivergentVariant && (
+            <SheetStalenessBanners
+              entityType="character"
+              divergentVariantId={characterDivergentVariant.id}
+              onCompareDivergent={() =>
+                setCompareVariant(characterDivergentVariant)
+              }
+              onPromoteDivergent={() =>
+                handlePromote(characterDivergentVariant)
+              }
+              onDiscardDivergent={() =>
+                handleDiscardWithUndo(characterDivergentVariant)
+              }
+            />
+          )}
+
           {/* Character sheet image - 16:9 aspect ratio */}
           <div className="relative aspect-video overflow-hidden rounded-lg bg-muted">
             {character.sheetImageUrl && !isSheetGenerating ? (
@@ -364,6 +469,23 @@ export const CharacterDetailView: React.FC<CharacterDetailViewProps> = ({
           </dl>
         </div>
       </ScrollArea>
+
+      {compareVariant && (
+        <SheetComparisonDialog
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setCompareVariant(null);
+          }}
+          entityType="character"
+          livePrimaryUrl={character.sheetImageUrl}
+          variantUrl={compareVariant.url}
+          variantId={compareVariant.id}
+          onPromote={() => handlePromote(compareVariant)}
+          onDiscard={() => handleDiscardWithUndo(compareVariant)}
+          isPromoting={promoteVariant.isPending}
+          isDiscarding={discardVariant.isPending}
+        />
+      )}
     </div>
   );
 };

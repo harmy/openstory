@@ -1,12 +1,17 @@
+import { SheetStalenessBanners } from '@/components/sheets/sheet-staleness-banners';
 import { Card } from '@/components/ui/card';
 import type { CharacterWithTalent } from '@/lib/db/schema';
 import { Sparkles, User } from 'lucide-react';
 
 type TalentCardProps = {
   character: CharacterWithTalent;
+  divergentVariantId?: string;
 };
 
-export const TalentCard: React.FC<TalentCardProps> = ({ character }) => {
+export const TalentCard: React.FC<TalentCardProps> = ({
+  character,
+  divergentVariantId,
+}) => {
   const imageUrl = character.sheetImageUrl;
 
   return (
@@ -37,6 +42,24 @@ export const TalentCard: React.FC<TalentCardProps> = ({ character }) => {
         {character.sheetStatus === 'generating' && (
           <div className="absolute right-2 top-2 rounded-full bg-primary/90 px-2 py-0.5 text-xs font-medium text-primary-foreground">
             Generating…
+          </div>
+        )}
+
+        {divergentVariantId && (
+          <div
+            className="absolute left-2 top-2 z-10"
+            // Stop click bubbling so the dot's own click handler (jump to detail
+            // view via the parent's `onClick`) can fire without re-selecting
+            // the card behind it.
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            <SheetStalenessBanners
+              density="corner-dot"
+              entityType="character"
+              divergentVariantId={divergentVariantId}
+            />
           </div>
         )}
       </div>

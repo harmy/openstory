@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { SheetComparisonDialog } from '@/components/sheets/sheet-comparison-dialog';
+import { SheetStalenessBanners } from '@/components/sheets/sheet-staleness-banners';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,9 +16,22 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  talentSheetVariantKeys,
+  useDiscardTalentSheetVariant,
+  usePromoteTalentSheetVariant,
+  useTalentDivergentVariants,
+  useUndiscardTalentSheetVariant,
+} from '@/hooks/use-talent-sheet-variants';
 import { useUpdateTalent, useDeleteTalentMedia } from '@/hooks/use-talent';
+import { useSheetStaleDetected } from '@/lib/realtime/use-sheet-stale-detected';
 import { AddTalentMediaDialog } from './add-talent-media-dialog';
-import type { Talent, TalentMediaRecord, TalentSheet } from '@/lib/db/schema';
+import type {
+  Talent,
+  TalentMediaRecord,
+  TalentSheet,
+  TalentSheetVariant,
+} from '@/lib/db/schema';
 import { Pencil, Plus, X } from 'lucide-react';
 
 type TalentWithRelations = Talent & {
@@ -36,6 +52,99 @@ export const EditTalentDialog: React.FC<EditTalentDialogProps> = ({
 
   const updateTalent = useUpdateTalent();
   const deleteMedia = useDeleteTalentMedia();
+
+  const { data: divergentVariants } = useTalentDivergentVariants(
+    open ? talent.id : undefined
+  );
+  const invalidateDivergentKeys = useCallback(
+    () => [talentSheetVariantKeys.divergentByTalent(talent.id)],
+    [talent.id]
+  );
+  useSheetStaleDetected({
+    channelId: open ? `talent:${talent.id}` : undefined,
+    entityTypes: ['talent'],
+    invalidateKeys: invalidateDivergentKeys,
+  });
+  const promoteVariant = usePromoteTalentSheetVariant();
+  const discardVariant = useDiscardTalentSheetVariant();
+  const undiscardVariant = useUndiscardTalentSheetVariant();
+  const [compareVariant, setCompareVariant] =
+    useState<TalentSheetVariant | null>(null);
+
+  // Pick the most relevant divergent variant for the banner: oldest active
+  // entry across this talent's sheets (matches the listing order).
+  const focusVariant = useMemo(
+    () => divergentVariants?.[0],
+    [divergentVariants]
+  );
+
+  // Live primary url for the focused variant — `talent_sheets.imageUrl` of
+  // the parent sheet. Match by id rather than picking the default sheet so
+  // the dialog compares against the correct primary slot.
+  const focusVariantLiveUrl = useMemo(() => {
+    if (!compareVariant) return null;
+    const sheet = talent.sheets.find(
+      (s) => s.id === compareVariant.talentSheetId
+    );
+    return sheet?.imageUrl ?? null;
+  }, [compareVariant, talent.sheets]);
+
+  const handleDiscardWithUndo = useCallback(
+    (variant: TalentSheetVariant) => {
+      const restore = () =>
+        undiscardVariant.mutate(
+          { variantId: variant.id, talentId: talent.id },
+          {
+            onSuccess: () => toast.success('Alternate restored'),
+            onError: (error) => {
+              toast.error('Failed to restore alternate', {
+                description:
+                  error instanceof Error ? error.message : 'Unknown error',
+              });
+            },
+          }
+        );
+      discardVariant.mutate(
+        { variantId: variant.id, talentId: talent.id },
+        {
+          onSuccess: () => {
+            setCompareVariant(null);
+            toast('Alternate discarded', {
+              action: { label: 'Undo', onClick: restore },
+            });
+          },
+          onError: (error) => {
+            toast.error('Failed to discard alternate', {
+              description:
+                error instanceof Error ? error.message : 'Unknown error',
+            });
+          },
+        }
+      );
+    },
+    [discardVariant, undiscardVariant, talent.id]
+  );
+
+  const handlePromote = useCallback(
+    (variant: TalentSheetVariant) => {
+      promoteVariant.mutate(
+        { variantId: variant.id, talentId: talent.id },
+        {
+          onSuccess: () => {
+            setCompareVariant(null);
+            toast.success('Alternate promoted');
+          },
+          onError: (error) => {
+            toast.error('Failed to promote alternate', {
+              description:
+                error instanceof Error ? error.message : 'Unknown error',
+            });
+          },
+        }
+      );
+    },
+    [promoteVariant, talent.id]
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -88,6 +197,16 @@ export const EditTalentDialog: React.FC<EditTalentDialogProps> = ({
               Update talent details and reference media.
             </DialogDescription>
           </DialogHeader>
+
+          {focusVariant && (
+            <SheetStalenessBanners
+              entityType="talent"
+              divergentVariantId={focusVariant.id}
+              onCompareDivergent={() => setCompareVariant(focusVariant)}
+              onPromoteDivergent={() => handlePromote(focusVariant)}
+              onDiscardDivergent={() => handleDiscardWithUndo(focusVariant)}
+            />
+          )}
 
           <div className="grid gap-4">
             <div className="flex flex-col gap-2">
@@ -174,6 +293,23 @@ export const EditTalentDialog: React.FC<EditTalentDialogProps> = ({
             </Button>
           </DialogFooter>
         </form>
+
+        {compareVariant && (
+          <SheetComparisonDialog
+            open={true}
+            onOpenChange={(o) => {
+              if (!o) setCompareVariant(null);
+            }}
+            entityType="talent"
+            livePrimaryUrl={focusVariantLiveUrl}
+            variantUrl={compareVariant.url}
+            variantId={compareVariant.id}
+            onPromote={() => handlePromote(compareVariant)}
+            onDiscard={() => handleDiscardWithUndo(compareVariant)}
+            isPromoting={promoteVariant.isPending}
+            isDiscarding={discardVariant.isPending}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -1,7 +1,9 @@
 import { Skeleton } from '@/components/ui/skeleton';
+import { useCharacterDivergentVariants } from '@/hooks/use-character-sheet-variants';
 import { useSequenceCharacters } from '@/hooks/use-sequence-characters';
 import { Link } from '@tanstack/react-router';
 import { Users } from 'lucide-react';
+import { useMemo } from 'react';
 import { TalentCard } from './talent-card';
 
 type TalentViewProps = {
@@ -14,6 +16,16 @@ export const TalentView: React.FC<TalentViewProps> = ({ sequenceId }) => {
     isLoading,
     error,
   } = useSequenceCharacters(sequenceId);
+  const { data: divergentVariants } = useCharacterDivergentVariants(sequenceId);
+  const divergentByCharacterId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of divergentVariants ?? []) {
+      // Oldest active divergence per character; the list is already
+      // sorted by divergedAt ascending.
+      if (!map.has(v.characterId)) map.set(v.characterId, v.id);
+    }
+    return map;
+  }, [divergentVariants]);
 
   if (error) {
     return (
@@ -60,7 +72,10 @@ export const TalentView: React.FC<TalentViewProps> = ({ sequenceId }) => {
               params={{ id: sequenceId, characterId: character.id }}
               className="block"
             >
-              <TalentCard character={character} />
+              <TalentCard
+                character={character}
+                divergentVariantId={divergentByCharacterId.get(character.id)}
+              />
             </Link>
           ))}
         </div>

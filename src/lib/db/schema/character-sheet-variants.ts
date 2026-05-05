@@ -1,11 +1,8 @@
 /**
- * Character Sheet Variants Schema
- * Stores divergent character sheet outputs (Stage 2 of workflow snapshots).
- *
- * Mirrors `frame_variants` shape: parent FK, model, URL/path, input_hash,
- * diverged_at, status, error. When `characterSheetWorkflow` finishes generating
- * a sheet but its inputs have diverged from the live character row, the result
- * is saved here instead of overwriting `characters.sheetImageUrl`.
+ * Stores divergent character-sheet outputs. When `characterSheetWorkflow`
+ * finishes generating but its inputs have diverged from the live character
+ * row, the result is saved here instead of overwriting
+ * `characters.sheetImageUrl`.
  */
 
 import { sql, type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
@@ -54,6 +51,8 @@ export const characterSheetVariants = sqliteTable(
 
     inputHash: text('input_hash'),
     divergedAt: integer('diverged_at', { mode: 'timestamp' }),
+    // Soft-delete marker; preserves the artifact for the toast Undo.
+    discardedAt: integer('discarded_at', { mode: 'timestamp' }),
 
     createdAt: integer('created_at', { mode: 'timestamp' })
       .$defaultFn(() => new Date())

@@ -1,7 +1,9 @@
 import { Skeleton } from '@/components/ui/skeleton';
+import { useSequenceLocationDivergentVariants } from '@/hooks/use-location-sheet-variants';
 import { useSequenceLocations } from '@/hooks/use-sequence-locations';
 import { Link } from '@tanstack/react-router';
 import { MapPin } from 'lucide-react';
+import { useMemo } from 'react';
 import { LocationCard } from './location-card';
 
 type LocationViewProps = {
@@ -14,6 +16,15 @@ export const LocationView: React.FC<LocationViewProps> = ({ sequenceId }) => {
     isLoading,
     error,
   } = useSequenceLocations(sequenceId);
+  const { data: divergentVariants } =
+    useSequenceLocationDivergentVariants(sequenceId);
+  const divergentByLocationId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of divergentVariants ?? []) {
+      if (!map.has(v.parentId)) map.set(v.parentId, v.id);
+    }
+    return map;
+  }, [divergentVariants]);
 
   if (error) {
     return (
@@ -60,7 +71,10 @@ export const LocationView: React.FC<LocationViewProps> = ({ sequenceId }) => {
               params={{ id: sequenceId, locationId: location.id }}
               className="block"
             >
-              <LocationCard location={location} />
+              <LocationCard
+                location={location}
+                divergentVariantId={divergentByLocationId.get(location.id)}
+              />
             </Link>
           ))}
         </div>

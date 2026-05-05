@@ -1,12 +1,17 @@
+import { SheetStalenessBanners } from '@/components/sheets/sheet-staleness-banners';
 import { Card } from '@/components/ui/card';
 import type { SequenceLocation } from '@/lib/db/schema';
 import { MapPin, Sparkles } from 'lucide-react';
 
 type LocationCardProps = {
   location: SequenceLocation;
+  divergentVariantId?: string;
 };
 
-export const LocationCard: React.FC<LocationCardProps> = ({ location }) => {
+export const LocationCard: React.FC<LocationCardProps> = ({
+  location,
+  divergentVariantId,
+}) => {
   const imageUrl = location.referenceImageUrl;
 
   return (
@@ -32,6 +37,21 @@ export const LocationCard: React.FC<LocationCardProps> = ({ location }) => {
         {location.referenceStatus === 'generating' && (
           <div className="absolute right-2 top-2 rounded-full bg-primary/90 px-2 py-0.5 text-xs font-medium text-primary-foreground">
             Generating…
+          </div>
+        )}
+
+        {divergentVariantId && (
+          <div
+            className="absolute right-2 bottom-2 z-10"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            <SheetStalenessBanners
+              density="corner-dot"
+              entityType="location"
+              divergentVariantId={divergentVariantId}
+            />
           </div>
         )}
 
