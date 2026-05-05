@@ -23,6 +23,7 @@ import type {
   SequenceVideoVariant,
 } from '@/lib/db/schema';
 import { and, eq, sql } from 'drizzle-orm';
+import { insertDivergentRaceTolerant } from './divergent-insert';
 
 export type WriteVariantResult<T> = { variant: T; divergent: boolean };
 
@@ -83,34 +84,23 @@ export function createSequenceVariantsMethods(db: Database) {
   const insertDivergentVideo = async (
     data: NewSequenceVideoVariant & { inputHash: string; divergedAt: Date }
   ): Promise<SequenceVideoVariant> => {
-    // Pre-check existence rather than `onConflictDoNothing` because drizzle's
-    // SQLite `onConflictDoNothing` does not emit the partial-index `WHERE`
-    // predicate after the target column list. Idempotent on retry of the same
-    // (sequence, workflow, inputHash).
-    const existing = await db
-      .select()
-      .from(sequenceVideoVariants)
-      .where(
-        and(
-          eq(sequenceVideoVariants.sequenceId, data.sequenceId),
-          eq(sequenceVideoVariants.workflow, data.workflow),
-          eq(sequenceVideoVariants.inputHash, data.inputHash),
-          sql`${sequenceVideoVariants.divergedAt} IS NOT NULL`
-        )
-      );
-    const existingRow = existing.at(0);
-    if (existingRow) {
-      return existingRow;
-    }
-    const inserted = await db
-      .insert(sequenceVideoVariants)
-      .values(data)
-      .returning();
-    const variant = inserted.at(0);
-    if (!variant) {
-      throw new Error('insertDivergentVideo returned no row');
-    }
-    return variant;
+    const findExisting = () =>
+      db
+        .select()
+        .from(sequenceVideoVariants)
+        .where(
+          and(
+            eq(sequenceVideoVariants.sequenceId, data.sequenceId),
+            eq(sequenceVideoVariants.workflow, data.workflow),
+            eq(sequenceVideoVariants.inputHash, data.inputHash),
+            sql`${sequenceVideoVariants.divergedAt} IS NOT NULL`
+          )
+        );
+    return insertDivergentRaceTolerant({
+      findExisting,
+      insert: () => db.insert(sequenceVideoVariants).values(data).returning(),
+      errorMessage: 'insertDivergentVideo returned no row',
+    });
   };
 
   const getMusicPrimary = async (
@@ -169,30 +159,23 @@ export function createSequenceVariantsMethods(db: Database) {
   const insertDivergentMusic = async (
     data: NewSequenceMusicVariant & { inputHash: string; divergedAt: Date }
   ): Promise<SequenceMusicVariant> => {
-    const existing = await db
-      .select()
-      .from(sequenceMusicVariants)
-      .where(
-        and(
-          eq(sequenceMusicVariants.sequenceId, data.sequenceId),
-          eq(sequenceMusicVariants.model, data.model),
-          eq(sequenceMusicVariants.inputHash, data.inputHash),
-          sql`${sequenceMusicVariants.divergedAt} IS NOT NULL`
-        )
-      );
-    const existingRow = existing.at(0);
-    if (existingRow) {
-      return existingRow;
-    }
-    const inserted = await db
-      .insert(sequenceMusicVariants)
-      .values(data)
-      .returning();
-    const variant = inserted.at(0);
-    if (!variant) {
-      throw new Error('insertDivergentMusic returned no row');
-    }
-    return variant;
+    const findExisting = () =>
+      db
+        .select()
+        .from(sequenceMusicVariants)
+        .where(
+          and(
+            eq(sequenceMusicVariants.sequenceId, data.sequenceId),
+            eq(sequenceMusicVariants.model, data.model),
+            eq(sequenceMusicVariants.inputHash, data.inputHash),
+            sql`${sequenceMusicVariants.divergedAt} IS NOT NULL`
+          )
+        );
+    return insertDivergentRaceTolerant({
+      findExisting,
+      insert: () => db.insert(sequenceMusicVariants).values(data).returning(),
+      errorMessage: 'insertDivergentMusic returned no row',
+    });
   };
 
   return {

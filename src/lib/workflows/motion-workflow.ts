@@ -145,10 +145,17 @@ export const generateMotionWorkflow = createScopedWorkflow<MotionWorkflowInput>(
           });
         }
 
-        void getGenerationChannel(input.sequenceId).emit(
-          'generation.video:progress',
-          { frameId: input.frameId, status: 'generating' }
-        );
+        try {
+          await getGenerationChannel(input.sequenceId).emit(
+            'generation.video:progress',
+            { frameId: input.frameId, status: 'generating' }
+          );
+        } catch (emitError) {
+          console.error(
+            `[MotionWorkflow] Failed to emit generation.video:progress for frame ${input.frameId}:`,
+            emitError
+          );
+        }
         return { frameDeleted: false };
       }
     );
@@ -373,10 +380,17 @@ export const generateMotionWorkflow = createScopedWorkflow<MotionWorkflowInput>(
           return;
         }
 
-        void getGenerationChannel(input.sequenceId).emit(
-          'generation.video:progress',
-          { frameId, status: 'completed', videoUrl: storageResult.url }
-        );
+        try {
+          await getGenerationChannel(input.sequenceId).emit(
+            'generation.video:progress',
+            { frameId, status: 'completed', videoUrl: storageResult.url }
+          );
+        } catch (emitError) {
+          console.error(
+            `[MotionWorkflow] Failed to emit generation.video:progress for frame ${frameId}:`,
+            emitError
+          );
+        }
       });
 
       // Step 6: Check if all frames are complete and trigger merge
@@ -438,7 +452,7 @@ export const generateMotionWorkflow = createScopedWorkflow<MotionWorkflowInput>(
 
       if (input.sequenceId && input.frameId) {
         try {
-          void getGenerationChannel(input.sequenceId).emit(
+          await getGenerationChannel(input.sequenceId).emit(
             'generation.video:progress',
             { frameId: input.frameId, status: 'failed' }
           );

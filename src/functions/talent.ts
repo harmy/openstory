@@ -222,7 +222,7 @@ export const createTalentSheetFn = createServerFn({ method: 'POST' })
       imageUrl: data.imageUrl,
       imagePath: data.imagePath,
       metadata: data.metadata,
-      isDefault: data.isDefault ?? false,
+      isDefault: data.isDefault,
       source:
         data.source === 'ai_generated' ||
         data.source === 'manual_upload' ||
