@@ -16,15 +16,9 @@
  */
 
 import { createHash } from 'node:crypto';
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type * as http from 'node:http';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 type ResponseEntry = {
   status: number;
@@ -109,9 +103,12 @@ const recordedThisSession = new Set<string>();
 
 const FIXTURE_DIR = resolve(import.meta.dirname, '../fixtures/recorded/fal');
 
-function ensureFixtureDir(): void {
-  if (!existsSync(FIXTURE_DIR)) {
-    mkdirSync(FIXTURE_DIR, { recursive: true });
+// Ensures the per-service subdir for a fixture path exists before write —
+// each fal service routes into its own folder via `serviceSlug()`.
+function ensureFixtureParent(filePath: string): void {
+  const parent = dirname(filePath);
+  if (!existsSync(parent)) {
+    mkdirSync(parent, { recursive: true });
   }
 }
 
@@ -162,45 +159,20 @@ function hashBody(body: string): string {
     .slice(0, 16);
 }
 
-// Diagnostic: each record-mode call appends one JSONL line with the model,
-// computed hash, and the *normalized* body (post ULID/UUID strip). After two
-// record passes, diff the entries with the same `model` to see exactly what
-// stayed volatile and is keeping fixtures from being reused.
-//
-// Path: e2e/fixtures/recorded/_debug-bodies.jsonl
-const DEBUG_LOG_PATH = resolve(
-  import.meta.dirname,
-  '../fixtures/recorded/_debug-bodies.jsonl'
-);
-
-function appendDebugBodyLog(
-  targetHost: string,
-  method: string,
-  pathname: string,
-  bodyHash: string,
-  rawBody: string
-): void {
-  if (process.env.FAL_RECORD !== 'true') return;
-  const entry = {
-    ts: new Date().toISOString(),
-    targetHost,
-    method,
-    pathname,
-    bodyHash,
-    normalizedBody: normalizeForHash(rawBody),
-  };
-  try {
-    appendFileSync(DEBUG_LOG_PATH, JSON.stringify(entry) + '\n');
-  } catch {
-    // diagnostic-only; don't break recording on log failure
-  }
-}
-
 function safeFilename(parts: string[]): string {
   return parts
     .join('__')
     .replace(/[^a-zA-Z0-9_.-]/g, '-')
     .replace(/-+/g, '-');
+}
+
+// Slug of the fal service from the request pathname so each service's
+// fixtures live under its own subdir (e.g. `flux-2/`, `kling-video/`).
+// Falls back to "_unknown" for paths that don't match the `/fal-ai/{svc}/…`
+// shape.
+function serviceSlug(pathname: string): string {
+  const match = pathname.match(/^\/fal-ai\/([^/]+)/);
+  return match?.[1] ?? '_unknown';
 }
 
 function fixturePath(record: FixtureRecord['request']): string {
@@ -210,7 +182,7 @@ function fixturePath(record: FixtureRecord['request']): string {
     record.pathname,
     record.bodyHash,
   ]);
-  return resolve(FIXTURE_DIR, `${name}.json`);
+  return resolve(FIXTURE_DIR, serviceSlug(record.pathname), `${name}.json`);
 }
 
 async function readBody(req: http.IncomingMessage): Promise<string> {
@@ -273,7 +245,9 @@ async function forwardToFal(
 }
 
 export function createFalHandler() {
-  ensureFixtureDir();
+  if (!existsSync(FIXTURE_DIR)) {
+    mkdirSync(FIXTURE_DIR, { recursive: true });
+  }
 
   return {
     async handleRequest(
@@ -334,6 +308,7 @@ export function createFalHandler() {
           headers: upstream.headers,
           body: tryParseJson(upstream.body),
         };
+        ensureFixtureParent(filePath);
         if (recordedThisSession.has(filePath) && existsSync(filePath)) {
           const existing = loadFixture(filePath);
           // Collapse consecutive identical statuses (e.g. dozens of
@@ -361,7 +336,6 @@ export function createFalHandler() {
           writeFileSync(filePath, JSON.stringify(record, null, 2));
           recordedThisSession.add(filePath);
         }
-        appendDebugBodyLog(targetHost, method, falPath, bodyHash, rawBody);
         writeResponse(res, upstream.status, upstream.headers, upstream.body);
         return true;
       }

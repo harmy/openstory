@@ -114,6 +114,38 @@ export const frameImagesWorkflow = createScopedWorkflow<
       (input.sceneSnapshots ?? []).map((s) => [s.sceneId, s])
     );
 
+    // Pre-compute every (sceneId, model) snapshot hash once and persist via
+    // `context.run`. Two reasons:
+    //   1. The hash awaits would otherwise sit inside the parallel
+    //      `context.invoke` branches below; Upstash Workflow assigns step
+    //      indices in the order each branch first reaches `context.invoke`,
+    //      not in source order, so racing async work in front of it produces
+    //      `Incompatible step name` on retry. Hoisting + persisting keeps
+    //      the parallel branches' first await synchronous (the framework's
+    //      `deferExecution` microtask drain) so registration follows source
+    //      order.
+    //   2. Workflow bodies replay from the top on every step callback. A
+    //      plain `await` here would recompute every hash on every callback;
+    //      wrapping in `context.run` snapshots the result so replays just
+    //      read the persisted Record.
+    const snapshotHashKey = (sceneId: string, model: string) =>
+      `${sceneId}::${model}`;
+    const snapshotHashByKey = await context.run(
+      'compute-snapshot-hashes',
+      async () => {
+        const out: Record<string, string | undefined> = {};
+        for (const scene of scenesWithVisualPrompts) {
+          const snap = sceneSnapshotsById.get(scene.sceneId);
+          for (const model of imageModels) {
+            out[snapshotHashKey(scene.sceneId, model)] = snap
+              ? await computeFrameImageSceneHash(snap, model, aspectRatio)
+              : undefined;
+          }
+        }
+        return out;
+      }
+    );
+
     // Generate frame images in parallel (for each scene, for each model)
     const imageUrls = await Promise.all(
       scenesWithVisualPrompts.map(async (scene) => {
@@ -154,16 +186,8 @@ export const frameImagesWorkflow = createScopedWorkflow<
         // Generate with each selected model in parallel
         const modelResults = await Promise.all(
           imageModels.map(async (model) => {
-            // Compute the per-frame hash here (rather than at trigger time)
-            // because each model gets its own image-workflow invocation, and
-            // `computeFrameImageSceneHash` is keyed on the model.
-            const perFrameSnapshotInputHash = sceneSnapshot
-              ? await computeFrameImageSceneHash(
-                  sceneSnapshot,
-                  model,
-                  aspectRatio
-                )
-              : undefined;
+            const perFrameSnapshotInputHash =
+              snapshotHashByKey[snapshotHashKey(scene.sceneId, model)];
 
             const result = await context.invoke(
               `image-${scene.sceneId}-${model}`,

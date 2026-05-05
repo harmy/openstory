@@ -172,7 +172,7 @@ Story just broke. We need this on air now.
       const talentDialog = page.getByRole('dialog');
       await expect(talentDialog).toBeVisible({ timeout: 10_000 });
       await page.getByText(testTalents[0].name).click();
-      await page.getByRole('button', { name: 'Done' }).click();
+      await page.getByRole('button', { name: 'Cast 1 role' }).click();
       await expect(talentDialog).not.toBeVisible();
 
       // 6. Pick location.
@@ -184,7 +184,7 @@ Story just broke. We need this on air now.
       await expect(locationDialog).toBeVisible({ timeout: 10_000 });
       if (!testLocation) throw new Error('testLocation not initialised');
       await page.getByText(testLocation.name).click();
-      await page.getByRole('button', { name: 'Done' }).click();
+      await page.getByRole('button', { name: 'Use 1 location' }).click();
       await expect(locationDialog).not.toBeVisible();
 
       // 7. Upload an element image directly to the file input on the page.

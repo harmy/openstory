@@ -7,13 +7,20 @@
  * Browser-side mocks (fal.ai, R2, QStash) remain in handlers.ts via Playwright routes.
  */
 
-import { LLMock, loadFixturesFromDir, type Fixture } from '@copilotkit/aimock';
-import { existsSync } from 'node:fs';
+import { LLMock, loadFixtureFile, type Fixture } from '@copilotkit/aimock';
+import { existsSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createFalHandler } from './fal-handler';
 
 const AIMOCK_PORT = 4010;
-const FIXTURE_DIR = resolve(import.meta.dirname, '../fixtures/recorded');
+const FIXTURE_DIR = resolve(
+  import.meta.dirname,
+  '../fixtures/recorded/openrouter'
+);
+// New recordings land here; `record-e2e-fixtures.ts` sorts them into stage
+// subfolders by `userMessage` after the run. aimock's loader doesn't recurse,
+// so we walk the tree ourselves and skip this staging dir until it's sorted.
+const RECORD_STAGING_DIR = resolve(FIXTURE_DIR, '_unsorted');
 
 // OpenRouter SDK validates `system_fingerprint` as `z.nullable(z.string())`,
 // rejecting `undefined`. aimock omits the field unless the fixture supplies
@@ -53,6 +60,22 @@ function patchFixturesArray(fixtures: Fixture[]): void {
   };
 }
 
+// aimock's `loadFixturesFromDir` is non-recursive (logs and skips subdirs).
+// Walk ourselves so stage-folders (`script-enhance/`, `visual-prompts/`, …)
+// load.
+function loadFixturesRecursive(dirPath: string): Fixture[] {
+  const fixtures: Fixture[] = [];
+  for (const entry of readdirSync(dirPath, { withFileTypes: true })) {
+    const fullPath = resolve(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      fixtures.push(...loadFixturesRecursive(fullPath));
+    } else if (entry.isFile() && entry.name.endsWith('.json')) {
+      fixtures.push(...loadFixtureFile(fullPath));
+    }
+  }
+  return fixtures;
+}
+
 let mockServer: LLMock | null = null;
 
 export async function startAimockServer(): Promise<string> {
@@ -60,11 +83,13 @@ export async function startAimockServer(): Promise<string> {
     port: AIMOCK_PORT,
     strict: true,
     logLevel: 'info',
-    // Record locally (real key from .env.local), replay-only on CI (dummy key)
+    // Record locally (real key from .env.local), replay-only on CI (dummy key).
+    // Recordings land in `_unsorted/`; the record script sorts them into
+    // stage subfolders post-run so they don't pollute the curated layout.
     ...(!process.env.CI && {
       record: {
         providers: { openai: 'https://openrouter.ai/api/v1' },
-        fixturePath: FIXTURE_DIR,
+        fixturePath: RECORD_STAGING_DIR,
       },
     }),
   });
@@ -72,7 +97,7 @@ export async function startAimockServer(): Promise<string> {
   // Load any previously recorded fixtures
   if (existsSync(FIXTURE_DIR)) {
     mockServer.addFixtures(
-      stampSystemFingerprint(loadFixturesFromDir(FIXTURE_DIR))
+      stampSystemFingerprint(loadFixturesRecursive(FIXTURE_DIR))
     );
   }
 
