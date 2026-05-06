@@ -2,7 +2,7 @@
   "request": {
     "bucket": "videos",
     "key": "videos/teams/01KQY10D09JHYAZW09HGB7N9CG/sequences/01KQY10XGT523K0E9432A0R2JA/frames/01KQY111NYGGGS245TJNBX7FNB/drop-soon_title-card-and-fade-out_3tasma_openstory.mp4",
-    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_title-card-and-fade-out_3tasma_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_title-card-and-fade-out_<HASH>_openstory.mp4",
     "contentType": "video/mp4",
     "bodyHash": "d752ddd1f8f77c53807946f84776588dbd4fa899a249ef866ed4caffc4b9734d",
     "bodySize": 4426399

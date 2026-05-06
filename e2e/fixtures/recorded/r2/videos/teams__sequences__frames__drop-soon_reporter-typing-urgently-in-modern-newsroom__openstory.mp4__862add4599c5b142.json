@@ -2,7 +2,7 @@
   "request": {
     "bucket": "videos",
     "key": "videos/teams/01KQY10D09JHYAZW09HGB7N9CG/sequences/01KQY10XGT523K0E9432A0R2JA/frames/01KQY110MD24CXKTX8FVQ02CQV/drop-soon_reporter-typing-urgently-in-modern-newsroom_93p20p_openstory.mp4",
-    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_reporter-typing-urgently-in-modern-newsroom_93p20p_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_reporter-typing-urgently-in-modern-newsroom_<HASH>_openstory.mp4",
     "contentType": "video/mp4",
     "bodyHash": "754e6924bb5fddbf779b4172b14e3e8b571bdec91a5fee4bc55e9c4386eb797f",
     "bodySize": 18622894

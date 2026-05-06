@@ -2,7 +2,7 @@
   "request": {
     "bucket": "videos",
     "key": "videos/teams/01KQY10D09JHYAZW09HGB7N9CG/sequences/01KQY10XGT523K0E9432A0R2JA/frames/01KQY111EQZNGT0XRA541CEV37/drop-soon_serum-product-insert-and-final-reporter-smile_kjxtya_openstory.mp4",
-    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_serum-product-insert-and-final-reporter-smile_kjxtya_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_serum-product-insert-and-final-reporter-smile_<HASH>_openstory.mp4",
     "contentType": "video/mp4",
     "bodyHash": "11512ad273ecfaee80d0c5747d355396db5678fae4ee6e6dabbb04ea1b7e3f1a",
     "bodySize": 9637147

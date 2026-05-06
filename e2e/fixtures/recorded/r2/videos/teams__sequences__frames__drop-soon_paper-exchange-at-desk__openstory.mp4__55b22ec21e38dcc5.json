@@ -2,7 +2,7 @@
   "request": {
     "bucket": "videos",
     "key": "videos/teams/01KQY10D09JHYAZW09HGB7N9CG/sequences/01KQY10XGT523K0E9432A0R2JA/frames/01KQY110TSY5MJMC013SNQXR39/drop-soon_paper-exchange-at-desk_ehrfpm_openstory.mp4",
-    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_paper-exchange-at-desk_ehrfpm_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_paper-exchange-at-desk_<HASH>_openstory.mp4",
     "contentType": "video/mp4",
     "bodyHash": "4e95b1f88df08153288368c16d8e14e49f6f11e3e79ce51a0968098c047c142c",
     "bodySize": 7329433

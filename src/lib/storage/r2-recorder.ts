@@ -58,9 +58,17 @@ const FIXTURE_DIR = resolve(process.cwd(), 'e2e/fixtures/recorded/r2');
 const ULID_RE = /\b[0-9A-HJKMNP-TV-Z]{26}\b/g;
 const UUID_RE =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+// Filenames embed a per-upload short hash (6 chars in video/audio storage,
+// 8 chars in merged-video) immediately before `_openstory.<ext>`. That's a
+// fresh ULID slice on each upload, so it varies across runs and must be
+// normalised the same way as ULIDs/UUIDs to keep fingerprints stable.
+const SHORT_HASH_RE = /(^|[/_])[a-zA-Z0-9]{6,8}(_openstory\.)/g;
 
 function normaliseKey(key: string): string {
-  return key.replace(ULID_RE, '<ULID>').replace(UUID_RE, '<UUID>');
+  return key
+    .replace(ULID_RE, '<ULID>')
+    .replace(UUID_RE, '<UUID>')
+    .replace(SHORT_HASH_RE, '$1<HASH>$2');
 }
 
 function bodyHashHex(body: Uint8Array): string {
@@ -85,6 +93,7 @@ function fixturePath(fp: UploadFingerprint, hash: string): string {
   const segments = fp.key.split('/').slice(1);
   const meaningful = segments
     .map((seg) => seg.replace(ULID_RE, '').replace(UUID_RE, ''))
+    .map((seg) => seg.replace(SHORT_HASH_RE, '$1$2'))
     .map((seg) => seg.replace(/^\.+/, '')) // drop leading dots so we don't make hidden files
     .filter((seg) => seg.length > 0);
   const slug = meaningful

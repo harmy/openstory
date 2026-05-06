@@ -2,7 +2,7 @@
   "request": {
     "bucket": "videos",
     "key": "videos/teams/01KQY10D09JHYAZW09HGB7N9CG/sequences/01KQY10XGT523K0E9432A0R2JA/frames/01KQY110WCPKPNMX5EF6VDNZ43/drop-soon_reporter-reacts-to-story-and-counts-down_h6e28g_openstory.mp4",
-    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_reporter-reacts-to-story-and-counts-down_h6e28g_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_reporter-reacts-to-story-and-counts-down_<HASH>_openstory.mp4",
     "contentType": "video/mp4",
     "bodyHash": "80f03b2012d2c198ca7183d044683431bc84038f6e8b306ec5fce33bff7bf1e8",
     "bodySize": 10682065

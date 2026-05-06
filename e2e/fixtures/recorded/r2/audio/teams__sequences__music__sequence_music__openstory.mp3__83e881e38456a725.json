@@ -2,7 +2,7 @@
   "request": {
     "bucket": "audio",
     "key": "audio/teams/01KQY10D09JHYAZW09HGB7N9CG/sequences/01KQY10XGT523K0E9432A0R2JA/music/sequence_music_v8ck8t_openstory.mp3",
-    "normalisedKey": "audio/teams/<ULID>/sequences/<ULID>/music/sequence_music_v8ck8t_openstory.mp3",
+    "normalisedKey": "audio/teams/<ULID>/sequences/<ULID>/music/sequence_music_<HASH>_openstory.mp3",
     "contentType": "audio/mpeg",
     "bodyHash": "d8a4736263625446536b355b3b8a90913a8402ed803452e70785bbe3f543dbfe",
     "bodySize": 1248907

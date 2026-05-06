@@ -2,7 +2,7 @@
   "request": {
     "bucket": "videos",
     "key": "videos/teams/01KQY10D09JHYAZW09HGB7N9CG/sequences/01KQY10XGT523K0E9432A0R2JA/frames/01KQY110RPHFNY6A4WF3SXQJ48/drop-soon_producer-rushes-in-with-breaking-news_qtb2t6_openstory.mp4",
-    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_producer-rushes-in-with-breaking-news_qtb2t6_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_producer-rushes-in-with-breaking-news_<HASH>_openstory.mp4",
     "contentType": "video/mp4",
     "bodyHash": "b479b92f9f35e75976fc1a3efe9c2ea34e77c138fae1ba00d7c8dd84817443ff",
     "bodySize": 23686994

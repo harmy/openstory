@@ -2,7 +2,7 @@
   "request": {
     "bucket": "videos",
     "key": "videos/teams/01KQY10D09JHYAZW09HGB7N9CG/sequences/01KQY10XGT523K0E9432A0R2JA/frames/01KQY111724D1T9M78GHGFZK0J/drop-soon_city-skyline-view-through-rainy-window_5gyv2k_openstory.mp4",
-    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_city-skyline-view-through-rainy-window_5gyv2k_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_city-skyline-view-through-rainy-window_<HASH>_openstory.mp4",
     "contentType": "video/mp4",
     "bodyHash": "bc118b7e32eccfdbe87fad0b5eff59103a1b8a673c9b737d81bd932491087aca",
     "bodySize": 14043046

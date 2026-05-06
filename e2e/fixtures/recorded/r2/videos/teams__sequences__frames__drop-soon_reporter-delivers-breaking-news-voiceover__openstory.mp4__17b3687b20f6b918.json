@@ -2,7 +2,7 @@
   "request": {
     "bucket": "videos",
     "key": "videos/teams/01KQY10D09JHYAZW09HGB7N9CG/sequences/01KQY10XGT523K0E9432A0R2JA/frames/01KQY1119HEQBPCWGTVF9FVQ33/drop-soon_reporter-delivers-breaking-news-voiceover_68nr9x_openstory.mp4",
-    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_reporter-delivers-breaking-news-voiceover_68nr9x_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_reporter-delivers-breaking-news-voiceover_<HASH>_openstory.mp4",
     "contentType": "video/mp4",
     "bodyHash": "0f3ca0ecbd4bc7632d938982f479ea8ee29777639ed10faf0ae063c2eb116115",
     "bodySize": 20066735

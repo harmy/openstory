@@ -2,7 +2,7 @@
   "request": {
     "bucket": "videos",
     "key": "videos/teams/01KQY10D09JHYAZW09HGB7N9CG/sequences/01KQY10XGT523K0E9432A0R2JA/frames/01KQY11140VDF8N4J0SDSGTVF8/drop-soon_live-feed-preparation-and-earpiece-adjustment_m5dka1_openstory.mp4",
-    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_live-feed-preparation-and-earpiece-adjustment_m5dka1_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_live-feed-preparation-and-earpiece-adjustment_<HASH>_openstory.mp4",
     "contentType": "video/mp4",
     "bodyHash": "16fcc2c5d97662c1dc0534c3e6c031bd03cefb575245734f85155df96671e040",
     "bodySize": 10488123

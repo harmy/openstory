@@ -2,7 +2,7 @@
   "request": {
     "bucket": "videos",
     "key": "videos/teams/01KQY10D09JHYAZW09HGB7N9CG/sequences/01KQY10XGT523K0E9432A0R2JA/frames/01KQY110PF1QH95VYT5TMTDB5A/drop-soon_overhead-close-up-of-typing-keyboard_4kq4av_openstory.mp4",
-    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_overhead-close-up-of-typing-keyboard_4kq4av_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/drop-soon_overhead-close-up-of-typing-keyboard_<HASH>_openstory.mp4",
     "contentType": "video/mp4",
     "bodyHash": "34d2c334033b7d01e7bd6794f036a9757aae152af2cc09ebfe57829b1ca5cdd8",
     "bodySize": 4193332
