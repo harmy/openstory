@@ -121,6 +121,10 @@ export default defineConfig({
     ],
   },
   ssr: {
-    noExternal: ['@upstash/realtime', '@videojs/react'],
+    noExternal: [
+      '@upstash/realtime',
+      '@videojs/react',
+      '@tailwindcss/typography',
+    ],
   },
 });

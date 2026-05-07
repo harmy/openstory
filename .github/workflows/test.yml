@@ -39,9 +39,45 @@ jobs:
       - name: Run tests
         run: bun test
 
+  build-e2e:
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build app for E2E
+        run: bun --bun run build
+        env:
+          VITE_APP_URL: http://localhost:3001
+          VITE_DISABLE_DEVTOOLS: 'true'
+          VITE_R2_PUBLIC_ASSETS_DOMAIN: ${{ vars.VITE_R2_PUBLIC_ASSETS_DOMAIN }}
+          VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ secrets.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN }}
+          VITE_PUBLIC_POSTHOG_HOST: ${{ vars.VITE_PUBLIC_POSTHOG_HOST }}
+
+      - name: Upload .output artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-output
+          path: .output
+          retention-days: 1
+          if-no-files-found: error
+
   e2e:
     runs-on: ubuntu-latest
     environment: staging
+    needs: build-e2e
 
     steps:
       - uses: actions/checkout@v6
@@ -63,10 +99,17 @@ jobs:
       - name: Setup test database
         run: bun test:e2e:setup
 
+      - name: Download .output artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-output
+          path: .output
+
       - name: Run E2E tests
         run: bun test:e2e
         env:
           E2E_TEST: 'true'
+          E2E_BUILT: 'true'
           DATABASE_URL: file:test.db
           BETTER_AUTH_URL: http://localhost:3001
           # QStash - local Docker service
@@ -111,6 +154,7 @@ jobs:
   e2e-full-pipeline:
     runs-on: ubuntu-latest
     environment: staging
+    needs: build-e2e
 
     steps:
       - uses: actions/checkout@v6
@@ -151,11 +195,18 @@ jobs:
             -H "Authorization: Bearer eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=" \
             >/dev/null 2>&1; do sleep 1; done'
 
+      - name: Download .output artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-output
+          path: .output
+
       - name: Run full-pipeline E2E test
         run: bun test:e2e:full
         env:
           PLAYWRIGHT_FULL_PIPELINE: 'true'
           E2E_TEST: 'true'
+          E2E_BUILT: 'true'
           E2E_FULL_PIPELINE: 'true'
           DATABASE_URL: file:test.db
           BETTER_AUTH_URL: http://localhost:3001

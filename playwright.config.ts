@@ -58,20 +58,39 @@ export default defineConfig({
     },
   ],
 
-  webServer: {
+  webServer: (() => {
+    const useBuiltServer = process.env.E2E_BUILT === 'true';
+    const fullPipeline = process.env.PLAYWRIGHT_FULL_PIPELINE === 'true';
+    const envPrefix = [
+      'E2E_TEST=true',
+      ...(fullPipeline
+        ? ['E2E_FULL_PIPELINE=true', 'FAL_PROXY_URL=http://localhost:4010/fal']
+        : []),
+      'PORT=3001',
+      'DATABASE_URL=file:test.db',
+      'VITE_APP_URL=http://localhost:3001',
+      'OPENROUTER_BASE_URL=http://localhost:4010',
+      'VITE_DISABLE_DEVTOOLS=true',
+    ].join(' ');
+
     // E2E_FULL_PIPELINE opts the server into running real workflows + routing
     // fal traffic through the aimock fal handler. Off by default so existing
     // hermetic specs keep using browser-side route mocks. Set
     // PLAYWRIGHT_FULL_PIPELINE=true (e.g. for the full-sequence spec) to flip.
-    command: `E2E_TEST=true${
-      process.env.PLAYWRIGHT_FULL_PIPELINE === 'true'
-        ? ' E2E_FULL_PIPELINE=true FAL_PROXY_URL=http://localhost:4010/fal'
-        : ''
-    } PORT=3001 DATABASE_URL=file:test.db VITE_APP_URL=http://localhost:3001 OPENROUTER_BASE_URL=http://localhost:4010 VITE_DISABLE_DEVTOOLS=true bun dev:e2e`,
-    url: 'http://localhost:3001',
-    reuseExistingServer: true,
-    timeout: 300_000,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  },
+    //
+    // E2E_BUILT=true runs the production-built Nitro server (`bun start`)
+    // instead of `vite dev` — used on CI to avoid HMR/dev-only behaviour and
+    // to catch bundling/Nitro-runtime issues earlier. Local dev keeps the
+    // dev-server path for fast iteration.
+    return {
+      command: useBuiltServer
+        ? `${envPrefix} bun start`
+        : `${envPrefix} bun dev:e2e`,
+      url: 'http://localhost:3001',
+      reuseExistingServer: !useBuiltServer,
+      timeout: 300_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    };
+  })(),
 });
