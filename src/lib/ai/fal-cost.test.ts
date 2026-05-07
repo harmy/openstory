@@ -10,13 +10,13 @@ import { micros, ZERO_MICROS, usdToMicros } from '@/lib/billing/money';
 const usd = (n: number) => usdToMicros(n);
 
 describe('calculateImageCost', () => {
-  test('per_image model (grok-imagine-image)', () => {
+  test('per_compute_second model (grok-imagine-image-quality)', () => {
     const cost = calculateImageCost({
-      endpointId: 'xai/grok-imagine-image',
+      endpointId: 'xai/grok-imagine-image/quality',
       numImages: 2,
     });
-    // 20_000 micros * 2 = 40_000
-    expect(cost).toBe(micros(40_000));
+    // 170 micros * 3 (DEFAULT_COMPUTE_SECONDS) * 2 = 1_020
+    expect(cost).toBe(micros(1_020));
   });
 
   test('per_megapixel model (flux-2)', () => {

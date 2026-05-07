@@ -78,18 +78,18 @@ When multiple models are selected, the footer shows "N sequences will be created
 
 The AI model for generating scene images. You can select **multiple image models** to generate variant images across different providers. Available models include:
 
-| Model              | Provider          | Notes                                   |
-| ------------------ | ----------------- | --------------------------------------- |
-| Nano Banana 2      | Google            | Fast generation and editing (default)   |
-| Nano Banana Pro    | Google            | Enhanced realism and typography         |
-| Grok Imagine Image | Grok              | Aesthetic generation with low censoring |
-| FLUX.2 Max         | Black Forest Labs | Exceptional realism and consistency     |
-| Phota              | Phota             | Character consistency via profiles      |
-| Hunyuan Image v3   | Tencent           | Open source with strong composition     |
-| FLUX.2 Dev         | Black Forest Labs | Open source, 32B open weights           |
-| Qwen Image 2 Pro   | Alibaba           | Apache 2.0, native 2K, text rendering   |
-| HiDream I1         | HiDream           | MIT licensed, 17B parameters            |
-| Seedream 5         | ByteDance         | Unified generation and editing          |
+| Model                      | Provider          | Notes                                                |
+| -------------------------- | ----------------- | ---------------------------------------------------- |
+| Nano Banana 2              | Google            | Fast generation and editing (default)                |
+| Nano Banana Pro            | Google            | Enhanced realism and typography                      |
+| Grok Imagine Image Quality | Grok              | High-quality aesthetic generation with low censoring |
+| FLUX.2 Max                 | Black Forest Labs | Exceptional realism and consistency                  |
+| Phota                      | Phota             | Character consistency via profiles                   |
+| Hunyuan Image v3           | Tencent           | Open source with strong composition                  |
+| FLUX.2 Dev                 | Black Forest Labs | Open source, 32B open weights                        |
+| Qwen Image 2 Pro           | Alibaba           | Apache 2.0, native 2K, text rendering                |
+| HiDream I1                 | HiDream           | MIT licensed, 17B parameters                         |
+| Seedream 5                 | ByteDance         | Unified generation and editing                       |
 
 ### Motion Model
 
