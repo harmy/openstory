@@ -190,9 +190,10 @@ Story just broke. We need this on air now.
       await expect(locationDialog).not.toBeVisible();
 
       // 7. Upload an element image directly to the file input on the page.
+      // Photo by Vidak on Unsplash: https://unsplash.com/photos/KiqrvOpdv0I
       const fileInput = page.locator('input[type="file"][accept*="image"]');
       await fileInput.setInputFiles(
-        resolve(import.meta.dirname, '../fixtures/test-image.jpg')
+        resolve(import.meta.dirname, '../fixtures/broadcast-mic.jpg')
       );
 
       // 8. Generate — should kick off the workflow chain and navigate.
