@@ -52,6 +52,14 @@ export type ElementSelectorHandle = {
 type BaseProps = {
   ref?: React.Ref<ElementSelectorHandle>;
   disabled?: boolean;
+  /**
+   * Fires `true` while at least one upload is in flight, `false` once all
+   * accepted files have either uploaded or errored. Parent forms gate their
+   * submit button on this so a user (or e2e test) can't kick off a workflow
+   * before the upload row lands in the DB — see the elements-race that left
+   * `script-analyze` calls without the user-uploaded element on slow networks.
+   */
+  onUploadingChange?: (uploading: boolean) => void;
 };
 
 type DraftModeProps = BaseProps & {
@@ -87,7 +95,13 @@ type DisplayItem = {
 };
 
 export const ElementSelector: React.FC<ElementSelectorProps> = (props) => {
-  const { ref, disabled = false, sequenceId, onDraftElementsChange } = props;
+  const {
+    ref,
+    disabled = false,
+    sequenceId,
+    onDraftElementsChange,
+    onUploadingChange,
+  } = props;
   const isPersisted = !!sequenceId;
 
   const [open, setOpen] = useState(false);
@@ -109,6 +123,15 @@ export const ElementSelector: React.FC<ElementSelectorProps> = (props) => {
         .filter((u): u is DraftElementUpload => !!u),
     [entries]
   );
+
+  const isUploading = useMemo(
+    () => Array.from(entries.values()).some((e) => e.status === 'uploading'),
+    [entries]
+  );
+
+  useEffect(() => {
+    onUploadingChange?.(isUploading);
+  }, [isUploading, onUploadingChange]);
 
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
