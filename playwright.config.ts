@@ -72,6 +72,12 @@ export default defineConfig({
       ...(fullPipeline
         ? ['E2E_FULL_PIPELINE=true', 'FAL_PROXY_URL=http://localhost:4010/fal']
         : []),
+      // Propagate the record flag so the dev server's adapter factory can
+      // disable the OpenRouter SDK's retry loop — see create-adapter.ts. We
+      // do this only when recording because aimock buffers SSE responses
+      // upstream, which can trip the SDK's retry path and produce duplicate
+      // fixture writes for the same prompt.
+      ...(process.env.E2E_RECORD === '1' ? ['E2E_RECORD=1'] : []),
       'PORT=3001',
       'DATABASE_URL=file:test.db',
       'VITE_APP_URL=http://localhost:3001',
