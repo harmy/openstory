@@ -108,7 +108,14 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
       async () => {
         if (!sequenceId) return [];
 
-        const MAX_WAIT_MS = 30_000;
+        // With the inline draft-mode analyze call, vision usually finishes
+        // before Generate fires and this loop returns immediately. The cap
+        // is a safety. In E2E record runs we widen it so real fal/OpenRouter
+        // latency during fixture capture doesn't trip the placeholder path
+        // and pollute the recorded scene-split prompt with `(vision
+        // description pending)`.
+        const isRecording = process.env.E2E_RECORD === '1';
+        const MAX_WAIT_MS = isRecording ? 600_000 : 30_000;
         const POLL_INTERVAL_MS = 1500;
         const startedAt = Date.now();
 

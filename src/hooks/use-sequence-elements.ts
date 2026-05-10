@@ -1,4 +1,5 @@
 import {
+  analyzeDraftElementFn,
   deleteSequenceElementFn,
   finalizeElementUploadFn,
   listSequenceElementsFn,
@@ -78,18 +79,33 @@ export type DraftElementUpload = {
   tempPublicUrl: string;
   filename: string;
   token: string;
+  /**
+   * Vision-LLM description, populated during draft upload so the Generate
+   * button can gate on vision-readiness. Null when the analyze call failed
+   * or was skipped (e.g. E2E replay) — promoteTempElements falls back to
+   * triggering the persisted vision workflow in that case.
+   */
+  description: string | null;
+  consistencyTag: string | null;
 };
 
 /**
  * Upload an element file as a *draft* (before a sequence exists). Returns the
  * temp storage path + public URL so the caller can persist it in local state
  * and pass it to the createSequence mutation for promotion.
+ *
+ * Runs vision analysis inline after the upload resolves so promoteTempElements
+ * can skip the async element-vision workflow on the happy path. If the vision
+ * call fails we still resolve with `description: null` — the upload itself
+ * succeeded and the persisted-mode fallback in promoteTempElements will kick
+ * the workflow on promotion.
  */
 export function useUploadDraftElement() {
   return useMutation({
     mutationFn: async (data: {
       file: File;
       onProgress?: (percent: number) => void;
+      onAnalyzingChange?: (analyzing: boolean) => void;
     }): Promise<DraftElementUpload> => {
       const presign = await presignElementUploadFn({
         data: { filename: data.file.name },
@@ -105,11 +121,37 @@ export function useUploadDraftElement() {
         .toUpperCase()
         .replace(/[^A-Z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '');
+      const finalToken = token.length > 0 ? token : 'ELEMENT';
+
+      data.onAnalyzingChange?.(true);
+      let description: string | null = null;
+      let consistencyTag: string | null = null;
+      try {
+        const result = await analyzeDraftElementFn({
+          data: {
+            publicUrl: presign.publicUrl,
+            filename: data.file.name,
+            token: finalToken,
+          },
+        });
+        description = result.description;
+        consistencyTag = result.consistencyTag;
+      } catch (err) {
+        console.warn(
+          '[useUploadDraftElement] Vision analysis failed; falling back to async workflow on promotion',
+          err
+        );
+      } finally {
+        data.onAnalyzingChange?.(false);
+      }
+
       return {
         tempPath: presign.path,
         tempPublicUrl: presign.publicUrl,
         filename: data.file.name,
-        token: token.length > 0 ? token : 'ELEMENT',
+        token: finalToken,
+        description,
+        consistencyTag,
       };
     },
   });

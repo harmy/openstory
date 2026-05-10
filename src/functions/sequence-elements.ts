@@ -1,5 +1,6 @@
 import { getEnv } from '#env';
 import { getSignedUploadUrl } from '#storage';
+import { describeElementImage } from '@/lib/ai/element-vision';
 import { generateId } from '@/lib/db/id';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import { deriveTokenFromFilename } from '@/lib/sequence-elements/derive-token';
@@ -15,6 +16,16 @@ import { createServerFn } from '@tanstack/react-start';
 import { zodValidator } from '@tanstack/zod-adapter';
 import { z } from 'zod';
 import { authWithTeamMiddleware, sequenceAccessMiddleware } from './middleware';
+
+/**
+ * E2E_RECORD=1 captures real upstream calls into fixtures. E2E_TEST=true with
+ * E2E_RECORD unset is replay-only — vision calls would miss the fixture and
+ * either error or capture an unwanted new fixture, so skip them in replay.
+ */
+function shouldRunVisionInE2E(): boolean {
+  const env = getEnv();
+  return env.E2E_TEST !== 'true' || env.E2E_RECORD === '1';
+}
 
 async function triggerElementVision(
   elementId: string,
@@ -68,6 +79,46 @@ export const presignElementUploadFn = createServerFn({ method: 'POST' })
   });
 
 // ============================================================================
+// Synchronously analyze a draft (pre-sequence) element via vision LLM.
+//
+// Draft uploads can't trigger the persisted element-vision workflow because the
+// element row doesn't exist yet. Running vision inline here lets the Generate
+// button gate on the result so we never hand the LLM a token with no visual
+// context (the placeholder `(vision description pending)` path in
+// scene-split-workflow). On promotion, the description is written straight onto
+// the new row so we don't re-run vision twice.
+// ============================================================================
+
+export const analyzeDraftElementFn = createServerFn({ method: 'POST' })
+  .middleware([authWithTeamMiddleware])
+  .inputValidator(
+    zodValidator(
+      z.object({
+        publicUrl: z.string().url(),
+        filename: z.string().min(1),
+        token: z.string().min(1).max(100),
+      })
+    )
+  )
+  .handler(async ({ context, data }) => {
+    if (!shouldRunVisionInE2E()) {
+      return { description: null, consistencyTag: null };
+    }
+    const openRouterApiKeyInfo =
+      await context.scopedDb.apiKeys.resolveKey('openrouter');
+    const result = await describeElementImage({
+      imageUrl: data.publicUrl,
+      filename: data.filename,
+      token: data.token,
+      openRouterApiKey: openRouterApiKeyInfo.key,
+    });
+    return {
+      description: result.description,
+      consistencyTag: result.consistencyTag,
+    };
+  });
+
+// ============================================================================
 // Finalize upload to an existing sequence
 // ============================================================================
 
@@ -104,8 +155,10 @@ export const finalizeElementUploadFn = createServerFn({ method: 'POST' })
       visionStatus: 'pending',
     });
 
-    // Kick off vision workflow — do not block the upload response
-    if (getEnv().E2E_TEST !== 'true') {
+    // Kick off vision workflow — do not block the upload response. During E2E
+    // recording (E2E_RECORD=1) we still trigger so aimock captures the vision
+    // call into a fixture; replay-only runs skip it.
+    if (shouldRunVisionInE2E()) {
       await triggerElementVision(
         element.id,
         element.sequenceId,

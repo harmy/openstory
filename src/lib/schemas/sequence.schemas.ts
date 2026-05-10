@@ -114,13 +114,18 @@ export const createSequenceSchema = createInsertSchema(sequences, {
     suggestedTalentIds: z.array(z.string()).optional(),
     // Suggested location IDs for visual consistency during generation
     suggestedLocationIds: z.array(z.string()).optional(),
-    // Draft element uploads (presigned to temp path before sequence exists)
+    // Draft element uploads (presigned to temp path before sequence exists).
+    // description/consistencyTag are populated by the inline analyzeDraftElementFn
+    // call so promoteTempElements can write them straight onto the new row
+    // instead of re-triggering the async vision workflow.
     elementUploads: z
       .array(
         z.object({
           tempPath: z.string().min(1),
           tempPublicUrl: z.string().url(),
           filename: z.string().min(1),
+          description: z.string().nullable().optional(),
+          consistencyTag: z.string().nullable().optional(),
         })
       )
       .optional(),

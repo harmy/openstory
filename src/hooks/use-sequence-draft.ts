@@ -9,6 +9,8 @@ const draftElementSchema = z.object({
   tempPublicUrl: z.string(),
   filename: z.string(),
   token: z.string(),
+  description: z.string().nullable().default(null),
+  consistencyTag: z.string().nullable().default(null),
 });
 
 const sequenceDraftSchema = z.object({

@@ -14,9 +14,18 @@ const tempUploadSchema = z.object({
   tempPath: z.string().min(1),
   tempPublicUrl: z.string().url(),
   filename: z.string().min(1),
+  // Optional: pre-computed by analyzeDraftElementFn during draft upload so we
+  // can write the row in `completed` state without re-running vision here.
+  description: z.string().nullable().optional(),
+  consistencyTag: z.string().nullable().optional(),
 });
 
 export type TempElementUpload = z.infer<typeof tempUploadSchema>;
+
+function shouldRunVisionInE2E(): boolean {
+  const env = getEnv();
+  return env.E2E_TEST !== 'true' || env.E2E_RECORD === '1';
+}
 
 async function triggerElementVision(
   elementId: string,
@@ -92,6 +101,8 @@ export async function promoteTempElements(params: {
       rawToken
     );
 
+    const hasInlineVision = !!upload.description && !!upload.consistencyTag;
+
     const element = await scopedDb.sequenceElements.create({
       id: newId,
       sequenceId,
@@ -99,10 +110,16 @@ export async function promoteTempElements(params: {
       token,
       imageUrl: publicUrl,
       imagePath: permanentPath,
-      visionStatus: 'pending',
+      description: hasInlineVision ? upload.description : null,
+      consistencyTag: hasInlineVision ? upload.consistencyTag : null,
+      visionStatus: hasInlineVision ? 'completed' : 'pending',
+      visionGeneratedAt: hasInlineVision ? new Date() : null,
     });
 
-    if (triggerVision && getEnv().E2E_TEST !== 'true') {
+    // Skip the async workflow when vision already ran inline during draft
+    // upload (the happy path). Fall back to triggering it when description
+    // is missing (vision call failed / older client / E2E hermetic skip).
+    if (triggerVision && !hasInlineVision && shouldRunVisionInE2E()) {
       await triggerElementVision(
         element.id,
         sequenceId,

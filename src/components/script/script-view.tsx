@@ -173,7 +173,7 @@ export const ScriptView: FC<{
   const { talentIds: selectedTalentIds, locationIds: selectedLocationIds } =
     selections;
   const [draftElements, setDraftElements] = useState<DraftElementUpload[]>([]);
-  const [isElementUploading, setIsElementUploading] = useState(false);
+  const [isElementBusy, setIsElementBusy] = useState(false);
   const elementSelectorRef = useRef<ElementSelectorHandle>(null);
   const dragCounterRef = useRef(0);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
@@ -540,7 +540,7 @@ export const ScriptView: FC<{
 
   const isSubmitting = createSequenceMutation.isPending;
   const isDisabled =
-    !isFormValid || isSubmitting || isEnhancing || isElementUploading;
+    !isFormValid || isSubmitting || isEnhancing || isElementBusy;
 
   const scriptValue = script ?? sequence?.script ?? '';
   const { ref: textareaRef } = useAutoScroll({
@@ -616,7 +616,7 @@ export const ScriptView: FC<{
                 ref={elementSelectorRef}
                 sequenceId={sequence.id}
                 disabled={loading}
-                onUploadingChange={setIsElementUploading}
+                onElementBusyChange={setIsElementBusy}
               />
             ) : (
               <ElementSelector
@@ -624,7 +624,7 @@ export const ScriptView: FC<{
                 draftElements={draftElements}
                 onDraftElementsChange={setDraftElements}
                 disabled={loading}
-                onUploadingChange={setIsElementUploading}
+                onElementBusyChange={setIsElementBusy}
               />
             )}
           </div>
