@@ -1,0 +1,44 @@
+{
+  "request": {
+    "targetHost": "queue.fal.run",
+    "method": "GET",
+    "pathname": "/fal-ai/flux-2/requests/019e15cf-4b21-7851-8a45-9538aecdcf79",
+    "bodyHash": "e3b0c44298fc1c14"
+  },
+  "responses": [
+    {
+      "status": 200,
+      "headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "1777",
+        "content-type": "application/json",
+        "date": "Mon, 11 May 2026 06:52:49 GMT",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "x-fal-billable-units": "1",
+        "x-fal-request-id": "019e15cf-4b21-7851-8a45-9538aecdcf79",
+        "x-fal-served-from": "c82347e3-5860-49cf-9af9-a48db51d6f2b",
+        "x-robots-tag": "noindex"
+      },
+      "body": {
+        "images": [
+          {
+            "url": "https://v3b.fal.media/files/b/0a99bfac/cM0rlnIjUOEBLIpxKjTWH_zJ0EfqPa.png",
+            "content_type": "image/png",
+            "file_name": "cM0rlnIjUOEBLIpxKjTWH_zJ0EfqPa.png",
+            "file_size": null,
+            "width": 1024,
+            "height": 576
+          }
+        ],
+        "timings": {
+          "inference": 0.5997840389900375
+        },
+        "seed": 1471716580,
+        "has_nsfw_concepts": [false],
+        "prompt": "A cinematic establishing shot for \"Untitled Sequence\". Opening scene: INT. MODERN NEWSROOM - GOLDEN HOUR\n\nWide cinematic frame. Rain streaks catch soft window light across a clean white desk. Reporter's hands move with effortless rhythm over a glowing keyboard, nails polished in soft #D4536D. Macro close-up on fingertips pressing matte keys, shallow depth of field, airy highlights.\n\nREPORTER\nWe go live in ten.\n\nQuick handheld cut to producer's sneakers crossing the bleached wood floor. She carries a single printed page, edges crisp against the #E8F4E8 wall. Natura Art style: Modern social-first product photography with tactile, editorial energy. Products shown in real-life context -- hands opening packaging, fingers pressing textures, products on bathroom shelves, kitchen counters, rumpled linen. Close-up detail shots emphasize material and finish. Flat-lays with curated minimal arrangements. Color-matched backgrounds that complement the product. Every frame feels like something you would screenshot and save. Mood: Fresh, sensory, and effortlessly cool. Lighting: Bright natural window light with clean directional shadows. Direct on-camera flash for punchy editorial energy on select shots. No heavy diffusion -- let light feel real and immediate. Golden hour warmth for lifestyle moments. High-key and airy overall with pops of contrast. No text, no titles, no subtitles, no watermarks, no letters, no words, no signs, no UI elements."
+      }
+    }
+  ]
+}

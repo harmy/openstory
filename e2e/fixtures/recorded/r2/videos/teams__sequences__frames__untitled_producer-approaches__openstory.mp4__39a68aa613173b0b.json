@@ -1,0 +1,15 @@
+{
+  "request": {
+    "bucket": "videos",
+    "key": "videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZAMMB560H1M7BEVNJR3Y/untitled_producer-approaches_hxn4qe_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/untitled_producer-approaches_<HASH>_openstory.mp4",
+    "contentType": "video/mp4",
+    "bodyHash": "caa0d53419a64a3e977eff8e871e570c17b2780e114ac7200e21f5c939b91e5f",
+    "bodySize": 10896374
+  },
+  "response": {
+    "path": "videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZAMMB560H1M7BEVNJR3Y/untitled_producer-approaches_hxn4qe_openstory.mp4",
+    "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZAMMB560H1M7BEVNJR3Y/untitled_producer-approaches_hxn4qe_openstory.mp4",
+    "fullPath": "videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZAMMB560H1M7BEVNJR3Y/untitled_producer-approaches_hxn4qe_openstory.mp4"
+  }
+}

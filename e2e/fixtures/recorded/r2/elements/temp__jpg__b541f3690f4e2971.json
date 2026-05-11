@@ -1,15 +1,15 @@
 {
   "request": {
     "bucket": "elements",
-    "key": "elements/01KRA7Z0V8PERWQ7C99ENA1MZ9/temp/01KRA7ZBZM3SAJ1Z4HSDMH35J4.jpg",
+    "key": "elements/01KRAWXGMJC4M4T42XC9AHZ4S1/temp/01KRAWY840R0YJKSE7DJDR9CEK.jpg",
     "normalisedKey": "elements/<ULID>/temp/<ULID>.jpg",
     "contentType": "image/jpeg",
     "bodyHash": "17801ae0c5bd909d3844c401f2368d3902660247382771c5ce8ab33175523ba8",
     "bodySize": 122891
   },
   "response": {
-    "path": "elements/01KRA7Z0V8PERWQ7C99ENA1MZ9/temp/01KRA7ZBZM3SAJ1Z4HSDMH35J4.jpg",
-    "publicUrl": "https://storage-dev.openstory.so/elements/01KRA7Z0V8PERWQ7C99ENA1MZ9/temp/01KRA7ZBZM3SAJ1Z4HSDMH35J4.jpg",
-    "fullPath": "elements/01KRA7Z0V8PERWQ7C99ENA1MZ9/temp/01KRA7ZBZM3SAJ1Z4HSDMH35J4.jpg"
+    "path": "elements/01KRAWXGMJC4M4T42XC9AHZ4S1/temp/01KRAWY840R0YJKSE7DJDR9CEK.jpg",
+    "publicUrl": "https://storage-dev.openstory.so/elements/01KRAWXGMJC4M4T42XC9AHZ4S1/temp/01KRAWY840R0YJKSE7DJDR9CEK.jpg",
+    "fullPath": "elements/01KRAWXGMJC4M4T42XC9AHZ4S1/temp/01KRAWY840R0YJKSE7DJDR9CEK.jpg"
   }
 }

@@ -1,0 +1,34 @@
+{
+  "request": {
+    "targetHost": "queue.fal.run",
+    "method": "POST",
+    "pathname": "/fal-ai/kling-video/v3/pro/image-to-video",
+    "bodyHash": "03c992502c53a3a6"
+  },
+  "responses": [
+    {
+      "status": 200,
+      "headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "439",
+        "content-type": "application/json",
+        "date": "Mon, 11 May 2026 06:54:53 GMT",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "x-fal-request-id": "019e15d1-3921-7f62-a687-1174ceb36a61",
+        "x-robots-tag": "noindex"
+      },
+      "body": {
+        "status": "IN_QUEUE",
+        "request_id": "019e15d1-3921-7f62-a687-1174ceb36a61",
+        "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/019e15d1-3921-7f62-a687-1174ceb36a61",
+        "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/019e15d1-3921-7f62-a687-1174ceb36a61/status",
+        "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/019e15d1-3921-7f62-a687-1174ceb36a61/cancel",
+        "logs": null,
+        "metrics": {},
+        "queue_position": 1
+      }
+    }
+  ]
+}

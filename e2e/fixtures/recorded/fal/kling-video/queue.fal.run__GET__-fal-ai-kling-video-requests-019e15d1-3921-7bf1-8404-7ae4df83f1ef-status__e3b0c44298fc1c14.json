@@ -1,0 +1,56 @@
+{
+  "request": {
+    "targetHost": "queue.fal.run",
+    "method": "GET",
+    "pathname": "/fal-ai/kling-video/requests/019e15d1-3921-7bf1-8404-7ae4df83f1ef/status",
+    "bodyHash": "e3b0c44298fc1c14"
+  },
+  "responses": [
+    {
+      "status": 202,
+      "headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "421",
+        "content-type": "application/json",
+        "date": "Mon, 11 May 2026 06:54:53 GMT",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "x-robots-tag": "noindex"
+      },
+      "body": {
+        "status": "IN_PROGRESS",
+        "request_id": "019e15d1-3921-7bf1-8404-7ae4df83f1ef",
+        "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/019e15d1-3921-7bf1-8404-7ae4df83f1ef",
+        "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/019e15d1-3921-7bf1-8404-7ae4df83f1ef/status",
+        "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/019e15d1-3921-7bf1-8404-7ae4df83f1ef/cancel",
+        "logs": [],
+        "metrics": {}
+      }
+    },
+    {
+      "status": 200,
+      "headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "454",
+        "content-type": "application/json",
+        "date": "Mon, 11 May 2026 06:56:43 GMT",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "x-robots-tag": "noindex"
+      },
+      "body": {
+        "status": "COMPLETED",
+        "request_id": "019e15d1-3921-7bf1-8404-7ae4df83f1ef",
+        "response_url": "https://queue.fal.run/fal-ai/kling-video/requests/019e15d1-3921-7bf1-8404-7ae4df83f1ef",
+        "status_url": "https://queue.fal.run/fal-ai/kling-video/requests/019e15d1-3921-7bf1-8404-7ae4df83f1ef/status",
+        "cancel_url": "https://queue.fal.run/fal-ai/kling-video/requests/019e15d1-3921-7bf1-8404-7ae4df83f1ef/cancel",
+        "logs": [],
+        "metrics": {
+          "inference_time": 106.90746188163757
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "request": {
+    "bucket": "videos",
+    "key": "videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZBQENT3B5S422FJVFSQZ/untitled_final-beauty-frame_f2060s_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/untitled_final-beauty-frame_<HASH>_openstory.mp4",
+    "contentType": "video/mp4",
+    "bodyHash": "bf916cc69505371b5b1280608efd8d1a71fac849069d632d127663f9c4345f5a",
+    "bodySize": 3085045
+  },
+  "response": {
+    "path": "videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZBQENT3B5S422FJVFSQZ/untitled_final-beauty-frame_f2060s_openstory.mp4",
+    "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZBQENT3B5S422FJVFSQZ/untitled_final-beauty-frame_f2060s_openstory.mp4",
+    "fullPath": "videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZBQENT3B5S422FJVFSQZ/untitled_final-beauty-frame_f2060s_openstory.mp4"
+  }
+}

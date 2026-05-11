@@ -1,0 +1,56 @@
+{
+  "request": {
+    "targetHost": "queue.fal.run",
+    "method": "GET",
+    "pathname": "/fal-ai/flux-2/requests/019e15cf-aedf-7403-a43b-7c0d477dd3fe/status",
+    "bodyHash": "e3b0c44298fc1c14"
+  },
+  "responses": [
+    {
+      "status": 202,
+      "headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "408",
+        "content-type": "application/json",
+        "date": "Mon, 11 May 2026 06:53:13 GMT",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "x-robots-tag": "noindex"
+      },
+      "body": {
+        "status": "IN_PROGRESS",
+        "request_id": "019e15cf-aedf-7403-a43b-7c0d477dd3fe",
+        "response_url": "https://queue.fal.run/fal-ai/flux-2/requests/019e15cf-aedf-7403-a43b-7c0d477dd3fe",
+        "status_url": "https://queue.fal.run/fal-ai/flux-2/requests/019e15cf-aedf-7403-a43b-7c0d477dd3fe/status",
+        "cancel_url": "https://queue.fal.run/fal-ai/flux-2/requests/019e15cf-aedf-7403-a43b-7c0d477dd3fe/cancel",
+        "logs": null,
+        "metrics": {}
+      }
+    },
+    {
+      "status": 200,
+      "headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "441",
+        "content-type": "application/json",
+        "date": "Mon, 11 May 2026 06:53:14 GMT",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "x-robots-tag": "noindex"
+      },
+      "body": {
+        "status": "COMPLETED",
+        "request_id": "019e15cf-aedf-7403-a43b-7c0d477dd3fe",
+        "response_url": "https://queue.fal.run/fal-ai/flux-2/requests/019e15cf-aedf-7403-a43b-7c0d477dd3fe",
+        "status_url": "https://queue.fal.run/fal-ai/flux-2/requests/019e15cf-aedf-7403-a43b-7c0d477dd3fe/status",
+        "cancel_url": "https://queue.fal.run/fal-ai/flux-2/requests/019e15cf-aedf-7403-a43b-7c0d477dd3fe/cancel",
+        "logs": null,
+        "metrics": {
+          "inference_time": 0.9981949329376221
+        }
+      }
+    }
+  ]
+}

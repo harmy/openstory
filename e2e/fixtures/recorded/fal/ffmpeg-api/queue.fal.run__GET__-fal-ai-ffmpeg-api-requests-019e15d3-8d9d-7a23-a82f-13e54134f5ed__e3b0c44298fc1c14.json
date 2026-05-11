@@ -1,0 +1,93 @@
+{
+  "request": {
+    "targetHost": "queue.fal.run",
+    "method": "GET",
+    "pathname": "/fal-ai/ffmpeg-api/requests/019e15d3-8d9d-7a23-a82f-13e54134f5ed",
+    "bodyHash": "e3b0c44298fc1c14"
+  },
+  "responses": [
+    {
+      "status": 200,
+      "headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "1875",
+        "content-type": "application/json",
+        "date": "Mon, 11 May 2026 06:57:47 GMT",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "x-fal-request-id": "019e15d3-8d9d-7a23-a82f-13e54134f5ed",
+        "x-fal-served-from": "f5492321-5cca-444f-893b-700b2e52527a",
+        "x-robots-tag": "noindex"
+      },
+      "body": {
+        "video": {
+          "url": "https://v3b.fal.media/files/b/0a99bfca/-dvKwaTeH8F8JdWpPVKOv_merged_video.mp4",
+          "content_type": "video/mp4",
+          "file_name": "merged_video.mp4",
+          "file_size": 9988841
+        },
+        "metadata": {
+          "final_fps": 24,
+          "final_width": 1928,
+          "final_height": 1072,
+          "total_duration": 30.208335,
+          "has_audio": true,
+          "input_videos": [
+            {
+              "index": 1,
+              "fps": 24,
+              "width": 1928,
+              "height": 1072,
+              "duration": 8.041667,
+              "has_audio": true,
+              "sample_rate": 44100,
+              "url": "https://storage-dev.openstory.so/videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZACH4G9NRZ3H4R6Y1NBG/untitled_reporter-at-desk_93j1xb_openstory.mp4"
+            },
+            {
+              "index": 2,
+              "fps": 24,
+              "width": 1928,
+              "height": 1072,
+              "duration": 6.041667,
+              "has_audio": true,
+              "sample_rate": 44100,
+              "url": "https://storage-dev.openstory.so/videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZAMMB560H1M7BEVNJR3Y/untitled_producer-approaches_hxn4qe_openstory.mp4"
+            },
+            {
+              "index": 3,
+              "fps": 24,
+              "width": 1928,
+              "height": 1072,
+              "duration": 5.041667,
+              "has_audio": true,
+              "sample_rate": 44100,
+              "url": "https://storage-dev.openstory.so/videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZAZXR8BV4VPHR1BZHT48/untitled_paper-reveal-and-nod_qnzz3a_openstory.mp4"
+            },
+            {
+              "index": 4,
+              "fps": 24,
+              "width": 1928,
+              "height": 1072,
+              "duration": 7.041667,
+              "has_audio": true,
+              "sample_rate": 44100,
+              "url": "https://storage-dev.openstory.so/videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZBCBDBWVZGVE2MSPB81V/untitled_rise-and-approach-broadcast-rig_bk5drb_openstory.mp4"
+            },
+            {
+              "index": 5,
+              "fps": 24,
+              "width": 1928,
+              "height": 1072,
+              "duration": 4.041667,
+              "has_audio": true,
+              "sample_rate": 44100,
+              "url": "https://storage-dev.openstory.so/videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZBQENT3B5S422FJVFSQZ/untitled_final-beauty-frame_f2060s_openstory.mp4"
+            }
+          ],
+          "video_count": 5
+        }
+      }
+    }
+  ]
+}

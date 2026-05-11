@@ -9,6 +9,7 @@ import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
 import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
 import type { MotionPromptSceneWorkflowInput } from '@/lib/workflow/types';
 import { computeMotionPromptInputHash } from '../ai/input-hash';
+import { getGenerationChannel } from '../realtime';
 import {
   type MotionPrompt,
   motionPromptSchema,
@@ -131,6 +132,15 @@ export const motionPromptSceneWorkflow = createScopedWorkflow<
           inputHash,
           analysisModel: analysisModelId,
         });
+
+        await getGenerationChannel(sequenceId).emit(
+          'generation.frame:updated',
+          {
+            frameId,
+            updateType: 'motion-prompt',
+            metadata: enrichedScene,
+          }
+        );
       });
     }
     return { sceneId: scene.sceneId, motionPrompt };

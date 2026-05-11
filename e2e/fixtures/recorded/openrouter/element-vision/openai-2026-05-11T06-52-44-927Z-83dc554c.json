@@ -1,0 +1,12 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "userMessage": "Element token: BROADCAST_MIC\nUploaded filename: broadcast-mic.jpg\n\nDescribe the element in the image below."
+      },
+      "response": {
+        "content": "{\"description\": \"A large-diaphragm condenser studio microphone with a matte champagne/silver cylindrical body and a fine woven metal mesh grille at the top. The body bears the text 'PHANTOM classic' and a circular logo emblem, with 'Nr. 1307' engraved near the base. The microphone is mounted in a silver elastic shock mount cradle with black rubber bands. A round black pop filter with dual mesh layers is attached via a flexible gooseneck arm positioned in front of the capsule.\", \"consistencyTag\": \"silver-condenser-studio-microphone\"}"
+      }
+    }
+  ]
+}

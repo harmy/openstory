@@ -1,0 +1,34 @@
+{
+  "request": {
+    "targetHost": "queue.fal.run",
+    "method": "POST",
+    "pathname": "/fal-ai/nano-banana-2/edit",
+    "bodyHash": "347df820e9dbea7d"
+  },
+  "responses": [
+    {
+      "status": 200,
+      "headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "445",
+        "content-type": "application/json",
+        "date": "Mon, 11 May 2026 06:54:43 GMT",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "x-fal-request-id": "019e15d1-12c8-7132-957e-f63e72c2c71a",
+        "x-robots-tag": "noindex"
+      },
+      "body": {
+        "status": "IN_QUEUE",
+        "request_id": "019e15d1-12c8-7132-957e-f63e72c2c71a",
+        "response_url": "https://queue.fal.run/fal-ai/nano-banana-2/requests/019e15d1-12c8-7132-957e-f63e72c2c71a",
+        "status_url": "https://queue.fal.run/fal-ai/nano-banana-2/requests/019e15d1-12c8-7132-957e-f63e72c2c71a/status",
+        "cancel_url": "https://queue.fal.run/fal-ai/nano-banana-2/requests/019e15d1-12c8-7132-957e-f63e72c2c71a/cancel",
+        "logs": null,
+        "metrics": {},
+        "queue_position": 1
+      }
+    }
+  ]
+}

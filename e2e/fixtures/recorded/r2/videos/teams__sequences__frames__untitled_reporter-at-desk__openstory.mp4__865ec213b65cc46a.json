@@ -1,0 +1,15 @@
+{
+  "request": {
+    "bucket": "videos",
+    "key": "videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZACH4G9NRZ3H4R6Y1NBG/untitled_reporter-at-desk_93j1xb_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/untitled_reporter-at-desk_<HASH>_openstory.mp4",
+    "contentType": "video/mp4",
+    "bodyHash": "0bc5ffab1a45a8c3abe7e8af3de88fa16d27a6c891fbac86d2b9f7284e8bd482",
+    "bodySize": 6380800
+  },
+  "response": {
+    "path": "videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZACH4G9NRZ3H4R6Y1NBG/untitled_reporter-at-desk_93j1xb_openstory.mp4",
+    "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZACH4G9NRZ3H4R6Y1NBG/untitled_reporter-at-desk_93j1xb_openstory.mp4",
+    "fullPath": "videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZACH4G9NRZ3H4R6Y1NBG/untitled_reporter-at-desk_93j1xb_openstory.mp4"
+  }
+}

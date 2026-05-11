@@ -1,0 +1,15 @@
+{
+  "request": {
+    "bucket": "videos",
+    "key": "videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZAZXR8BV4VPHR1BZHT48/untitled_paper-reveal-and-nod_qnzz3a_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/untitled_paper-reveal-and-nod_<HASH>_openstory.mp4",
+    "contentType": "video/mp4",
+    "bodyHash": "df82e2cba788918e50ed30e9e89e28bedf14565ae835fbd83c1c205f3fdca395",
+    "bodySize": 9318069
+  },
+  "response": {
+    "path": "videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZAZXR8BV4VPHR1BZHT48/untitled_paper-reveal-and-nod_qnzz3a_openstory.mp4",
+    "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZAZXR8BV4VPHR1BZHT48/untitled_paper-reveal-and-nod_qnzz3a_openstory.mp4",
+    "fullPath": "videos/teams/01KRAWXGMJC4M4T42XC9AHZ4S1/sequences/01KRAWYGXHSFJKBNXERTRYVEFX/frames/01KRAWZAZXR8BV4VPHR1BZHT48/untitled_paper-reveal-and-nod_qnzz3a_openstory.mp4"
+  }
+}
