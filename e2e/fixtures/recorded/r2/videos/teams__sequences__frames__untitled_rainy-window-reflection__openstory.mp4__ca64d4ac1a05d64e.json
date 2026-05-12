@@ -1,0 +1,15 @@
+{
+  "request": {
+    "bucket": "videos",
+    "key": "videos/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/frames/01KRD0BHBHPMD2BWEK66791EZM/untitled_rainy-window-reflection_ajtya2_openstory.mp4",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/untitled_rainy-window-reflection_<HASH>_openstory.mp4",
+    "contentType": "video/mp4",
+    "bodyHash": "6d8fbafe2c6a5f7b7f25f62edfb86e87e0a7da35fba3a006e194531eca2f3233",
+    "bodySize": 8972937
+  },
+  "response": {
+    "path": "videos/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/frames/01KRD0BHBHPMD2BWEK66791EZM/untitled_rainy-window-reflection_ajtya2_openstory.mp4",
+    "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/frames/01KRD0BHBHPMD2BWEK66791EZM/untitled_rainy-window-reflection_ajtya2_openstory.mp4",
+    "fullPath": "videos/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/frames/01KRD0BHBHPMD2BWEK66791EZM/untitled_rainy-window-reflection_ajtya2_openstory.mp4"
+  }
+}

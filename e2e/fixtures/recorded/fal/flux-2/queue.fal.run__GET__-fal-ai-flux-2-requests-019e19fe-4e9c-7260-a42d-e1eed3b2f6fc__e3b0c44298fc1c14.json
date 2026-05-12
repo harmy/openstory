@@ -1,0 +1,44 @@
+{
+  "request": {
+    "targetHost": "queue.fal.run",
+    "method": "GET",
+    "pathname": "/fal-ai/flux-2/requests/019e19fe-4e9c-7260-a42d-e1eed3b2f6fc",
+    "bodyHash": "e3b0c44298fc1c14"
+  },
+  "responses": [
+    {
+      "status": 200,
+      "headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "1782",
+        "content-type": "application/json",
+        "date": "Tue, 12 May 2026 02:22:39 GMT",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "x-fal-billable-units": "1",
+        "x-fal-request-id": "019e19fe-4e9c-7260-a42d-e1eed3b2f6fc",
+        "x-fal-served-from": "a30c948e-8326-4941-b06d-f2c7aad0f302",
+        "x-robots-tag": "noindex"
+      },
+      "body": {
+        "images": [
+          {
+            "url": "https://v3b.fal.media/files/b/0a99db17/kXCiZnvrYRbhoSqNyhBci_QHd4F6XR.png",
+            "content_type": "image/png",
+            "file_name": "kXCiZnvrYRbhoSqNyhBci_QHd4F6XR.png",
+            "file_size": null,
+            "width": 1024,
+            "height": 576
+          }
+        ],
+        "timings": {
+          "inference": 0.6152309449971654
+        },
+        "seed": 1672116166,
+        "has_nsfw_concepts": [false],
+        "prompt": "A cinematic establishing shot for \"Untitled Sequence\". Opening scene: INT. NEWSROOM - NIGHT\n\nRain streaks the wide window in crisp, tactile lines under bright natural light, casting clean directional shadows across the sleek newsroom. A reporter's hands move with effortless precision over the glowing terminal, keys clacking in rhythmic detail.\n\nREPORTER\nWe go live in ten.\n\nThe producer rushes in, fingers pressing the printed lede with urgency. The page lands on the counter amid curated minimal chaos.\n\nPRODUCER\nStory just broke. We need this on air now.\n\nQuick cuts Art style: Modern social-first product photography with tactile, editorial energy. Products shown in real-life context -- hands opening packaging, fingers pressing textures, products on bathroom shelves, kitchen counters, rumpled linen. Close-up detail shots emphasize material and finish. Flat-lays with curated minimal arrangements. Color-matched backgrounds that complement the product. Every frame feels like something you would screenshot and save. Mood: Fresh, sensory, and effortlessly cool. Lighting: Bright natural window light with clean directional shadows. Direct on-camera flash for punchy editorial energy on select shots. No heavy diffusion -- let light feel real and immediate. Golden hour warmth for lifestyle moments. High-key and airy overall with pops of contrast. No text, no titles, no subtitles, no watermarks, no letters, no words, no signs, no UI elements."
+      }
+    }
+  ]
+}

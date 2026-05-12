@@ -1,0 +1,83 @@
+{
+  "request": {
+    "targetHost": "queue.fal.run",
+    "method": "GET",
+    "pathname": "/fal-ai/ffmpeg-api/requests/019e1a09-a320-7390-9034-6c3a52033414",
+    "bodyHash": "e3b0c44298fc1c14"
+  },
+  "responses": [
+    {
+      "status": 200,
+      "headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "1586",
+        "content-type": "application/json",
+        "date": "Tue, 12 May 2026 02:35:21 GMT",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "x-fal-request-id": "019e1a09-a320-7390-9034-6c3a52033414",
+        "x-fal-served-from": "d691acb1-4ac5-4f9e-a8e5-0be0389f7cc4",
+        "x-robots-tag": "noindex"
+      },
+      "body": {
+        "video": {
+          "url": "https://v3b.fal.media/files/b/0a99db63/4jO2e_UDOPEhbhHYd9tnb_merged_video.mp4",
+          "content_type": "video/mp4",
+          "file_name": "merged_video.mp4",
+          "file_size": 12074508
+        },
+        "metadata": {
+          "final_fps": 24,
+          "final_width": 1928,
+          "final_height": 1072,
+          "total_duration": 24.166996,
+          "has_audio": true,
+          "input_videos": [
+            {
+              "index": 1,
+              "fps": 24,
+              "width": 1928,
+              "height": 1072,
+              "duration": 8.041667,
+              "has_audio": true,
+              "sample_rate": 44100,
+              "url": "https://storage-dev.openstory.so/videos/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/frames/01KRD0BFZAKDG0QFPW3Z08QMR3/untitled_newsroom-setup_k6f6vm_openstory.mp4"
+            },
+            {
+              "index": 2,
+              "fps": 24,
+              "width": 1928,
+              "height": 1072,
+              "duration": 6.041667,
+              "has_audio": true,
+              "sample_rate": 44100,
+              "url": "https://storage-dev.openstory.so/videos/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/frames/01KRD0BG9JCYGHWD18QN8KY7F8/untitled_producer-enters-with-breaking-news_dhnsa4_openstory.mp4"
+            },
+            {
+              "index": 3,
+              "fps": 24,
+              "width": 1928,
+              "height": 1072,
+              "duration": 7.041667,
+              "has_audio": true,
+              "sample_rate": 44100,
+              "url": "https://storage-dev.openstory.so/videos/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/frames/01KRD0BGSW1NERAQ78GVNA8TV1/untitled_pre-live-preparations-and-go-live_fnm6zn_openstory.mp4"
+            },
+            {
+              "index": 4,
+              "fps": 24,
+              "width": 1928,
+              "height": 1072,
+              "duration": 3.041995,
+              "has_audio": true,
+              "sample_rate": 44100,
+              "url": "https://storage-dev.openstory.so/videos/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/frames/01KRD0BHBHPMD2BWEK66791EZM/untitled_rainy-window-reflection_ajtya2_openstory.mp4"
+            }
+          ],
+          "video_count": 4
+        }
+      }
+    }
+  ]
+}

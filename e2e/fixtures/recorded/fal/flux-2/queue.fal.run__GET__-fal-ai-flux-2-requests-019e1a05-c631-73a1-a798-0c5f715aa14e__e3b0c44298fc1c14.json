@@ -1,0 +1,44 @@
+{
+  "request": {
+    "targetHost": "queue.fal.run",
+    "method": "GET",
+    "pathname": "/fal-ai/flux-2/requests/019e1a05-c631-73a1-a798-0c5f715aa14e",
+    "bodyHash": "e3b0c44298fc1c14"
+  },
+  "responses": [
+    {
+      "status": 200,
+      "headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "1404",
+        "content-type": "application/json",
+        "date": "Tue, 12 May 2026 02:30:48 GMT",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "x-fal-billable-units": "1",
+        "x-fal-request-id": "019e1a05-c631-73a1-a798-0c5f715aa14e",
+        "x-fal-served-from": "4601997c-0439-458a-8568-641878249ed4",
+        "x-robots-tag": "noindex"
+      },
+      "body": {
+        "images": [
+          {
+            "url": "https://v3b.fal.media/files/b/0a99db48/MHdm57yH9HPKiH8HVrSEU_c5llcBnX.png",
+            "content_type": "image/png",
+            "file_name": "MHdm57yH9HPKiH8HVrSEU_c5llcBnX.png",
+            "file_size": null,
+            "width": 1024,
+            "height": 576
+          }
+        ],
+        "timings": {
+          "inference": 0.609920802002307
+        },
+        "seed": 919415683,
+        "has_nsfw_concepts": [false],
+        "prompt": "Cinematic film still. The producer rushes in, fingers pressing the printed lede with urgency. The page lands on the counter amid curated minimal chaos.\n\nPRODUCER\nStory just broke. We need this on air now.. Art style: Modern social-first product photography with tactile, editorial energy. Products shown in real-life context -- hands opening packaging, fingers pressing textures, products on bathroom shelves, kitchen counters, rumpled linen. Close-up detail shots emphasize material and finish. Flat-lays with curated minimal arrangements. Color-matched backgrounds that complement the product. Every frame feels like something you would screenshot and save. Mood: Fresh, sensory, and effortlessly cool. Lighting: Bright natural window light with clean directional shadows. Direct on-camera flash for punchy editorial energy on select shots. No heavy diffusion -- let light feel real and immediate. Golden hour warmth for lifestyle moments. High-key and airy overall with pops of contrast. No text, no titles, no subtitles, no watermarks, no letters, no words, no signs, no UI elements."
+      }
+    }
+  ]
+}
