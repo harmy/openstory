@@ -3,6 +3,7 @@ import {
   deleteSequenceElementFn,
   finalizeElementUploadFn,
   listSequenceElementsFn,
+  presignDraftElementUploadFn,
   presignElementUploadFn,
   renameSequenceElementTokenFn,
 } from '@/functions/sequence-elements';
@@ -107,7 +108,7 @@ export function useUploadDraftElement() {
       onProgress?: (percent: number) => void;
       onAnalyzingChange?: (analyzing: boolean) => void;
     }): Promise<DraftElementUpload> => {
-      const presign = await presignElementUploadFn({
+      const presign = await presignDraftElementUploadFn({
         data: { filename: data.file.name },
       });
       await putToR2(

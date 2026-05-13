@@ -38,16 +38,36 @@ async function triggerElementVision(
 }
 
 // ============================================================================
-// Presign upload
+// Presign upload — drafts go under the user's default team's `temp/` folder
+// and are later relocated via `promoteTempElements`. Persisted uploads
+// (existing sequence) must use the *sequence's* teamId in the path so the
+// finalize check passes for users whose default team differs from the
+// sequence's team (multi-team members and system admins).
 // ============================================================================
 
-export const presignElementUploadFn = createServerFn({ method: 'POST' })
+export const presignDraftElementUploadFn = createServerFn({ method: 'POST' })
   .middleware([authWithTeamMiddleware])
+  .inputValidator(zodValidator(z.object({ filename: z.string().min(1) })))
+  .handler(async ({ context, data }) => {
+    const ext = getExtensionFromUrl(data.filename);
+    const uploadId = generateId();
+    const contentType = getMimeTypeFromExtension(ext);
+    const storagePath = `${context.teamId}/temp/${uploadId}.${ext}`;
+
+    return getSignedUploadUrl(
+      STORAGE_BUCKETS.ELEMENTS,
+      storagePath,
+      contentType
+    );
+  });
+
+export const presignElementUploadFn = createServerFn({ method: 'POST' })
+  .middleware([sequenceAccessMiddleware])
   .inputValidator(
     zodValidator(
       z.object({
+        sequenceId: ulidSchema,
         filename: z.string().min(1),
-        sequenceId: ulidSchema.optional(),
       })
     )
   )
@@ -55,10 +75,7 @@ export const presignElementUploadFn = createServerFn({ method: 'POST' })
     const ext = getExtensionFromUrl(data.filename);
     const uploadId = generateId();
     const contentType = getMimeTypeFromExtension(ext);
-
-    const storagePath = data.sequenceId
-      ? `${context.teamId}/${data.sequenceId}/${uploadId}.${ext}`
-      : `${context.teamId}/temp/${uploadId}.${ext}`;
+    const storagePath = `${context.teamId}/${data.sequenceId}/${uploadId}.${ext}`;
 
     return getSignedUploadUrl(
       STORAGE_BUCKETS.ELEMENTS,
