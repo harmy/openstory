@@ -789,16 +789,22 @@ export const ScriptView: FC<{
                       ? 'Generating…'
                       : isElementBusy
                         ? 'Analyzing elements…'
-                        : 'Generate'}
+                        : isEditing
+                          ? 'Generate Copy'
+                          : 'Generate'}
                   </span>
                   {/* Shine effect */}
                   <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none" />
                 </Button>
               </div>
               <span className="hidden sm:block text-xs text-muted-foreground text-right">
-                {analysisModels.length === 1
-                  ? '1 sequence will be created'
-                  : `${analysisModels.length} sequences will be created`}
+                {isEditing
+                  ? analysisModels.length === 1
+                    ? '1 copy will be created'
+                    : `${analysisModels.length} copies will be created`
+                  : analysisModels.length === 1
+                    ? '1 sequence will be created'
+                    : `${analysisModels.length} sequences will be created`}
               </span>
             </div>
           </div>
@@ -816,9 +822,12 @@ export const ScriptView: FC<{
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Generate new sequence?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Generate a copy of this sequence?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              A new sequence will be created from this script.
+              A copy will be created from this script. Your original sequence
+              won't change.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -829,7 +838,7 @@ export const ScriptView: FC<{
                 executeRegeneration();
               }}
             >
-              Generate
+              Generate Copy
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
