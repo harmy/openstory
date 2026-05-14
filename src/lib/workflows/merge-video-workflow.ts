@@ -47,6 +47,13 @@ async function chainAudioMux(
   input: MergeVideoWorkflowInput & { sequenceId: string },
   mergedVideoVariantId: string
 ): Promise<void> {
+  if (input.skipAudioMux) {
+    console.log(
+      `[MergeVideoWorkflow] skipAudioMux=true; bypassing audio mux for sequence ${input.sequenceId}`
+    );
+    return;
+  }
+
   const musicVariantId = await context.run(
     'fetch-music-variant-for-mux',
     async () => resolveMusicVariantForMux(scopedDb, input.sequenceId)

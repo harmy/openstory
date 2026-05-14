@@ -168,14 +168,18 @@ function MusicPage() {
   });
 
   const mergeVideoAndMusic = useMutation({
-    mutationFn: () => mergeVideoAndMusicFn({ data: { sequenceId } }),
-    onMutate: () => {
+    mutationFn: (args: { includeMusic: boolean }) =>
+      mergeVideoAndMusicFn({
+        data: { sequenceId, includeMusic: args.includeMusic },
+      }),
+    onMutate: (args) => {
       queryClient.setQueryData<Sequence>(
         sequenceKeys.detail(sequenceId),
         (old) => (old ? { ...old, mergedVideoStatus: 'merging' as const } : old)
       );
       posthog.capture('merged_video_generation_started', {
         sequence_id: sequenceId,
+        include_music: args.includeMusic,
       });
     },
   });
@@ -241,7 +245,7 @@ function MusicPage() {
           videoDuration={videoDuration}
           onGenerateMusic={(args) => generateMusic.mutate(args)}
           isGeneratingMusic={generateMusic.isPending}
-          onMergeVideoAndMusic={() => mergeVideoAndMusic.mutate()}
+          onMergeVideoAndMusic={(args) => mergeVideoAndMusic.mutate(args)}
           isMergingVideoAndMusic={mergeVideoAndMusic.isPending}
           divergentBanner={divergentBanner}
           isMusicPromptStale={musicPromptStaleness?.musicPrompt === 'stale'}

@@ -34,6 +34,7 @@ export const generationMotionOptionsSchema = z.object({
   fps: z.number().optional(),
   motionBucket: z.number().optional(),
   aspectRatio: aspectRatioSchema.optional(),
+  generateAudio: z.boolean().optional(),
 });
 
 export type GenerateMotionOptions = {
@@ -45,6 +46,10 @@ export type GenerateMotionOptions = {
   fps?: number;
   motionBucket?: number;
   aspectRatio?: AspectRatio;
+  /** For audio-capable models (kling v3, veo3), pass `false` to suppress
+   *  the model's native audio output (sfx/ambient/lip-sync). Omitting the
+   *  flag lets the API schema default apply (true for audio-capable models). */
+  generateAudio?: boolean;
 };
 
 import { buildModelInput } from './build-model-input';
@@ -174,10 +179,12 @@ export function calculateMotionMetadata(options: GenerateMotionOptions): {
   const validatedDuration = snapDuration(options.duration, modelKey);
 
   const providerInput = buildModelInput(options, modelConfig, modelKey);
+  const audioEnabled =
+    videoModelSupportsAudio(modelKey) && options.generateAudio !== false;
   const cost = calculateVideoCost({
     endpointId: modelConfig.id,
     durationSeconds: validatedDuration,
-    audioEnabled: videoModelSupportsAudio(modelKey),
+    audioEnabled,
     resolution:
       'resolution' in providerInput &&
       typeof providerInput.resolution === 'string'

@@ -13,6 +13,7 @@ import {
 import {
   DEFAULT_MUSIC_MODEL,
   DEFAULT_VIDEO_MODEL,
+  videoModelSupportsAudio,
   type AudioModel,
   type ImageToVideoModel,
 } from '@/lib/ai/models';
@@ -67,12 +68,15 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [includeMusic, setIncludeMusic] = useState(false);
+  const [generateAudio, setGenerateAudio] = useState(true);
   const [motionModel, setMotionModel] = useState<ImageToVideoModel>(
     initialMotionModel ?? DEFAULT_VIDEO_MODEL
   );
   const [musicModel, setMusicModel] = useState<AudioModel>(
     initialMusicModel ?? DEFAULT_MUSIC_MODEL
   );
+
+  const motionSupportsAudio = videoModelSupportsAudio(motionModel);
 
   const prevInitialMotionRef = useRef(initialMotionModel);
   if (
@@ -127,7 +131,12 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
 
     setIsGenerating(true);
     try {
-      await onBatchGenerateMotion({ includeMusic, motionModel, musicModel });
+      await onBatchGenerateMotion({
+        includeMusic,
+        motionModel,
+        musicModel,
+        generateAudio: motionSupportsAudio ? generateAudio : false,
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -287,6 +296,21 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
                   )}
                 </span>
               </label>
+              {motionSupportsAudio && (
+                <label
+                  htmlFor="mobile-batch-generate-audio"
+                  className="flex items-center gap-2 text-sm text-muted-foreground justify-center"
+                >
+                  <Checkbox
+                    id="mobile-batch-generate-audio"
+                    checked={generateAudio}
+                    onCheckedChange={(checked) =>
+                      setGenerateAudio(checked === true)
+                    }
+                  />
+                  <span>Include SFX &amp; dialogue</span>
+                </label>
+              )}
             </SheetFooter>
           )}
         </SheetContent>

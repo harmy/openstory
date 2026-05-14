@@ -6,6 +6,7 @@ import { DivergentAlternateBanner } from '@/components/staleness/divergent-alter
 import { StalenessIndicator } from '@/components/staleness/staleness-indicator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -42,6 +43,7 @@ import {
   getCompatibleModel,
   safeImageToVideoModel,
   safeTextToImageModel,
+  videoModelSupportsAudio,
   type ImageToVideoModel,
   type TextToImageModel,
 } from '@/lib/ai/models';
@@ -173,6 +175,8 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     setEditPrompts((s) => ({ ...s, motionPrompt: v }));
   const setSelectedMotionModel = (v: ImageToVideoModel | undefined) =>
     setEditPrompts((s) => ({ ...s, motionModel: v }));
+  // SFX/dialogue toggle for audio-capable models (kling v3, veo3, etc.)
+  const [generateAudio, setGenerateAudio] = useState(true);
 
   const handleImageModelChange = useCallback(
     (model: TextToImageModel) => {
@@ -597,6 +601,9 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
       };
     });
 
+    const motionModelForCall = selectedMotionModel || DEFAULT_VIDEO_MODEL;
+    const supportsAudio = videoModelSupportsAudio(motionModelForCall);
+
     try {
       await generateFrameMotionFn({
         data: {
@@ -604,6 +611,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
           frameId: frame.id,
           model: selectedMotionModel,
           prompt: editedMotionPrompt || undefined,
+          generateAudio: supportsAudio ? generateAudio : undefined,
         },
       });
 
@@ -632,6 +640,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     frame,
     selectedMotionModel,
     editedMotionPrompt,
+    generateAudio,
     queryClient,
     onRegenerateStart,
     showFalGate,
@@ -1266,6 +1275,26 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
               entityType="frame"
               onCompare={() => onCompareDivergent?.(divergentVideoVariant)}
             />
+          )}
+
+          {/* SFX/dialogue toggle — only for audio-capable models */}
+          {videoModelSupportsAudio(
+            selectedMotionModel || DEFAULT_VIDEO_MODEL
+          ) && (
+            <label
+              htmlFor="scene-generate-audio"
+              className="flex items-center gap-2 text-sm text-muted-foreground"
+            >
+              <Checkbox
+                id="scene-generate-audio"
+                checked={generateAudio}
+                onCheckedChange={(checked) =>
+                  setGenerateAudio(checked === true)
+                }
+                disabled={isGenerating || isGeneratingMotion}
+              />
+              <span>Include SFX &amp; dialogue</span>
+            </label>
           )}
 
           {/* Regenerate button */}

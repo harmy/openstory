@@ -44,6 +44,11 @@ describe('buildModelInput', () => {
       const result = build('kling_v3_pro');
       expect(result.generate_audio).toBe(true);
     });
+
+    it('forwards generate_audio=false when caller suppresses audio', () => {
+      const result = build('kling_v3_pro', { generateAudio: false });
+      expect(result.generate_audio).toBe(false);
+    });
   });
 
   describe('Grok Imagine Video', () => {
@@ -62,6 +67,11 @@ describe('buildModelInput', () => {
     it('sets generate_audio to true from schema default', () => {
       const result = build('veo3_1');
       expect(result.generate_audio).toBe(true);
+    });
+
+    it('forwards generate_audio=false when caller suppresses audio', () => {
+      const result = build('veo3_1', { generateAudio: false });
+      expect(result.generate_audio).toBe(false);
     });
 
     it('uses image_url', () => {

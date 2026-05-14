@@ -477,11 +477,21 @@ export const generateMusicFn = createServerFn({ method: 'POST' })
  */
 export const mergeVideoAndMusicFn = createServerFn({ method: 'POST' })
   .middleware([sequenceAccessMiddleware])
-  .inputValidator(zodValidator(z.object({ sequenceId: ulidSchema })))
-  .handler(async ({ context }) => {
+  .inputValidator(
+    zodValidator(
+      z.object({
+        sequenceId: ulidSchema,
+        /** When `false`, restitch frame videos without muxing the generated
+         *  music track. Default `true` preserves the legacy behavior. */
+        includeMusic: z.boolean().optional(),
+      })
+    )
+  )
+  .handler(async ({ data, context }) => {
     const { sequence, user, teamId } = context;
+    const includeMusic = data.includeMusic !== false;
 
-    if (!sequence.musicUrl) {
+    if (includeMusic && !sequence.musicUrl) {
       throw new Error('Music must be generated before merging');
     }
 
@@ -522,6 +532,7 @@ export const mergeVideoAndMusicFn = createServerFn({ method: 'POST' })
         teamId,
         sequenceId: sequence.id,
         videoUrls,
+        skipAudioMux: !includeMusic,
       } satisfies MergeVideoWorkflowInput,
       { label: buildWorkflowLabel(sequence.id) }
     );

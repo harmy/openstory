@@ -91,6 +91,7 @@ export const generateMotionWorkflow = createScopedWorkflow<MotionWorkflowInput>(
         fps: input.fps,
         motionBucket: input.motionBucket,
         aspectRatio: input.aspectRatio,
+        generateAudio: input.generateAudio,
       });
 
       // Check if team has enough credits (resolve BYOK status before job submission)
@@ -236,6 +237,7 @@ export const generateMotionWorkflow = createScopedWorkflow<MotionWorkflowInput>(
         fps: input.fps,
         motionBucket: input.motionBucket,
         aspectRatio: input.aspectRatio,
+        generateAudio: input.generateAudio,
         scopedDb,
       }).catch((error) => {
         if (
