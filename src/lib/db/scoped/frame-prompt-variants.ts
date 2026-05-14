@@ -38,9 +38,11 @@ type WriteFramePromptVariantBase = {
  * `inputHash` represents the upstream context (scene + style + narrowed
  * bibles + aspectRatio + analysisModel) that this prompt is aligned with,
  * regardless of who authored the text. AI-generated and regenerated rows
- * always carry a real hash — they can't be written without one. User-edits
- * also carry the live hash captured at edit time so staleness detection
- * keeps working after a hand-typed prompt; null is permitted only when the
+ * carry a real hash at the call site so the partial unique index can dedupe
+ * QStash retries; the helper may downgrade the persisted hash to null on
+ * the force-regen fallback path (see `write` for details). User-edits also
+ * carry the live hash captured at edit time so staleness detection keeps
+ * working after a hand-typed prompt; null is permitted only when the
  * upstream context was uncomputable at write time (e.g. style deleted), in
  * which case the staleness function falls back to an earlier non-null row.
  *
@@ -98,6 +100,14 @@ export function createFramePromptVariantsMethods(db: Database) {
      * `(frame_id, prompt_type, input_hash) WHERE input_hash IS NOT NULL`:
      * an insert that conflicts with an existing row no-ops, the existing row
      * is fetched, and the cached pointer is updated as normal.
+     *
+     * Force-regeneration corner case: an explicit user-triggered regen runs
+     * the LLM against unchanged upstream inputs. The new completion's hash
+     * matches an existing row, so the unique-index insert no-ops — but the
+     * text genuinely differs. We append a fallback row with `input_hash =
+     * NULL` (excluded by the partial index) so history records the new text;
+     * the cached `*_prompt_input_hash` column still tracks the real
+     * `liveHash` so staleness detection stays correct.
      */
     write: async (
       input: WriteFramePromptVariantInput
@@ -138,7 +148,34 @@ export function createFramePromptVariantsMethods(db: Database) {
             )
           )
           .limit(1);
-        variant = existing;
+
+        if (
+          existing &&
+          existing.text !== input.text &&
+          (input.source === 'ai-generated' || input.source === 'regenerated')
+        ) {
+          // Force-regen path: same upstream hash but a fresh LLM completion.
+          // Bypass the partial unique index with a null `input_hash` so the
+          // new text lands in history. Restore/user-edit paths never reach
+          // this branch — they don't carry a non-null `inputHash` here.
+          const [forced] = await db
+            .insert(framePromptVariants)
+            .values({
+              frameId: input.frameId,
+              promptType: input.promptType,
+              text: input.text,
+              components: input.components,
+              parameters: input.parameters,
+              source: input.source,
+              inputHash: null,
+              analysisModel,
+              createdBy: input.createdBy ?? null,
+            })
+            .returning();
+          variant = forced;
+        } else {
+          variant = existing;
+        }
       }
 
       if (!variant) {

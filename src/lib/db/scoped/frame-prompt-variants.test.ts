@@ -310,6 +310,85 @@ describe('frame_prompt_variants helper', () => {
     expect(history).toHaveLength(1);
   });
 
+  it('force-regen at the same input_hash appends a null-hash history row with the new text and keeps the cached hash tracking the live context', async () => {
+    // Mirrors the user-driven "Regenerate Prompt" path: the LLM is invoked
+    // again against unchanged upstream inputs, so the new completion's hash
+    // collides with the existing row. The helper must still record the new
+    // text in history (otherwise the user's regenerated prompt would be
+    // silently lost) while keeping the cached `*_prompt_input_hash` column
+    // tracking the real upstream hash so staleness detection stays correct.
+    const methods = createFramePromptVariantsMethods(asDatabase(db));
+
+    const first = await methods.write({
+      frameId,
+      promptType: 'visual',
+      text: 'AI prompt v1',
+      source: 'ai-generated',
+      inputHash: 'context-hash-1',
+      analysisModel: 'anthropic/claude-haiku-4.5',
+    });
+
+    const forced = await methods.write({
+      frameId,
+      promptType: 'visual',
+      text: 'Fresh LLM completion against same inputs',
+      source: 'regenerated',
+      inputHash: 'context-hash-1',
+      analysisModel: 'anthropic/claude-haiku-4.5',
+    });
+
+    // A distinct row was inserted (not the existing one returned verbatim).
+    expect(forced.id).not.toBe(first.id);
+    // Bypasses the partial unique index via null `input_hash`.
+    expect(forced.inputHash).toBeNull();
+    expect(forced.source).toBe('regenerated');
+    expect(forced.text).toBe('Fresh LLM completion against same inputs');
+
+    const history = await methods.listByFrame(frameId, 'visual');
+    expect(history).toHaveLength(2);
+    expect(history[0].text).toBe('Fresh LLM completion against same inputs');
+    expect(history[1].text).toBe('AI prompt v1');
+
+    const [refreshed] = await db
+      .select()
+      .from(frames)
+      .where(eq(frames.id, frameId));
+    expect(refreshed.imagePrompt).toBe(
+      'Fresh LLM completion against same inputs'
+    );
+    // Cached hash still reflects the live upstream so staleness detection
+    // doesn't fire spuriously after a force regeneration.
+    expect(refreshed.visualPromptInputHash).toBe('context-hash-1');
+  });
+
+  it('idempotent retry of the same text at the same hash still de-dupes (does not fall through to the null-hash branch)', async () => {
+    // Regression guard for the force-regen branch: it must only fire when
+    // `existing.text !== input.text`. A genuine workflow step retry submits
+    // the same text + same hash and should still collapse to one row.
+    const methods = createFramePromptVariantsMethods(asDatabase(db));
+
+    await methods.write({
+      frameId,
+      promptType: 'visual',
+      text: 'AI prompt v1',
+      source: 'ai-generated',
+      inputHash: 'context-hash-1',
+      analysisModel: 'anthropic/claude-haiku-4.5',
+    });
+
+    await methods.write({
+      frameId,
+      promptType: 'visual',
+      text: 'AI prompt v1',
+      source: 'regenerated',
+      inputHash: 'context-hash-1',
+      analysisModel: 'anthropic/claude-haiku-4.5',
+    });
+
+    const history = await methods.listByFrame(frameId, 'visual');
+    expect(history).toHaveLength(1);
+  });
+
   it('a different input_hash produces a new row for the same frame+type', async () => {
     const methods = createFramePromptVariantsMethods(asDatabase(db));
 
