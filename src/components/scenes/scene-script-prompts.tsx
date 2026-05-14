@@ -48,7 +48,7 @@ import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
 import type { Frame } from '@/types/database';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CopyIcon, History, Loader2, Minimize2 } from 'lucide-react';
+import { CopyIcon, History, Loader2, Minimize2, RefreshCw } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { FrameStalenessBanners } from './frame-staleness-banners';
@@ -204,15 +204,29 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     frameId: frame?.id,
   });
   const regeneratePromptMutation = useMutation({
-    mutationFn: (promptType: 'visual' | 'motion') => {
+    mutationFn: (vars: {
+      promptType: 'visual' | 'motion';
+      force?: boolean;
+    }) => {
       if (!frame?.id) throw new Error('frame required');
       return regenerateFramePromptFn({
-        data: { sequenceId, frameId: frame.id, promptType },
+        data: {
+          sequenceId,
+          frameId: frame.id,
+          promptType: vars.promptType,
+          force: vars.force,
+        },
       });
     },
-    onSuccess: async (result) => {
+    onSuccess: async (result, vars) => {
       if (result.alreadyUpToDate) {
         toast.info('Prompt is already up to date');
+      } else {
+        toast.success(
+          vars.promptType === 'visual'
+            ? 'Regenerating visual prompt…'
+            : 'Regenerating motion prompt…'
+        );
       }
       if (frame?.id) {
         await queryClient.invalidateQueries({
@@ -282,7 +296,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   // triggered it. Without this, both tabs' indicators would show busy whenever
   // either was clicked.
   const inFlightPromptType = regeneratePromptMutation.isPending
-    ? regeneratePromptMutation.variables
+    ? regeneratePromptMutation.variables?.promptType
     : null;
   const isRegeneratingVisualPrompt = inFlightPromptType === 'visual';
   const isRegeneratingMotionPrompt = inFlightPromptType === 'motion';
@@ -895,10 +909,37 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
               artifact="visual-prompt"
               entityType="frame"
               density="inline"
-              onRegenerate={() => regeneratePromptMutation.mutate('visual')}
+              onRegenerate={() =>
+                regeneratePromptMutation.mutate({ promptType: 'visual' })
+              }
               isRegenerating={isRegeneratingVisualPrompt}
             />
           )}
+
+          {/* Explicit regenerate-prompt button — always available so the user
+              can roll the dice on a fresh LLM completion regardless of
+              staleness. Passes `force: true` so the server skips the
+              up-to-date short-circuit even when no upstream input changed. */}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              regeneratePromptMutation.mutate({
+                promptType: 'visual',
+                force: true,
+              })
+            }
+            disabled={!frame || isRegeneratingVisualPrompt}
+            className="w-full"
+            aria-label="Regenerate visual prompt"
+          >
+            {isRegeneratingVisualPrompt ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            {isRegeneratingVisualPrompt ? 'Regenerating…' : 'Regenerate Prompt'}
+          </Button>
 
           {divergentImageVariant && (
             <DivergentAlternateBanner
@@ -1052,10 +1093,36 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
               artifact="motion-prompt"
               entityType="frame"
               density="inline"
-              onRegenerate={() => regeneratePromptMutation.mutate('motion')}
+              onRegenerate={() =>
+                regeneratePromptMutation.mutate({ promptType: 'motion' })
+              }
               isRegenerating={isRegeneratingMotionPrompt}
             />
           )}
+
+          {/* Explicit regenerate-prompt button — see image-prompt tab for the
+              full rationale; `force: true` lets the user request a fresh LLM
+              completion even when upstream inputs are unchanged. */}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              regeneratePromptMutation.mutate({
+                promptType: 'motion',
+                force: true,
+              })
+            }
+            disabled={!frame || isRegeneratingMotionPrompt}
+            className="w-full"
+            aria-label="Regenerate motion prompt"
+          >
+            {isRegeneratingMotionPrompt ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            {isRegeneratingMotionPrompt ? 'Regenerating…' : 'Regenerate Prompt'}
+          </Button>
 
           {divergentVideoVariant && (
             <DivergentAlternateBanner

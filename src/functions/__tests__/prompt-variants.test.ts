@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   framePromptDedupId,
+  framePromptForceDedupId,
   isPromptUpToDate,
   musicPromptDedupId,
 } from '@/functions/prompt-variants';
@@ -53,6 +54,23 @@ describe('framePromptDedupId', () => {
     const first = framePromptDedupId('visual', 'frame-1', 'hash');
     const second = framePromptDedupId('visual', 'frame-1', 'hash');
     expect(first).toBe(second);
+  });
+});
+
+describe('framePromptForceDedupId', () => {
+  it('builds an id distinct from the stable hash-based dedup id', () => {
+    // The force-regen path must use a different ID prefix so QStash treats it
+    // as a fresh run instead of collapsing it into the stable hash bucket.
+    const stable = framePromptDedupId('visual', 'frame-1', 'hash');
+    const forced = framePromptForceDedupId('visual', 'frame-1', 'nonce');
+    expect(forced).not.toBe(stable);
+    expect(forced.startsWith('prompt-visual-frame-1-force-')).toBe(true);
+  });
+
+  it('changes with each unique nonce so repeated clicks do not dedupe', () => {
+    const a = framePromptForceDedupId('visual', 'frame-1', 'nonce-a');
+    const b = framePromptForceDedupId('visual', 'frame-1', 'nonce-b');
+    expect(a).not.toBe(b);
   });
 });
 
