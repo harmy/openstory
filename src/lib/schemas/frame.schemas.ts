@@ -85,6 +85,8 @@ export const generateMotionSchema = z.object({
   duration: z.number().min(1).max(10).optional(),
   fps: z.number().min(7).max(30).optional(),
   motionBucket: z.number().min(1).max(255).optional(),
+  /** Toggle sfx/dialogue/ambient audio for audio-capable models. */
+  generateAudio: z.boolean().optional(),
 });
 
 export const generateVariantSchema = z.object({

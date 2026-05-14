@@ -46,6 +46,12 @@ export function buildModelInput<T extends ImageToVideoModel>(
     imageUrl: options.imageUrl,
     aspectRatio: options.aspectRatio,
     ...QUALITY_OVERRIDES[modelKey],
+    // Pass-through `generate_audio` for audio-capable models. The schema-driven
+    // transform forwards unknown keys; models without `generate_audio` strip
+    // it during apiSchema.parse.
+    ...(options.generateAudio !== undefined && {
+      generate_audio: options.generateAudio,
+    }),
   }) as ModelOutputMap[T];
 
   const outputPrompt =

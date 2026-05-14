@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   DEFAULT_MUSIC_MODEL,
   DEFAULT_VIDEO_MODEL,
+  videoModelSupportsAudio,
   type AudioModel,
   type ImageToVideoModel,
 } from '@/lib/ai/models';
@@ -19,6 +20,9 @@ export type BatchGenerateMotionArgs = {
   includeMusic: boolean;
   motionModel: ImageToVideoModel;
   musicModel: AudioModel;
+  /** When the motion model emits audio (sfx/dialogue/ambient), allow the
+   *  user to suppress it. Ignored for models without audio output. */
+  generateAudio: boolean;
 };
 
 type SceneListProps = {
@@ -78,12 +82,15 @@ const SceneListComponent: React.FC<SceneListProps> = ({
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [includeMusic, setIncludeMusic] = useState(true);
+  const [generateAudio, setGenerateAudio] = useState(true);
   const [motionModel, setMotionModel] = useState<ImageToVideoModel>(
     initialMotionModel ?? DEFAULT_VIDEO_MODEL
   );
   const [musicModel, setMusicModel] = useState<AudioModel>(
     initialMusicModel ?? DEFAULT_MUSIC_MODEL
   );
+
+  const motionSupportsAudio = videoModelSupportsAudio(motionModel);
 
   // Sync local selection when the sequence's saved model changes from outside
   // (e.g. after generation completes and the workflow persists the new model).
@@ -133,7 +140,12 @@ const SceneListComponent: React.FC<SceneListProps> = ({
 
     setIsGenerating(true);
     try {
-      await onBatchGenerateMotion({ includeMusic, motionModel, musicModel });
+      await onBatchGenerateMotion({
+        includeMusic,
+        motionModel,
+        musicModel,
+        generateAudio: motionSupportsAudio ? generateAudio : false,
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -262,6 +274,21 @@ const SceneListComponent: React.FC<SceneListProps> = ({
               )}
             </span>
           </label>
+          {motionSupportsAudio && (
+            <label
+              htmlFor="batch-generate-audio"
+              className="flex items-center gap-2 text-sm text-muted-foreground"
+            >
+              <Checkbox
+                id="batch-generate-audio"
+                checked={generateAudio}
+                onCheckedChange={(checked) =>
+                  setGenerateAudio(checked === true)
+                }
+              />
+              <span>Include SFX &amp; dialogue</span>
+            </label>
+          )}
         </div>
       )}
     </div>

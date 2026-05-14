@@ -189,6 +189,12 @@ export interface MotionWorkflowInput extends SequenceWorkflowContext {
   motionBucket?: number;
   aspectRatio?: AspectRatio; // "16:9", "9:16", "1:1"
   /**
+   * For audio-capable models (kling v3, veo3), pass `false` to suppress the
+   * model's native audio output (sfx/ambient/lip-sync). Omit to use the API
+   * schema default (true for audio-capable models).
+   */
+  generateAudio?: boolean;
+  /**
    * `true` when `prompt` came from a user edit (typed in the UI). `false` for
    * auto paths (batch generation, smart-retry) where `prompt` was produced by
    * `resolveMotionPrompt` and may include model-specific dialogue/audio
@@ -524,6 +530,12 @@ export interface MergeVideoWorkflowInput extends SequenceWorkflowContext {
   targetFps?: number;
   /** Target resolution (512-2048 per dimension) */
   resolution?: { width: number; height: number };
+  /**
+   * When `true`, skip the chained merge-audio-video workflow even if a music
+   * variant exists. Used by the music tab's "Merge with Video" CTA when the
+   * user has unchecked "Include music".
+   */
+  skipAudioMux?: boolean;
 }
 
 export interface MergeVideoWorkflowResult {
@@ -763,6 +775,8 @@ export interface BatchMotionMusicWorkflowInput extends SequenceWorkflowContext {
     fps?: number;
     motionBucket?: number;
     aspectRatio?: AspectRatio;
+    /** See `MotionWorkflowInput.generateAudio`. */
+    generateAudio?: boolean;
     /** See `MotionWorkflowInput.userEditedPrompt`. */
     userEditedPrompt?: boolean;
   }>;

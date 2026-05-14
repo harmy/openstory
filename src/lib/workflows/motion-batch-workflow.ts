@@ -64,6 +64,7 @@ export const motionBatchWorkflow =
             fps: frame.fps,
             motionBucket: frame.motionBucket,
             aspectRatio: frame.aspectRatio,
+            generateAudio: frame.generateAudio,
             userEditedPrompt: frame.userEditedPrompt,
             // motion-batch invokes merge itself at step 3
             triggerMergeOnComplete: false,

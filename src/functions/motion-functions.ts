@@ -96,6 +96,7 @@ export const generateFrameMotionFn = createServerFn({ method: 'POST' })
           fps: data.fps,
           motionBucket: data.motionBucket,
           aspectRatio: sequence.aspectRatio,
+          generateAudio: data.generateAudio,
           userEditedPrompt,
         },
       ],
@@ -128,6 +129,7 @@ const batchGenerateMotionInputSchema = z.object({
   duration: generateMotionSchema.shape.duration,
   fps: generateMotionSchema.shape.fps,
   motionBucket: generateMotionSchema.shape.motionBucket,
+  generateAudio: generateMotionSchema.shape.generateAudio,
 });
 
 export const batchGenerateMotionFn = createServerFn({ method: 'POST' })
@@ -212,6 +214,7 @@ export const batchGenerateMotionFn = createServerFn({ method: 'POST' })
           fps: data.fps,
           motionBucket: data.motionBucket,
           aspectRatio: sequence.aspectRatio,
+          generateAudio: data.generateAudio,
         };
       }),
       music: musicConfig,

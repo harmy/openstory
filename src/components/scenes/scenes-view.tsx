@@ -512,6 +512,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
       includeMusic,
       motionModel,
       musicModel,
+      generateAudio,
     }: BatchGenerateMotionArgs) => {
       // Optimistic: compute eligible frames locally (same filter as backend)
       const eligibleFrameIds = (frames ?? [])
@@ -548,6 +549,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         eligible_frame_count: eligibleFrameIds.length,
         motion_model: motionModel,
         music_model: includeMusic ? musicModel : undefined,
+        generate_audio: generateAudio,
       });
 
       try {
@@ -557,6 +559,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
             includeMusic,
             model: motionModel,
             musicModel: includeMusic ? musicModel : undefined,
+            generateAudio,
           },
         });
       } catch (error) {
