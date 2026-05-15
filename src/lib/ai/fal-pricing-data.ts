@@ -148,7 +148,7 @@ export const IMAGE_PRICING: Record<string, ImagePricing> = {
     basePrice: micros(1_000_000),
     unit: 'per_image',
   },
-  'xai/grok-imagine-image/quality': {
+  'xai/grok-imagine-image/quality/text-to-image': {
     basePrice: micros(170),
     unit: 'per_compute_second',
   },

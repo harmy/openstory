@@ -1,15 +1,33 @@
 {
-  "request": {
+  "fingerprint": {
     "bucket": "videos",
-    "key": "videos/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/merged/8HFHAEBJ_openstory.mp4",
     "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/merged/<HASH>_openstory.mp4",
-    "contentType": "video/mp4",
-    "bodyHash": "2b03676e95e61ca37d9052d92b0c144159867b48b6beac1ac2f5e4120de07c96",
-    "bodySize": 10968805
+    "contentType": "video/mp4"
   },
-  "response": {
-    "path": "videos/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/merged/8HFHAEBJ_openstory.mp4",
-    "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/merged/8HFHAEBJ_openstory.mp4",
-    "fullPath": "videos/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/merged/8HFHAEBJ_openstory.mp4"
-  }
+  "entries": [
+    {
+      "request": {
+        "key": "videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/merged/2KEEFQ9W_openstory.mp4",
+        "bodyHash": "30ef5e9a560396e475f2b58873e7f9aeaae9a3e315930e59c45ab8024771070b",
+        "bodySize": 12107914
+      },
+      "response": {
+        "path": "videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/merged/2KEEFQ9W_openstory.mp4",
+        "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/merged/2KEEFQ9W_openstory.mp4",
+        "fullPath": "videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/merged/2KEEFQ9W_openstory.mp4"
+      }
+    },
+    {
+      "request": {
+        "key": "videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/merged/60BQ4W4C_openstory.mp4",
+        "bodyHash": "d908ce4bd2d57185761dbd3915e2b1dd4aefc77dea4c33c464e2070dfa49e0e6",
+        "bodySize": 10995884
+      },
+      "response": {
+        "path": "videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/merged/60BQ4W4C_openstory.mp4",
+        "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/merged/60BQ4W4C_openstory.mp4",
+        "fullPath": "videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/merged/60BQ4W4C_openstory.mp4"
+      }
+    }
+  ]
 }

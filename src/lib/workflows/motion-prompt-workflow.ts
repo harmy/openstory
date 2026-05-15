@@ -30,9 +30,6 @@ export const motionPromptWorkflow = createScopedWorkflow<
 
     const label = buildWorkflowLabel(input.sequenceId);
 
-    console.log(
-      `[MotionPromptWorkflow] Starting motion prompt generation for ${scenes.length} scenes`
-    );
     // ============================================================
     // PHASE 3: Motion Prompt Generation (using durableLLMCall helper)
     // ============================================================

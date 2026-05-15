@@ -12,7 +12,7 @@ const usd = (n: number) => usdToMicros(n);
 describe('calculateImageCost', () => {
   test('per_compute_second model (grok-imagine-image-quality)', () => {
     const cost = calculateImageCost({
-      endpointId: 'xai/grok-imagine-image/quality',
+      endpointId: 'xai/grok-imagine-image/quality/text-to-image',
       numImages: 2,
     });
     // 170 micros * 3 (DEFAULT_COMPUTE_SECONDS) * 2 = 1_020

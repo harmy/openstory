@@ -34,9 +34,17 @@ export default defineConfig({
   // Shared settings for all projects
   use: {
     baseURL: 'http://localhost:3001',
+    viewport: { width: 1920, height: 1080 },
     trace: process.env.CI ? 'on-first-retry' : 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'on-first-retry',
+    video: process.env.CI
+      ? 'on-first-retry'
+      : { mode: 'on', size: { width: 1920, height: 1080 } },
+    // Local recordings render the app in dark mode (matches the design's
+    // primary palette). CI keeps the default light scheme. The app uses
+    // `@media (prefers-color-scheme: dark)` so this toggles natively
+    // without injecting a class.
+    colorScheme: process.env.CI ? 'light' : 'dark',
   },
 
   // Configure projects
@@ -50,7 +58,10 @@ export default defineConfig({
     {
       name: 'auth',
       testMatch: /auth\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1920, height: 1080 },
+      },
     },
     // All other tests - use stored auth state
     {
@@ -58,6 +69,7 @@ export default defineConfig({
       testIgnore: /auth\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
+        viewport: { width: 1920, height: 1080 },
         storageState: 'e2e/.auth/user.json',
       },
       dependencies: ['setup'],

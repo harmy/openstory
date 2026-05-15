@@ -1,15 +1,21 @@
 {
-  "request": {
+  "fingerprint": {
     "bucket": "audio",
-    "key": "audio/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/music/sequence_music_bkbpp9_openstory.mp3",
     "normalisedKey": "audio/teams/<ULID>/sequences/<ULID>/music/sequence_music_<HASH>_openstory.mp3",
-    "contentType": "audio/mpeg",
-    "bodyHash": "bf29f2d7d65a0fc8e3a64e4965fe9cc8caa524bad4f2b8692446fb6f95989103",
-    "bodySize": 384149
+    "contentType": "audio/mpeg"
   },
-  "response": {
-    "path": "audio/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/music/sequence_music_bkbpp9_openstory.mp3",
-    "publicUrl": "https://storage-dev.openstory.so/audio/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/music/sequence_music_bkbpp9_openstory.mp3",
-    "fullPath": "audio/teams/01KRD095JQ7VDEV0MXHGJ2HPB0/sequences/01KRD0AG0G6JHVF4ZRK1CPWR8Y/music/sequence_music_bkbpp9_openstory.mp3"
-  }
+  "entries": [
+    {
+      "request": {
+        "key": "audio/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/music/sequence_music_c4g5th_openstory.mp3",
+        "bodyHash": "6ae8a8fe2cf9cabcfa30f4820def4ea4c2c03989777107f07cebaf9373cbc8fc",
+        "bodySize": 384149
+      },
+      "response": {
+        "path": "audio/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/music/sequence_music_c4g5th_openstory.mp3",
+        "publicUrl": "https://storage-dev.openstory.so/audio/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/music/sequence_music_c4g5th_openstory.mp3",
+        "fullPath": "audio/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/music/sequence_music_c4g5th_openstory.mp3"
+      }
+    }
+  ]
 }

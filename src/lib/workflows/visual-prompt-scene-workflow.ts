@@ -37,10 +37,6 @@ export const visualPromptSceneWorkflow = createScopedWorkflow<
       sequenceId,
     } = input;
 
-    console.log(
-      `[VisualPromptSceneWorkflow] Generating visual prompt for scene ${scene.sceneId}`
-    );
-
     const result = await durableLLMCall(
       context,
       {

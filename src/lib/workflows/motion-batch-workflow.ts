@@ -157,8 +157,6 @@ export const motionBatchWorkflow =
         });
       }
 
-      console.log(`[MotionBatchWorkflow] Completed for sequence ${sequenceId}`);
-
       return { sequenceId };
     },
     {

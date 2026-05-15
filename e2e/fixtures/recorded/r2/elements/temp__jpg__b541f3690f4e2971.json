@@ -1,15 +1,21 @@
 {
-  "request": {
+  "fingerprint": {
     "bucket": "elements",
-    "key": "elements/01KRD095JQ7VDEV0MXHGJ2HPB0/temp/01KRD0AFKWM7YF30XV4F6DS830.jpg",
     "normalisedKey": "elements/<ULID>/temp/<ULID>.jpg",
-    "contentType": "image/jpeg",
-    "bodyHash": "17801ae0c5bd909d3844c401f2368d3902660247382771c5ce8ab33175523ba8",
-    "bodySize": 122891
+    "contentType": "image/jpeg"
   },
-  "response": {
-    "path": "elements/01KRD095JQ7VDEV0MXHGJ2HPB0/temp/01KRD0AFKWM7YF30XV4F6DS830.jpg",
-    "publicUrl": "https://storage-dev.openstory.so/elements/01KRD095JQ7VDEV0MXHGJ2HPB0/temp/01KRD0AFKWM7YF30XV4F6DS830.jpg",
-    "fullPath": "elements/01KRD095JQ7VDEV0MXHGJ2HPB0/temp/01KRD0AFKWM7YF30XV4F6DS830.jpg"
-  }
+  "entries": [
+    {
+      "request": {
+        "key": "elements/01KRMKS88ZRXB9Z8RAX8MSZKJ5/temp/01KRMKT7CW0V7T6GQ0Z7Y1DWP1.jpg",
+        "bodyHash": "17801ae0c5bd909d3844c401f2368d3902660247382771c5ce8ab33175523ba8",
+        "bodySize": 122891
+      },
+      "response": {
+        "path": "elements/01KRMKS88ZRXB9Z8RAX8MSZKJ5/temp/01KRMKT7CW0V7T6GQ0Z7Y1DWP1.jpg",
+        "publicUrl": "https://storage-dev.openstory.so/elements/01KRMKS88ZRXB9Z8RAX8MSZKJ5/temp/01KRMKT7CW0V7T6GQ0Z7Y1DWP1.jpg",
+        "fullPath": "elements/01KRMKS88ZRXB9Z8RAX8MSZKJ5/temp/01KRMKT7CW0V7T6GQ0Z7Y1DWP1.jpg"
+      }
+    }
+  ]
 }

@@ -190,7 +190,6 @@ export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
       // TODO: Tom Mar 2026 - Add a step to generate a music track for each scene
     }
 
-    console.log('[MusicWorkflow]', 'Music generation workflow completed');
     return { audioUrl: audioUrl, duration: actualDuration };
   },
   {

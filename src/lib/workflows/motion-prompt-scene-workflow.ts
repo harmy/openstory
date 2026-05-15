@@ -37,10 +37,6 @@ export const motionPromptSceneWorkflow = createScopedWorkflow<
       frameId,
     } = input;
 
-    console.log(
-      `[MotionPromptSceneWorkflow] Generating motion prompt for scene ${scene.sceneId}`
-    );
-
     // ============================================================
     // PHASE 3: Motion Prompt Generation (using durableLLMCall helper)
     // ============================================================
@@ -48,6 +44,9 @@ export const motionPromptSceneWorkflow = createScopedWorkflow<
     const { promptVariables, additionalMetadata } = await context.run(
       'prepare-motion-prompt-generation',
       async () => {
+        console.log(
+          `[MotionPromptSceneWorkflow] Generating motion prompt for scene ${scene.sceneId}`
+        );
         return {
           promptVariables: {
             sceneBefore: sceneBefore

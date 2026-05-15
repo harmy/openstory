@@ -1,0 +1,64 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "{\"video_urls\":[\"https://storage-dev.openstory.so/videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/coral-a-summer-launch_studio-vanity-application_<HASH>_openstory.mp4\",\"https://storage-dev.openstory.so/videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/coral-a-summer-launch_promenade-walk_<HASH>_openstory.mp4\",\"https://storage-dev.openstory.so/videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/coral-a-summer-launch_shoreline-reveal_<HASH>_openstory.mp4\"],\"prompt\":\"\"}",
+        "model": "fal-ai/ffmpeg-api/merge-videos",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video": {
+            "url": "https://v3b.fal.media/files/b/0a9a3f29/Hnge0uzGK1mb38wALQHAB_merged_video.mp4",
+            "content_type": "video/mp4",
+            "file_name": "merged_video.mp4",
+            "file_size": 12107914
+          },
+          "metadata": {
+            "final_fps": 24,
+            "final_width": 1928,
+            "final_height": 1072,
+            "total_duration": 24.125001,
+            "has_audio": true,
+            "input_videos": [
+              {
+                "index": 1,
+                "fps": 24,
+                "width": 1928,
+                "height": 1072,
+                "duration": 8.041667,
+                "has_audio": true,
+                "sample_rate": 44100,
+                "url": "https://storage-dev.openstory.so/videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/frames/01KRMKVXCE3BYXRCQV410EP0TG/coral-a-summer-launch_studio-vanity-application_g38vet_openstory.mp4"
+              },
+              {
+                "index": 2,
+                "fps": 24,
+                "width": 1928,
+                "height": 1072,
+                "duration": 6.041667,
+                "has_audio": true,
+                "sample_rate": 44100,
+                "url": "https://storage-dev.openstory.so/videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/frames/01KRMKVZG8SGSBAKZPPF01Q8AY/coral-a-summer-launch_promenade-walk_h0vz41_openstory.mp4"
+              },
+              {
+                "index": 3,
+                "fps": 24,
+                "width": 1928,
+                "height": 1072,
+                "duration": 10.041667,
+                "has_audio": true,
+                "sample_rate": 44100,
+                "url": "https://storage-dev.openstory.so/videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/frames/01KRMKW1ZMWNYGBMAX45SSGZS2/coral-a-summer-launch_shoreline-reveal_ra1g1p_openstory.mp4"
+              }
+            ],
+            "video_count": 3
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Subtle handheld eye-level camera holds a steady intimate frame with gentle micro-movements as hands lift the coral lipstick tube from its box. Fingers trace the matte surface slowly before gliding color smoothly across the lips. A single blot follows, then lips part into a gentle smile while warm window light shifts softly across the vanity.\n\n[SCARLETT, soft reflective]: \"One shade. One summer.\"\n\nAmbient sounds: quiet coastal studio with soft natural room tone and faint distant waves. subtle lipstick tube handling, lip application glide, single soft blot.",
+        "model": "fal-ai/kling-video/v3/pro/image-to-video",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video": {
+            "url": "https://v3b.fal.media/files/b/0a9a3f22/lF4C0ghvI_M0dHTLPE3oB_output.mp4",
+            "content_type": "video/mp4",
+            "file_name": "output.mp4",
+            "file_size": 8821105
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

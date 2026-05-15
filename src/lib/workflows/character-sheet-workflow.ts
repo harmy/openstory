@@ -282,11 +282,6 @@ export const characterSheetWorkflow = createScopedWorkflow<
       }
     });
 
-    console.log(
-      '[CharacterSheetWorkflow]',
-      `Character sheet workflow completed for ${input.characterName}`
-    );
-
     const result: CharacterSheetWorkflowResult = {
       sheetImageUrl,
       sheetImagePath,

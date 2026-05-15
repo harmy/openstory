@@ -84,11 +84,10 @@ export const mergeVideoWorkflow = createScopedWorkflow<MergeVideoWorkflowInput>(
     const narrowedInput = { ...input, sequenceId: input.sequenceId };
     const seq = scopedDb.sequence(input.sequenceId);
 
-    console.log(
-      `[MergeVideoWorkflow] Starting merge for sequence ${input.sequenceId} with ${input.videoUrls.length} videos`
-    );
-
     const inputHash = await context.run('compute-input-hash', async () => {
+      console.log(
+        `[MergeVideoWorkflow] Starting merge for sequence ${input.sequenceId} with ${input.videoUrls.length} videos`
+      );
       return computeSequenceVideoHashFromDto(input);
     });
 
@@ -294,10 +293,6 @@ export const mergeVideoWorkflow = createScopedWorkflow<MergeVideoWorkflowInput>(
         }
       );
     });
-
-    console.log(
-      `[MergeVideoWorkflow] Completed merge for sequence ${input.sequenceId}`
-    );
 
     await chainAudioMux(
       context,

@@ -1,0 +1,21 @@
+{
+  "fingerprint": {
+    "bucket": "videos",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/coral-a-summer-launch_shoreline-reveal_<HASH>_openstory.mp4",
+    "contentType": "video/mp4"
+  },
+  "entries": [
+    {
+      "request": {
+        "key": "videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/frames/01KRMKW1ZMWNYGBMAX45SSGZS2/coral-a-summer-launch_shoreline-reveal_ra1g1p_openstory.mp4",
+        "bodyHash": "90c0e2a32e5a4a59c9ba42ab8d86d5b694a7dcf09c0f47699df9689b6cce2448",
+        "bodySize": 24016157
+      },
+      "response": {
+        "path": "videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/frames/01KRMKW1ZMWNYGBMAX45SSGZS2/coral-a-summer-launch_shoreline-reveal_ra1g1p_openstory.mp4",
+        "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/frames/01KRMKW1ZMWNYGBMAX45SSGZS2/coral-a-summer-launch_shoreline-reveal_ra1g1p_openstory.mp4",
+        "fullPath": "videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/frames/01KRMKW1ZMWNYGBMAX45SSGZS2/coral-a-summer-launch_shoreline-reveal_ra1g1p_openstory.mp4"
+      }
+    }
+  ]
+}

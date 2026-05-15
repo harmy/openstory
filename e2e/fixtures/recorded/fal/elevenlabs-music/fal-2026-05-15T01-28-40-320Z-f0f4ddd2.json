@@ -1,0 +1,24 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Instrumental light electronic ambient track with soft synth pads and gentle percussion, beginning serene and minimal in a bright studio before flowing into uplifting fresh energy along the coastal beach.",
+        "model": "fal-ai/elevenlabs/music",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "audio": {
+            "url": "https://v3b.fal.media/files/b/0a9a3f13/sokd6_YLO6KZkDk_G6JzP_music_generated.mp3",
+            "content_type": "audio/mpeg",
+            "file_name": "music_generated.mp3",
+            "file_size": 384149
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Handheld camera trails Scarlett from slightly behind and to the side as she steps onto the wide promenade mid-stride, body moving forward with natural gait while she glances back over her shoulder toward the ocean. Surfers carve white lines across the blue water in the background. Wind gently lifts strands of hair. She delivers the line with relaxed posture and an inviting tilt of the head. Light sea breeze stirs fabric and shifts sand underfoot as the camera maintains steady forward tracking motion.\n\n[SCARLETT, light breezy]: \"Made for the water. Wear it everywhere.\"\n\nAmbient sounds: ocean waves crashing, gentle sea breeze on promenade. light footsteps on pavement, wind lifting hair.",
+        "model": "fal-ai/kling-video/v3/pro/image-to-video",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video": {
+            "url": "https://v3b.fal.media/files/b/0a9a3f1f/SwUPWT5Z_9SopzlMGrqlc_output.mp4",
+            "content_type": "video/mp4",
+            "file_name": "output.mp4",
+            "file_size": 15846021
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

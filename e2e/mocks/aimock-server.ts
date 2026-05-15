@@ -1,13 +1,26 @@
 /**
  * aimock Server for E2E Tests
  *
- * Provides a standalone OpenAI-compatible mock server that intercepts
- * server-side LLM calls (OpenRouter) during E2E tests.
+ * Standalone mock server that intercepts server-side AI traffic during E2E
+ * tests. Handles OpenRouter (LLM) and fal.ai (image/video/audio) natively:
  *
- * Browser-side mocks (fal.ai, R2, QStash) remain in handlers.ts via Playwright routes.
+ * - OpenRouter: aimock's OpenAI-compatible dispatcher matches against
+ *   recorded fixtures under `fixtures/recorded/openrouter/<stage>/`.
+ * - fal.ai: aimock's built-in `/fal/*` dispatcher (server.js dispatch at
+ *   `FAL_PREFIX_RE`) reads the `x-fal-target-host` header that
+ *   `src/lib/ai/fal-config.ts` already stamps on fal requests, and matches
+ *   against recorded fixtures under `fixtures/recorded/fal/`. No `mount()`
+ *   needed — the library handles it.
+ *
+ * Browser-side mocks (R2, QStash) remain in handlers.ts via Playwright routes.
  */
 
-import { LLMock, loadFixtureFile, type Fixture } from '@copilotkit/aimock';
+import {
+  LLMock,
+  loadFixtureFile,
+  type ChatCompletionRequest,
+  type Fixture,
+} from '@copilotkit/aimock';
 import {
   existsSync,
   mkdirSync,
@@ -19,17 +32,24 @@ import {
 } from 'node:fs';
 import { resolve } from 'node:path';
 import { E2E_RECORDING } from '../recording-mode';
-import { createFalHandler } from './fal-handler';
 
 const AIMOCK_PORT = 4010;
 const FIXTURE_DIR = resolve(
   import.meta.dirname,
   '../fixtures/recorded/openrouter'
 );
+const FAL_FIXTURE_DIR = resolve(
+  import.meta.dirname,
+  '../fixtures/recorded/fal'
+);
 // aimock's recorder writes flat into a single directory; we point it here and
 // `sortStagingFixtures()` (run on shutdown) classifies each new file by its
-// `userMessage` prefix and moves it into the right stage subfolder.
-const RECORD_STAGING_DIR = resolve(FIXTURE_DIR, '_unsorted');
+// provider-key prefix (`openai-…` vs `fal-…`) and moves it into the right
+// sibling subfolder of `fixtures/recorded/` (`openrouter/<stage>/` or `fal/`).
+const RECORD_STAGING_DIR = resolve(
+  import.meta.dirname,
+  '../fixtures/recorded/_unsorted'
+);
 
 // Maps a fixture's `userMessage` prefix to the stage subfolder it belongs in.
 // First-match-wins; prefixes are disjoint (each comes from a distinct workflow
@@ -122,6 +142,49 @@ const ULID_OR_UUID_SPLIT_RE = new RegExp(
   'i'
 );
 
+// fal request bodies for non-prompt models (ffmpeg-api/loudnorm/compose,
+// kling image-to-video, nano-banana-2-edit) contain R2 URLs and fal CDN
+// URLs that drift every run. aimock's built-in fal handler matches on the
+// JSON-stringified body when no `prompt` field is present, so without
+// normalization those fixtures never match across runs. Mirrors the
+// deleted custom fal-handler.ts:normalizeForHash exactly:
+//   - UPLOAD_SUFFIX: the ULID-tail shortHash baked into R2 filenames
+//     (e.g. `merged/<8 hex>_openstory.mp4` or
+//     `<slug>_<slug>_<6 hex>_openstory.<ext>`).
+//   - FAL_CDN_PATH: fal output URLs of the shape
+//     `/files/b/<8 hex>/<base62 id>_<rest>.<ext>`. Collapse the bucket+id
+//     while preserving the `_<rest>.<ext>` suffix so different logical
+//     outputs (normalized_audio.wav vs output.mp4) still differ.
+const FAL_UPLOAD_SUFFIX_RE = /(?<=[_/])[0-9A-Za-z]{6,16}_openstory\./g;
+const FAL_CDN_PATH_RE =
+  /\/files\/b\/[0-9a-f]{6,12}\/[A-Za-z0-9_-]{10,}(?=[_.])/g;
+
+function normalizeFalContent(content: string): string {
+  return content
+    .replace(ULID_TOKEN_RE, '<ULID>')
+    .replace(UUID_TOKEN_RE, '<UUID>')
+    .replace(FAL_UPLOAD_SUFFIX_RE, '<HASH>_openstory.')
+    .replace(FAL_CDN_PATH_RE, '/files/b/<FAL>/<FAL>');
+}
+
+// aimock applies this to both the live request (router.js:38) and the
+// recorder's fixture-match build (recorder.js:172), so record and replay
+// stay symmetric — both sides see normalized content.
+// Setting a transform also flips string matching from `.includes()` to
+// `===` (router.js:39); openrouter fixtures are unaffected because
+// `tolerateRuntimeIds` rewrites their userMessage matchers as RegExps,
+// which always use `.test()`.
+function falRequestTransform(
+  req: ChatCompletionRequest
+): ChatCompletionRequest {
+  if (req._endpointType !== 'fal') return req;
+  const messages = req.messages.map((msg) => {
+    if (msg.role !== 'user' || typeof msg.content !== 'string') return msg;
+    return { ...msg, content: normalizeFalContent(msg.content) };
+  });
+  return { ...req, messages };
+}
+
 function escapeRegex(literal: string): string {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -155,8 +218,14 @@ let mockServer: LLMock | null = null;
 export async function startAimockServer(): Promise<string> {
   mockServer = new LLMock({
     port: AIMOCK_PORT,
-    strict: true,
+    // Strict replay returns 503 on unmatched requests. aimock's fal
+    // dispatcher (fal.js:240) checks strict mode BEFORE the record branch,
+    // so leaving strict on during recording would 503 every fal call
+    // instead of proxying upstream. Gate it on recording mode: strict for
+    // CI replay, lenient while recording so the proxy/record path runs.
+    strict: !E2E_RECORDING,
     logLevel: 'info',
+    requestTransform: falRequestTransform,
     // Record only when E2E_RECORD=1 (real key from .env.local). Default is
     // strict replay against the recorded fixtures — CI runs without the flag
     // so a missing fixture fails fast instead of proxying to live OpenRouter.
@@ -166,6 +235,13 @@ export async function startAimockServer(): Promise<string> {
       record: {
         providers: { openai: 'https://openrouter.ai/api/v1' },
         fixturePath: RECORD_STAGING_DIR,
+        // Reasoning models (e.g. Grok 4.3 + structured output under concurrent
+        // load) routinely leave 30s+ gaps between SSE chunks while thinking,
+        // which trips aimock's default 30s body-idle timer and truncates the
+        // recorded stream. Option ships on the linked aimock fork
+        // (CopilotKit/aimock#197); requires @copilotkit/aimock linked locally
+        // until the option is in a published release.
+        // bodyTimeoutMs: 120_000,
       },
     }),
   });
@@ -186,10 +262,14 @@ export async function startAimockServer(): Promise<string> {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- intentional readonly→mutable widening to install push/unshift hooks
   patchFixturesArray(mockServer.getFixtures() as Fixture[]);
 
-  // Mount fal.ai handler at /fal so workflows can hit fal endpoints via
-  // FAL_PROXY_URL=http://localhost:4010/fal. The handler manages its own
-  // record/replay (aimock's record providers don't speak fal).
-  mockServer.mount('/fal', createFalHandler());
+  // fal.ai fixtures: aimock's built-in /fal/* dispatcher matches against the
+  // same fixture pool. Loaded raw — no ULID tolerance or fingerprint stamping
+  // (those are OpenRouter-shaped concerns). When recording, `handleFal`
+  // auto-derives `providers.fal = https://${x-fal-target-host}`, so no extra
+  // record-providers entry is needed.
+  if (existsSync(FAL_FIXTURE_DIR)) {
+    mockServer.addFixtures(loadFixturesRecursive(FAL_FIXTURE_DIR));
+  }
 
   const url = await mockServer.start();
   console.log(`[e2e] aimock server started at ${url}`);
@@ -210,7 +290,7 @@ export async function stopAimockServer(): Promise<void> {
 }
 
 type FixtureFile = {
-  fixtures: Array<{ match: { userMessage?: string } }>;
+  fixtures: Array<{ match: { userMessage?: string; model?: string } }>;
 };
 
 function classifyStage(filePath: string): string | null {
@@ -222,10 +302,29 @@ function classifyStage(filePath: string): string | null {
   );
 }
 
-// Walk `_unsorted/` and move each freshly-recorded fixture into its stage
-// subfolder by `userMessage` prefix. Runs on shutdown of any E2E_RECORD=1
-// run, so recordings end up in the curated layout regardless of whether the
-// caller used `bun test:e2e:record:full` or the wrapper script.
+// Slugify the fal model path into a folder name. Strips the `fal-ai/` vendor
+// prefix and replaces remaining `/` separators with `-`, so e.g.
+// `fal-ai/kling-video/v3/pro/image-to-video` → `kling-video-v3-pro-image-to-video`.
+// Returns `null` if the fixture lacks a usable model field — caller falls back
+// to dropping it into `FAL_FIXTURE_DIR` directly.
+function classifyFalModel(filePath: string): string | null {
+  const data: FixtureFile = JSON.parse(readFileSync(filePath, 'utf8'));
+  const model = data.fixtures[0]?.match.model;
+  if (!model) return null;
+  const tail = model.startsWith('fal-ai/')
+    ? model.slice('fal-ai/'.length)
+    : model;
+  return tail.replace(/\//g, '-') || null;
+}
+
+// Walk `fixtures/recorded/_unsorted/` (sibling of `openrouter/` and `fal/`)
+// and move each freshly-recorded fixture into the right curated subfolder.
+// aimock's recorder names files `<providerKey>-…json` (recorder.js:196), so
+// we route by prefix: `fal-…` into a model-keyed subfolder of
+// `fixtures/recorded/fal/` (e.g. `fal/nano-banana-2/`, `fal/flux-2-turbo/`),
+// and `openai-…` (used for OpenRouter) into a stage subfolder of
+// `fixtures/recorded/openrouter/` keyed by the fixture's userMessage prefix.
+// Runs on shutdown of any E2E_RECORD=1 run.
 function sortStagingFixtures(): void {
   if (!existsSync(RECORD_STAGING_DIR)) return;
 
@@ -241,6 +340,16 @@ function sortStagingFixtures(): void {
   let sorted = 0;
   for (const name of files) {
     const src = resolve(RECORD_STAGING_DIR, name);
+    if (name.startsWith('fal-')) {
+      const modelSlug = classifyFalModel(src);
+      const destDir = modelSlug
+        ? resolve(FAL_FIXTURE_DIR, modelSlug)
+        : FAL_FIXTURE_DIR;
+      mkdirSync(destDir, { recursive: true });
+      renameSync(src, resolve(destDir, name));
+      sorted++;
+      continue;
+    }
     const stage = classifyStage(src);
     if (stage === null) {
       console.warn(

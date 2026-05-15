@@ -309,8 +309,6 @@ export const generateImageWorkflow = createScopedWorkflow<
       });
     }
 
-    console.log('[ImageWorkflow]', 'Image generation workflow completed');
-
     return { imageUrl, frameId, sequenceId };
   },
   {

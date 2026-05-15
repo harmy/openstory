@@ -58,7 +58,7 @@ jobs:
         run: bun install
 
       - name: Build app for E2E
-        run: bun --bun run build
+        run: bun run build:e2e
         env:
           # Activates the `e2e` key in package.json `imports.#db-client` so the
           # built server uses Bun's local sqlite (file:test.db) instead of Turso.
@@ -194,9 +194,14 @@ jobs:
             --add-host=host.docker.internal:host-gateway \
             -p 8080:8080 \
             public.ecr.aws/upstash/qstash:latest qstash dev
-          timeout 30 sh -c 'until curl -sf -X POST "http://localhost:8080/v2/publish/http://localhost:3001/__health" \
-            -H "Authorization: Bearer eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=" \
-            >/dev/null 2>&1; do sleep 1; done'
+          # Readiness probe: any HTTP response from QStash means the server is
+          # accepting connections. We don't use -f so 404 still counts as
+          # "up" — qstash dev has no /health endpoint and we just need the
+          # TCP+HTTP layer to be live. Connection refused -> curl exits
+          # non-zero -> loop continues. Make timeout fatal so a slow QStash
+          # start can't silently leak into the test run.
+          timeout 60 sh -c 'until curl -s -o /dev/null http://localhost:8080/ 2>/dev/null; do sleep 1; done' \
+            || (echo "::error::QStash did not become ready within 60s" && docker logs qstash && exit 1)
 
       - name: Download .output artifact
         uses: actions/download-artifact@v4

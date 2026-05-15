@@ -25,6 +25,7 @@ import {
 import {
   record as recordR2Upload,
   tryReplay as tryReplayR2Upload,
+  tryReplayWithBody as tryReplayR2UploadWithBody,
 } from './r2-recorder';
 
 export function createR2Client(): S3Client {
@@ -78,11 +79,20 @@ export async function uploadFile(
       const recording = process.env.E2E_RECORD === '1';
 
       if (!recording) {
-        const cached = tryReplayR2Upload(fp);
-        // Cache hit: return without ever consuming the body. For uploads
-        // sourced from a fetch ReadableStream (most workflow uploads), this
-        // skips pulling MBs from fal CDN.
-        if (cached) return cached;
+        const replay = tryReplayR2Upload(fp);
+        // Unique-fingerprint hit: return without ever consuming the body. For
+        // uploads sourced from a fetch ReadableStream (most workflow uploads),
+        // this skips pulling MBs from fal CDN.
+        if (replay.type === 'hit') return replay.response;
+        // Multiple entries share this fingerprint (e.g. frame thumbnails
+        // whose paths are pure ULIDs). Buffer the body to disambiguate by
+        // SHA-256 — bytes are deterministic across runs because the upstream
+        // fal CDN URLs come from aimock fixtures.
+        if (replay.type === 'need-body') {
+          const body = await toUint8Array(file);
+          const matched = tryReplayR2UploadWithBody(fp, body);
+          if (matched) return matched;
+        }
         throw new Error(
           `[r2-mock] No fixture for ${bucket}/${path}. Re-record with E2E_RECORD=1.`
         );

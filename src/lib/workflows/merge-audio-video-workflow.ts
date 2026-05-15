@@ -45,11 +45,10 @@ export const mergeAudioVideoWorkflow = createScopedWorkflow<
     );
     const { mergedVideoUrl, musicUrl } = sources;
 
-    console.log(
-      `[MergeAudioVideoWorkflow] Starting mux for sequence ${sequenceId}`
-    );
-
     await context.run('set-merging-status', async () => {
+      console.log(
+        `[MergeAudioVideoWorkflow] Starting mux for sequence ${sequenceId}`
+      );
       await seq.updateMergedVideoFields({
         mergedVideoStatus: 'merging',
         mergedVideoError: null,
@@ -140,10 +139,6 @@ export const mergeAudioVideoWorkflow = createScopedWorkflow<
         mergedVideoUrl: storageResult.url,
       });
     });
-
-    console.log(
-      `[MergeAudioVideoWorkflow] Completed mux for sequence ${input.sequenceId}`
-    );
 
     return {
       mergedVideoUrl: storageResult.url,

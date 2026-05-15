@@ -1,0 +1,20 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "{\"tracks\":[{\"id\":\"video\",\"type\":\"video\",\"keyframes\":[{\"url\":\"https://storage-dev.openstory.so/videos/teams/<ULID>/sequences/<ULID>/merged/<HASH>_openstory.mp4\",\"timestamp\":0,\"duration\":24000}]},{\"id\":\"native-audio\",\"type\":\"audio\",\"keyframes\":[{\"url\":\"https://storage-dev.openstory.so/videos/teams/<ULID>/sequences/<ULID>/merged/<HASH>_openstory.mp4\",\"timestamp\":0,\"duration\":24000}]},{\"id\":\"music\",\"type\":\"audio\",\"keyframes\":[{\"url\":\"https://v3b.fal.media/files/b/<FAL>/<FAL>.wav\",\"timestamp\":0,\"duration\":24000}]}]}",
+        "model": "fal-ai/ffmpeg-api/compose",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video_url": "https://v3b.fal.media/files/b/0a9a3f2c/KMFWU8aJ72RkUBn-ZGddl_output.mp4",
+          "thumbnail_url": "https://v3b.fal.media/files/b/0a9a3f2d/zEaLcoDmN4OYehCnf9WMU_first_frame.jpg"
+        },
+        "status": 200
+      }
+    }
+  ]
+}

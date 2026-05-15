@@ -1,0 +1,24 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Camera holds a low eye-level handheld shot framing Scarlett's bare feet on wet shoreline. A gentle wave rushes in and washes over her toes as she shifts weight and laughs softly, the lipstick tube settling into damp sand beside its embossed mark. Camera slowly pulls back to reveal the open horizon while a second wave smooths the sand clean.\n\nScarlett delivers her line with gentle intimate tone, body relaxed mid-laughter, subtle shoulder movement.\n\nSand grains shift under receding water, light breeze lifts fine particles.\n\n[SCARLETT, gentle intimate]: \"Coral. Fresh. Yours.\"\n\nAmbient sounds: gentle ocean waves lapping shoreline, soft breeze. wave washing over bare feet, soft laughter.",
+        "model": "fal-ai/kling-video/v3/pro/image-to-video",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video": {
+            "url": "https://v3b.fal.media/files/b/0a9a3f26/XuAqzHBVX-tN5AApgYD6W_output.mp4",
+            "content_type": "video/mp4",
+            "file_name": "output.mp4",
+            "file_size": 24016157
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

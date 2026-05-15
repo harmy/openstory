@@ -30,11 +30,6 @@ export const recastCharacterWorkflow =
       const input = context.requestPayload;
       const label = buildWorkflowLabel(input.sequenceId);
 
-      console.log(
-        '[RecastCharacterWorkflow]',
-        `Starting recast for ${input.characterName} with ${input.affectedFrameIds.length} affected frames`
-      );
-
       // Step 1: Generate character sheet showing talent in costume.
       // Resolve the upstream talent-sheet hash and inline it so the child
       // workflow can detect divergence if the talent sheet is regenerated
@@ -42,6 +37,10 @@ export const recastCharacterWorkflow =
       const sheetBody = await context.run(
         'build-character-sheet-snapshot',
         async (): Promise<CharacterSheetWorkflowInput> => {
+          console.log(
+            '[RecastCharacterWorkflow]',
+            `Starting recast for ${input.characterName} with ${input.affectedFrameIds.length} affected frames`
+          );
           const talentSheetInputHash = await resolveTalentSheetHash(
             scopedDb,
             input.characterDbId
@@ -83,10 +82,6 @@ export const recastCharacterWorkflow =
       }
 
       const sheetImageUrl = sheetResult.sheetImageUrl;
-      console.log(
-        '[RecastCharacterWorkflow]',
-        `Character sheet generated for ${input.characterName}, regenerating ${input.affectedFrameIds.length} frames`
-      );
 
       // Step 2: Regenerate frames if there are any affected
       let framesRegenerated = 0;
@@ -181,10 +176,6 @@ export const recastCharacterWorkflow =
         framesRegenerated = regenerateResult?.successCount ?? 0;
         // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
         framesFailed = regenerateResult?.failedFrames?.length ?? 0;
-        console.log(
-          '[RecastCharacterWorkflow]',
-          `Regenerated ${framesRegenerated} frames for ${input.characterName}`
-        );
       }
 
       return {

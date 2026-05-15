@@ -246,8 +246,6 @@ export const generateShotVariantWorkflow = createScopedWorkflow<
       });
     }
 
-    console.log('[ShotVariantWorkflow]', 'Image generation workflow completed');
-
     // Return workflow result
     const result: ShotVariantWorkflowResult = {
       variantImageUrl: imageUrl,

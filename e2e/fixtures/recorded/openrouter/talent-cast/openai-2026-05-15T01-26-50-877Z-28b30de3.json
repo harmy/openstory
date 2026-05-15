@@ -1,0 +1,18 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "userMessage": "Cast the following talent into character roles. The user specifically selected these 1 talent members.\n\nCHARACTERS (1 available):\n- Character ID: scarlett\n  Name: SCARLETT\n  Age: 19\n  Gender: female\n  Ethnicity: Caucasian\n  Physical: Sun-kissed skin, loose blonde waves, youthful face\n\nTALENT TO CAST (1 selected by user):\n- Talent ID: 01KRMKES6TWAEC44S2S8PXZBM8\n  Name: Sienna Blake\n  Age: unspecified (infer from name if recognizable)\n  Gender: unspecified (infer from name if recognizable)\n  Ethnicity: unspecified\n  Physical/Description: Golden blonde, beach-tanned skin, effortless Bondi energy. Wide smile, freckles across the nose, the kind of face that sells skincare without trying. Perfect for product ads, lifestyle campaigns, and rom-com leads.\n\nREQUIREMENTS:\n- Match ALL 1 talent to characters (1 talent, 1 characters available)\n- Each talent gets exactly one character\n- Each character can only have one talent\n\n\nRespond with exactly 1 matches.",
+        "model": "x-ai/grok-4.3",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "content": "{\"matches\":[{\"characterId\":\"scarlett\",\"talentId\":\"01KRMKES6TWAEC44S2S8PXZBM8\",\"confidence\":0.9,\"reason\":\"Sienna's golden blonde hair, beach-tanned skin, and youthful freckled look closely match Scarlett's 19-year-old sun-kissed Caucasian description, suiting her for the role.\"}]}"
+      },
+      "metadata": {
+        "systemHash": "b98a3bc5"
+      }
+    }
+  ]
+}

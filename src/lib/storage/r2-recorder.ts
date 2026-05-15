@@ -17,13 +17,19 @@
  * so we normalise them to `<ULID>` placeholders before hashing — same trick as
  * `fal-handler.ts:normalizeForHash`.
  *
- * The fingerprint deliberately does NOT include body content. The pipeline
- * upstream of every R2 upload is deterministic in replay mode (LLM via aimock
- * → fal API via fal-handler → fal CDN serves the same bytes for the same URL),
- * so "same logical key" → "same body content" is invariant. Skipping body in
- * the fingerprint lets `tryReplay` answer without consuming the body stream,
- * which avoids pulling MBs of fal CDN data per cache hit. The recorded fixture
- * still stores `bodyHash` and `bodySize` as metadata for debugging.
+ * Several upload paths produce keys whose every segment is a ULID
+ * (`thumbnails/teams/<ULID>/sequences/<ULID>/frames/<ULID>/<ULID>.png`), so
+ * after normalisation many distinct uploads share a single fingerprint. We
+ * therefore store an array of entries per fixture file and disambiguate by
+ * SHA-256 of the body when more than one entry exists. The body content is
+ * deterministic across runs (LLM via aimock → fal API via fal-handler →
+ * fal CDN serves the same bytes for the same URL), so the same upload always
+ * resolves to the same recorded response.
+ *
+ * `tryReplay` returns a tagged result so the caller can short-circuit on
+ * unique fingerprints without consuming the body stream (avoids pulling MBs
+ * from fal CDN per cache hit). Only collisions pay the body-read cost via
+ * `tryReplayWithBody`.
  *
  * This module imports `node:fs` and is loaded only via `storage-s3.ts`. On
  * Cloudflare the `#storage` alias resolves to `storage-cloudflare.ts` so this
@@ -41,7 +47,27 @@ export type UploadFingerprint = {
   contentType?: string;
 };
 
+type FixtureEntry = {
+  request: {
+    key: string;
+    bodyHash: string;
+    bodySize: number;
+  };
+  response: UploadResult;
+};
+
 type FixtureFile = {
+  fingerprint: {
+    bucket: string;
+    normalisedKey: string;
+    contentType?: string;
+  };
+  entries: FixtureEntry[];
+};
+
+// Legacy single-entry shape — still readable so existing fixtures don't all
+// need re-recording. Written-back as the new array shape on next record.
+type LegacyFixtureFile = {
   request: {
     bucket: string;
     key: string;
@@ -52,6 +78,11 @@ type FixtureFile = {
   };
   response: UploadResult;
 };
+
+export type ReplayResult =
+  | { type: 'hit'; response: UploadResult }
+  | { type: 'need-body' }
+  | { type: 'miss' };
 
 const FIXTURE_DIR = resolve(process.cwd(), 'e2e/fixtures/recorded/r2');
 
@@ -104,11 +135,63 @@ function fixturePath(fp: UploadFingerprint, hash: string): string {
   return resolve(FIXTURE_DIR, fp.bucket, filename);
 }
 
-export function tryReplay(fp: UploadFingerprint): UploadResult | null {
-  const filePath = fixturePath(fp, fingerprintHash(fp));
+function readFixture(filePath: string): FixtureFile | null {
   if (!existsSync(filePath)) return null;
-  const fixture: FixtureFile = JSON.parse(readFileSync(filePath, 'utf8'));
-  return fixture.response;
+  const raw: FixtureFile | LegacyFixtureFile = JSON.parse(
+    readFileSync(filePath, 'utf8')
+  );
+  if ('entries' in raw) return raw;
+  if ('request' in raw && 'response' in raw) {
+    return {
+      fingerprint: {
+        bucket: raw.request.bucket,
+        normalisedKey: raw.request.normalisedKey,
+        contentType: raw.request.contentType,
+      },
+      entries: [
+        {
+          request: {
+            key: raw.request.key,
+            bodyHash: raw.request.bodyHash,
+            bodySize: raw.request.bodySize,
+          },
+          response: raw.response,
+        },
+      ],
+    };
+  }
+  return null;
+}
+
+// Fingerprints we've already touched during this record run. First touch
+// clears any pre-existing entries (so re-records don't accumulate stale
+// fixtures from previous runs); subsequent touches append.
+const recordedThisRun = new Set<string>();
+
+function fingerprintKey(fp: UploadFingerprint): string {
+  return [fp.bucket, normaliseKey(fp.key), fp.contentType ?? ''].join('\x00');
+}
+
+export function tryReplay(fp: UploadFingerprint): ReplayResult {
+  const filePath = fixturePath(fp, fingerprintHash(fp));
+  const fixture = readFixture(filePath);
+  if (!fixture || fixture.entries.length === 0) return { type: 'miss' };
+  if (fixture.entries.length === 1) {
+    return { type: 'hit', response: fixture.entries[0].response };
+  }
+  return { type: 'need-body' };
+}
+
+export function tryReplayWithBody(
+  fp: UploadFingerprint,
+  body: Uint8Array
+): UploadResult | null {
+  const filePath = fixturePath(fp, fingerprintHash(fp));
+  const fixture = readFixture(filePath);
+  if (!fixture) return null;
+  const bodyHash = bodyHashHex(body);
+  const match = fixture.entries.find((e) => e.request.bodyHash === bodyHash);
+  return match?.response ?? null;
 }
 
 export function record(
@@ -117,16 +200,36 @@ export function record(
   response: UploadResult
 ): void {
   const filePath = fixturePath(fp, fingerprintHash(fp));
+  const fpKey = fingerprintKey(fp);
+
+  // First record() this run for this fingerprint replaces any stale fixture
+  // wholesale; later calls append/update entries within the same run.
+  let entries: FixtureEntry[] = [];
+  if (recordedThisRun.has(fpKey)) {
+    const existing = readFixture(filePath);
+    if (existing) entries = existing.entries;
+  }
+  recordedThisRun.add(fpKey);
+
+  const bodyHash = bodyHashHex(body);
+  const newEntry: FixtureEntry = {
+    request: { key: fp.key, bodyHash, bodySize: body.byteLength },
+    response,
+  };
+  const existingIdx = entries.findIndex((e) => e.request.bodyHash === bodyHash);
+  if (existingIdx >= 0) {
+    entries[existingIdx] = newEntry;
+  } else {
+    entries.push(newEntry);
+  }
+
   const fixture: FixtureFile = {
-    request: {
+    fingerprint: {
       bucket: fp.bucket,
-      key: fp.key,
       normalisedKey: normaliseKey(fp.key),
       contentType: fp.contentType,
-      bodyHash: bodyHashHex(body),
-      bodySize: body.byteLength,
     },
-    response,
+    entries,
   };
   const parent = dirname(filePath);
   if (!existsSync(parent)) mkdirSync(parent, { recursive: true });

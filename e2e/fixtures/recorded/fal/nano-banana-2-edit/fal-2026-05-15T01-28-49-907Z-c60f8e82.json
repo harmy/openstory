@@ -1,0 +1,29 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "9-panel cinematic storyboard sheet derived from Image 1. Mix Wide, Medium, and Tight shots of the same scene. No borders between panels.\n\nLayout: 3x3 grid (9 panels) in a 16:9 landscape image.\n\nScene: Cinematic still captured on 35mm film showing SCARLETT in a clean white tank top standing barefoot on the wet shoreline, one foot lifted slightly as a gentle wave rushes over her toes and sinks into the sand, body angled toward the ocean with a natural mid-breath posture suggesting laughter, lipstick tube resting beside the embossed brand imprint in the damp sand a few inches from her foot, pale sand stretching toward the open horizon with small shells and linen scraps nearby on a pale board, golden-hour warmth washing across the entire frame with crisp cool shadows carving every texture and grain, bright natural coastal light creating soft bokeh on the receding water, shallow depth of field with the foreground sharply detailed and the distant sea gently blurred, dynamic handheld energy with slight natural movement in the composition.\n\nMatch Image 1 exactly: same character(s) (face, hair, skin, clothing), lighting, color grade, and texture. If character reference sheets are provided, use them for likeness — do not render them as separate panels.\n\nNo text, dialogue bubbles, scene numbers, or watermarks.\n\n\n  <reference-images>\n    - Image 1 [PRIMARY SOURCE]: Primary source scene — generate 9 variant shots from this image\n    - Image 2 [CHARACTER REF]: SCARLETT - Match the real-world appearance of Sienna Blake exactly\n    - Image 3 [LOCATION REF]: EXT. BONDI BEACH - SHORELINE - Wet shoreline with waves washing over feet\n    \n    IMPORTANT: Character, location, and element reference images are for IDENTITY CONSISTENCY ONLY. Do NOT reproduce them as separate panels or subjects. Elements (logos, products) must render faithfully when referenced but should appear naturally within the scene. All output panels must depict the scene from the PRIMARY SOURCE image.\n  </reference-images>",
+        "model": "fal-ai/nano-banana-2/edit",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "images": [
+            {
+              "url": "https://v3b.fal.media/files/b/0a9a3f12/saKUsJDiyEZU2ZO8prQ61_AV9RanRn.png",
+              "content_type": "image/png",
+              "file_name": "saKUsJDiyEZU2ZO8prQ61_AV9RanRn.png",
+              "file_size": null,
+              "width": null,
+              "height": null
+            }
+          ],
+          "description": ""
+        },
+        "status": 200
+      }
+    }
+  ]
+}

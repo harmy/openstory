@@ -32,12 +32,6 @@ export const generateStoryboardWorkflow =
 
     const { sequenceId, teamId, userId } = input;
 
-    console.log('[StoryboardWorkflow] Input received:', {
-      sequenceId: input.sequenceId,
-      teamId: input.teamId,
-      userId: input.userId,
-      autoGenerateMotion: input.autoGenerateMotion,
-    });
     if (!sequenceId || !teamId || !userId) {
       throw new WorkflowValidationError(
         'Sequence ID, team ID, and user ID are required'
@@ -54,6 +48,12 @@ export const generateStoryboardWorkflow =
       imageModel,
       videoModel,
     } = await context.run('verify-clear-and-start-processing', async () => {
+      console.log('[StoryboardWorkflow] Input received:', {
+        sequenceId: input.sequenceId,
+        teamId: input.teamId,
+        userId: input.userId,
+        autoGenerateMotion: input.autoGenerateMotion,
+      });
       validateSequenceAuth(input);
 
       const sequence = await scopedDb.sequences.getForUser({

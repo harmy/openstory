@@ -1,0 +1,18 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "userMessage": "Classify music design for each scene and generate a unified music prompt for the sequence.\n\n<SCENES>\n[\n  {\n    \"sceneId\": \"scene1\",\n    \"title\": \"Studio Vanity Application\",\n    \"storyBeat\": \"Introduction of Scarlett applying coral lipstick in bright studio light with voiceover\",\n    \"durationSeconds\": 8,\n    \"location\": \"INT. BONDI STUDIO - MORNING\",\n    \"timeOfDay\": \"morning\",\n    \"visualSummary\": \"Clean, fresh, minimal morning calm with coral accent pop\"\n  },\n  {\n    \"sceneId\": \"scene2\",\n    \"title\": \"Promenade Walk\",\n    \"storyBeat\": \"Scarlett walking the promenade with dynamic beach background and voiceover\",\n    \"durationSeconds\": 6,\n    \"location\": \"EXT. BONDI BEACH PROMENADE\",\n    \"timeOfDay\": \"morning\",\n    \"visualSummary\": \"Fresh, sensory, and effortlessly cool with energetic yet light coastal breeze feeling\"\n  },\n  {\n    \"sceneId\": \"scene3\",\n    \"title\": \"Shoreline Reveal\",\n    \"storyBeat\": \"Climactic shoreline moment with product detail, laughter, final voiceover and product super\",\n    \"durationSeconds\": 10,\n    \"location\": \"EXT. BONDI BEACH - SHORELINE\",\n    \"timeOfDay\": \"morning\",\n    \"visualSummary\": \"Fresh, sensory, effortlessly cool coastal moment with serene potential energy\"\n  }\n]\n</SCENES>\n\nFor each scene, classify:\n1. presence: \"none\"|\"minimal\"|\"moderate\"|\"full\"\n2. style: Genre/instrumentation (if music present)\n3. mood: Emotional quality (if music present)\n4. atmosphere: Environmental atmosphere\n\nThen synthesize unified tags (starting with \"instrumental\") and a 1-2 sentence prompt for one cohesive music track.\n\nRespond with ONLY valid JSON matching the schema.",
+        "model": "x-ai/grok-4.3",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "content": "{\n  \"scenes\": [\n    {\n      \"sceneId\": \"scene1\",\n      \"musicDesign\": {\n        \"presence\": \"minimal\",\n        \"style\": \"light electronic ambient\",\n        \"mood\": \"serene\",\n        \"atmosphere\": \"bright clean studio\"\n      }\n    },\n    {\n      \"sceneId\": \"scene2\",\n      \"musicDesign\": {\n        \"presence\": \"moderate\",\n        \"style\": \"uplifting indie electronic\",\n        \"mood\": \"fresh and cool\",\n        \"atmosphere\": \"dynamic coastal promenade\"\n      }\n    },\n    {\n      \"sceneId\": \"scene3\",\n      \"musicDesign\": {\n        \"presence\": \"moderate\",\n        \"style\": \"ethereal electronic\",\n        \"mood\": \"serene yet energetic\",\n        \"atmosphere\": \"serene shoreline\"\n      }\n    }\n  ],\n  \"tags\": \"instrumental, ambient, electronic, uplifting, serene, fresh, light, coastal, flowing\",\n  \"prompt\": \"Instrumental light electronic ambient track with soft synth pads and gentle percussion, beginning serene and minimal in a bright studio before flowing into uplifting fresh energy along the coastal beach.\"\n}"
+      },
+      "metadata": {
+        "systemHash": "ae656c2a"
+      }
+    }
+  ]
+}

@@ -17,8 +17,13 @@
  *   subfolders automatically on aimock teardown).
  */
 
+import { resolve } from 'node:path';
 import { expect, type Locator } from 'playwright/test';
 import { test as testWithUser } from '../fixtures/auth.fixture';
+import {
+  getSystemLocationByName,
+  type TestLibraryLocation,
+} from '../fixtures/location.fixture';
 import {
   cleanupSequenceById,
   createTestStyle,
@@ -29,11 +34,6 @@ import {
   getSystemTalentByName,
   type TestTalent,
 } from '../fixtures/talent.fixture';
-import {
-  getSystemLocationByName,
-  type TestLibraryLocation,
-} from '../fixtures/location.fixture';
-import { resolve } from 'node:path';
 import { t } from '../recording-mode';
 
 const fullPipeline = process.env.PLAYWRIGHT_FULL_PIPELINE === 'true';
@@ -162,20 +162,35 @@ testWithUser.describe('Full Sequence Pipeline', () => {
         .first()
         .click();
 
-      // 3. Type a short script.
+      // 3. Type a short script — a 30-second makeup ad.
       const script = `
-INT. NEWSROOM - NIGHT
+CORAL — A SUMMER LAUNCH
 
-A reporter types furiously at a glowing terminal. The clack of keys is
-the only sound. Outside, rain streaks the window.
+Bondi Studio - Morning in front of her microphone
 
-REPORTER
-We go live in ten.
+Sunlight floods a white vanity. SCARLETT (19, blonde, sun-kissed),
+a Bondi influencer, unboxes a coral lipstick and turns it slowly
+to camera.
 
-A producer rushes in with a printed lede.
+SCARLETT (V.O.)
+One shade. One summer.
 
-PRODUCER
-Story just broke. We need this on air now.
+CLOSE ON LIPS — Scarlett swipes the colour, blots, smiles.
+
+EXT. BONDI BEACH PROMENADE - CONTINUOUS
+
+Scarlett walks the promenade, blonde hair lifting in the breeze,
+surfers cresting behind her. She glances back at camera.
+
+SCARLETT (V.O.)
+Made for the water. Wear it everywhere.
+
+EXT. BONDI BEACH - SHORELINE - CONTINUOUS
+
+She laughs as a wave breaks at her feet. The lipstick lands
+beside the brand mark in the sand.
+
+SUPER:  CORAL.  OUT NOW.
       `.trim();
       const scriptTextarea = page.locator('textarea');
       await expect(scriptTextarea).toBeVisible();
@@ -187,6 +202,10 @@ Story just broke. We need this on air now.
       ).toBeEnabled({ timeout: 10_000 });
       await page.getByRole('button', { name: /Enhance Script/i }).click();
       await expect(page.getByText('Target video duration')).toBeVisible();
+      // Pick 1m so the enhancer generates more scenes (default is 30s). The
+      // duration toggle is a Radix ToggleGroup type="single"; its items render
+      // with role="radio".
+      await page.getByRole('radio', { name: '1m' }).click();
       await page.getByRole('button', { name: 'Enhance' }).last().click();
       await expect(page.getByRole('button', { name: /Stop/i })).toBeVisible({
         timeout: t(15_000),

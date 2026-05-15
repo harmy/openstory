@@ -127,7 +127,7 @@ export const IMAGE_MODELS = {
     maxPromptLength: 32000,
   },
   grok_imagine_image: {
-    id: 'xai/grok-imagine-image/quality' as const,
+    id: 'xai/grok-imagine-image/quality/text-to-image' as const,
     name: 'Grok Imagine Image Quality',
     provider: 'Grok',
     license: 'proprietary' as const,

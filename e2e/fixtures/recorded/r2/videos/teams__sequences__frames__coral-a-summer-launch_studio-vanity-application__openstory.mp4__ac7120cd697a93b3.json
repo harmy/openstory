@@ -1,0 +1,21 @@
+{
+  "fingerprint": {
+    "bucket": "videos",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/coral-a-summer-launch_studio-vanity-application_<HASH>_openstory.mp4",
+    "contentType": "video/mp4"
+  },
+  "entries": [
+    {
+      "request": {
+        "key": "videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/frames/01KRMKVXCE3BYXRCQV410EP0TG/coral-a-summer-launch_studio-vanity-application_g38vet_openstory.mp4",
+        "bodyHash": "8e90a5c0f6db80cc6a3efebedfb6c689dc72002b02344f65f932889006f95eef",
+        "bodySize": 8821105
+      },
+      "response": {
+        "path": "videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/frames/01KRMKVXCE3BYXRCQV410EP0TG/coral-a-summer-launch_studio-vanity-application_g38vet_openstory.mp4",
+        "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/frames/01KRMKVXCE3BYXRCQV410EP0TG/coral-a-summer-launch_studio-vanity-application_g38vet_openstory.mp4",
+        "fullPath": "videos/teams/01KRMKS88ZRXB9Z8RAX8MSZKJ5/sequences/01KRMKTJ3HZZBFMFJEC5H25FVH/frames/01KRMKVXCE3BYXRCQV410EP0TG/coral-a-summer-launch_studio-vanity-application_g38vet_openstory.mp4"
+      }
+    }
+  ]
+}
