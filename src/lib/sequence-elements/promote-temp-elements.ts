@@ -14,6 +14,9 @@ const tempUploadSchema = z.object({
   tempPath: z.string().min(1),
   tempPublicUrl: z.string().url(),
   filename: z.string().min(1),
+  // Optional: vision-suggested token returned by analyzeDraftElementFn during
+  // draft upload. Falls back to filename-derived when missing (legacy clients).
+  token: z.string().min(1).max(100).nullable().optional(),
   // Optional: pre-computed by analyzeDraftElementFn during draft upload so we
   // can write the row in `completed` state without re-running vision here.
   description: z.string().nullable().optional(),
@@ -90,7 +93,10 @@ export async function promoteTempElements(params: {
         ? upload.tempPublicUrl
         : getPublicUrl(STORAGE_BUCKETS.ELEMENTS, permanentRelative);
 
-    const rawToken = deriveTokenFromFilename(upload.filename);
+    const rawToken =
+      upload.token && upload.token.length > 0
+        ? upload.token
+        : deriveTokenFromFilename(upload.filename);
     const token = await scopedDb.sequenceElements.ensureUniqueToken(
       sequenceId,
       rawToken

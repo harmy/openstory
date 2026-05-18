@@ -11,14 +11,14 @@ import {
   type FileUploadProps,
 } from '@/components/ui/file-upload';
 import {
-  useDeleteSequenceElement,
-  useRenameSequenceElementToken,
+  useFrameCountsForAllElements,
   useSequenceElements,
   useUploadElementToSequence,
 } from '@/hooks/use-sequence-elements';
 import { getFileKey } from '@/lib/utils/upload';
-import { Loader2, Trash2, Upload, X } from 'lucide-react';
+import { Upload, X } from 'lucide-react';
 import { useCallback, useState } from 'react';
+import { ElementCard } from './element-card';
 
 type ElementsViewProps = {
   sequenceId: string;
@@ -26,9 +26,8 @@ type ElementsViewProps = {
 
 export const ElementsView: React.FC<ElementsViewProps> = ({ sequenceId }) => {
   const { data: elements = [] } = useSequenceElements(sequenceId);
+  const { data: frameCounts } = useFrameCountsForAllElements(sequenceId);
   const uploadMutation = useUploadElementToSequence();
-  const deleteMutation = useDeleteSequenceElement();
-  const renameMutation = useRenameSequenceElementToken();
   const [files, setFiles] = useState<File[]>([]);
 
   const onUpload: NonNullable<FileUploadProps['onUpload']> = useCallback(
@@ -110,64 +109,13 @@ export const ElementsView: React.FC<ElementsViewProps> = ({ sequenceId }) => {
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {elements.map((el) => (
-            <div
+            <ElementCard
               key={el.id}
-              className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3"
-            >
-              <div className="relative aspect-video overflow-hidden rounded-md bg-muted">
-                <img
-                  src={el.imageUrl}
-                  alt={el.uploadedFilename}
-                  className="size-full object-contain"
-                />
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <input
-                  type="text"
-                  defaultValue={el.token}
-                  className="flex-1 rounded-md border border-input bg-background px-2 py-1 font-mono text-sm"
-                  onBlur={(e) => {
-                    const next = e.currentTarget.value.trim();
-                    if (next && next.toUpperCase() !== el.token) {
-                      renameMutation.mutate({
-                        elementId: el.id,
-                        sequenceId,
-                        token: next,
-                      });
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  disabled={deleteMutation.isPending}
-                  onClick={() =>
-                    deleteMutation.mutate({
-                      elementId: el.id,
-                      sequenceId,
-                    })
-                  }
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {el.visionStatus === 'pending' ||
-                el.visionStatus === 'analyzing' ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Loader2 className="size-3 animate-spin" />
-                    Analyzing image…
-                  </span>
-                ) : el.visionStatus === 'failed' ? (
-                  <span className="text-destructive">
-                    Vision failed: {el.visionError ?? 'unknown error'}
-                  </span>
-                ) : (
-                  <span>{el.description ?? 'No description'}</span>
-                )}
-              </div>
-            </div>
+              element={el}
+              sequenceId={sequenceId}
+              affectedFrameCount={frameCounts?.[el.id]?.frameCount ?? 0}
+              affectedVideoCount={frameCounts?.[el.id]?.videoCount ?? 0}
+            />
           ))}
         </div>
       )}

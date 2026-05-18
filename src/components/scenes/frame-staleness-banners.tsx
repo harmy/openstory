@@ -87,7 +87,11 @@ export const FrameStalenessBanners: React.FC<FrameStalenessBannersProps> = ({
     );
   }
 
-  if (staleness?.thumbnail === 'stale') {
+  // Suppress the thumbnail banner when the visual prompt is also stale: the
+  // visual-prompt banner inside the Image tab is the prerequisite action
+  // (regenerating the image from a stale prompt would just produce another
+  // stale image), and showing both at once is redundant.
+  if (staleness?.thumbnail === 'stale' && staleness.visualPrompt !== 'stale') {
     return (
       <StalenessIndicator
         artifact="thumbnail"

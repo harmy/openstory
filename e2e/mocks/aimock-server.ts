@@ -63,7 +63,7 @@ const STAGE_PREFIXES: ReadonlyArray<readonly [string, string]> = [
   ['Generate the visual prompt for the starting frame', 'visual-prompts'],
   ['Generate the motion prompt for this scene', 'motion-prompts'],
   ['Classify music design for each scene', 'music-design'],
-  ['Element token:', 'element-vision'],
+  ['Uploaded filename (hint only', 'element-vision'],
 ];
 
 // Diagnostic dump for unmatched requests — written on shutdown so we can diff

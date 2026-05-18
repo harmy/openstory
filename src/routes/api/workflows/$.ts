@@ -34,6 +34,7 @@ import { generateMusicWorkflow } from '@/lib/workflows/music-workflow';
 import { recastCharacterWorkflow } from '@/lib/workflows/recast-character-workflow';
 import { recastLocationWorkflow } from '@/lib/workflows/recast-location-workflow';
 import { regenerateFramesWorkflow } from '@/lib/workflows/regenerate-frames-workflow';
+import { replaceElementWorkflow } from '@/lib/workflows/replace-element-workflow';
 import { sceneSplitWorkflow } from '@/lib/workflows/scene-split-workflow';
 import { generateStoryboardWorkflow } from '@/lib/workflows/storyboard-workflow';
 import { talentMatchingWorkflow } from '@/lib/workflows/talent-matching-workflow';
@@ -76,6 +77,7 @@ function getHandler() {
         'recast-character': recastCharacterWorkflow,
         'recast-location': recastLocationWorkflow,
         'regenerate-frames': regenerateFramesWorkflow,
+        'replace-element': replaceElementWorkflow,
         storyboard: generateStoryboardWorkflow,
         'talent-matching': talentMatchingWorkflow,
         'upscale-variant': upscaleShotVariantWorkflow,

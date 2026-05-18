@@ -172,12 +172,42 @@ async function generateImageInternal(
   }
 
   const adapter = createFalAdapter(endpoint, falApiKeyInfo.key);
+
+  console.log(
+    '[Image Generation] generateImage request',
+    JSON.stringify(
+      {
+        model: params.model,
+        endpoint,
+        keySource: falApiKeyInfo.source,
+        prompt,
+        modelOptions,
+        referenceImageUrls: params.referenceImageUrls ?? [],
+      },
+      null,
+      2
+    )
+  );
+
   const result = await generateImage({
     adapter,
     prompt,
     modelOptions,
-    debug: false,
+    debug: true,
   });
+
+  console.log(
+    '[Image Generation] generateImage response',
+    JSON.stringify(
+      {
+        model: params.model,
+        endpoint,
+        imageUrls: result.images.map((img) => img.url),
+      },
+      null,
+      2
+    )
+  );
 
   const imageUrls = result.images
     .map((img) => img.url)

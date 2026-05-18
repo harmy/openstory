@@ -880,4 +880,40 @@ export interface ElementVisionWorkflowResult {
   elementId: string;
   description: string;
   consistencyTag: string;
+  /** Final token after any vision-driven auto-rename. */
+  token: string;
+}
+
+/**
+ * Replace element workflow input
+ * Orchestrates element image swap + per-frame image edits for affected frames.
+ *
+ * Per-frame behaviour: invokes `image-workflow` with the existing frame
+ * thumbnail as the PRIMARY SOURCE and the new element image as an ELEMENT REF.
+ * The image edit endpoint swaps the element while preserving the rest of the
+ * frame — this is by design for elements (vs cast/location which fully
+ * regenerate the frame).
+ */
+export interface ReplaceElementWorkflowInput extends SequenceWorkflowContext {
+  /** Always present for this workflow — narrowed from the optional base type. */
+  sequenceId: string;
+  elementId: string;
+  /** Token of the element being replaced (for logging + edit prompt) */
+  token: string;
+  /** Description of the prior element (for the edit prompt; null if vision never ran) */
+  previousDescription: string | null;
+  /** New image URL (already uploaded to R2 and persisted on the element row) */
+  newImageUrl: string;
+  /** Original filename of the new image (for vision analysis context) */
+  newFilename: string;
+  /** Frame IDs to edit using the new element */
+  affectedFrameIds: string[];
+  /** Image model to use for the edit (defaults to nano_banana_2 for edit support) */
+  imageModel?: TextToImageModel;
+}
+
+export interface ReplaceElementWorkflowResult {
+  elementId: string;
+  successCount: number;
+  failedCount: number;
 }

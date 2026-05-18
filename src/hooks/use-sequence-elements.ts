@@ -2,19 +2,48 @@ import {
   analyzeDraftElementFn,
   deleteSequenceElementFn,
   finalizeElementUploadFn,
+  getFrameCountsByElementFn,
+  getFrameIdsForElementFn,
   listSequenceElementsFn,
   presignDraftElementUploadFn,
   presignElementUploadFn,
   renameSequenceElementTokenFn,
+  replaceSequenceElementFn,
 } from '@/functions/sequence-elements';
 import type { SequenceElement } from '@/lib/db/schema';
+import type {
+  ReplaceElementCompletePayload,
+  ReplaceElementFailedPayload,
+  ReplaceElementStartPayload,
+} from '@/lib/realtime';
+import { useRealtime } from '@/lib/realtime/client';
 import { putToR2 } from '@/lib/utils/upload';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useState } from 'react';
+import { toast } from 'sonner';
+
+type ReplaceElementEvent =
+  | {
+      event: 'generation.replace-element:start';
+      data: ReplaceElementStartPayload;
+    }
+  | {
+      event: 'generation.replace-element:complete';
+      data: ReplaceElementCompletePayload;
+    }
+  | {
+      event: 'generation.replace-element:failed';
+      data: ReplaceElementFailedPayload;
+    };
 
 export const sequenceElementKeys = {
   all: ['sequence-elements'] as const,
   bySequence: (sequenceId: string) =>
     ['sequence-elements', sequenceId] as const,
+  framesForElement: (sequenceId: string, elementId: string) =>
+    ['sequence-elements', sequenceId, 'frames', elementId] as const,
+  frameCountsBySequence: (sequenceId: string) =>
+    ['sequence-elements', sequenceId, 'frame-counts'] as const,
 };
 
 export function useSequenceElements(sequenceId: string | undefined) {
@@ -25,7 +54,6 @@ export function useSequenceElements(sequenceId: string | undefined) {
     queryFn: () =>
       listSequenceElementsFn({ data: { sequenceId: sequenceId ?? '' } }),
     enabled: Boolean(sequenceId),
-    // Poll while vision is still analyzing
     refetchInterval: (query) => {
       const data = query.state.data as SequenceElement[] | undefined;
       if (!data) return false;
@@ -118,21 +146,17 @@ export function useUploadDraftElement() {
         presign.contentType,
         data.onProgress
       );
-      const token = data.file.name
-        .replace(/\.[^.]+$/, '')
-        .toUpperCase()
-        .replace(/[^A-Z0-9]+/g, '_')
-        .replace(/^_+|_+$/g, '');
-      const finalToken = token.length > 0 ? token : 'ELEMENT';
-
       data.onAnalyzingChange?.(true);
-      let result: { description: string; consistencyTag: string };
+      let result: {
+        description: string;
+        consistencyTag: string;
+        suggestedToken: string;
+      };
       try {
         result = await analyzeDraftElementFn({
           data: {
             publicUrl: presign.publicUrl,
             filename: data.file.name,
-            token: finalToken,
           },
         });
       } finally {
@@ -143,7 +167,7 @@ export function useUploadDraftElement() {
         tempPath: presign.path,
         tempPublicUrl: presign.publicUrl,
         filename: data.file.name,
-        token: finalToken,
+        token: result.suggestedToken,
         description: result.description,
         consistencyTag: result.consistencyTag,
       };
@@ -172,10 +196,204 @@ export function useRenameSequenceElementToken() {
       sequenceId: string;
       token: string;
     }) => renameSequenceElementTokenFn({ data }),
-    onSuccess: (_res, variables) => {
+    onSuccess: (result, variables) => {
       void queryClient.invalidateQueries({
         queryKey: sequenceElementKeys.bySequence(variables.sequenceId),
       });
+      // Frames now contain the new token in metadata / prompts. Refresh
+      // anything that renders frame text or counts.
+      if (result.framesUpdated > 0) {
+        void queryClient.invalidateQueries({ queryKey: ['frames'] });
+        void queryClient.invalidateQueries({
+          queryKey: sequenceElementKeys.frameCountsBySequence(
+            variables.sequenceId
+          ),
+        });
+      }
+    },
+  });
+}
+
+/**
+ * Frame counts for *all* elements in a sequence, fetched in one query.
+ * Use this from the elements grid to avoid the per-card N+1.
+ */
+export function useFrameCountsForAllElements(sequenceId: string | undefined) {
+  return useQuery({
+    queryKey: sequenceId
+      ? sequenceElementKeys.frameCountsBySequence(sequenceId)
+      : ['sequence-elements', 'frame-counts', 'none'],
+    queryFn: () =>
+      getFrameCountsByElementFn({ data: { sequenceId: sequenceId ?? '' } }),
+    enabled: Boolean(sequenceId),
+    staleTime: 60 * 1000,
+  });
+}
+
+/** Frame count + IDs for frames that reference this element by token */
+export function useFrameIdsForElement(
+  sequenceId: string | undefined,
+  elementId: string | undefined
+) {
+  return useQuery({
+    queryKey:
+      sequenceId && elementId
+        ? sequenceElementKeys.framesForElement(sequenceId, elementId)
+        : ['sequence-elements', 'frames', 'none'],
+    queryFn: () =>
+      getFrameIdsForElementFn({
+        data: { sequenceId: sequenceId ?? '', elementId: elementId ?? '' },
+      }),
+    enabled: Boolean(sequenceId) && Boolean(elementId),
+    staleTime: 60 * 1000,
+  });
+}
+
+/**
+ * Subscribes to `replace-element:start|complete|failed` for one element so
+ * the card can show a spinner across the whole flow (server-fn → :start →
+ * vision → per-frame edits → :complete) and surface a final-state toast.
+ *
+ * Without this hook the card's `isReplacing` clears the moment vision flips
+ * to `completed`, hiding the per-frame edit phase from the user — and any
+ * post-vision failure becomes user-invisible.
+ */
+export function useReplaceElementProgress(
+  sequenceId: string | undefined,
+  elementId: string,
+  token: string
+): { editing: boolean } {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+
+  const onData = useCallback(
+    (evt: ReplaceElementEvent) => {
+      if (evt.data.elementId !== elementId) return;
+
+      if (evt.event === 'generation.replace-element:start') {
+        setEditing(true);
+        return;
+      }
+
+      if (evt.event === 'generation.replace-element:complete') {
+        setEditing(false);
+        const {
+          successCount,
+          failedCount,
+          videoSuccessCount,
+          videoFailedCount,
+          renamedTo,
+        } = evt.data;
+        const displayName = renamedTo ?? token;
+        if (renamedTo && renamedTo !== token) {
+          toast.message(`Renamed ${token} → ${renamedTo}`);
+        }
+        if (failedCount > 0) {
+          toast.warning(
+            `${displayName}: ${successCount} edited, ${failedCount} failed`
+          );
+        } else if (successCount > 0) {
+          toast.success(
+            `${displayName}: edited ${successCount} frame${successCount === 1 ? '' : 's'}`
+          );
+        }
+        const vidSuccess = videoSuccessCount ?? 0;
+        const vidFailed = videoFailedCount ?? 0;
+        if (vidSuccess > 0 || vidFailed > 0) {
+          if (vidFailed > 0) {
+            toast.warning(
+              `${displayName} videos: ${vidSuccess} regenerated, ${vidFailed} failed`
+            );
+          } else {
+            toast.success(
+              `${displayName}: regenerated ${vidSuccess} video${vidSuccess === 1 ? '' : 's'}`
+            );
+          }
+        }
+        if (sequenceId) {
+          void queryClient.invalidateQueries({
+            queryKey: sequenceElementKeys.bySequence(sequenceId),
+          });
+        }
+        void queryClient.invalidateQueries({ queryKey: ['frames'] });
+        return;
+      }
+
+      setEditing(false);
+      toast.error(`Replace failed for ${token}`, {
+        description: evt.data.error,
+      });
+      if (sequenceId) {
+        void queryClient.invalidateQueries({
+          queryKey: sequenceElementKeys.bySequence(sequenceId),
+        });
+      }
+    },
+    [elementId, token, sequenceId, queryClient]
+  );
+
+  useRealtime({
+    channels: sequenceId ? [sequenceId] : [],
+    events: [
+      'generation.replace-element:start',
+      'generation.replace-element:complete',
+      'generation.replace-element:failed',
+    ] as const,
+    onData,
+    enabled: Boolean(sequenceId),
+  });
+
+  return { editing };
+}
+
+/**
+ * Replace an element image: presign → R2 → finalize.
+ * Triggers per-frame image edits via the replace-element workflow.
+ */
+export function useReplaceSequenceElement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      file: File;
+      sequenceId: string;
+      elementId: string;
+      onProgress?: (percent: number) => void;
+    }) => {
+      const presign = await presignElementUploadFn({
+        data: { filename: data.file.name, sequenceId: data.sequenceId },
+      });
+      await putToR2(
+        presign.uploadUrl,
+        data.file,
+        presign.contentType,
+        data.onProgress
+      );
+      return await replaceSequenceElementFn({
+        data: {
+          sequenceId: data.sequenceId,
+          elementId: data.elementId,
+          publicUrl: presign.publicUrl,
+          path: presign.path,
+          filename: data.file.name,
+        },
+      });
+    },
+    onSuccess: (_result, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: sequenceElementKeys.bySequence(variables.sequenceId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: sequenceElementKeys.framesForElement(
+          variables.sequenceId,
+          variables.elementId
+        ),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: sequenceElementKeys.frameCountsBySequence(
+          variables.sequenceId
+        ),
+      });
+      void queryClient.invalidateQueries({ queryKey: ['frames'] });
     },
   });
 }

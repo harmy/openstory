@@ -542,7 +542,7 @@ export const ElementSelector: React.FC<ElementSelectorProps> = (props) => {
                           {item.errorMessage ?? 'Failed'}
                         </div>
                       )}
-                      {item.token && (
+                      {item.status === 'done' && item.token && (
                         <div className="absolute bottom-0 left-0 right-0 bg-background/90 px-1.5 py-0.5 text-[10px] font-mono truncate">
                           {item.token}
                         </div>

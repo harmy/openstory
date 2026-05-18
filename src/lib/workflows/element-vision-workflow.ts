@@ -29,15 +29,15 @@ export const elementVisionWorkflow = createScopedWorkflow<
       );
     });
 
-    // Step 2: load element for token (needed in the prompt)
+    // Step 2: load element so we know the current token (for auto-rename).
     const element = await context.run('load-element', async () => {
       const el = await scopedDb.sequenceElements.getById(elementId);
       if (!el) throw new Error(`Element ${elementId} not found`);
       return el;
     });
 
-    // Step 3: vision call
-    const { description, consistencyTag } = await context.run(
+    // Step 3: vision call (also returns a vision-suggested token).
+    const { description, consistencyTag, suggestedToken } = await context.run(
       'describe-element',
       async () => {
         const openRouterApiKeyInfo =
@@ -45,13 +45,12 @@ export const elementVisionWorkflow = createScopedWorkflow<
         return await describeElementImage({
           imageUrl,
           filename,
-          token: element.token,
           openRouterApiKey: openRouterApiKeyInfo.key,
         });
       }
     );
 
-    // Step 4: persist result
+    // Step 4: persist description + consistencyTag.
     await context.run('persist-vision', async () => {
       await scopedDb.sequenceElements.updateVisionResult(
         elementId,
@@ -60,7 +59,32 @@ export const elementVisionWorkflow = createScopedWorkflow<
       );
     });
 
-    return { elementId, description, consistencyTag };
+    // Step 5: auto-rename to vision-suggested token if different. Uses
+    // ensureUniqueToken (suffixes `_2` on collision) because the system is
+    // choosing the name — failing the workflow on collision would strand the
+    // element with no usable name.
+    const finalToken = await context.run('auto-rename', async () => {
+      if (suggestedToken === element.token) return element.token;
+      const unique = await scopedDb.sequenceElements.ensureUniqueToken(
+        element.sequenceId,
+        suggestedToken
+      );
+      if (unique === element.token) return element.token;
+      const result = await scopedDb.sequenceElements.cascadeRename({
+        sequenceId: element.sequenceId,
+        elementId,
+        oldToken: element.token,
+        newToken: unique,
+      });
+      return result.element.token;
+    });
+
+    return {
+      elementId,
+      description,
+      consistencyTag,
+      token: finalToken,
+    };
   },
   {
     failureFunction: async ({ context, scopedDb, failResponse }) => {
