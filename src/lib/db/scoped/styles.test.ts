@@ -11,6 +11,7 @@ import {
   describe,
   expect,
   it,
+  spyOn,
 } from 'bun:test';
 import { type Client, createClient } from '@libsql/client';
 import { asc, desc, eq, or, sql } from 'drizzle-orm';
@@ -68,13 +69,15 @@ function makeStylesMethods(database: Database, teamId: string, userId: string) {
       if (!style) throw new Error('insert returned nothing');
       return style;
     },
-    incrementUsage: async (styleId: string): Promise<number> => {
+    incrementUsage: async (styleId: string): Promise<void> => {
       const rows = await database
         .update(styles)
         .set({ usageCount: sql`${styles.usageCount} + 1` })
         .where(eq(styles.id, styleId))
         .returning({ id: styles.id });
-      return rows.length;
+      if (rows.length === 0) {
+        console.warn('[styles] incrementUsage matched zero rows', { styleId });
+      }
     },
   };
 }
@@ -139,10 +142,18 @@ describe('createStylesMethods.incrementUsage', () => {
     expect(after?.usageCount).toBe(2);
   });
 
-  it('returns zero affected rows for an unknown styleId', async () => {
+  it('logs a warning when the styleId matches zero rows', async () => {
     const methods = makeStylesMethods(db, team.id, userRow.id);
-    const affected = await methods.incrementUsage('does_not_exist');
-    expect(affected).toBe(0);
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await methods.incrementUsage('does_not_exist');
+      expect(warn).toHaveBeenCalledWith(
+        '[styles] incrementUsage matched zero rows',
+        { styleId: 'does_not_exist' }
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

@@ -6,7 +6,7 @@ import {
   type ImageToVideoModel,
 } from '@/lib/ai/models';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 
 const GROUP_ORDER = ['all'] as const;
 
@@ -48,15 +48,6 @@ export const MotionModelSelector: React.FC<MotionModelSelectorProps> = ({
     }
     return 'matched';
   }, [recommendedVideoModel, aspectRatio]);
-
-  useEffect(() => {
-    if (recommendationStatus === 'unknown') {
-      console.warn(
-        '[MotionModelSelector] recommendedVideoModel did not match any model',
-        { recommendedVideoModel, styleName }
-      );
-    }
-  }, [recommendationStatus, recommendedVideoModel, styleName]);
 
   const models = useMemo(
     () =>
@@ -121,6 +112,12 @@ export const MotionModelSelector: React.FC<MotionModelSelectorProps> = ({
             it's not compatible with the current aspect ratio.
           </p>
         )}
+      {recommendationStatus === 'unknown' && (
+        <p className="text-[10px] text-muted-foreground">
+          {styleName ? `${styleName} recommends` : 'Recommended'} a model that's
+          no longer available.
+        </p>
+      )}
     </div>
   );
 };

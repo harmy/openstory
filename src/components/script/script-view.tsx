@@ -41,6 +41,8 @@ import {
   DEFAULT_MUSIC_MODEL,
   DEFAULT_VIDEO_MODEL,
   IMAGE_TO_VIDEO_MODELS,
+  isValidImageToVideoModel,
+  isValidTextToImageModel,
   safeAudioModel,
   safeImageToVideoModel,
   safeTextToImageModel,
@@ -53,7 +55,10 @@ import {
   isValidAnalysisModelId,
   type AnalysisModelId,
 } from '@/lib/ai/models.config';
-import type { AspectRatio } from '@/lib/constants/aspect-ratios';
+import {
+  aspectRatioSchema,
+  type AspectRatio,
+} from '@/lib/constants/aspect-ratios';
 import { cn } from '@/lib/utils';
 import {
   dataTransferHasImages,
@@ -345,6 +350,104 @@ export const ScriptView: FC<{
     }
   }, [styleCategory, motionModel]);
 
+  // Auto-apply style recommendations on style change. Issue #716 originally
+  // said "suggest, never auto-change", but in practice most users never open
+  // the settings popover, so badges alone don't drive adoption of the
+  // recommended models. We override + show a "From {Style} · Reset" pill so
+  // the user can back out with a single click.
+  //
+  // The seed value of `lastAppliedStyleIdRef` is the sequence's stored styleId
+  // when editing (so we don't clobber existing values on mount) or null when
+  // creating (so the first auto-selected style triggers the apply).
+  const lastAppliedStyleIdRef = useRef<string | null>(
+    sequence?.styleId ?? null
+  );
+  const styleApplySnapshotRef = useRef<{
+    aspectRatio: AspectRatio;
+    imageModels: TextToImageModel[];
+    motionModel: ImageToVideoModel;
+  } | null>(null);
+  const [appliedFromStyle, setAppliedFromStyle] = useState<{
+    styleId: string;
+    styleName: string;
+  } | null>(null);
+
+  useEffect(() => {
+    // Wait for localStorage sync in create mode so we don't snapshot a
+    // pre-sync default and then have savedSettings overwrite the applied
+    // values immediately after.
+    if (!isEditing && !settingsLoaded) return;
+
+    const id = selectedStyle?.id;
+    if (!id || id === lastAppliedStyleIdRef.current) return;
+
+    const validImage =
+      recommendedImageModel && isValidTextToImageModel(recommendedImageModel)
+        ? recommendedImageModel
+        : null;
+    const validVideo =
+      recommendedVideoModel && isValidImageToVideoModel(recommendedVideoModel)
+        ? recommendedVideoModel
+        : null;
+    const parsedRatio = recommendedAspectRatio
+      ? aspectRatioSchema.safeParse(recommendedAspectRatio)
+      : null;
+    const validRatio = parsedRatio?.success ? parsedRatio.data : null;
+
+    lastAppliedStyleIdRef.current = id;
+
+    // Always restore the existing snapshot first (if any) so chained style
+    // switches measure against the user's pre-auto-apply baseline, never
+    // against another style's applied values. Switching to a style with no
+    // recommendations therefore lands the user back on their baseline rather
+    // than stranding them on the previous style's recommendations.
+    const baseline = styleApplySnapshotRef.current;
+
+    if (!validImage && !validVideo && !validRatio) {
+      if (baseline) {
+        setGenSettings((s) => ({ ...s, ...baseline }));
+      }
+      styleApplySnapshotRef.current = null;
+      setAppliedFromStyle(null);
+      return;
+    }
+
+    setGenSettings((s) => {
+      const start = baseline ?? {
+        aspectRatio: s.aspectRatio,
+        imageModels: s.imageModels,
+        motionModel: s.motionModel,
+      };
+      styleApplySnapshotRef.current = start;
+      return {
+        ...s,
+        aspectRatio: validRatio ?? start.aspectRatio,
+        imageModels: validImage ? [validImage] : start.imageModels,
+        motionModel: validVideo ?? start.motionModel,
+      };
+    });
+    setAppliedFromStyle({
+      styleId: id,
+      styleName: selectedStyle?.name ?? 'this style',
+    });
+  }, [
+    isEditing,
+    settingsLoaded,
+    selectedStyle?.id,
+    selectedStyle?.name,
+    recommendedImageModel,
+    recommendedVideoModel,
+    recommendedAspectRatio,
+  ]);
+
+  const resetStyleDefaults = () => {
+    const snapshot = styleApplySnapshotRef.current;
+    if (!snapshot) return;
+    setGenSettings((s) => ({ ...s, ...snapshot }));
+    styleApplySnapshotRef.current = null;
+    setAppliedFromStyle(null);
+  };
+
   const [targetDuration, setTargetDuration] = useState(30);
   const [enhancePopoverOpen, setEnhancePopoverOpen] = useState(false);
 
@@ -600,6 +703,8 @@ export const ScriptView: FC<{
             recommendedImageModel={recommendedImageModel}
             recommendedVideoModel={recommendedVideoModel}
             recommendedAspectRatio={recommendedAspectRatio}
+            appliedFromStyle={appliedFromStyle}
+            onResetStyleDefaults={resetStyleDefaults}
           />
           <div className="flex items-center gap-2 min-h-10">
             <TalentSuggestionSelector

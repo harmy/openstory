@@ -36,41 +36,7 @@ import { z } from 'zod';
 import { authWithTeamMiddleware, sequenceAccessMiddleware } from './middleware';
 import { copySequenceElements } from '@/lib/sequence-elements/copy-sequence-elements';
 import { promoteTempElements } from '@/lib/sequence-elements/promote-temp-elements';
-import { getPostHogClient } from '@/lib/posthog-server';
-
-/**
- * Fire-and-forget analytics + popularity bump for "this user picked this style".
- * Failures must never break the critical path that drives the click.
- */
-function bumpStylePopularity(args: {
-  scopedDb: { styles: { incrementUsage: (id: string) => Promise<void> } };
-  styleId: string;
-  sequenceIds: string[];
-  teamId: string;
-  userId: string;
-}) {
-  args.scopedDb.styles.incrementUsage(args.styleId).catch((err) => {
-    console.warn('[styles] incrementUsage failed', {
-      styleId: args.styleId,
-      err,
-    });
-  });
-  try {
-    const posthog = getPostHogClient();
-    if (!posthog) return;
-    posthog.capture({
-      distinctId: args.userId,
-      event: 'style_selected',
-      properties: {
-        styleId: args.styleId,
-        sequenceIds: args.sequenceIds,
-        teamId: args.teamId,
-      },
-    });
-  } catch (err) {
-    console.warn('[posthog] style_selected capture failed', err);
-  }
-}
+import { bumpStylePopularity } from '@/lib/style/bump-style-popularity';
 
 export const getSequencesFn = createServerFn({ method: 'GET' })
   .middleware([authWithTeamMiddleware])
@@ -288,6 +254,9 @@ export const updateSequenceFn = createServerFn({ method: 'POST' })
       status: needsRegeneration ? 'processing' : undefined,
     });
 
+    // sequences.styleId is `.notNull() + onDelete: 'set null'` — TS types it as
+    // non-null but the runtime value can be null after the parent style is
+    // deleted. Keep the runtime guard despite what the type says.
     if (
       updateData.styleId !== undefined &&
       updateData.styleId !== previousStyleId &&

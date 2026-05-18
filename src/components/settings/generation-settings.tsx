@@ -5,6 +5,7 @@ import {
 import { ModelSelector } from '@/components/model/model-selector';
 import { MotionModelSelector } from '@/components/model/motion-model-selector';
 import { MusicModelSelector } from '@/components/model/music-model-selector';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
   Popover,
@@ -83,6 +84,13 @@ type GenerationSettingsProps = {
   recommendedVideoModel?: string | null;
   /** Style-recommended aspect ratio — drives the "Recommended" badge */
   recommendedAspectRatio?: string | null;
+  /**
+   * Active style-applied-defaults marker. When set, the trigger renders a
+   * sibling pill saying "From {styleName} · Reset". Cleared on user reset.
+   */
+  appliedFromStyle?: { styleId: string; styleName: string } | null;
+  /** Restore the pre-apply snapshot. Required when `appliedFromStyle` is set. */
+  onResetStyleDefaults?: () => void;
 };
 
 export const GenerationSettings: FC<GenerationSettingsProps> = ({
@@ -108,18 +116,40 @@ export const GenerationSettings: FC<GenerationSettingsProps> = ({
   recommendedImageModel,
   recommendedVideoModel,
   recommendedAspectRatio,
+  appliedFromStyle,
+  onResetStyleDefaults,
 }) => {
   const [open, setOpen] = useState(false);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild disabled={disabled}>
-        <GenerationSettingsTrigger
-          aspectRatio={aspectRatio}
-          autoGenerateMotion={autoGenerateMotion}
-          autoGenerateMusic={autoGenerateMusic}
-        />
-      </PopoverTrigger>
+      <div className="flex items-center gap-2 flex-wrap">
+        <PopoverTrigger asChild disabled={disabled}>
+          <GenerationSettingsTrigger
+            aspectRatio={aspectRatio}
+            autoGenerateMotion={autoGenerateMotion}
+            autoGenerateMusic={autoGenerateMusic}
+          />
+        </PopoverTrigger>
+        {appliedFromStyle && onResetStyleDefaults && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs">
+            <span>From {appliedFromStyle.styleName}</span>
+            <span aria-hidden="true" className="text-primary/40">
+              ·
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-auto px-1 py-0 text-xs font-medium text-primary hover:bg-primary/15"
+              onClick={onResetStyleDefaults}
+              disabled={disabled}
+            >
+              Reset
+            </Button>
+          </span>
+        )}
+      </div>
       <PopoverContent className="w-auto p-4" align="start">
         <div className="flex flex-col gap-4">
           {/* Aspect Ratio Section */}

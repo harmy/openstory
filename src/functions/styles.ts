@@ -73,9 +73,7 @@ export const createStyleFn = createServerFn({ method: 'POST' })
   .middleware([authWithTeamMiddleware])
   .inputValidator(zodValidator(createStyleSchema))
   .handler(async ({ data, context }) => {
-    // teamId/createdBy are injected by scoped.create — strip any client-supplied values.
-    const { teamId: _teamId, createdBy: _createdBy, ...input } = data;
-    return context.scopedDb.styles.create(input);
+    return context.scopedDb.styles.create(data);
   });
 
 // ============================================================================

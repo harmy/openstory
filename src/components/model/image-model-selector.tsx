@@ -4,7 +4,7 @@ import {
   isValidTextToImageModel,
   type TextToImageModel,
 } from '@/lib/ai/models';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 
 const GROUP_ORDER = ['all'] as const;
 
@@ -15,11 +15,31 @@ type RecommendationProps = {
   styleName?: string;
 };
 
+type RecommendationStatus =
+  | { kind: 'matched'; modelName: string }
+  | { kind: 'hidden-by-filter'; modelName: string }
+  | { kind: 'unknown' }
+  | { kind: 'none' };
+
+function resolveRecommendation(
+  recommendedImageModel: string | null | undefined,
+  filterModels: TextToImageModel[] | undefined
+): RecommendationStatus {
+  if (!recommendedImageModel) return { kind: 'none' };
+  if (!isValidTextToImageModel(recommendedImageModel))
+    return { kind: 'unknown' };
+  const modelName = IMAGE_MODELS[recommendedImageModel].name;
+  if (filterModels && !filterModels.includes(recommendedImageModel)) {
+    return { kind: 'hidden-by-filter', modelName };
+  }
+  return { kind: 'matched', modelName };
+}
+
 function useImageModels({
   recommendedImageModel,
   styleName,
 }: RecommendationProps = {}) {
-  const models = useMemo(
+  return useMemo(
     () =>
       Object.entries(IMAGE_MODELS)
         .filter(([, m]) => !('hidden' in m))
@@ -38,20 +58,30 @@ function useImageModels({
         })),
     [recommendedImageModel, styleName]
   );
+}
 
-  // Surface unmatched recommendations so a stale style key doesn't silently
-  // vanish from the UI (e.g. a model rename or removal).
-  useEffect(() => {
-    if (!recommendedImageModel) return;
-    if (!models.some((m) => m.recommendedFor)) {
-      console.warn(
-        '[ImageModelSelector] recommendedImageModel did not match any rendered model',
-        { recommendedImageModel, styleName }
-      );
-    }
-  }, [models, recommendedImageModel, styleName]);
-
-  return models;
+function RecommendationHint({
+  status,
+  styleName,
+}: {
+  status: RecommendationStatus;
+  styleName: string | undefined;
+}) {
+  if (status.kind === 'matched' || status.kind === 'none') return null;
+  const prefix = styleName ? `${styleName} recommends` : 'Recommended';
+  if (status.kind === 'unknown') {
+    return (
+      <p className="text-[10px] text-muted-foreground">
+        {prefix} a model that's no longer available.
+      </p>
+    );
+  }
+  return (
+    <p className="text-[10px] text-muted-foreground">
+      {prefix} <span className="font-medium">{status.modelName}</span>, but it's
+      not available in this selector.
+    </p>
+  );
 }
 
 type ImageModelSelectorProps = {
@@ -71,29 +101,34 @@ export const ImageModelSelector: React.FC<ImageModelSelectorProps> = ({
   styleName,
 }) => {
   const allModels = useImageModels({ recommendedImageModel, styleName });
-  // isValidTextToImageModel narrows m.id from string → TextToImageModel so
-  // filterModels.includes typechecks; keep it.
   const models = filterModels
     ? allModels.filter(
         (m) => isValidTextToImageModel(m.id) && filterModels.includes(m.id)
       )
     : allModels;
+  const status = useMemo(
+    () => resolveRecommendation(recommendedImageModel, filterModels),
+    [recommendedImageModel, filterModels]
+  );
 
   return (
-    <BaseModelSelector
-      label="Image Model"
-      models={models}
-      groupOrder={GROUP_ORDER}
-      selectedIds={[selectedModel]}
-      onSelectionChange={(ids) => {
-        const firstId = ids[0];
-        if (firstId && isValidTextToImageModel(firstId)) {
-          onModelChange(firstId);
-        }
-      }}
-      disabled={disabled}
-      multiSelect={false}
-    />
+    <div className="flex flex-col gap-1">
+      <BaseModelSelector
+        label="Image Model"
+        models={models}
+        groupOrder={GROUP_ORDER}
+        selectedIds={[selectedModel]}
+        onSelectionChange={(ids) => {
+          const firstId = ids[0];
+          if (firstId && isValidTextToImageModel(firstId)) {
+            onModelChange(firstId);
+          }
+        }}
+        disabled={disabled}
+        multiSelect={false}
+      />
+      <RecommendationHint status={status} styleName={styleName} />
+    </div>
   );
 };
 
@@ -113,21 +148,28 @@ export const ImageModelMultiSelector: React.FC<
   styleName,
 }) => {
   const models = useImageModels({ recommendedImageModel, styleName });
+  const status = useMemo(
+    () => resolveRecommendation(recommendedImageModel, undefined),
+    [recommendedImageModel]
+  );
 
   return (
-    <BaseModelSelector
-      label="Image Models"
-      models={models}
-      groupOrder={GROUP_ORDER}
-      selectedIds={selectedModels}
-      onSelectionChange={(ids) => {
-        const validIds = ids.filter(isValidTextToImageModel);
-        if (validIds.length > 0) {
-          onModelsChange(validIds);
-        }
-      }}
-      disabled={disabled}
-      multiSelect={true}
-    />
+    <div className="flex flex-col gap-1">
+      <BaseModelSelector
+        label="Image Models"
+        models={models}
+        groupOrder={GROUP_ORDER}
+        selectedIds={selectedModels}
+        onSelectionChange={(ids) => {
+          const validIds = ids.filter(isValidTextToImageModel);
+          if (validIds.length > 0) {
+            onModelsChange(validIds);
+          }
+        }}
+        disabled={disabled}
+        multiSelect={true}
+      />
+      <RecommendationHint status={status} styleName={styleName} />
+    </div>
   );
 };
