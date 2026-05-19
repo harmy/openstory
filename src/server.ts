@@ -19,6 +19,7 @@ export { MergeVideoWorkflow } from '@/lib/workflows/cf/merge-video-workflow';
 export { MotionWorkflow } from '@/lib/workflows/cf/motion-workflow';
 export { CharacterSheetWorkflow } from '@/lib/workflows/cf/character-sheet-workflow';
 export { LocationSheetWorkflow } from '@/lib/workflows/cf/location-sheet-workflow';
+export { LibraryTalentSheetWorkflow } from '@/lib/workflows/cf/library-talent-sheet-workflow';
 
 export default {
   fetch(request: Request) {

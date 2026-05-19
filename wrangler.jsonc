@@ -84,5 +84,10 @@
       "binding": "LOCATION_SHEET_WORKFLOW",
       "class_name": "LocationSheetWorkflow",
     },
+    {
+      "name": "library-talent-sheet-workflow",
+      "binding": "LIBRARY_TALENT_SHEET_WORKFLOW",
+      "class_name": "LibraryTalentSheetWorkflow",
+    },
   ],
 }

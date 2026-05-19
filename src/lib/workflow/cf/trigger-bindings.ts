@@ -25,6 +25,7 @@ const TRIGGER_TO_BINDING: Record<string, keyof CloudflareEnv> = {
   motion: 'MOTION_WORKFLOW',
   'character-sheet': 'CHARACTER_SHEET_WORKFLOW',
   'location-sheet': 'LOCATION_SHEET_WORKFLOW',
+  'library-talent-sheet': 'LIBRARY_TALENT_SHEET_WORKFLOW',
 };
 
 export type CfTriggerResult = { workflowRunId: string };
