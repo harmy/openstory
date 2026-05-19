@@ -19,13 +19,10 @@
  *     `.isFailed` so a single child failure surfaces as a typed error
  *     instead of an unhandled rejection.
  *
- * Two child workflows are NOT yet CF-ported and stubbed inside `step.do`
- * with `NonRetryableError` so the dispatcher keeps this workflow on QStash
- * until they land:
- *
- *   - `scene-split` (Gap C — needs LLM streaming inside `step.do`).
- *   - `motion-batch` (no CF port yet; the inner motion/music/merge tree
- *     stays on QStash).
+ * Every child workflow is CF-ported and spawned via `spawnAndAwaitChild`,
+ * including `scene-split` (Gap C — LLM streaming wrapped in a single
+ * `step.do` per `docs/investigations/cloudflare-workflows.md`) and
+ * `motion-batch` (Phase 5 motion + music + merge tree).
  *
  * The QStash version stays as-is — both run side by side until
  * `engine-registry.ts` flips `analyze-script` to `'cloudflare'`. See

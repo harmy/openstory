@@ -174,11 +174,10 @@ export class RecastCharacterWorkflow extends OpenStoryWorkflowEntrypoint<RecastC
   ): Promise<RecastCharacterWorkflowResult> {
     const input = event.payload;
 
-    // Step 1: Generate character sheet showing talent in costume.
-    // Resolve the upstream talent-sheet hash and inline it so the child
-    // workflow can detect divergence if the talent sheet is regenerated
-    // mid-flight.
-    await step.do(
+    // Step 1: Build the character-sheet payload (resolve upstream talent-sheet
+    // hash + snapshot hash). Captured into a const so the spawn below reuses
+    // the cached step result on replay instead of recomputing.
+    const sheetPayload = await step.do(
       'build-character-sheet-snapshot',
       async (): Promise<CharacterSheetWorkflowInput> => {
         console.log(
@@ -226,32 +225,7 @@ export class RecastCharacterWorkflow extends OpenStoryWorkflowEntrypoint<RecastC
       parentBindingName: 'RECAST_CHARACTER_WORKFLOW',
       parentInstanceId: event.instanceId,
       childId: `character-sheet:recast:${input.characterDbId}`,
-      childPayload: await step.do(
-        'build-character-sheet-payload',
-        async (): Promise<CharacterSheetWorkflowInput> => {
-          const talentSheetInputHash = await resolveTalentSheetHash(
-            scopedDb,
-            input.characterDbId
-          );
-          const partial: CharacterSheetWorkflowInput = {
-            characterDbId: input.characterDbId,
-            characterName: input.characterName,
-            characterMetadata: input.characterMetadata,
-            sequenceId: input.sequenceId,
-            teamId: input.teamId,
-            userId: input.userId,
-            imageModel: input.imageModel,
-            referenceImageUrl: input.referenceImageUrl,
-            talentMetadata: input.talentMetadata,
-            talentDescription: input.talentDescription,
-            styleConfig: input.styleConfig,
-            talentSheetInputHash,
-          };
-          partial.snapshotInputHash =
-            await computeCharacterSheetHashFromDto(partial);
-          return partial;
-        }
-      ),
+      childPayload: sheetPayload,
       spawnStepName: 'spawn-character-sheet',
       awaitStepName: 'await-character-sheet',
     });
