@@ -13,10 +13,21 @@ jobs:
 
       - name: Reject pull_request_target trigger
         run: |
-          # Exclude this lint workflow itself so the literal in the error
-          # message below doesn't self-match.
-          if grep -rn --exclude='workflow-lint.yml' 'pull_request_target' .github/workflows/; then
-            echo '::error::pull_request_target is not allowed in this repo.'
+          set -euo pipefail
+          shopt -s nullglob
+          # Inspect only each workflow's top-level `on:` block, so the trigger
+          # name appearing inside a step's `run:` script (like this one) is not
+          # a false positive — and so this workflow can't shield itself just by
+          # being named the lint workflow.
+          violations=0
+          for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
+            block=$(awk '/^on:/{flag=1; print; next} flag && /^[a-zA-Z]/{flag=0} flag' "$wf")
+            if echo "$block" | grep -q 'pull_request_target'; then
+              echo "::error file=$wf::pull_request_target trigger is not allowed in this repo."
+              violations=$((violations + 1))
+            fi
+          done
+          if [ "$violations" -gt 0 ]; then
             echo 'It runs base-branch workflow code with secrets in the context of fork PRs and is a known secret-leak vector.'
             echo 'See https://securitylab.github.com/research/github-actions-preventing-pwn-requests/'
             exit 1

@@ -29,11 +29,16 @@ pre-commit:
       run: bun scripts/check-migrations.ts {staged_files}
     workflow-trigger-safety:
       glob: '.github/workflows/*.{yml,yaml}'
-      exclude:
-        - .github/workflows/workflow-lint.yml
       run: |
-        if grep -n 'pull_request_target' {staged_files}; then
-          echo 'ERROR: pull_request_target is not allowed in this repo.'
+        violations=0
+        for wf in {staged_files}; do
+          block=$(awk '/^on:/{flag=1; print; next} flag && /^[a-zA-Z]/{flag=0} flag' "$wf")
+          if echo "$block" | grep -q 'pull_request_target'; then
+            echo "ERROR $wf: pull_request_target trigger is not allowed in this repo."
+            violations=$((violations + 1))
+          fi
+        done
+        if [ "$violations" -gt 0 ]; then
           echo 'It runs base-branch workflow code with secrets in the context of fork PRs.'
           echo 'See https://securitylab.github.com/research/github-actions-preventing-pwn-requests/'
           exit 1
