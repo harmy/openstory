@@ -27,7 +27,6 @@ import type {
 import type { ScopedDb } from '@/lib/db/scoped';
 import { spawnAndAwaitChild } from '@/lib/workflow/cf/await-child';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/cf/base-workflow';
-import { WorkflowValidationError } from '@/lib/workflow/errors';
 import type {
   VisualPromptSceneWorkflowInput,
   VisualPromptWorkflowInput,
@@ -165,9 +164,13 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
         }
 
         if (failedSceneIds.length > 0) {
-          throw new WorkflowValidationError(
+          // NonRetryableError (not WorkflowValidationError) because the base
+          // class's re-wrap only runs at the runImpl catch boundary; a throw
+          // inside step.do gets retried by CF's step machinery first.
+          throw new NonRetryableError(
             `visual-prompt-scene child(ren) returned no body for scene(s) [${failedSceneIds.join(', ')}]. ` +
-              `Check sub-workflow logs for the upstream failure.`
+              `Check sub-workflow logs for the upstream failure.`,
+            'WorkflowValidationError'
           );
         }
 
@@ -176,11 +179,12 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
             (s) => s.childResult.sceneId === scene.sceneId
           );
           if (!enrichment) {
-            throw new WorkflowValidationError(
+            throw new NonRetryableError(
               `Scene ID mismatch in visual prompts: expected "${scene.sceneId}" but AI returned [${successResults
                 .map((s) => s.childResult.sceneId)
                 .join(', ')}]. ` +
-                `Input had [${scenes.map((s) => s.sceneId).join(', ')}].`
+                `Input had [${scenes.map((s) => s.sceneId).join(', ')}].`,
+              'WorkflowValidationError'
             );
           }
           return {

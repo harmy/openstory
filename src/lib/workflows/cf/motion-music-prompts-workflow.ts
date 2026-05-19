@@ -147,8 +147,9 @@ export class MotionMusicPromptsWorkflow extends OpenStoryWorkflowEntrypoint<Moti
               (s) => s.sceneId === scene.sceneId
             );
             if (!motionPrompt) {
-              throw new WorkflowValidationError(
-                `Scene ID mismatch in motion prompts: expected "${scene.sceneId}"`
+              throw new NonRetryableError(
+                `Scene ID mismatch in motion prompts: expected "${scene.sceneId}"`,
+                'WorkflowValidationError'
               );
             }
             const musicSceneDesign = musicDesign.scenes.find(

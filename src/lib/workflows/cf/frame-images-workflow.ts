@@ -38,6 +38,7 @@ import { spawnAndAwaitChild } from '@/lib/workflow/cf/await-child';
 import { triggerWorkflow } from '@/lib/workflow/client';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
+import { NonRetryableError } from 'cloudflare:workflows';
 import type {
   FrameImagesWorkflowInput,
   FrameImagesWorkflowResult,
@@ -87,8 +88,12 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
         sceneSnapshots: input.sceneSnapshots,
       });
       if (recomputed !== expected) {
-        throw new WorkflowValidationError(
-          'snapshotInputHash does not match the inlined DTO; payload was tampered with or serialized inconsistently'
+        // NonRetryableError (not WorkflowValidationError) because the base
+        // class's re-wrap only runs at the runImpl catch boundary; a throw
+        // inside step.do gets retried by CF's step machinery first.
+        throw new NonRetryableError(
+          'snapshotInputHash does not match the inlined DTO; payload was tampered with or serialized inconsistently',
+          'WorkflowValidationError'
         );
       }
     });
