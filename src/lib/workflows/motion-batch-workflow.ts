@@ -17,7 +17,6 @@ import type {
   MusicWorkflowInput,
 } from '@/lib/workflow/types';
 
-import { getFalFlowControl } from './constants';
 import { mergeAudioVideoWorkflow } from './merge-audio-video-workflow';
 import {
   MERGE_VIDEO_WORKFLOW_NAME,
@@ -71,7 +70,6 @@ export const motionBatchWorkflow =
           } satisfies MotionWorkflowInput,
           retries: 3,
           retryDelay: 'pow(2, retried) * 1000',
-          flowControl: getFalFlowControl(),
         })
       );
 
@@ -91,7 +89,6 @@ export const motionBatchWorkflow =
               } satisfies MusicWorkflowInput,
               retries: 3,
               retryDelay: 'pow(2, retried) * 1000',
-              flowControl: getFalFlowControl(),
             })
           : null;
 

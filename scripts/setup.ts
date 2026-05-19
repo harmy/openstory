@@ -112,13 +112,7 @@ function writeEnvFile(vars: Map<string, string>) {
     },
     {
       header: 'AI Services',
-      keys: [
-        'FAL_KEY',
-        'FAL_CONCURRENCY_LIMIT',
-        'OPENROUTER_KEY',
-        'CEREBRAS_API_KEY',
-        'LETZAI_API_KEY',
-      ],
+      keys: ['FAL_KEY', 'OPENROUTER_KEY', 'CEREBRAS_API_KEY', 'LETZAI_API_KEY'],
     },
     {
       header: 'Storage (Cloudflare R2)',
@@ -233,7 +227,6 @@ const PR_PREVIEW_SECRETS_BASE = [
   'BETTER_AUTH_SECRET',
   'CEREBRAS_API_KEY',
   'EMAIL_FROM',
-  'FAL_CONCURRENCY_LIMIT',
   'FAL_KEY',
   'LANGFUSE_BASE_URL',
   'LANGFUSE_PROMPTS_ENABLED',
@@ -1950,22 +1943,6 @@ async function main() {
         'Get one at: https://fal.ai/dashboard/keys'
       );
     }
-  }
-
-  if (vars.has('FAL_KEY') && !vars.has('FAL_CONCURRENCY_LIMIT')) {
-    const concLimit = checkCancel(
-      await p.text({
-        message: 'Fal.ai concurrency limit',
-        placeholder: '10',
-        defaultValue: '10',
-      })
-    );
-    if (concLimit) {
-      vars.set('FAL_CONCURRENCY_LIMIT', concLimit.trim() || '10');
-      saveProgress();
-    }
-  } else if (vars.has('FAL_CONCURRENCY_LIMIT')) {
-    p.log.success('FAL_CONCURRENCY_LIMIT — already configured');
   }
 
   // -------------------------------------------------------------------------

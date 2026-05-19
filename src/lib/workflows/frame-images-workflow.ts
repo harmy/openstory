@@ -21,7 +21,6 @@ import type {
   ImageWorkflowInput,
   ShotVariantWorkflowInput,
 } from '@/lib/workflow/types';
-import { getFalFlowControl } from './constants';
 import { generateImageWorkflow } from './image-workflow';
 import {
   matchCharactersToScene,
@@ -211,7 +210,6 @@ export const frameImagesWorkflow = createScopedWorkflow<
                 } satisfies ImageWorkflowInput,
                 retries: 3,
                 retryDelay: 'pow(2, retried) * 1000',
-                flowControl: getFalFlowControl(),
               }
             );
 
@@ -248,7 +246,6 @@ export const frameImagesWorkflow = createScopedWorkflow<
                   },
                   {
                     label,
-                    flowControl: getFalFlowControl(),
                     retries: 3,
                     retryDelay: 'pow(2, retried) * 1000',
                   }

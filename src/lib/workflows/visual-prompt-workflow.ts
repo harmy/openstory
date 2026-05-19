@@ -10,7 +10,6 @@ import { WorkflowValidationError } from '@/lib/workflow/errors';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
 import type { VisualPromptWorkflowInput } from '@/lib/workflow/types';
-import { getLLMFlowControl } from './constants';
 import { visualPromptSceneWorkflow } from './visual-prompt-scene-workflow';
 
 export const visualPromptWorkflow = createScopedWorkflow<
@@ -61,7 +60,6 @@ export const visualPromptWorkflow = createScopedWorkflow<
             frameId: frameMapping?.find((f) => f.sceneId === scene.sceneId)
               ?.frameId,
           },
-          flowControl: getLLMFlowControl(),
           retries: 3,
           retryDelay: '10000 * pow(2, retried)',
         });

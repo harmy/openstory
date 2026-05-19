@@ -28,7 +28,6 @@ import type {
   RegenerateFramesWorkflowInput,
   ShotVariantWorkflowInput,
 } from '@/lib/workflow/types';
-import { getFalFlowControl } from './constants';
 import { generateImageWorkflow } from './image-workflow';
 import {
   buildConvergentWrites,
@@ -127,7 +126,6 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
           },
           retries: 3,
           retryDelay: 'pow(2, retried) * 1000',
-          flowControl: getFalFlowControl(),
         });
 
         // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard

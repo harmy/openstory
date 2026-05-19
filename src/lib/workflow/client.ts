@@ -2,7 +2,7 @@ import { getEnv } from '#env';
 import { ConfigurationError } from '@/lib/errors';
 import { getServerAppUrl } from '@/lib/utils/environment';
 import { getRequest } from '@tanstack/react-start/server';
-import { Client as QStashClient, type FlowControl } from '@upstash/qstash';
+import { Client as QStashClient } from '@upstash/qstash';
 import { Client as WorkflowClient } from '@upstash/workflow';
 
 function getVercelBypassHeaders(): Record<string, string> | undefined {
@@ -68,7 +68,6 @@ export async function triggerWorkflow<
   options?: {
     deduplicationId?: string;
     label?: string;
-    flowControl?: FlowControl;
     retries?: number;
     retryDelay?: string;
   }
@@ -96,7 +95,6 @@ export async function triggerWorkflow<
     workflowRunId: options?.deduplicationId,
     headers: getVercelBypassHeaders(),
     label: options?.label,
-    flowControl: options?.flowControl,
     retries: options?.retries,
     retryDelay: options?.retryDelay,
   });
