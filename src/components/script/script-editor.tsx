@@ -1,4 +1,4 @@
-import { Textarea } from '@/components/ui/textarea';
+import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { cn } from '@/lib/utils';
 import type * as React from 'react';
 import { useCallback } from 'react';
@@ -6,7 +6,7 @@ import { useCallback } from 'react';
 type ScriptEditorProps = {
   value: string;
   onValueChange: (value: string) => void;
-  ref?: React.Ref<HTMLTextAreaElement>;
+  ref?: React.Ref<HTMLDivElement | null>;
   error?: string;
   maxLength?: number;
   placeholder?: string;
@@ -27,49 +27,45 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   loading = false,
 }) => {
   const handleChange = useCallback(
-    (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const newValue = event.target.value;
-      if (maxLength && newValue.length <= maxLength) {
-        onValueChange(newValue);
+    (markdown: string) => {
+      if (!maxLength || markdown.length <= maxLength) {
+        onValueChange(markdown);
       }
     },
     [onValueChange, maxLength]
   );
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Cmd/Ctrl+Enter submits the form (per CLAUDE.md guidelines)
-      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        // Find the closest form and submit it
-        const form = event.currentTarget.closest('form');
-        if (form) {
-          form.requestSubmit();
-        }
-      }
-    },
-    []
-  );
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      const target = event.target;
+      const form = target instanceof Element ? target.closest('form') : null;
+      form?.requestSubmit();
+      return true;
+    }
+    return false;
+  }, []);
 
-  const isOverLimit = maxLength && value.length > maxLength;
+  const isOverLimit = Boolean(maxLength && value.length > maxLength);
   const hasError = Boolean(error) || isOverLimit;
+  const editorValue = loading ? 'Loading...' : value;
 
   return (
     <>
       <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
-        <Textarea
-          ref={ref}
-          name="script"
+        <MarkdownEditor
+          scrollRef={ref}
           id="script"
-          value={loading ? 'Loading...' : value}
-          onChange={handleChange}
+          name="script"
+          value={editorValue}
+          onValueChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={disabled}
-          aria-invalid={hasError ? 'true' : 'false'}
+          aria-invalid={hasError}
           className={cn(
-            'min-h-[4lh] flex-1 resize-none overflow-y-auto bg-transparent dark:bg-transparent border-none shadow-none focus-visible:ring-0 overscroll-contain [field-sizing:fixed] pb-10',
-            hasError && 'border-destructive focus-visible:ring-destructive/20'
+            'min-h-[4lh] flex-1 bg-transparent dark:bg-transparent border-none shadow-none focus-within:ring-0 focus-within:border-input overscroll-contain pb-10',
+            hasError && 'border-destructive focus-within:ring-destructive/20'
           )}
           data-testid="script-editor-textarea"
         />

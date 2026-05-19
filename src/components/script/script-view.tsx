@@ -647,7 +647,7 @@ export const ScriptView: FC<{
     !isFormValid || isSubmitting || isEnhancing || isElementBusy;
 
   const scriptValue = script ?? sequence?.script ?? '';
-  const { ref: textareaRef } = useAutoScroll({
+  const { ref: textareaRef } = useAutoScroll<HTMLDivElement>({
     enabled: isEnhancing,
     content: scriptValue,
   });
