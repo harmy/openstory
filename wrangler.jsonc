@@ -41,13 +41,18 @@
   "workflows": [
     // CF Workflows PoC (issue #728). The class is exported from src/server.ts
     // and the binding is consulted by `triggerWorkflow()` when the per-workflow
-    // engine registry routes `image` to `'cloudflare'`. Defaults to QStash —
-    // flip via `CF_WORKFLOWS_ENABLED=image` env var or by editing the
+    // engine registry routes the workflow to `'cloudflare'`. Defaults to QStash —
+    // flip via `CF_WORKFLOWS_ENABLED=<name>` env var or by editing the
     // registry. See docs/investigations/cloudflare-workflows-poc.md.
     {
       "name": "image-workflow",
       "binding": "IMAGE_WORKFLOW",
       "class_name": "ImageWorkflow",
+    },
+    {
+      "name": "element-vision-workflow",
+      "binding": "ELEMENT_VISION_WORKFLOW",
+      "class_name": "ElementVisionWorkflow",
     },
   ],
 }

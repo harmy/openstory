@@ -15,12 +15,11 @@
  * stays decoupled from the generated file.
  */
 export type CloudflareEnv = Cloudflare.Env & {
-  /**
-   * Image workflow binding. Declared in `wrangler.jsonc` under `workflows[]`.
-   * Optional at the type level because the binding only exists in CF-deployed
-   * builds — local Node/Vercel runs do not have it.
-   */
+  // Each binding is declared in `wrangler.jsonc` under `workflows[]` and
+  // optional here because it only exists in CF-deployed builds — local
+  // Node/Vercel runs don't bind workflows.
   IMAGE_WORKFLOW?: Workflow<unknown>;
+  ELEMENT_VISION_WORKFLOW?: Workflow<unknown>;
 };
 
 /** Engine selector for the per-workflow rollout switch. */

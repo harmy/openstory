@@ -12,6 +12,7 @@ import handler from '@tanstack/react-start/server-entry';
 // includes them. Each must have a matching entry in `wrangler.jsonc` under
 // `workflows[]`. See docs/investigations/cloudflare-workflows-poc.md.
 export { ImageWorkflow } from '@/lib/workflows/cf/image-workflow';
+export { ElementVisionWorkflow } from '@/lib/workflows/cf/element-vision-workflow';
 
 export default {
   fetch(request: Request) {
