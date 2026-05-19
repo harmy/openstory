@@ -397,7 +397,6 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
     // we fail loud here instead of silently downstream.
     const streamResult: StreamResult = JSON.parse(streamResultJson);
     if (
-      !streamResult ||
       !Array.isArray(streamResult.scenes) ||
       !Array.isArray(streamResult.frameMapping)
     ) {
@@ -491,7 +490,6 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
     );
     const reconciled: SceneSplitWorkflowResult = JSON.parse(reconcileJson);
     if (
-      !reconciled ||
       !Array.isArray(reconciled.scenes) ||
       !Array.isArray(reconciled.frameMapping)
     ) {
