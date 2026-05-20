@@ -114,7 +114,9 @@
     "doppler:push:stg": "doppler secrets upload -p openstory --config=stg .env.staging",
     "cf:typegen": "wrangler types",
     "cf:build": "bun --bun run cf:typegen && BUILD_CLOUDFLARE=1 bun --bun run build",
-    "cf:dev": "BUILD_CLOUDFLARE=1 bun vite dev",
+    "db:migrate:cf-local": "wrangler d1 migrations apply DB --local",
+    "cf:dev": "bun --bun --sequential db:migrate:cf-local cf:dev:vite",
+    "cf:dev:vite": "BUILD_CLOUDFLARE=1 bun vite dev",
     "cf:preview": "BUILD_CLOUDFLARE=1 vite preview",
     "cf:deploy:prd": "bun --bun run cf:build && wrangler deploy",
     "knip": "knip"
