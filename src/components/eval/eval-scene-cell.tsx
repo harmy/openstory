@@ -2,6 +2,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Frame } from '@/types/database';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
+import { stripMarkdown } from '@/lib/utils/markdown-plain';
 import { Image } from '@unpic/react';
 import type React from 'react';
 import { EvalCellDialog, type DialogTab } from './eval-cell-dialog';
@@ -172,7 +173,7 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
         >
           <ScrollArea className="flex-1 w-full min-h-0">
             <p className="text-xs leading-relaxed whitespace-pre-wrap pr-2">
-              {script}
+              {stripMarkdown(script)}
             </p>
           </ScrollArea>
         </button>

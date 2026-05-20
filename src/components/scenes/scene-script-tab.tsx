@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
+import { MarkdownEditor } from '@/components/text-editor/markdown-editor';
 import { estimateSceneDurationFn } from '@/functions/ai';
 import { IMAGE_TO_VIDEO_MODELS, type ImageToVideoModel } from '@/lib/ai/models';
 import { MOTION_JSON_SCHEMAS } from '@/lib/motion/endpoint-map';
@@ -139,12 +139,12 @@ export const SceneScriptTab: React.FC<SceneScriptTabProps> = ({
           </span>
         </div>
         <div className="relative">
-          <Textarea
+          <MarkdownEditor
             id="script-extract-input"
             value={currentScript}
-            onChange={(e) => onEditedScriptChange(e.target.value)}
+            onValueChange={(value) => onEditedScriptChange(value)}
             placeholder="Enter the script text for this scene…"
-            className="min-h-[180px] resize-y pr-10"
+            className="min-h-[180px] pr-10"
             disabled={!frame || isSaving}
           />
           <Button

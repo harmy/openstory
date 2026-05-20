@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VideoPlayer } from '@/components/motion/video-player';
 import type { Frame } from '@/types/database';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
+import { stripMarkdown } from '@/lib/utils/markdown-plain';
 import {
   Clapperboard,
   FileTextIcon,
@@ -188,7 +189,7 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
             ) : (
               <ScrollArea className="h-full">
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {script}
+                  {stripMarkdown(script)}
                 </p>
               </ScrollArea>
             )}

@@ -7,8 +7,11 @@ type UseAutoScrollOptions = {
 
 const BOTTOM_THRESHOLD = 20;
 
-export function useAutoScroll({ enabled, content }: UseAutoScrollOptions) {
-  const ref = useRef<HTMLTextAreaElement | null>(null);
+export function useAutoScroll<T extends HTMLElement = HTMLElement>({
+  enabled,
+  content,
+}: UseAutoScrollOptions) {
+  const ref = useRef<T | null>(null);
   const shouldAutoScrollRef = useRef(true);
 
   // Effect 1: Attach scroll listener when enabled, track user scroll position

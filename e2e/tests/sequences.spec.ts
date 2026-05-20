@@ -21,8 +21,10 @@ test.describe('Sequences', () => {
   test('new sequence page has script input', async ({ page }) => {
     await page.goto('/sequences/new');
 
-    // Should have some form of text input for the script
-    const textarea = page.locator('textarea');
-    await expect(textarea).toBeVisible();
+    // The script field is a TipTap-backed contenteditable wrapped in the
+    // MarkdownEditor component. Target it by data-slot so the assertion is
+    // resilient to internal ProseMirror DOM shape.
+    const editor = page.locator('[data-slot="markdown-editor"]');
+    await expect(editor).toBeVisible();
   });
 });

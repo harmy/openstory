@@ -192,7 +192,11 @@ beside the brand mark in the sand.
 
 SUPER:  CORAL.  OUT NOW.
       `.trim();
-      const scriptTextarea = page.locator('textarea');
+      // Script input is now a TipTap-backed contenteditable, not a <textarea>.
+      // Playwright's .fill() works on contenteditable elements.
+      const scriptTextarea = page.locator(
+        '[data-slot="markdown-editor"] .ProseMirror'
+      );
       await expect(scriptTextarea).toBeVisible();
       await scriptTextarea.fill(script);
 

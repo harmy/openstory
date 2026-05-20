@@ -8,6 +8,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { cn } from '@/lib/utils';
+import { stripMarkdown } from '@/lib/utils/markdown-plain';
 import type { Frame } from '@/types/database';
 import { Check, Loader2 } from 'lucide-react';
 import { memo } from 'react';
@@ -58,7 +59,9 @@ const SceneListItemComponent: React.FC<SceneListItemProps> = ({
     : (metadata?.metadata?.title ?? `Scene ${sceneNumber}`);
   const scriptPreview = !frame
     ? undefined
-    : (metadata?.originalScript.extract ?? frame.description ?? '');
+    : stripMarkdown(
+        metadata?.originalScript.extract ?? frame.description ?? ''
+      );
 
   // Skeleton state (no frame): suppress click handling and pointer cursor so
   // a click during the loading window does not invoke the (now-undefined)

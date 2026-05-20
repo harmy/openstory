@@ -63,7 +63,11 @@ testWithUser.describe('Sequence Creation Flow', () => {
         page.getByRole('grid', { name: 'Style selection' })
       ).toBeVisible({ timeout: 15000 });
 
-      const scriptTextarea = page.locator('textarea');
+      // Script input is now a TipTap-backed contenteditable, not a <textarea>.
+      // Playwright's .fill() works on contenteditable elements.
+      const scriptTextarea = page.locator(
+        '[data-slot="markdown-editor"] .ProseMirror'
+      );
       await expect(scriptTextarea).toBeVisible();
       await expect(page).toHaveURL('/sequences/new');
 
@@ -90,7 +94,7 @@ Here's your caffeine fix. How's it going?
         .first();
       await firstStyle.click();
 
-      // Now fill the textarea - React is hydrated since style click worked
+      // Now fill the editor - React is hydrated since style click worked
       await scriptTextarea.fill(testScript);
 
       // Wait for "Generate" button to become enabled - this proves:

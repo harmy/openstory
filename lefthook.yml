@@ -11,7 +11,15 @@ pre-commit:
       exclude:
         - src/routeTree.gen.ts
         - public/mockServiceWorker.js
-      run: bun run --bun oxlint --type-aware --quiet {staged_files}
+      # Filter staged files against .oxlintrc.json's ignorePatterns
+      # before invoking oxlint — when every staged file is ignored by
+      # oxlint config, oxlint itself exits "no files to lint" + 1. The
+      # awk pipeline drops src/components/ui/* (matching .oxlintrc), and
+      # the surrounding `[ -n ... ] && ... || true` skips the run when
+      # nothing remains.
+      run: |
+        filtered=$(printf '%s\n' {staged_files} | awk '!/^src\/components\/ui\//')
+        [ -n "$filtered" ] && bun run --bun oxlint --type-aware --quiet $filtered || true
       stage_fixed: true
     format:
       glob: '*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,sql,json,md}'
