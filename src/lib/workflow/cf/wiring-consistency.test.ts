@@ -147,6 +147,36 @@ describe('CF workflow wiring is consistent across all four declaration sites', (
   });
 });
 
+describe('Pattern 3 childIds are CF-valid after sanitization', () => {
+  // Mirror of the sanitizer inside spawnAndAwaitChild (private). If the
+  // helper's sanitization regex ever changes, update this duplicate.
+  const sanitize = (raw: string): string =>
+    raw.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 100);
+  const CF_VALID = /^[a-zA-Z0-9_-]+$/;
+
+  // Catch the historical "colons in childId crash CF" footgun by sampling
+  // the actual childId shapes our codebase passes.
+  const realCallsiteIds = [
+    'image:seq-123:frame-7',
+    'image:seq-123:frame-7:nano_banana_2',
+    'motion:seq-123:frame-7',
+    'merge-audio-video:seq-123:variant-abc:music-def',
+    'analyze-script:01KS23834FEGDBN8074VVPR3Q8',
+    'character-sheet:recast:01KS23',
+    'regenerate-frames:character:01KS23',
+    'music-prompt:01KS23',
+    'motion-prompts:01KS23',
+  ];
+
+  for (const id of realCallsiteIds) {
+    test(`childId ${id} sanitizes to a CF-valid ID`, () => {
+      const sanitized = sanitize(id);
+      expect(sanitized).toMatch(CF_VALID);
+      expect(sanitized.length).toBeLessThanOrEqual(100);
+    });
+  }
+});
+
 describe('buildInstanceId always emits CF-valid IDs', () => {
   const CF_VALID = /^[a-zA-Z0-9_-]+$/;
 
