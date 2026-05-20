@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "triggers": {
     // Sweep stuck generating-status rows every 5 minutes. See
-    // src/lib/workflow/reconcile-all.ts and issue #727.
+    // src/lib/cron/reconcile-all.ts and issue #727.
     "crons": ["*/5 * * * *"],
   },
   "observability": {

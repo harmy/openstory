@@ -7,7 +7,7 @@
 
 import './instrumentation';
 import handler from '@tanstack/react-start/server-entry';
-import { reconcileAllStuckJobs } from '@/lib/workflow/reconcile-all';
+import { reconcileAllStuckJobs } from '@/lib/cron/reconcile-all';
 
 // Bindings shape from wrangler.jsonc. Only declared so the scheduled() handler
 // has a real type for its env parameter (vs. the framework default of unknown).
@@ -23,7 +23,7 @@ const exportedHandler: ExportedHandler<WorkerEnv> = {
   },
   scheduled(_controller, _env, ctx) {
     // Best-effort sweep for stuck generating-status rows across every table.
-    // See src/lib/workflow/reconcile-all.ts; cron is in wrangler.jsonc.
+    // See src/lib/cron/reconcile-all.ts; cron schedule is in wrangler.jsonc.
     ctx.waitUntil(
       reconcileAllStuckJobs().catch((error) => {
         console.error('[scheduled] reconcileAllStuckJobs failed:', error);

@@ -79,7 +79,7 @@ const dbMock = {
 mock.module('#db-client', () => ({ getDb: () => dbMock }));
 
 // QStash stub: "still running" — verified passes are no-ops unless overridden.
-mock.module('./client', () => ({
+mock.module('@/lib/workflow/client', () => ({
   getWorkflowClient: () => ({
     logs: async () => ({ runs: [{ workflowState: 'RUN_STARTED' }] }),
   }),

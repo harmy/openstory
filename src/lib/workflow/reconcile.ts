@@ -1,12 +1,12 @@
 /**
  * Shared helper for resolving a stale workflow run via QStash.
  *
- * Used by the cron-driven sweep in `reconcile-all.ts`, which is the single
- * source of truth for healing rows stuck in 'generating' / 'merging' /
- * 'analyzing'. The previous on-load reconciler (`reconcileStaleFrameStatuses`)
- * was removed in #727 — it duplicated cron work, doubled QStash query rate
- * for stuck rows, and made `updated_at` writes hard to reason about (two
- * systems writing to the same row).
+ * Used by the cron-driven sweep in `src/lib/cron/reconcile-all.ts`, which
+ * is the single source of truth for healing rows stuck in 'generating' /
+ * 'merging' / 'analyzing'. The previous on-load reconciler
+ * (`reconcileStaleFrameStatuses`) was removed in #727 — it duplicated cron
+ * work, doubled QStash query rate for stuck rows, and made `updated_at`
+ * writes hard to reason about (two systems writing to the same row).
  */
 
 import { getWorkflowClient } from './client';

@@ -1,10 +1,11 @@
 /**
  * Broad reconciliation sweep for stuck generating-status rows.
  *
- * Driven by the Cloudflare Workers cron in `src/server.ts`. Unlike the lazy
- * per-load reconciler in `reconcile.ts`, this pass scans every status-bearing
- * table directly and reconciles rows the user hasn't loaded — so idle
- * accounts get healed too.
+ * Driven by the Cloudflare Workers cron in `src/server.ts` (see
+ * `wrangler.jsonc` `triggers.crons`). Scans every status-bearing table
+ * directly and reconciles rows the user hasn't loaded — so idle accounts
+ * get healed too. This is the only reconciler; the old on-load helper was
+ * removed in #727.
  *
  * Two reconciliation shapes:
  *   A. Tables with a workflow_run_id column — query QStash, trust its truth
@@ -24,8 +25,8 @@ import {
   sequenceVideoVariants,
   sequences,
 } from '@/lib/db/schema';
+import { resolveRunState, STALE_THRESHOLD_MS } from '@/lib/workflow/reconcile';
 import { and, eq, lt } from 'drizzle-orm';
-import { resolveRunState, STALE_THRESHOLD_MS } from './reconcile';
 
 const BLIND_FAIL_THRESHOLD_MS = 30 * 60 * 1000;
 const MAX_ROWS_PER_PASS = 100;
