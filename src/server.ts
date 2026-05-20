@@ -40,6 +40,8 @@ export { RegenerateFramesWorkflow } from '@/lib/workflows/cf/regenerate-frames-w
 export { RecastLocationWorkflow } from '@/lib/workflows/cf/recast-location-workflow';
 export { ReplaceElementWorkflow } from '@/lib/workflows/cf/replace-element-workflow';
 export { SceneSplitWorkflow } from '@/lib/workflows/cf/scene-split-workflow';
+export { StoryboardWorkflow } from '@/lib/workflows/cf/storyboard-workflow';
+export { AnalyzeScriptWorkflow } from '@/lib/workflows/cf/analyze-script-workflow';
 
 export default {
   fetch(request: Request) {

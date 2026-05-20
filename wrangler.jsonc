@@ -189,5 +189,15 @@
       "binding": "SCENE_SPLIT_WORKFLOW",
       "class_name": "SceneSplitWorkflow",
     },
+    {
+      "name": "storyboard-workflow",
+      "binding": "STORYBOARD_WORKFLOW",
+      "class_name": "StoryboardWorkflow",
+    },
+    {
+      "name": "analyze-script-workflow",
+      "binding": "ANALYZE_SCRIPT_WORKFLOW",
+      "class_name": "AnalyzeScriptWorkflow",
+    },
   ],
 }
