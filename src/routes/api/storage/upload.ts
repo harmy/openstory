@@ -62,7 +62,34 @@ export const Route = createFileRoute('/api/storage/upload')({
             );
           }
 
-          await uploadFile(validBucket, path, body, {
+          // workerd's R2 binding rejects ReadableStreams without a known
+          // length. The browser sends Content-Length (the body is a Blob),
+          // but once `request.body` has been routed through TanStack Start
+          // the length link is lost — so we re-establish it explicitly via
+          // FixedLengthStream. See issue #738.
+          const contentLengthHeader = request.headers.get('content-length');
+          const contentLength = contentLengthHeader
+            ? Number.parseInt(contentLengthHeader, 10)
+            : Number.NaN;
+
+          if (!Number.isFinite(contentLength) || contentLength <= 0) {
+            return Response.json(
+              {
+                success: false,
+                error: 'Content-Length header required for upload',
+              },
+              { status: 411 }
+            );
+          }
+
+          const fixedLength = new FixedLengthStream(contentLength);
+          body.pipeTo(fixedLength.writable).catch(() => {
+            // Pipe errors (client disconnect, length mismatch) surface
+            // through the readable side and reject the r2.put() below,
+            // which the outer catch turns into a 5xx via handleApiError.
+          });
+
+          await uploadFile(validBucket, path, fixedLength.readable, {
             contentType,
           });
 
