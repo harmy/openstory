@@ -77,12 +77,19 @@ export default defineConfig({
   ],
 
   webServer: (() => {
-    const useBuiltServer = process.env.E2E_BUILT === 'true';
     const fullPipeline = process.env.PLAYWRIGHT_FULL_PIPELINE === 'true';
+    const useBuiltServer = process.env.E2E_BUILT === 'true';
     const envPrefix = [
       'E2E_TEST=true',
       ...(fullPipeline
-        ? ['E2E_FULL_PIPELINE=true', 'FAL_PROXY_URL=http://localhost:4010/fal']
+        ? [
+            'E2E_FULL_PIPELINE=true',
+            'FAL_PROXY_URL=http://localhost:4010/fal',
+            // Route every workflow through Cloudflare Workflows. The workerd
+            // runtime supplies the bindings; resolveEngineForTrigger falls
+            // back to QStash if a binding is missing, so this stays safe.
+            'CF_WORKFLOWS_ENABLED=all',
+          ]
         : []),
       // Propagate the record flag so the dev server's adapter factory can
       // disable the OpenRouter SDK's retry loop — see create-adapter.ts. We
@@ -91,31 +98,38 @@ export default defineConfig({
       // fixture writes for the same prompt.
       ...(process.env.E2E_RECORD === '1' ? ['E2E_RECORD=1'] : []),
       'PORT=3001',
+      // Hermetic Nitro path reads sqlite via DATABASE_URL. CF path reads via
+      // the D1 binding, but the env var is harmless there.
       'DATABASE_URL=file:test.db',
       'VITE_APP_URL=http://localhost:3001',
       'OPENROUTER_BASE_URL=http://localhost:4010',
       'VITE_DISABLE_DEVTOOLS=true',
     ].join(' ');
 
-    // E2E_FULL_PIPELINE opts the server into running real workflows + routing
-    // fal traffic through the aimock fal handler. Off by default so existing
-    // hermetic specs keep using browser-side route mocks. Set
-    // PLAYWRIGHT_FULL_PIPELINE=true (e.g. for the full-sequence spec) to flip.
-    //
-    // E2E_BUILT=true runs the production-built Nitro server (`bun start`)
-    // instead of `vite dev` — used on CI to avoid HMR/dev-only behaviour and
-    // to catch bundling/Nitro-runtime issues earlier. Local dev keeps the
-    // dev-server path for fast iteration.
-    return {
-      command: useBuiltServer
+    // Four webServer shapes, picked by (fullPipeline, useBuiltServer):
+    //   (false, false) Hermetic dev:   `bun dev:e2e`   — Vite dev, Nitro
+    //   (false, true)  Hermetic built: `bun start`     — built Nitro
+    //   (true, false)  CF dev:         `bun dev:e2e:cf` — Vite dev, CF plugin
+    //   (true, true)   CF built:       `bun start:e2e:cf` — wrangler dev
+    //                                   against the prebuilt CF artifact
+    const command = fullPipeline
+      ? useBuiltServer
+        ? `${envPrefix} bun start:e2e:cf`
+        : `${envPrefix} bun dev:e2e:cf`
+      : useBuiltServer
         ? `${envPrefix} bun start`
-        : `${envPrefix} bun dev:e2e`,
-      // Wait for the TCP port, not an HTTP 2xx. The Nitro build returns 500
-      // for SSR errors (vite dev wraps them in 2xx error-overlay HTML), and
-      // we only need the server reachable — individual specs handle their
-      // own page readiness via `page.goto()`.
-      port: 3001,
-      reuseExistingServer: !useBuiltServer,
+        : `${envPrefix} bun dev:e2e`;
+
+    return {
+      command,
+      // Wait for an HTTP response, not just the TCP port. wrangler dev binds
+      // :3001 before the worker module has finished loading, so a port-based
+      // wait races: tests fire `page.goto` against a listener that hasn't
+      // wired up its handler yet and the browser sees net::ERR_ABORTED.
+      // `/` is the marketing homepage — fully static, returns 200 in both
+      // Nitro-built and CF-built modes.
+      url: 'http://localhost:3001/',
+      reuseExistingServer: !useBuiltServer && !fullPipeline,
       timeout: 300_000,
       stdout: 'pipe',
       stderr: 'pipe',

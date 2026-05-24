@@ -1,13 +1,16 @@
 /**
  * Test Database Client for E2E Tests
- * Drizzle ORM instance pointing to test.db
+ * Drizzle ORM instance pointing to test.db, or to the wrangler-local D1
+ * sqlite when full-pipeline is enabled (so fixtures and the workerd
+ * webserver share a single SQLite file).
  */
 
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { relations } from '@/lib/db/schema/relations';
 
-const client = createClient({ url: 'file:test.db' });
+const dbPath = process.env.E2E_DB_PATH ?? 'test.db';
+const client = createClient({ url: `file:${dbPath}` });
 
 // busy_timeout waits for locks instead of failing immediately during parallel tests
 // WAL mode is set by CI workflow and global-setup, not here (avoids SQLITE_BUSY_RECOVERY on stale WAL files)

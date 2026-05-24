@@ -253,9 +253,11 @@ SUPER:  CORAL.  OUT NOW.
       );
 
       // 8. Generate — should kick off the workflow chain and navigate.
+      // Vision analysis (analyzeDraftElementFn) is the long pole here; it can
+      // take ~15-20s when aimock falls back to upstream, so give it headroom.
       await expect(
         page.getByRole('button', { name: /^Generate$/i })
-      ).toBeEnabled({ timeout: 15_000 });
+      ).toBeEnabled({ timeout: t(30_000) });
       await page.getByRole('button', { name: /^Generate$/i }).click();
       // Generate kicks off the scene-split workflow before the redirect lands.
       await page.waitForURL(/\/sequences\/[^/]+\/scenes/, {
