@@ -1,6 +1,10 @@
 /**
  * Theatre View
- * Displays the merged video for a sequence
+ *
+ * Plays a sequence live in the browser — stitches scene videos + music via
+ * Mediabunny without producing a server-side merged-MP4 artifact. Exporting
+ * an MP4 is an explicit user action (the Share menu's "Export as MP4"); the
+ * blob lands in `sequence_exports` rather than `sequences.mergedVideo*`.
  */
 
 import { Button } from '@/components/ui/button';
@@ -11,225 +15,141 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import { VideoPlayer } from '@/components/motion/video-player';
+import { SequencePlayer } from '@/components/theatre/sequence-player';
+import { useSequenceExport } from '@/components/theatre/use-sequence-export';
+import { useFramesBySequence } from '@/hooks/use-frames';
+import type { ExportProgress } from '@/lib/sequence-player/export';
 import type { Sequence } from '@/types/database';
-import {
-  Loader2,
-  AlertCircle,
-  Film,
-  Share2,
-  Link,
-  Download,
-} from 'lucide-react';
-import { useBrowserMerge } from '@/components/theatre/use-browser-merge';
-import type { MergeProgress } from '@/lib/browser-merge';
+import { Download, Film, Link, Loader2, Share2 } from 'lucide-react';
 import { usePostHog } from '@posthog/react';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 
 type TheatreViewProps = {
   sequence: Sequence;
-  onGenerateMergedVideo?: () => void;
-  isGenerating?: boolean;
-  /** Banner rendered above the video player while `mergedVideoStatus === 'completed'`. */
-  divergentBanner?: React.ReactNode;
 };
 
-export const TheatreView: React.FC<TheatreViewProps> = ({
-  sequence,
-  onGenerateMergedVideo,
-  isGenerating = false,
-  divergentBanner,
-}) => {
-  const { mergedVideoStatus, mergedVideoUrl, mergedVideoError, aspectRatio } =
-    sequence;
+export const TheatreView: React.FC<TheatreViewProps> = ({ sequence }) => {
   const posthog = usePostHog();
-  const browserMerge = useBrowserMerge(sequence);
+  const { data: frames } = useFramesBySequence(sequence.id);
+  const sequenceExport = useSequenceExport(sequence);
 
-  const handleCopyVideoUrl = useCallback(async () => {
-    if (!mergedVideoUrl) return;
+  const scenes = useMemo(() => {
+    if (!frames) return [];
+    return frames
+      .filter((f): f is typeof f & { videoUrl: string } => Boolean(f.videoUrl))
+      .map((f) => ({ orderIndex: f.orderIndex, videoUrl: f.videoUrl }));
+  }, [frames]);
+
+  const shareUrl = sequenceExport.latestExportUrl ?? sequence.mergedVideoUrl;
+
+  const handleCopyShareUrl = useCallback(async () => {
+    if (!shareUrl) {
+      toast.error('Export an MP4 first to get a shareable URL.');
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(mergedVideoUrl);
+      await navigator.clipboard.writeText(shareUrl);
       toast.success('Video URL copied');
-      posthog.capture('video_url_copied', {
-        sequence_id: sequence.id,
-      });
+      posthog.capture('video_url_copied', { sequence_id: sequence.id });
     } catch (err) {
       toast.error('Failed to copy URL');
       posthog.captureException(err);
     }
-  }, [mergedVideoUrl, sequence.id, posthog]);
+  }, [shareUrl, sequence.id, posthog]);
 
-  const handleDownloadVideo = useCallback(() => {
-    if (!mergedVideoUrl) return;
+  const handleDownloadLatest = useCallback(() => {
+    if (!shareUrl) {
+      sequenceExport.start();
+      return;
+    }
     const a = document.createElement('a');
-    a.href = mergedVideoUrl;
+    a.href = shareUrl;
     a.download = `${sequence.title || 'sequence'}_openstory.mp4`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    posthog.capture('video_downloaded', {
-      sequence_id: sequence.id,
-    });
-  }, [mergedVideoUrl, sequence.id, sequence.title, posthog]);
+    posthog.capture('video_downloaded', { sequence_id: sequence.id });
+  }, [shareUrl, sequence.id, sequence.title, posthog, sequenceExport]);
 
-  // Merging state
-  if (mergedVideoStatus === 'merging') {
+  if (!frames) {
+    return <Skeleton className="aspect-video w-full" />;
+  }
+
+  const allScenesReady = scenes.length === frames.length;
+  if (!allScenesReady || scenes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <p className="text-muted-foreground">
-          {browserMerge.isRunning && browserMerge.progress
-            ? formatMergeProgress(browserMerge.progress)
-            : 'Merging video segments…'}
+        <Film className="h-8 w-8 text-muted-foreground" />
+        <p className="text-muted-foreground">No scenes ready yet</p>
+        <p className="text-sm text-muted-foreground max-w-md text-center">
+          The theatre will play live once every scene video is generated.
         </p>
       </div>
     );
   }
 
-  // Completed state - show video
-  if (mergedVideoStatus === 'completed' && mergedVideoUrl) {
-    return (
-      <div className="flex flex-col gap-3">
-        {divergentBanner}
-        <div className="relative">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-2 right-2 z-10 h-8 w-8 bg-black/50 text-white hover:bg-black/70"
-                aria-label="Share"
-              >
-                <Share2 className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void handleCopyVideoUrl()}>
-                <Link className="h-4 w-4" />
-                Copy video URL
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleDownloadVideo}>
-                <Download className="h-4 w-4" />
-                Download video
-              </DropdownMenuItem>
-              {browserMerge.isEnabled && (
-                <DropdownMenuItem
-                  onClick={browserMerge.start}
-                  disabled={browserMerge.isRunning}
-                >
-                  {browserMerge.isRunning ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Film className="h-4 w-4" />
-                  )}
-                  Re-merge in browser (beta)
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <VideoPlayer src={mergedVideoUrl} aspectRatio={aspectRatio} />
-        </div>
-      </div>
-    );
-  }
-
-  // Failed state
-  if (mergedVideoStatus === 'failed') {
-    return (
-      <div className="flex flex-col items-center justify-center gap-4 py-16">
-        <AlertCircle className="h-8 w-8 text-destructive" />
-        <p className="text-destructive">Failed to merge video</p>
-        {mergedVideoError && (
-          <p className="text-sm text-muted-foreground max-w-md text-center">
-            {mergedVideoError}
-          </p>
+  const overlay = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 bg-black/50 text-white hover:bg-black/70"
+          aria-label="Share"
+        >
+          <Share2 className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => void handleCopyShareUrl()}>
+          <Link className="h-4 w-4" />
+          Copy latest export URL
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={sequenceExport.start}
+          disabled={sequenceExport.isRunning}
+        >
+          {sequenceExport.isRunning ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4" />
+          )}
+          {sequenceExport.isRunning
+            ? formatExportProgress(sequenceExport.progress)
+            : 'Export as MP4'}
+        </DropdownMenuItem>
+        {shareUrl && (
+          <DropdownMenuItem onClick={handleDownloadLatest}>
+            <Download className="h-4 w-4" />
+            Download last export
+          </DropdownMenuItem>
         )}
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {onGenerateMergedVideo && (
-            <Button onClick={onGenerateMergedVideo} disabled={isGenerating}>
-              {isGenerating ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Retrying…
-                </>
-              ) : (
-                'Retry Merge'
-              )}
-            </Button>
-          )}
-          {browserMerge.isEnabled && (
-            <Button
-              variant="outline"
-              onClick={browserMerge.start}
-              disabled={browserMerge.isRunning}
-            >
-              {browserMerge.isRunning ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Merging in browser…
-                </>
-              ) : (
-                'Merge in browser (beta)'
-              )}
-            </Button>
-          )}
-        </div>
-      </div>
-    );
-  }
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
-  // Pending state - no merged video yet
   return (
-    <div className="flex flex-col items-center justify-center gap-4 py-16">
-      <Film className="h-8 w-8 text-muted-foreground" />
-      <p className="text-muted-foreground">No merged video yet</p>
-      <p className="text-sm text-muted-foreground max-w-md text-center">
-        The merged video will be generated automatically once all motion
-        segments are complete.
-      </p>
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        {onGenerateMergedVideo && (
-          <Button
-            variant="outline"
-            onClick={onGenerateMergedVideo}
-            disabled={isGenerating}
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating…
-              </>
-            ) : (
-              'Generate Now'
-            )}
-          </Button>
-        )}
-        {browserMerge.isEnabled && (
-          <Button
-            variant="outline"
-            onClick={browserMerge.start}
-            disabled={browserMerge.isRunning}
-          >
-            {browserMerge.isRunning ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Merging in browser…
-              </>
-            ) : (
-              'Merge in browser (beta)'
-            )}
-          </Button>
-        )}
-      </div>
-    </div>
+    <SequencePlayer
+      scenes={scenes}
+      musicUrl={sequence.musicUrl ?? null}
+      musicLoudnessGainDb={null}
+      aspectRatio={sequence.aspectRatio}
+      overlayActions={overlay}
+    />
   );
 };
 
-function formatMergeProgress(progress: MergeProgress): string {
-  const phaseLabel: Record<MergeProgress['phase'], string> = {
-    fetch: 'Downloading scenes',
-    decode: 'Stitching video',
+export const TheatreViewSkeleton: React.FC = () => (
+  <Skeleton className="aspect-video w-full" />
+);
+
+function formatExportProgress(progress: ExportProgress | null): string {
+  if (!progress) return 'Exporting…';
+  const phaseLabel: Record<ExportProgress['phase'], string> = {
+    prepare: 'Preparing',
+    video: 'Stitching video',
+    music: 'Downloading music',
     mix: 'Mixing audio',
     encode: 'Encoding audio',
     finalize: 'Finalizing',
@@ -244,7 +164,3 @@ function formatMergeProgress(progress: MergeProgress): string {
   }
   return `${label}…`;
 }
-
-export const TheatreViewSkeleton: React.FC = () => (
-  <Skeleton className="aspect-video w-full" />
-);

@@ -69,6 +69,7 @@ const musicVariant = (
   inputHash: 'hash-1',
   divergedAt: null,
   discardedAt: null,
+  loudnessGainDb: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   ...overrides,

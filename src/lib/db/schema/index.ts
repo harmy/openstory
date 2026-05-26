@@ -28,6 +28,7 @@ import { sequenceMusicPromptVariants } from './sequence-music-prompt-variants';
 
 import { sequenceVideoVariants } from './sequence-video-variants';
 import { sequenceMusicVariants } from './sequence-music-variants';
+import { sequenceExports } from './sequence-exports';
 
 import { characters } from './characters';
 
@@ -168,6 +169,11 @@ export type {
   SequenceMusicVariant,
   SequenceMusicVariantStatus,
 } from './sequence-music-variants';
+
+// Sequence exports (browser-rendered MP4 snapshots)
+export { sequenceExports };
+
+export type { NewSequenceExport, SequenceExport } from './sequence-exports';
 
 // Characters (scripted roles)
 export { characters };
@@ -319,6 +325,7 @@ export const schema = {
   sequenceMusicPromptVariants,
   sequenceVideoVariants,
   sequenceMusicVariants,
+  sequenceExports,
 
   // Characters (scripted roles extracted from script)
   characters,

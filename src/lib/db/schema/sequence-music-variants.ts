@@ -11,6 +11,7 @@ import { sql, type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import {
   index,
   integer,
+  real,
   snakeCase,
   text,
   uniqueIndex,
@@ -41,6 +42,13 @@ export const sequenceMusicVariants = snakeCase.table(
     // Output
     url: text(),
     storagePath: text(),
+    // Measured integrated loudness gain in dB needed to hit the target
+    // listening level (see DEFAULT_MUSIC_LOUDNESS_LUFS). Computed once at
+    // music-generation time so the live player can apply a single GainNode
+    // without re-running an EBU R128 pass per playback. Nullable for rows
+    // generated before the measurement step shipped — the player falls back
+    // to a fixed default gain in that case.
+    loudnessGainDb: real(),
 
     // Inputs that produced this variant (kept on the row for promotion)
     prompt: text(),
