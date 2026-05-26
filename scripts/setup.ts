@@ -10,8 +10,13 @@
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import { execFileSync } from 'child_process';
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
+import {
+  buildRules,
+  derivePreviewOriginPatterns,
+  setBucketCors,
+} from './r2-cors';
 
 const MIN_BUN_VERSION = '1.3.9';
 
@@ -288,43 +293,6 @@ function bucketHasDomain(bucket: string, domain: string): boolean {
   }
 }
 
-type CorsRule = {
-  allowed: { origins: string[]; methods: string[]; headers: string[] };
-  expose?: string[];
-  maxAge?: number;
-};
-
-function configureBucketCors(bucketName: string, rules: CorsRule[]): boolean {
-  const tmpFile = resolve(process.cwd(), '.cors-tmp.json');
-  try {
-    writeFileSync(tmpFile, JSON.stringify({ rules }, null, 2));
-    execFileSync(
-      'bunx',
-      [
-        'wrangler',
-        'r2',
-        'bucket',
-        'cors',
-        'set',
-        bucketName,
-        '--file',
-        tmpFile,
-        '--force',
-      ],
-      { stdio: 'pipe' }
-    );
-    return true;
-  } catch {
-    return false;
-  } finally {
-    try {
-      unlinkSync(tmpFile);
-    } catch {
-      // ignore
-    }
-  }
-}
-
 async function getCloudflareWorkersSubdomain(
   accountId: string,
   apiToken: string
@@ -341,27 +309,6 @@ async function getCloudflareWorkersSubdomain(
     // fall through
   }
   return undefined;
-}
-
-// Wildcard origin patterns matching each hosting platform's PR preview URLs.
-// PR preview URLs are ephemeral and unique per PR, so we use platform-specific
-// wildcards to cover all of them with a single CORS rule.
-function derivePreviewOriginPatterns(opts: {
-  platform: string | undefined;
-  workersSubdomain?: string;
-}): string[] {
-  switch (opts.platform) {
-    case 'cloudflare':
-      return opts.workersSubdomain
-        ? [`https://pr-*.${opts.workersSubdomain}.workers.dev`]
-        : [];
-    case 'vercel':
-      return ['https://*.vercel.app'];
-    case 'railway':
-      return ['https://*.up.railway.app'];
-    default:
-      return [];
-  }
 }
 
 async function prPreviewSetup() {
@@ -707,26 +654,18 @@ async function prPreviewSetup() {
       }
 
       if (setupStgCors) {
-        const rules: CorsRule[] = [
-          {
-            allowed: {
-              origins: previewOrigins,
-              methods: ['GET', 'HEAD'],
-              headers: ['content-type', 'range'],
-            },
-            expose: ['ETag', 'Content-Length'],
-            maxAge: 3600,
-          },
-        ];
-
+        const rules = buildRules({
+          origins: previewOrigins,
+          includeWrites: false,
+        });
         const corsSpinner = p.spinner();
         corsSpinner.start(`Configuring CORS on ${stgBucketName}`);
-
-        if (configureBucketCors(stgBucketName, rules)) {
+        try {
+          setBucketCors(stgBucketName, rules);
           corsSpinner.stop(
             `CORS configured on ${stgBucketName} (${previewOrigins.join(', ')})`
           );
-        } else {
+        } catch {
           corsSpinner.stop('CORS configuration failed');
           p.log.warn(
             'Configure manually in Cloudflare Dashboard:\n' +
@@ -2296,24 +2235,16 @@ async function main() {
       const origins = new Set(['http://localhost:3000']);
       if (appUrl !== 'http://localhost:3000') origins.add(appUrl);
 
-      const rules: CorsRule[] = [
-        {
-          allowed: {
-            origins: [...origins],
-            methods: ['GET', 'PUT', 'HEAD'],
-            headers: ['content-type'],
-          },
-          expose: ['ETag'],
-          maxAge: 3600,
-        },
-      ];
-
+      const rules = buildRules({
+        origins: [...origins],
+        includeWrites: true,
+      });
       const corsSpinner = p.spinner();
       corsSpinner.start(`Configuring CORS on ${bucketName}`);
-
-      if (configureBucketCors(bucketName, rules)) {
+      try {
+        setBucketCors(bucketName, rules);
         corsSpinner.stop(`CORS configured on ${bucketName}`);
-      } else {
+      } catch {
         corsSpinner.stop('CORS configuration failed');
         p.log.warn(
           'Configure manually in Cloudflare Dashboard:\n' +

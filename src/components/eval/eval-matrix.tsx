@@ -1,11 +1,13 @@
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Card } from '@/components/ui/card';
 import { EvalSequenceRow } from './eval-sequence-row';
 import type { SequenceWithFrames } from '@/hooks/use-sequences-with-frames';
 import type { ViewMode } from './eval-view';
 import type { DialogTab } from './eval-cell-dialog';
+import { Route as sequencesTheatreRoute } from '@/routes/_protected/sequences/$id/theatre';
 
 const ROW_HEIGHT = 240;
 const METADATA_WIDTH = 280;
@@ -37,6 +39,7 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
 }) => {
   const parentRef = useRef<HTMLDivElement>(null);
   const [openDialog, setOpenDialog] = useState<OpenDialogState>(null);
+  const navigate = useNavigate();
 
   // Calculate max scene count across all sequences
   const maxSceneCount = useMemo(() => {
@@ -76,7 +79,12 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
   };
 
   const handleOpenTheatre = (sequenceIndex: number) => {
-    setOpenDialog({ sequenceIndex, sceneIndex: 0, initialTab: 'theatre' });
+    const sequence = sequences[sequenceIndex];
+    if (!sequence) return;
+    void navigate({
+      to: sequencesTheatreRoute.fullPath,
+      params: { id: sequence.id },
+    });
   };
 
   return (

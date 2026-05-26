@@ -86,7 +86,7 @@ export class ConcatenatedVideoSource {
       if (!scene) continue;
       const input = new Input({
         formats: ALL_FORMATS,
-        source: new UrlSource(appendCacheBuster(scene.videoUrl)),
+        source: new UrlSource(scene.videoUrl),
       });
       const videoTrack = await input.getPrimaryVideoTrack();
       if (!videoTrack) {
@@ -294,20 +294,6 @@ export class ConcatenatedVideoSource {
     this.videoTracks = [];
     this.meta = null;
   }
-}
-
-/**
- * The same R2 URLs are also rendered as `<video src>` on other views, which
- * causes the Cloudflare edge to cache the response WITHOUT `Vary: Origin`
- * (because the `<video>` request had no Origin header). A subsequent `fetch()`
- * sends an Origin header for the same URL, the edge serves the cached
- * non-CORS response, and the browser blocks it with "Failed to fetch". A
- * unique query param forces a separate edge-cache key + a fresh fetch with
- * the right CORS headers attached.
- */
-function appendCacheBuster(url: string): string {
-  const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}_sp=1`;
 }
 
 function decoderConfigDescriptionHex(config: VideoDecoderConfig): string {

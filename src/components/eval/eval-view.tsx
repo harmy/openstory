@@ -50,7 +50,6 @@ export type FilterState = {
   analysisModel: string | null;
   imageModel: string | null;
   aspectRatio: AspectRatio | null;
-  hasMergedVideo: boolean;
 };
 
 export type SortCriteria = {
@@ -65,7 +64,6 @@ const defaultFilters: FilterState = {
   analysisModel: null,
   imageModel: null,
   aspectRatio: null,
-  hasMergedVideo: false,
 };
 
 type EvalViewProps = {
@@ -293,10 +291,6 @@ function applyFiltersAndSort(
 
   if (filters.aspectRatio) {
     result = result.filter((s) => s.aspectRatio === filters.aspectRatio);
-  }
-
-  if (filters.hasMergedVideo) {
-    result = result.filter((s) => Boolean(s.mergedVideoUrl));
   }
 
   // Apply multi-criteria sort

@@ -145,16 +145,7 @@ async function fetchAll(
 }
 
 async function fetchOne(url: string, signal?: AbortSignal): Promise<Blob> {
-  // Cache-busting: the same R2 URLs are also rendered as `<video src>` on
-  // other views, which causes the Cloudflare edge to cache the response
-  // *without* `Vary: Origin` (because the original request had no Origin
-  // header). When fetch() then sends an Origin header for the same URL, the
-  // edge serves the cached non-CORS response and the browser blocks it.
-  // A unique query param forces a separate cache key + a fresh fetch with
-  // CORS headers attached. `cache: 'no-store'` also bypasses the local HTTP
-  // cache so we don't pick up a stale entry the browser saved earlier.
-  const bustedUrl = appendCacheBuster(url);
-  const response = await fetch(bustedUrl, { signal, cache: 'no-store' });
+  const response = await fetch(url, { signal });
   if (!response.ok) {
     throw new Error(
       `Failed to fetch ${url}: ${response.status} ${response.statusText}`
@@ -165,9 +156,4 @@ async function fetchOne(url: string, signal?: AbortSignal): Promise<Blob> {
 
 function sceneCount(scenes: number, musicCount: number): number {
   return scenes + musicCount;
-}
-
-function appendCacheBuster(url: string): string {
-  const sep = url.includes('?') ? '&' : '?';
-  return `${url}${sep}_bm=1`;
 }

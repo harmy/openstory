@@ -68,7 +68,13 @@ const AudioSidePreview: React.FC<{
   }
   return (
     // eslint-disable-next-line jsx-a11y/media-has-caption -- Compare-dialog renders user-supplied generated audio without captions.
-    <audio src={src} controls preload="metadata" className="h-10 w-full" />
+    <audio
+      src={src}
+      crossOrigin="anonymous"
+      controls
+      preload="metadata"
+      className="h-10 w-full"
+    />
   );
 };
 

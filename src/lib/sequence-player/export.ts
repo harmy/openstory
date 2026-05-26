@@ -181,10 +181,7 @@ export async function exportSequence(
 }
 
 async function fetchBlob(url: string, signal?: AbortSignal): Promise<Blob> {
-  // Cache-buster prevents the CORS-less edge-cached response from being
-  // re-served when fetch() adds an Origin header. See browser-merge/merge-sequence.
-  const bustedUrl = url.includes('?') ? `${url}&_se=1` : `${url}?_se=1`;
-  const response = await fetch(bustedUrl, { signal, cache: 'no-store' });
+  const response = await fetch(url, { signal });
   if (!response.ok) {
     throw new Error(
       `Failed to fetch ${url}: ${response.status} ${response.statusText}`

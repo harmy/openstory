@@ -110,15 +110,9 @@ export class SequencePlayerEngine {
     let musicSampleRate: number | undefined;
     let hasAudio = false;
     if (this.opts.musicUrl) {
-      // Cache-buster avoids the Cloudflare-edge CORS issue documented in
-      // ConcatenatedVideoSource — the music URL is also rendered as
-      // `<audio src>` elsewhere, so the edge has it cached without
-      // `Vary: Origin` and a bare fetch() with an Origin header is blocked.
-      const sep = this.opts.musicUrl.includes('?') ? '&' : '?';
-      const musicUrl = `${this.opts.musicUrl}${sep}_sp=1`;
       this.musicInput = new Input({
         formats: ALL_FORMATS,
-        source: new UrlSource(musicUrl),
+        source: new UrlSource(this.opts.musicUrl),
       });
       this.musicTrack = await this.musicInput.getPrimaryAudioTrack();
       if (this.musicTrack && (await this.musicTrack.canDecode())) {

@@ -202,8 +202,6 @@ const MobileReelRow: React.FC<MobileReelRowProps> = ({
                     sequenceTitle={sequence.title}
                     aspectRatio={aspectRatio}
                     framesLoading={framesLoading}
-                    mergedVideoUrl={sequence.mergedVideoUrl}
-                    mergedVideoPoster={sequence.posterUrl}
                     dialogOpen={isDialogOpen}
                     dialogInitialTab={dialogInitialTab}
                     onDialogOpenChange={(open) => {
@@ -291,43 +289,17 @@ const MergedVideoCell: React.FC<MergedVideoCellProps> = ({
     'aria-label': `Open ${sequence.title || 'sequence'}`,
   } as const;
 
-  if (sequence.mergedVideoUrl) {
-    return (
-      <Link {...linkProps} className={baseClass} style={style}>
-        <video
-          src={sequence.mergedVideoUrl}
-          poster={sequence.posterUrl ?? undefined}
-          className="w-full h-full object-cover"
-          muted
-          loop
-          playsInline
-          preload="metadata"
-        />
-        {modelBadge}
-      </Link>
-    );
-  }
-
   if (sequence.posterUrl) {
-    const label =
-      sequence.mergedVideoStatus === 'merging'
-        ? 'Merging video…'
-        : sequence.mergedVideoStatus === 'failed'
-          ? 'Merge failed'
-          : 'No merged video yet';
     return (
       <Link {...linkProps} className={baseClass} style={style}>
         <Image
           src={sequence.posterUrl}
           alt={`${sequence.title || 'Sequence'} poster`}
-          className="w-full h-full object-cover opacity-60"
+          className="w-full h-full object-cover"
           loading="lazy"
           width={1000}
           height={1000}
         />
-        <span className="absolute text-xs font-medium text-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded-md border">
-          {label}
-        </span>
         {modelBadge}
       </Link>
     );
@@ -339,7 +311,7 @@ const MergedVideoCell: React.FC<MergedVideoCellProps> = ({
       className={`${baseClass} border-dashed text-xs text-muted-foreground`}
       style={style}
     >
-      No video yet
+      No preview yet
       {modelBadge}
     </Link>
   );

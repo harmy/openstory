@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import {
@@ -73,7 +72,6 @@ const countActiveFilters = (filters: FilterState): number => {
   if (filters.analysisModel) count++;
   if (filters.imageModel) count++;
   if (filters.aspectRatio) count++;
-  if (filters.hasMergedVideo) count++;
   if (filters.dateFrom) count++;
   if (filters.dateTo) count++;
   return count;
@@ -264,7 +262,6 @@ export const EvalToolbar: React.FC<EvalToolbarProps> = ({
       analysisModel: null,
       imageModel: null,
       aspectRatio: null,
-      hasMergedVideo: false,
     });
   };
 
@@ -452,23 +449,6 @@ export const EvalToolbar: React.FC<EvalToolbarProps> = ({
                 triggerClassName="h-11"
               />
 
-              <label
-                htmlFor="mobile-filter-has-merged-video"
-                className="flex h-11 items-center gap-2 text-sm cursor-pointer select-none"
-              >
-                <Checkbox
-                  id="mobile-filter-has-merged-video"
-                  checked={filters.hasMergedVideo}
-                  onCheckedChange={(checked) =>
-                    onFiltersChange({
-                      ...filters,
-                      hasMergedVideo: checked === true,
-                    })
-                  }
-                />
-                Has video
-              </label>
-
               {isAdmin && (
                 <div className="flex flex-col gap-3 border-t pt-3">
                   <div className="flex items-center justify-between gap-2">
@@ -564,22 +544,6 @@ export const EvalToolbar: React.FC<EvalToolbarProps> = ({
             placeholder="Aspect Ratio"
             triggerClassName="w-36"
           />
-          <label
-            htmlFor="filter-has-merged-video"
-            className="flex items-center gap-2 text-sm cursor-pointer select-none"
-          >
-            <Checkbox
-              id="filter-has-merged-video"
-              checked={filters.hasMergedVideo}
-              onCheckedChange={(checked) =>
-                onFiltersChange({
-                  ...filters,
-                  hasMergedVideo: checked === true,
-                })
-              }
-            />
-            Has video
-          </label>
           {hasActiveFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               <X className="h-4 w-4 mr-1" />

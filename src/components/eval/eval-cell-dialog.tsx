@@ -18,13 +18,7 @@ import { VideoPlayer } from '@/components/motion/video-player';
 import type { Frame } from '@/types/database';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { stripMarkdown } from '@/lib/utils/markdown-plain';
-import {
-  Clapperboard,
-  FileTextIcon,
-  ImageIcon,
-  Film,
-  TextIcon,
-} from 'lucide-react';
+import { Clapperboard, FileTextIcon, ImageIcon, TextIcon } from 'lucide-react';
 import { Image } from '@unpic/react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
@@ -35,11 +29,10 @@ import {
 } from './eval-scene-cell';
 import type { ViewMode } from './eval-view';
 
-export type DialogTab = ViewMode | 'theatre';
+export type DialogTab = ViewMode;
 
 function isDialogTab(value: string): value is DialogTab {
   return (
-    value === 'theatre' ||
     value === 'script' ||
     value === 'prompts' ||
     value === 'images' ||
@@ -55,8 +48,6 @@ type EvalCellDialogProps = {
   sequenceTitle: string;
   aspectRatio: AspectRatio;
   initialTab: DialogTab;
-  mergedVideoUrl?: string | null;
-  mergedVideoPoster?: string | null;
   onNavigateLeft?: () => void;
   onNavigateRight?: () => void;
   onNavigateUp?: () => void;
@@ -71,14 +62,11 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
   sequenceTitle,
   aspectRatio,
   initialTab,
-  mergedVideoUrl,
-  mergedVideoPoster,
   onNavigateLeft,
   onNavigateRight,
   onNavigateUp,
   onNavigateDown,
 }) => {
-  const hasTheatre = Boolean(mergedVideoUrl);
   const prompt = getVisualPrompt(frame);
   const motionPrompt = getMotionPrompt(frame);
   const script = getSceneScript(frame);
@@ -159,7 +147,6 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {hasTheatre && <SelectItem value="theatre">Theatre</SelectItem>}
                 <SelectItem value="script">Script</SelectItem>
                 <SelectItem value="prompts">Prompts</SelectItem>
                 <SelectItem value="images">Image</SelectItem>
@@ -184,12 +171,6 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
                 }
               }}
             >
-              {hasTheatre && (
-                <TabsTrigger value="theatre">
-                  <Film className="h-4 w-4 mr-2" />
-                  Theatre
-                </TabsTrigger>
-              )}
               <TabsTrigger value="script">
                 <FileTextIcon className="h-4 w-4 mr-2" />
                 Script
@@ -208,21 +189,6 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
               </TabsTrigger>
             </TabsList>
           </div>
-
-          {hasTheatre && (
-            <TabsContent value="theatre" className="flex-1 min-h-0 mt-0">
-              <div className="flex justify-center items-center h-full w-full">
-                <div className="w-full max-w-5xl">
-                  <VideoPlayer
-                    src={mergedVideoUrl ?? ''}
-                    posterSrc={mergedVideoPoster}
-                    aspectRatio={aspectRatio}
-                    className="rounded-lg"
-                  />
-                </div>
-              </div>
-            </TabsContent>
-          )}
 
           <TabsContent value="script" className="flex-1 min-h-0 mt-0">
             {!script ? (

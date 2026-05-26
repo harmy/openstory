@@ -423,6 +423,7 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
           <video
             key={nextFrame.videoUrl}
             src={nextFrame.videoUrl}
+            crossOrigin="anonymous"
             preload="auto"
           />
         </div>
