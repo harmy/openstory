@@ -245,7 +245,6 @@ export const MusicView: React.FC<MusicViewProps> = ({
         <audio
           controls
           src={musicUrl}
-          crossOrigin="anonymous"
           className="h-10 w-full"
           preload="metadata"
         >

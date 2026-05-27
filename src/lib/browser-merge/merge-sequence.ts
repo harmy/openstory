@@ -19,6 +19,7 @@ import { concatVideoTracks } from './concat-video-tracks';
 import { mixAndEncodeAudio } from './mix-audio-tracks';
 import { probeBrowserMergeCapabilities } from './probe';
 import { computeSceneOffsets } from './timeline-offsets';
+import { addCorsCacheBuster } from '@/lib/utils/cors-cache-buster';
 import type {
   MergeProgressCallback,
   MergeSequenceInput,
@@ -145,7 +146,7 @@ async function fetchAll(
 }
 
 async function fetchOne(url: string, signal?: AbortSignal): Promise<Blob> {
-  const response = await fetch(url, { signal });
+  const response = await fetch(addCorsCacheBuster(url), { signal });
   if (!response.ok) {
     throw new Error(
       `Failed to fetch ${url}: ${response.status} ${response.statusText}`

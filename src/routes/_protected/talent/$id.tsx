@@ -199,7 +199,6 @@ function TalentDetailPage() {
                     {media.type === 'video' && (
                       <video
                         src={media.url}
-                        crossOrigin="anonymous"
                         className="w-full h-full object-cover"
                         muted
                       />

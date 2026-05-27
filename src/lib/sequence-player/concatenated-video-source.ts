@@ -26,6 +26,7 @@ import {
   UrlSource,
   type WrappedCanvas,
 } from 'mediabunny';
+import { addCorsCacheBuster } from '@/lib/utils/cors-cache-buster';
 
 type CanvasFit = 'fill' | 'contain' | 'cover';
 
@@ -86,7 +87,7 @@ export class ConcatenatedVideoSource {
       if (!scene) continue;
       const input = new Input({
         formats: ALL_FORMATS,
-        source: new UrlSource(scene.videoUrl),
+        source: new UrlSource(addCorsCacheBuster(scene.videoUrl)),
       });
       const videoTrack = await input.getPrimaryVideoTrack();
       if (!videoTrack) {

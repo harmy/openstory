@@ -257,7 +257,6 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
           <div className="flex-1 flex items-center justify-center min-h-0">
             <video
               src={frame.videoUrl}
-              crossOrigin="anonymous"
               poster={frame.thumbnailUrl ?? undefined}
               className="max-w-full max-h-full object-contain rounded-md"
               muted

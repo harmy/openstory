@@ -244,7 +244,6 @@ export const EditTalentDialog: React.FC<EditTalentDialogProps> = ({
                       {media.type === 'video' ? (
                         <video
                           src={media.url}
-                          crossOrigin="anonymous"
                           className="size-full object-cover"
                           muted
                         />

@@ -84,16 +84,13 @@ const AssetPreview: React.FC<{
       // eslint-disable-next-line jsx-a11y/media-has-caption -- Compare-dialog renders user-supplied generated assets that have no caption track.
       <video
         src={url}
-        crossOrigin="anonymous"
         controls
         className="aspect-video w-full rounded-md bg-black"
       />
     );
   }
-  return (
-    // eslint-disable-next-line jsx-a11y/media-has-caption -- Compare-dialog renders user-supplied generated audio without captions.
-    <audio src={url} crossOrigin="anonymous" controls className="w-full" />
-  );
+  // eslint-disable-next-line jsx-a11y/media-has-caption -- Compare-dialog renders user-supplied generated audio without captions.
+  return <audio src={url} controls className="w-full" />;
 };
 
 export const DivergenceCompareDialog: React.FC<

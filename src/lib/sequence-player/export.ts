@@ -22,6 +22,7 @@ import {
   Output,
   UrlSource,
 } from 'mediabunny';
+import { addCorsCacheBuster } from '@/lib/utils/cors-cache-buster';
 
 import {
   applyGain,
@@ -133,12 +134,13 @@ export async function exportSequence(
       // MUSIC: fetch + mix at loudness gain + encode AAC.
       if (musicUrl && audioSrc) {
         if (signal?.aborted) throw new Error('Export aborted');
-        const musicBlob = await fetchBlob(musicUrl, signal);
+        const bustedMusicUrl = addCorsCacheBuster(musicUrl);
+        const musicBlob = await fetchBlob(bustedMusicUrl, signal);
         onProgress?.({ phase: 'music', completed: 1, total: 1 });
 
         musicInput = new Input({
           formats: ALL_FORMATS,
-          source: new UrlSource(musicUrl),
+          source: new UrlSource(bustedMusicUrl),
         });
 
         const mixed = await mixMusic({
