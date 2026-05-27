@@ -22,6 +22,7 @@ import {
   EncodedPacket,
   EncodedPacketSink,
   Input,
+  type InputAudioTrack,
   type InputVideoTrack,
   UrlSource,
   type WrappedCanvas,
@@ -54,10 +55,19 @@ export type ConcatenatedVideoMeta = {
   displayHeight: number;
 };
 
+export type SceneAudioTrack = {
+  /** Index into the (sorted) scenes array. */
+  sceneIndex: number;
+  /** Cumulative scene start offset (seconds) — where this audio is anchored on the global timeline. */
+  sceneOffsetSeconds: number;
+  track: InputAudioTrack;
+};
+
 export class ConcatenatedVideoSource {
   private readonly scenes: SceneInput[];
   private inputs: Input[] = [];
   private videoTracks: InputVideoTrack[] = [];
+  private audioTracks: Array<InputAudioTrack | null> = [];
   private meta: ConcatenatedVideoMeta | null = null;
 
   constructor(scenes: SceneInput[]) {
@@ -78,6 +88,7 @@ export class ConcatenatedVideoSource {
 
     const inputs: Input[] = [];
     const videoTracks: InputVideoTrack[] = [];
+    const audioTracks: Array<InputAudioTrack | null> = [];
     const sceneDurationsSeconds: number[] = [];
     let displayWidth = 0;
     let displayHeight = 0;
@@ -112,8 +123,16 @@ export class ConcatenatedVideoSource {
         displayHeight = await videoTrack.getDisplayHeight();
       }
 
+      // Embedded scene audio (dialogue / VO). Best-effort: scenes without an
+      // audio track or with an undecodable codec are silent; the rest are
+      // mixed by the player + export.
+      const audioTrack = await input.getPrimaryAudioTrack();
+      const usableAudio =
+        audioTrack && (await audioTrack.canDecode()) ? audioTrack : null;
+
       inputs.push(input);
       videoTracks.push(videoTrack);
+      audioTracks.push(usableAudio);
       sceneDurationsSeconds.push(duration);
     }
 
@@ -126,6 +145,7 @@ export class ConcatenatedVideoSource {
 
     this.inputs = inputs;
     this.videoTracks = videoTracks;
+    this.audioTracks = audioTracks;
     this.meta = {
       totalDurationSeconds: acc,
       sceneDurationsSeconds,
@@ -288,11 +308,29 @@ export class ConcatenatedVideoSource {
     }
   }
 
+  /**
+   * Audio tracks discovered during `prepare()`, paired with their global
+   * scene offset. Scenes without a usable audio track are omitted, so the
+   * length may be smaller than `scenes.length`.
+   */
+  getSceneAudioTracks(): SceneAudioTrack[] {
+    const meta = this.getMeta();
+    const result: SceneAudioTrack[] = [];
+    for (let i = 0; i < this.audioTracks.length; i++) {
+      const track = this.audioTracks[i];
+      const offset = meta.sceneOffsetsSeconds[i];
+      if (!track || offset === undefined) continue;
+      result.push({ sceneIndex: i, sceneOffsetSeconds: offset, track });
+    }
+    return result;
+  }
+
   /** Release every underlying `Input` — call when the source is no longer needed. */
   dispose(): void {
     for (const input of this.inputs) input.dispose();
     this.inputs = [];
     this.videoTracks = [];
+    this.audioTracks = [];
     this.meta = null;
   }
 }

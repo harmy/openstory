@@ -3,24 +3,22 @@
  * so the two stay in lock-step — same iterator, same scene timing, same
  * loudness gain. The only difference from playback is the sink:
  *
- * - Live player: video → `CanvasSink`, music → `AudioBufferSink` → `GainNode`.
- * - Export:      video → `EncodedVideoPacketSource`, music → mixed in an
- *                `OfflineAudioContext` → AAC → `EncodedAudioPacketSource`.
+ * - Live player: video → `CanvasSink`, music + per-scene dialogue → `AudioBufferSink`
+ *                / `AudioBufferSourceNode` → `GainNode`.
+ * - Export:      video → `EncodedVideoPacketSource`, music + per-scene dialogue
+ *                mixed in an `OfflineAudioContext` → AAC → `EncodedAudioPacketSource`.
  *
  * The result is an in-memory MP4 `Blob` ready to upload to R2 via the
  * `sequence_exports` server functions.
  */
 
 import {
-  ALL_FORMATS,
   BufferTarget,
   EncodedAudioPacketSource,
   EncodedPacket,
   EncodedVideoPacketSource,
-  Input,
   Mp4OutputFormat,
   Output,
-  UrlSource,
 } from 'mediabunny';
 import { addCorsCacheBuster } from '@/lib/utils/cors-cache-buster';
 
@@ -35,6 +33,7 @@ import {
   ConcatenatedVideoSource,
   type SceneInput,
 } from './concatenated-video-source';
+import { decodeAudioTrack } from './decode-audio-track';
 
 const MAX_TOTAL_DURATION_SECONDS = 5 * 60;
 const TARGET_SAMPLE_RATE = 48_000;
@@ -45,6 +44,7 @@ export type ExportProgressPhase =
   | 'prepare'
   | 'video'
   | 'music'
+  | 'dialogue'
   | 'mix'
   | 'encode'
   | 'finalize';
@@ -81,7 +81,6 @@ export async function exportSequence(
   const { scenes, musicUrl, musicLoudnessGainDb, onProgress, signal } = input;
 
   const videoSource = new ConcatenatedVideoSource(scenes);
-  let musicInput: Input | null = null;
 
   try {
     const meta = await videoSource.prepare();
@@ -93,6 +92,9 @@ export async function exportSequence(
       );
     }
 
+    const sceneAudioTracks = videoSource.getSceneAudioTracks();
+    const hasAudio = Boolean(musicUrl) || sceneAudioTracks.length > 0;
+
     const output = new Output({
       format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
       target: new BufferTarget(),
@@ -100,7 +102,7 @@ export async function exportSequence(
     const videoSrc = new EncodedVideoPacketSource('avc');
     output.addVideoTrack(videoSrc);
 
-    const audioSrc = musicUrl ? new EncodedAudioPacketSource('aac') : null;
+    const audioSrc = hasAudio ? new EncodedAudioPacketSource('aac') : null;
     if (audioSrc) output.addAudioTrack(audioSrc);
 
     await output.start();
@@ -131,22 +133,48 @@ export async function exportSequence(
         total: packetCount,
       });
 
-      // MUSIC: fetch + mix at loudness gain + encode AAC.
-      if (musicUrl && audioSrc) {
-        if (signal?.aborted) throw new Error('Export aborted');
-        const bustedMusicUrl = addCorsCacheBuster(musicUrl);
-        const musicBlob = await fetchBlob(bustedMusicUrl, signal);
+      // AUDIO: fetch music + decode each scene's embedded audio (dialogue/VO),
+      // mix at scene offsets, encode AAC.
+      if (audioSrc) {
+        const musicBlob = musicUrl
+          ? await fetchBlob(addCorsCacheBuster(musicUrl), signal)
+          : null;
         onProgress?.({ phase: 'music', completed: 1, total: 1 });
 
-        musicInput = new Input({
-          formats: ALL_FORMATS,
-          source: new UrlSource(bustedMusicUrl),
-        });
+        const dialogueBuffers: Array<{
+          buffer: AudioBuffer;
+          sceneOffsetSeconds: number;
+        }> = [];
+        for (let i = 0; i < sceneAudioTracks.length; i++) {
+          if (signal?.aborted) throw new Error('Export aborted');
+          const entry = sceneAudioTracks[i];
+          if (!entry) continue;
+          try {
+            const buffer = await decodeAudioTrack(entry.track);
+            if (buffer) {
+              dialogueBuffers.push({
+                buffer,
+                sceneOffsetSeconds: entry.sceneOffsetSeconds,
+              });
+            }
+          } catch (err) {
+            console.warn(
+              `exportSequence: failed to decode embedded audio for scene ${entry.sceneIndex}`,
+              err
+            );
+          }
+          onProgress?.({
+            phase: 'dialogue',
+            completed: i + 1,
+            total: sceneAudioTracks.length,
+          });
+        }
 
-        const mixed = await mixMusic({
+        const mixed = await mixSequenceAudio({
           musicBlob,
-          totalDurationSeconds: meta.totalDurationSeconds,
           musicLoudnessGainDb,
+          dialogueBuffers,
+          totalDurationSeconds: meta.totalDurationSeconds,
           signal,
         });
         onProgress?.({ phase: 'mix', completed: 1, total: 1 });
@@ -178,7 +206,6 @@ export async function exportSequence(
     }
   } finally {
     videoSource.dispose();
-    if (musicInput) musicInput.dispose();
   }
 }
 
@@ -192,49 +219,58 @@ async function fetchBlob(url: string, signal?: AbortSignal): Promise<Blob> {
   return await response.blob();
 }
 
-async function mixMusic(args: {
-  musicBlob: Blob;
-  totalDurationSeconds: number;
+async function mixSequenceAudio(args: {
+  musicBlob: Blob | null;
   musicLoudnessGainDb: number | null;
+  dialogueBuffers: Array<{ buffer: AudioBuffer; sceneOffsetSeconds: number }>;
+  totalDurationSeconds: number;
   signal?: AbortSignal;
 }): Promise<AudioBuffer> {
-  const { musicBlob, totalDurationSeconds, musicLoudnessGainDb, signal } = args;
+  const {
+    musicBlob,
+    musicLoudnessGainDb,
+    dialogueBuffers,
+    totalDurationSeconds,
+    signal,
+  } = args;
 
-  const decodeCtx = new AudioContext();
-  let normalized: AudioBuffer;
-  try {
-    const arrayBuffer = await musicBlob.arrayBuffer();
-    const decoded = await decodeCtx.decodeAudioData(arrayBuffer);
-    if (signal?.aborted) throw new Error('Export aborted');
+  let normalizedMusic: AudioBuffer | null = null;
+  if (musicBlob) {
+    const decodeCtx = new AudioContext();
+    try {
+      const arrayBuffer = await musicBlob.arrayBuffer();
+      const decoded = await decodeCtx.decodeAudioData(arrayBuffer);
+      if (signal?.aborted) throw new Error('Export aborted');
 
-    const channels: Float32Array[] = [];
-    for (let c = 0; c < decoded.numberOfChannels; c++) {
-      channels.push(decoded.getChannelData(c).slice());
+      const channels: Float32Array[] = [];
+      for (let c = 0; c < decoded.numberOfChannels; c++) {
+        channels.push(decoded.getChannelData(c).slice());
+      }
+
+      // Prefer the precomputed gain so playback and export are bit-identical
+      // in loudness. Fall back to measuring if the column hasn't been backfilled.
+      const gainLinear =
+        musicLoudnessGainDb !== null && Number.isFinite(musicLoudnessGainDb)
+          ? Math.pow(10, musicLoudnessGainDb / 20)
+          : gainToTarget(
+              integratedLoudnessLUFS(channels, decoded.sampleRate),
+              DEFAULT_MUSIC_LOUDNESS_LUFS
+            );
+      applyGain(channels, gainLinear);
+
+      normalizedMusic = new AudioBuffer({
+        length: decoded.length,
+        numberOfChannels: decoded.numberOfChannels,
+        sampleRate: decoded.sampleRate,
+      });
+      for (let c = 0; c < channels.length; c++) {
+        const channel = channels[c];
+        if (!channel) throw new Error(`expected channel ${c}`);
+        normalizedMusic.copyToChannel(toArrayBufferBacked(channel), c);
+      }
+    } finally {
+      await decodeCtx.close();
     }
-
-    // Prefer the precomputed gain so playback and export are bit-identical
-    // in loudness. Fall back to measuring if the column hasn't been backfilled.
-    const gainLinear =
-      musicLoudnessGainDb !== null && Number.isFinite(musicLoudnessGainDb)
-        ? Math.pow(10, musicLoudnessGainDb / 20)
-        : gainToTarget(
-            integratedLoudnessLUFS(channels, decoded.sampleRate),
-            DEFAULT_MUSIC_LOUDNESS_LUFS
-          );
-    applyGain(channels, gainLinear);
-
-    normalized = new AudioBuffer({
-      length: decoded.length,
-      numberOfChannels: decoded.numberOfChannels,
-      sampleRate: decoded.sampleRate,
-    });
-    for (let c = 0; c < channels.length; c++) {
-      const channel = channels[c];
-      if (!channel) throw new Error(`expected channel ${c}`);
-      normalized.copyToChannel(toArrayBufferBacked(channel), c);
-    }
-  } finally {
-    await decodeCtx.close();
   }
 
   const length = Math.max(
@@ -246,10 +282,21 @@ async function mixMusic(args: {
     length,
     sampleRate: TARGET_SAMPLE_RATE,
   });
-  const src = offline.createBufferSource();
-  src.buffer = normalized;
-  src.connect(offline.destination);
-  src.start(0);
+
+  if (normalizedMusic) {
+    const src = offline.createBufferSource();
+    src.buffer = normalizedMusic;
+    src.connect(offline.destination);
+    src.start(0);
+  }
+
+  for (const { buffer, sceneOffsetSeconds } of dialogueBuffers) {
+    const src = offline.createBufferSource();
+    src.buffer = buffer;
+    src.connect(offline.destination);
+    src.start(Math.max(0, sceneOffsetSeconds));
+  }
+
   return await offline.startRendering();
 }
 

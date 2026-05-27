@@ -1,11 +1,15 @@
 /**
  * Live playback engine for a stitched sequence (N scene videos + one music
- * track). Modeled on the Mediabunny media-player example, extended with:
+ * track + optional per-scene dialogue). Modeled on the Mediabunny media-player
+ * example, extended with:
  *
  * - `ConcatenatedVideoSource` for the video iterator (handles cross-scene
  *   continuity + global timestamps).
- * - A separate music `Input` + `AudioBufferSink` mixed through a `GainNode`
- *   whose value is derived from the music variant's measured loudness gain.
+ * - A music `Input` + `AudioBufferSink` mixed through a music-only `GainNode`
+ *   that applies the variant's measured loudness gain.
+ * - Per-scene dialogue audio decoded once in `prepare()` and scheduled as
+ *   `AudioBufferSourceNode`s on `play()` / `seek()`, routed through a master
+ *   gain node so dialogue is not attenuated by the music loudness gain.
  * - Codec gating up front via `prepare()`; throws so the React component can
  *   render a fallback CTA.
  *
@@ -29,6 +33,7 @@ import {
   ConcatenatedVideoSource,
   type SceneInput,
 } from './concatenated-video-source';
+import { decodeAudioTrack } from './decode-audio-track';
 
 export type SequencePlayerOptions = {
   canvas: HTMLCanvasElement;
@@ -52,16 +57,25 @@ export type SequencePlayerMeta = {
   hasAudio: boolean;
 };
 
+type DialogueClip = {
+  buffer: AudioBuffer;
+  sceneOffsetSeconds: number;
+};
+
 export class SequencePlayerEngine {
   private readonly opts: SequencePlayerOptions;
   private readonly canvasContext: CanvasRenderingContext2D;
   private readonly videoSource: ConcatenatedVideoSource;
 
   private audioContext: AudioContext | null = null;
-  private gainNode: GainNode | null = null;
+  /** Master gain — volume + mute. Dialogue routes here directly. */
+  private masterGain: GainNode | null = null;
+  /** Music-only gain — applies the music variant's loudness normalization on top of master gain. */
+  private musicGain: GainNode | null = null;
   private musicInput: Input | null = null;
   private musicTrack: InputAudioTrack | null = null;
   private audioSink: AudioBufferSink | null = null;
+  private dialogueClips: DialogueClip[] = [];
 
   private meta: SequencePlayerMeta | null = null;
 
@@ -130,13 +144,39 @@ export class SequencePlayerEngine {
     // browsers that ship the standard, unprefixed AudioContext, so we can use
     // it directly without a webkit fallback.
     this.audioContext = new AudioContext({ sampleRate: musicSampleRate });
-    this.gainNode = this.audioContext.createGain();
-    this.gainNode.connect(this.audioContext.destination);
+    this.masterGain = this.audioContext.createGain();
+    this.masterGain.connect(this.audioContext.destination);
+    this.musicGain = this.audioContext.createGain();
+    this.musicGain.connect(this.masterGain);
     this.applyGain();
 
     if (this.musicTrack) {
       this.audioSink = new AudioBufferSink(this.musicTrack);
     }
+
+    // Per-scene dialogue/VO lives in each scene video's embedded audio track.
+    // Decode upfront so play()/seek() can schedule against the AudioContext
+    // clock without async IO in the hot path. A single failing track shouldn't
+    // kill the whole player — log and stay silent for that scene.
+    const dialogueClips: DialogueClip[] = [];
+    for (const {
+      sceneIndex,
+      sceneOffsetSeconds,
+      track,
+    } of this.videoSource.getSceneAudioTracks()) {
+      try {
+        const buffer = await decodeAudioTrack(track);
+        if (!buffer) continue;
+        dialogueClips.push({ buffer, sceneOffsetSeconds });
+      } catch (err) {
+        console.warn(
+          `SequencePlayerEngine: failed to decode embedded audio for scene ${sceneIndex}`,
+          err
+        );
+      }
+    }
+    this.dialogueClips = dialogueClips;
+    if (dialogueClips.length > 0) hasAudio = true;
 
     this.opts.canvas.width = videoMeta.displayWidth;
     this.opts.canvas.height = videoMeta.displayHeight;
@@ -201,6 +241,8 @@ export class SequencePlayerEngine {
       this.audioBufferIterator = this.audioSink.buffers(this.getPlaybackTime());
       void this.runAudioIterator();
     }
+
+    this.scheduleDialogueClips();
   }
 
   pause(): void {
@@ -262,14 +304,60 @@ export class SequencePlayerEngine {
     void this.audioContext?.close();
     this.audioContext = null;
     this.audioSink = null;
-    this.gainNode = null;
+    this.masterGain = null;
+    this.musicGain = null;
+    this.dialogueClips = [];
   }
 
   private applyGain(): void {
-    if (!this.gainNode) return;
-    const linear = this.muted ? 0 : this.volume ** 2;
-    const loudnessLinear = loudnessDbToLinear(this.opts.musicLoudnessGainDb);
-    this.gainNode.gain.value = linear * loudnessLinear;
+    if (!this.masterGain || !this.musicGain) return;
+    const masterLinear = this.muted ? 0 : this.volume ** 2;
+    this.masterGain.gain.value = masterLinear;
+    this.musicGain.gain.value = loudnessDbToLinear(
+      this.opts.musicLoudnessGainDb
+    );
+  }
+
+  /**
+   * Schedule every dialogue clip whose end timestamp is still ahead of the
+   * current playback head. Each clip is anchored to its scene's global offset:
+   * if the user seeks into the middle of a scene, the clip starts mid-buffer.
+   */
+  private scheduleDialogueClips(): void {
+    if (
+      !this.audioContext ||
+      !this.masterGain ||
+      this.audioContextStartTime === null
+    ) {
+      return;
+    }
+    const playStart = this.playbackTimeAtStart;
+    for (const { buffer, sceneOffsetSeconds } of this.dialogueClips) {
+      const clipEnd = sceneOffsetSeconds + buffer.duration;
+      if (clipEnd <= playStart) continue;
+
+      const node = this.audioContext.createBufferSource();
+      node.buffer = buffer;
+      node.connect(this.masterGain);
+
+      const scheduleTime =
+        this.audioContextStartTime + sceneOffsetSeconds - playStart;
+      const bufferOffset = Math.max(0, playStart - sceneOffsetSeconds);
+
+      if (scheduleTime >= this.audioContext.currentTime) {
+        node.start(scheduleTime, bufferOffset);
+      } else {
+        node.start(
+          this.audioContext.currentTime,
+          bufferOffset + (this.audioContext.currentTime - scheduleTime)
+        );
+      }
+
+      this.queuedAudioNodes.add(node);
+      node.onended = () => {
+        this.queuedAudioNodes.delete(node);
+      };
+    }
   }
 
   private async primeFirstFrame(): Promise<void> {
@@ -358,7 +446,7 @@ export class SequencePlayerEngine {
    * loudness normalization.
    */
   private async runAudioIterator(): Promise<void> {
-    if (!this.audioBufferIterator || !this.audioContext || !this.gainNode) {
+    if (!this.audioBufferIterator || !this.audioContext || !this.musicGain) {
       return;
     }
     for await (const { buffer, timestamp } of this.audioBufferIterator) {
@@ -367,7 +455,7 @@ export class SequencePlayerEngine {
       if (startBaseline === null) return;
       const node = this.audioContext.createBufferSource();
       node.buffer = buffer;
-      node.connect(this.gainNode);
+      node.connect(this.musicGain);
 
       let startTimestamp = startBaseline + timestamp - this.playbackTimeAtStart;
       startTimestamp =

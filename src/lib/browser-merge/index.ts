@@ -10,6 +10,7 @@ export {
   gainToTarget,
   integratedLoudnessLUFS,
 } from './loudness-normalize';
+export { assembleChannelData } from './mix-audio-tracks';
 export type {
   MergeProgress,
   MergeProgressCallback,

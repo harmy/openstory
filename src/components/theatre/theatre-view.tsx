@@ -150,6 +150,7 @@ function formatExportProgress(progress: ExportProgress | null): string {
     prepare: 'Preparing',
     video: 'Stitching video',
     music: 'Downloading music',
+    dialogue: 'Decoding dialogue',
     mix: 'Mixing audio',
     encode: 'Encoding audio',
     finalize: 'Finalizing',
