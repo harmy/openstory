@@ -3,6 +3,6 @@
     "bun install",
     "cp $ROOT_WORKTREE_PATH/.env.local .env.local",
     "cp $ROOT_WORKTREE_PATH/.claude/settings.local.json .claude/settings.local.json",
-    "cp $ROOT_WORKTREE_PATH/local.db local.db"
+    "bun db:fork:local || echo '  (no main D1 to fork; run bun db:migrate:local + bun db:seed:local to bootstrap)'"
   ]
 }
