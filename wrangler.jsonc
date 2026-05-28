@@ -23,10 +23,11 @@
       "invocation_logs": false,
       // PostHog destination. Create the destination in the Cloudflare
       // dashboard first (Workers & Pages -> openstory -> Observability ->
-      // Logs -> Destinations -> PostHog) and paste its id below. See
+      // Logs -> Destinations -> PostHog) and add its id below. The schema
+      // expects an array of strings, not objects. See
       // https://developers.cloudflare.com/workers/observability/exporting-opentelemetry-data/posthog/
       "destinations": [
-        // { "id": "posthog-prd" },
+        // "posthog-prd"
       ],
     },
     "traces": {

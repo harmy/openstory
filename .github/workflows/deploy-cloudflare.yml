@@ -176,7 +176,7 @@ jobs:
             obj.observability = obj.observability || {};
             obj.observability.logs = {
               ...(obj.observability.logs || {}),
-              destinations: [{ id: 'posthog-openstory-stg' }],
+              destinations: ['posthog-openstory-stg'],
             };
             // NOTE: triggers.crons retained on previews so the reconciler
             // sweep can be tested end-to-end. Each preview has its own
