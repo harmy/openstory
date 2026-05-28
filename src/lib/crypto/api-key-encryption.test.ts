@@ -1,6 +1,6 @@
-import { describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it, vi } from 'vitest';
 
-mock.module('#env', () => ({
+vi.doMock('#env', () => ({
   getEnv: () => ({
     API_KEY_ENCRYPTION_KEY: 'test-secret-for-encryption-testing',
   }),
@@ -65,12 +65,14 @@ describe('api-key-encryption', () => {
 
 describe('api-key-encryption missing env', () => {
   it('throws when API_KEY_ENCRYPTION_KEY is not set', async () => {
-    // Re-mock with missing key
-    mock.module('#env', () => ({
+    // Re-mock with missing key. resetModules() drops the cached api-key-encryption
+    // module so the dynamic import below re-evaluates against the new env mock.
+    vi.resetModules();
+    vi.doMock('#env', () => ({
       getEnv: () => ({}),
     }));
     const mod = await import('./api-key-encryption');
-    expect(mod.encryptApiKey('test')).rejects.toThrow(
+    await expect(mod.encryptApiKey('test')).rejects.toThrow(
       'API_KEY_ENCRYPTION_KEY environment variable is required'
     );
   });

@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-// Import real exports before mock.module so they can be re-exported
+// Import real exports before vi.doMock so they can be re-exported
 import * as tanstackAi from '@tanstack/ai';
 
 // Mock environment
-mock.module('#env', () => ({
+vi.doMock('#env', () => ({
   getEnv: () => ({
     OPENROUTER_KEY: 'test-key',
     VITE_APP_URL: 'http://localhost:3000',
@@ -15,18 +15,21 @@ mock.module('#env', () => ({
 
 // Mock @tanstack/ai — chat() is the only function callLLMStream uses
 // Re-export all real exports so other test files aren't affected by incomplete mock
-const mockChat = mock();
-mock.module('@tanstack/ai', () => ({
+const mockChat = vi.fn();
+vi.doMock('@tanstack/ai', () => ({
   ...tanstackAi,
   chat: mockChat,
 }));
 
 // Mock create-adapter to avoid real adapter creation
-mock.module('./create-adapter', () => ({
+vi.doMock('./create-adapter', () => ({
   createAdapter: () => ({ kind: 'text', name: 'mock' }),
 }));
 
-import { callLLMStream } from './llm-client';
+// Dynamic import so vi.doMock above is in effect when llm-client (and its
+// `./create-adapter` import) resolves. Static imports are hoisted above
+// vi.doMock and would bypass the mocks.
+const { callLLMStream } = await import('./llm-client');
 
 describe('llm-client', () => {
   beforeEach(() => {

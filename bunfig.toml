@@ -4,11 +4,3 @@ skip = ["msw"]
 
 # Equivalent to pnpm's onlyBuiltDependencies
 allowlist = ["@tailwindcss/oxide", "esbuild", "lefthook", "sharp"]
-
-[test]
-# Test configuration for bun test
-root = "./src"
-preload = ["./src/test/setup.ts"]
-
-# Coverage configuration (currently basic support in bun test)
-# More coverage options to be added as bun evolves

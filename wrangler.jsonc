@@ -52,6 +52,40 @@
     {
       "binding": "R2_STORAGE_BUCKET",
       "bucket_name": "openstory-storage",
+      // remote: true so writes during local dev hit real R2 and uploads
+      // surface via R2_PUBLIC_STORAGE_DOMAIN. Mirrors R2_PUBLIC_ASSETS_BUCKET
+      // (already remote) and avoids the broken-image problem of Miniflare-
+      // local R2 vs. a public CDN domain.
+      "remote": true,
     },
   ],
+  "env": {
+    // Playwright e2e environment. D1 stays local (Miniflare) for hermetic
+    // setup/teardown. R2 storage is `remote: true` so RECORD-mode uploads land
+    // in a real R2 bucket whose URLs persist for replay. Replay never invokes
+    // the binding (storage-cloudflare.ts short-circuits via aimock fixture
+    // lookup), so credentials are only required when recording.
+    "test": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "openstory-test",
+          "database_id": "openstory-test-local",
+          "migrations_dir": "drizzle/migrations",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "bucket_name": "openstory-public-assets",
+          "binding": "R2_PUBLIC_ASSETS_BUCKET",
+          "remote": true,
+        },
+        {
+          "binding": "R2_STORAGE_BUCKET",
+          "bucket_name": "openstory-storage",
+          "remote": true,
+        },
+      ],
+    },
+  },
 }

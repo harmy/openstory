@@ -10,10 +10,13 @@
  *   bun scripts/upload-system-previews-to-r2.ts --dry-run    # Preview only
  */
 
-import { $ } from 'bun';
+import { execFile } from 'node:child_process';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { PhotonImage, resize, SamplingFilter } from '@cf-wasm/photon';
+
+const execFileAsync = promisify(execFile);
 
 const PREVIEW_DIR = path.join(process.cwd(), 'preview');
 const THUMBNAIL_SIZE = 256;
@@ -70,14 +73,23 @@ async function uploadToR2(
     return;
   }
 
-  const result =
-    await $`bunx wrangler r2 object put ${R2_CONFIG.bucket}/${r2Key} --file=${localPath} --content-type=${contentType} --remote`
-      .quiet()
-      .nothrow();
-  if (result.exitCode !== 0) {
-    console.error(
-      `  ❌ Upload failed for ${r2Key}: ${result.stderr.toString()}`
-    );
+  try {
+    await execFileAsync('bunx', [
+      'wrangler',
+      'r2',
+      'object',
+      'put',
+      `${R2_CONFIG.bucket}/${r2Key}`,
+      `--file=${localPath}`,
+      `--content-type=${contentType}`,
+      '--remote',
+    ]);
+  } catch (error) {
+    const stderr =
+      error && typeof error === 'object' && 'stderr' in error
+        ? String(error.stderr).trim()
+        : '';
+    console.error(`  ❌ Upload failed for ${r2Key}: ${stderr}`);
     throw new Error(`Upload failed: ${r2Key}`);
   }
 }

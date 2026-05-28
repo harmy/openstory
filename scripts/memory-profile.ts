@@ -20,6 +20,10 @@
  */
 export {};
 
+import { spawn } from 'node:child_process';
+import { writeFile } from 'node:fs/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
+
 // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- env var can be undefined at runtime
 const BASE_URL = process.env.VITE_APP_URL ?? 'http://localhost:3000';
 const API_URL = `${BASE_URL}/api/dev/memory`;
@@ -333,7 +337,7 @@ async function watchLoop() {
     try {
       const samples = await fetchSamples();
       const html = generateHTML(samples);
-      await Bun.write(OUTPUT_PATH, html);
+      await writeFile(OUTPUT_PATH, html);
       const peakRSS = samples.length
         ? toMB(Math.max(...samples.map((s) => s.rss))).toFixed(1)
         : '0';
@@ -341,7 +345,7 @@ async function watchLoop() {
         `[${new Date().toLocaleTimeString()}] ${samples.length} samples, peak RSS: ${peakRSS} MB`
       );
       if (!opened) {
-        Bun.spawn(['open', OUTPUT_PATH]);
+        spawn('open', [OUTPUT_PATH], { detached: true, stdio: 'ignore' });
         opened = true;
       }
     } catch (error) {
@@ -350,7 +354,7 @@ async function watchLoop() {
         error instanceof Error ? error.message : error
       );
     }
-    await Bun.sleep(2000);
+    await sleep(2000);
   }
 }
 
@@ -363,12 +367,12 @@ async function runOnce() {
   }
 
   const html = generateHTML(samples);
-  await Bun.write(OUTPUT_PATH, html);
+  await writeFile(OUTPUT_PATH, html);
   console.log(`Generated ${OUTPUT_PATH} with ${samples.length} samples.`);
   console.log(
     `Peak RSS: ${toMB(Math.max(...samples.map((s) => s.rss))).toFixed(1)} MB`
   );
-  Bun.spawn(['open', OUTPUT_PATH]);
+  spawn('open', [OUTPUT_PATH], { detached: true, stdio: 'ignore' });
 }
 
 void mainLoop();

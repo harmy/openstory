@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 
 import { Seedance20ImageToVideoInputSchema } from './generated/schemas.gen';
 import { getDurationValues, numericOf, snapTo } from './motion-transform';

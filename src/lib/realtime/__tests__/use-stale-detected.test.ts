@@ -1,12 +1,12 @@
 /**
  * Tests for the testable pieces of `useStaleDetected`. The hook itself is
  * React-lifecycle-bound and not exercised here (the codebase has no DOM
- * environment configured for `bun:test`); behavior such as cross-sequence
+ * environment configured for Vitest); behavior such as cross-sequence
  * attribution and timer cleanup is covered by manual smoke testing in the
  * scenes view.
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import { formatStaleToastMessage } from '@/lib/realtime/use-stale-detected';
 
 describe('formatStaleToastMessage', () => {

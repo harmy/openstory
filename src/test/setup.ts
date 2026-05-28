@@ -1,9 +1,8 @@
 /**
- * Test setup file
- * Loaded before all tests via bunfig.toml
+ * Test setup file — loaded via vitest.config.ts setupFiles.
  */
 
-import { afterAll, afterEach, beforeAll } from 'bun:test';
+import { afterAll, afterEach, beforeAll } from 'vitest';
 import { server } from '@/lib/mocks/server';
 
 // Enable API mocking before all tests

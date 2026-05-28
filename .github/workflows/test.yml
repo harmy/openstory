@@ -36,8 +36,8 @@ jobs:
       - name: Check formatting
         run: bun format:check
 
-      - name: Run testsß
-        run: bun test
+      - name: Run tests
+        run: bun run test
 
   build-e2e:
     runs-on: ubuntu-latest
@@ -57,23 +57,19 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Build app for E2E
-        run: bun run build:e2e
+      - name: Build worker for E2E
+        run: bun run build
         env:
-          # Activates the `e2e` key in package.json `imports.#db-client` so the
-          # built server uses Bun's local sqlite (file:test.db) instead of Turso.
-          BUILD_E2E: '1'
           VITE_APP_URL: http://localhost:3001
           VITE_DISABLE_DEVTOOLS: 'true'
           VITE_R2_PUBLIC_ASSETS_DOMAIN: ${{ vars.VITE_R2_PUBLIC_ASSETS_DOMAIN }}
 
-      - name: Upload .output artifact
+      - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: e2e-output
-          # `.output` starts with a dot; v4 skips hidden paths by default.
           include-hidden-files: true
-          path: .output
+          path: dist
           retention-days: 1
           if-no-files-found: error
 
@@ -99,21 +95,20 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
-      - name: Setup test database
-        run: bun test:e2e:setup
+      - name: Setup test D1 + seed
+        run: bun run test:e2e:setup
 
-      - name: Download .output artifact
+      - name: Download dist artifact
         uses: actions/download-artifact@v4
         with:
           name: e2e-output
-          path: .output
+          path: dist
 
       - name: Run E2E tests
-        run: bun test:e2e
+        run: bun run test:e2e
         env:
           E2E_TEST: 'true'
           E2E_BUILT: 'true'
-          DATABASE_URL: file:test.db
           BETTER_AUTH_URL: http://localhost:3001
           # QStash - local Docker service
           QSTASH_TOKEN: eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=
@@ -176,8 +171,8 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
-      - name: Setup test database
-        run: bun test:e2e:setup
+      - name: Setup test D1 + seed
+        run: bun run test:e2e:setup
 
       - name: Start QStash
         run: |
@@ -203,20 +198,19 @@ jobs:
           timeout 60 sh -c 'until curl -s -o /dev/null http://localhost:8080/ 2>/dev/null; do sleep 1; done' \
             || (echo "::error::QStash did not become ready within 60s" && docker logs qstash && exit 1)
 
-      - name: Download .output artifact
+      - name: Download dist artifact
         uses: actions/download-artifact@v4
         with:
           name: e2e-output
-          path: .output
+          path: dist
 
       - name: Run full-pipeline E2E test
-        run: bun test:e2e:full
+        run: bun run test:e2e:full
         env:
           PLAYWRIGHT_FULL_PIPELINE: 'true'
           E2E_TEST: 'true'
           E2E_BUILT: 'true'
           E2E_FULL_PIPELINE: 'true'
-          DATABASE_URL: file:test.db
           BETTER_AUTH_URL: http://localhost:3001
           # QStash - local Docker service started above
           QSTASH_TOKEN: eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=

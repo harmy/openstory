@@ -1,14 +1,14 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockGenerateVideo } from './__mocks__/fal-client.mock';
 
 // Mock DB + env so api-key resolution falls through to platform key
-mock.module('#db-client', () => ({
+vi.doMock('#db-client', () => ({
   getDb: () => ({
     select: () => ({ from: () => ({ where: () => ({ limit: () => [] }) }) }),
   }),
 }));
 
-mock.module('#env', () => ({
+vi.doMock('#env', () => ({
   getEnv: () => ({ FAL_KEY: 'test-fal-key', OPENROUTER_KEY: 'test-or-key' }),
 }));
 

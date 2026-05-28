@@ -31,9 +31,11 @@
  * from fal CDN per cache hit). Only collisions pay the body-read cost via
  * `tryReplayWithBody`.
  *
- * This module imports `node:fs` and is loaded only via `storage-s3.ts`. On
- * Cloudflare the `#storage` alias resolves to `storage-cloudflare.ts` so this
- * file is never bundled into the worker.
+ * This module imports `node:fs` and runs only in the Node-side aimock server
+ * (`e2e/mocks/aimock-server.ts`), which exposes it over HTTP at port 4011.
+ * `storage-cloudflare.ts` under Workerd posts `{ bucket, key, bodyHash }` to
+ * the aimock endpoint instead of importing this module directly — keeping
+ * fs/crypto out of the worker bundle.
  */
 
 import { createHash } from 'node:crypto';
@@ -188,10 +190,19 @@ export function tryReplayWithBody(
   fp: UploadFingerprint,
   body: Uint8Array
 ): UploadResult | null {
+  return tryReplayWithBodyHash(fp, bodyHashHex(body));
+}
+
+// Same as tryReplayWithBody but accepts a precomputed body hash so callers
+// that already hashed the body (e.g. the worker computing crypto.subtle on
+// the way to aimock) don't have to ship megabytes over HTTP just to re-hash.
+export function tryReplayWithBodyHash(
+  fp: UploadFingerprint,
+  bodyHash: string
+): UploadResult | null {
   const filePath = fixturePath(fp, fingerprintHash(fp));
   const fixture = readFixture(filePath);
   if (!fixture) return null;
-  const bodyHash = bodyHashHex(body);
   const match = fixture.entries.find((e) => e.request.bodyHash === bodyHash);
   return match?.response ?? null;
 }
@@ -199,6 +210,17 @@ export function tryReplayWithBody(
 export function record(
   fp: UploadFingerprint,
   body: Uint8Array,
+  response: UploadResult
+): void {
+  recordWithHash(fp, bodyHashHex(body), body.byteLength, response);
+}
+
+// Same as record but accepts a precomputed body hash + size — see
+// tryReplayWithBodyHash for rationale.
+export function recordWithHash(
+  fp: UploadFingerprint,
+  bodyHash: string,
+  bodySize: number,
   response: UploadResult
 ): void {
   const filePath = fixturePath(fp, fingerprintHash(fp));
@@ -213,9 +235,8 @@ export function record(
   }
   recordedThisRun.add(fpKey);
 
-  const bodyHash = bodyHashHex(body);
   const newEntry: FixtureEntry = {
-    request: { key: fp.key, bodyHash, bodySize: body.byteLength },
+    request: { key: fp.key, bodyHash, bodySize },
     response,
   };
   const existingIdx = entries.findIndex((e) => e.request.bodyHash === bodyHash);

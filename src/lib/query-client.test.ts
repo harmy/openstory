@@ -1,16 +1,16 @@
 import { MutationObserver } from '@tanstack/react-query';
-import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { makeQueryClient } from './query-client';
 
 describe('MutationCache', () => {
   afterEach(() => {
-    mock.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('invalidates matching queries when mutation has a mutationKey', async () => {
     const qc = makeQueryClient();
-    const spy = spyOn(qc, 'invalidateQueries');
+    const spy = vi.spyOn(qc, 'invalidateQueries');
 
     const observer = new MutationObserver(qc, {
       mutationKey: ['items', 'org-1'],
@@ -25,7 +25,7 @@ describe('MutationCache', () => {
 
   it('invalidates ALL queries when mutation has no mutationKey', async () => {
     const qc = makeQueryClient();
-    const spy = spyOn(qc, 'invalidateQueries');
+    const spy = vi.spyOn(qc, 'invalidateQueries');
 
     const observer = new MutationObserver(qc, {
       mutationFn: () => Promise.resolve('ok'),
@@ -39,7 +39,7 @@ describe('MutationCache', () => {
 
   it('uses the correct key for each mutation', async () => {
     const qc = makeQueryClient();
-    const spy = spyOn(qc, 'invalidateQueries');
+    const spy = vi.spyOn(qc, 'invalidateQueries');
 
     const first = new MutationObserver(qc, {
       mutationKey: ['categories', 'org-1'],

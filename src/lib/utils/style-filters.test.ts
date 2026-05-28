@@ -1,5 +1,5 @@
 import type { Style } from '@/types/database';
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { filterStyles } from './style-filters';
 
 import { MOCK_SYSTEM_STYLES } from '../style/style-templates';

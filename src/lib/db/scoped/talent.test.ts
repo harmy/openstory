@@ -7,19 +7,13 @@
  * Drizzle v1 translates `{ id, OR: [...] }` to `id = ? AND (... OR ...)` —
  * NOT to `id = ? OR ... OR ...` — which would be a cross-tenant data leak.
  *
- * Sibling test files mock `@/lib/db/scoped/talent` via `mock.module` (Bun
- * applies this process-wide), so importing the wrappers here yields stubs.
- * Direct `db.query.talent.findFirst` calls avoid the polluted module ID.
+ * Sibling test files mock `@/lib/db/scoped/talent` via vi.doMock; that
+ * mock is per-file under Vitest so it shouldn't leak, but exercising the
+ * predicate via direct `db.query.talent.findFirst` keeps this test
+ * independent of the other file's mock setup either way.
  */
 
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { type Client, createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';

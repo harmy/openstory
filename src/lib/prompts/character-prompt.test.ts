@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import type { CharacterBibleEntry } from '@/lib/ai/scene-analysis.schema';
 import type { StyleConfig } from '@/lib/db/schema';
 import {

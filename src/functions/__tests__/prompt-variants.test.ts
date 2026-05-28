@@ -9,7 +9,7 @@
  * the dedup id would silently produce N copies of every regeneration.
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import {
   framePromptDedupId,
   framePromptForceDedupId,

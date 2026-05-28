@@ -1,22 +1,24 @@
 import { execFileSync } from 'node:child_process';
 import { startAimockServer } from './mocks/aimock-server';
+import { startR2MockServer } from './mocks/r2-mock-server';
 
 /**
- * Playwright global setup - ensures test.db is migrated and seeded,
- * and starts the aimock server for LLM mocking before tests run.
+ * Playwright global setup - migrates + seeds the local Wrangler D1 (test env),
+ * then starts aimock (LLM/fal on :4010) and r2-mock (R2 fixtures on :4011).
  */
 export default async function globalSetup() {
-  console.log('[e2e] Migrating test database...');
+  console.log('[e2e] Migrating test D1 (Wrangler local, [env.test])...');
   execFileSync(
-    'bun',
-    ['--bun', 'drizzle-kit', 'migrate', '--config=drizzle.config.test.ts'],
+    'wrangler',
+    ['d1', 'migrations', 'apply', 'DB', '--local', '--env=test'],
     { stdio: 'inherit' }
   );
 
   console.log('[e2e] Seeding test database...');
-  execFileSync('bun', ['--bun', 'scripts/seed.ts', '--test'], {
+  execFileSync('bun', ['scripts/seed.ts', '--test'], {
     stdio: 'inherit',
   });
 
   await startAimockServer();
+  await startR2MockServer();
 }

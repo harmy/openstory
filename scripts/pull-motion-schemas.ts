@@ -8,9 +8,21 @@
  * Usage: bun scripts/pull-motion-schemas.ts
  */
 
+import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { IMAGE_TO_VIDEO_MODELS } from '@/lib/ai/models';
+
+function runCommand(cmd: string, args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(cmd, args, { stdio: 'inherit' });
+    proc.on('error', reject);
+    proc.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${cmd} ${args.join(' ')} exited with ${code}`));
+    });
+  });
+}
 
 type OpenAPISpec = {
   info?: { 'x-fal-metadata'?: { endpointId?: string }; [key: string]: unknown };
@@ -70,32 +82,15 @@ async function main() {
 
   // Run hey-api codegen
   console.log('\nRunning @hey-api/openapi-ts codegen...\n');
-  const proc = Bun.spawn(
-    [
-      'bunx',
-      '@hey-api/openapi-ts',
-      '-f',
-      'scripts/motion-openapi-ts.config.ts',
-    ],
-    { stdout: 'inherit', stderr: 'inherit' }
-  );
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) {
-    throw new Error(`Codegen failed with exit code ${exitCode}`);
-  }
+  await runCommand('bunx', [
+    '@hey-api/openapi-ts',
+    '-f',
+    'scripts/motion-openapi-ts.config.ts',
+  ]);
 
   // Generate endpoint map + prompt limits from the generated types
   console.log('\nGenerating endpoint map...\n');
-  const mapProc = Bun.spawn(
-    ['bun', 'scripts/generate-motion-endpoint-map.ts'],
-    { stdout: 'inherit', stderr: 'inherit' }
-  );
-  const mapExitCode = await mapProc.exited;
-  if (mapExitCode !== 0) {
-    throw new Error(
-      `Endpoint map generation failed with exit code ${mapExitCode}`
-    );
-  }
+  await runCommand('bun', ['scripts/generate-motion-endpoint-map.ts']);
 
   console.log('\nDone! Generated types in src/lib/motion/generated/');
 }

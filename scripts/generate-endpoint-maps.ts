@@ -13,6 +13,7 @@
  *    - client.ts: EndpointType, InputType<T>, OutputType<T>, and EndpointTypeMap
  */
 
+import { spawn } from 'node:child_process';
 import {
   existsSync,
   readFileSync,
@@ -22,7 +23,6 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'bun';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -113,16 +113,26 @@ function toPascalCase(str: string): string {
  * Format TypeScript code using oxfmt via stdin
  */
 async function formatTypeScript(content: string): Promise<string> {
-  const proc = spawn(['bunx', 'oxfmt', '--stdin-filepath', 'file.ts'], {
-    stdin: 'pipe',
-    stdout: 'pipe',
-    stderr: 'pipe',
+  return new Promise((resolve, reject) => {
+    const proc = spawn('bunx', ['oxfmt', '--stdin-filepath', 'file.ts'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    proc.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    proc.on('error', reject);
+    proc.on('close', (code) => {
+      if (code === 0) resolve(stdout);
+      else reject(new Error(`oxfmt exited with ${code}: ${stderr}`));
+    });
+    proc.stdin.write(content);
+    proc.stdin.end();
   });
-  await proc.stdin.write(content);
-  await proc.stdin.end();
-  const output = await new Response(proc.stdout).text();
-  await proc.exited;
-  return output;
 }
 
 /**

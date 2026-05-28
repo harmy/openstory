@@ -2,23 +2,13 @@
 import { cloudflare } from '@cloudflare/vite-plugin';
 import contentCollections from '@content-collections/vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
-import { nitro } from 'nitro/vite';
-import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig } from 'vite';
 
 import tailwindcss from '@tailwindcss/vite';
 import { devtools } from '@tanstack/devtools-vite';
 import viteReact from '@vitejs/plugin-react';
 
-// Enable tree-shaking debugging: DEBUG_TREESHAKE=1 enables treeshake, DEBUG_VISUALIZER=1 adds visualizer
-const debugTreeshake = process.env.DEBUG_TREESHAKE_OFF !== '1';
-const debugVisualizer = process.env.DEBUG_VISUALIZER === '1';
 const isDev = process.env.NODE_ENV !== 'production';
-// E2E build: prod-shaped server bundle that uses local sqlite (file:test.db)
-// instead of Turso, so CI can run the built server without cloud DB credentials.
-// Activates the `e2e` key in package.json `imports.#db-client`.
-const isE2EBuild = process.env.BUILD_E2E === '1';
-const e2eConditions = isE2EBuild ? ['e2e'] : [];
 
 /**
  * Rolldown reorders CJS-to-ESM wrappers: tsyringe checks for
@@ -47,7 +37,6 @@ function reflectMetadataPolyfill(): import('vite').Plugin {
 export default defineConfig({
   resolve: {
     tsconfigPaths: true,
-    conditions: e2eConditions,
   },
   server: {
     port: 3000,
@@ -58,14 +47,13 @@ export default defineConfig({
         '**/e2e/.auth/**',
         '**/e2e/results/**',
         '**/playwright-report/**',
-        '**/test.db*',
-        '**/local.db*',
+        '**/.wrangler/**',
         '**/test-results/**',
       ],
     },
   },
   preview: {
-    port: 3000, // Preview server port (for cf:preview)
+    port: 3000,
     host: true,
   },
   plugins: [
@@ -73,33 +61,11 @@ export default defineConfig({
     isDev && devtools(),
     reflectMetadataPolyfill(),
     tailwindcss(),
-    process.env.BUILD_CLOUDFLARE
-      ? cloudflare({ viteEnvironment: { name: 'ssr' } })
-      : nitro({
-          preset: 'bun',
-          rollupConfig: {
-            // Default: treeshake disabled due to Nitro bug (see docs/nitro-treeshake-bug-report.md)
-            // Enable with DEBUG_TREESHAKE=1 for debugging
-            treeshake: debugTreeshake,
-            plugins: debugVisualizer
-              ? [
-                  visualizer({
-                    filename: '.output/stats-nitro.html',
-                    open: false,
-                    gzipSize: true,
-                    brotliSize: true,
-                    template: 'treemap', // 'sunburst', 'treemap', 'network'
-                  }),
-                ]
-              : [],
-          },
-        }),
-    // Enables Vite to resolve imports using path aliases.
+    cloudflare({ viteEnvironment: { name: 'ssr' } }),
     tanstackStart({
-      srcDirectory: 'src', // This is the default
+      srcDirectory: 'src',
       router: {
-        // Specifies the directory TanStack Router uses for your routes.
-        routesDirectory: 'routes', // Defaults to "routes", relative to srcDirectory
+        routesDirectory: 'routes',
       },
     }),
     viteReact(),
@@ -108,7 +74,7 @@ export default defineConfig({
     // Mermaid itself is excluded because pre-bundling its 74MB / 100+ chunks
     // blocks dev server startup. Its CJS transitive deps must be force-included
     // so Vite wraps them with proper ESM named-export shims.
-    exclude: ['bun', 'mermaid'],
+    exclude: ['mermaid'],
     include: [
       '@braintree/sanitize-url',
       'cytoscape',
@@ -127,9 +93,6 @@ export default defineConfig({
     ],
   },
   ssr: {
-    resolve: {
-      conditions: e2eConditions,
-    },
     noExternal: [
       '@upstash/realtime',
       '@videojs/react',

@@ -25,8 +25,9 @@
  *     --analysis-model cerebras/llama-3.3-70b
  */
 
+import { readFile } from 'node:fs/promises';
+import { parseArgs } from 'node:util';
 import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL } from '@/lib/ai/models';
-import { parseArgs } from 'util';
 import {
   ANALYSIS_MODEL_IDS,
   DEFAULT_ANALYSIS_MODEL,
@@ -114,7 +115,7 @@ async function main() {
   // Read script file
   let script: string;
   try {
-    script = await Bun.file(values.script).text();
+    script = await readFile(values.script, 'utf-8');
   } catch {
     console.error(`Error: Could not read script file: ${values.script}`);
     process.exit(1);
@@ -128,7 +129,7 @@ async function main() {
   // Read and validate style config
   let styleConfig: unknown;
   try {
-    const styleContent = await Bun.file(values.style).text();
+    const styleContent = await readFile(values.style, 'utf-8');
     styleConfig = JSON.parse(styleContent);
   } catch (error) {
     if (error instanceof SyntaxError) {

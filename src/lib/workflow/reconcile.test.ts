@@ -4,18 +4,18 @@
  * for sweep-level behaviour.
  */
 
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { WorkflowRunState } from './status';
 
 type LogsResult = {
   runs: ReadonlyArray<{ workflowState: WorkflowRunState }>;
 };
 
-const logsMock = mock<
+const logsMock = vi.fn<
   (args: { workflowRunId: string; count: number }) => Promise<LogsResult>
 >(async () => ({ runs: [] }));
 
-mock.module('./client', () => ({
+vi.doMock('./client', () => ({
   getWorkflowClient: () => ({ logs: logsMock }),
 }));
 

@@ -10,7 +10,7 @@
  * wrong column on the update, missing pass isolation).
  */
 
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   frameVariants,
   frames,
@@ -74,10 +74,10 @@ const dbMock = {
   }),
 };
 
-mock.module('#db-client', () => ({ getDb: () => dbMock }));
+vi.doMock('#db-client', () => ({ getDb: () => dbMock }));
 
 // QStash stub: "still running" — verified passes are no-ops unless overridden.
-mock.module('@/lib/workflow/client', () => ({
+vi.doMock('@/lib/workflow/client', () => ({
   getWorkflowClient: () => ({
     logs: async () => ({ runs: [{ workflowState: 'RUN_STARTED' }] }),
   }),

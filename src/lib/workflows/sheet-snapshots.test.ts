@@ -12,7 +12,7 @@
  *   - imageModel default-substitution agreement
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import type {
   CharacterSheetWorkflowInput,
   LibraryTalentSheetWorkflowInput,

@@ -10,7 +10,7 @@
  *   - divergent: a character sheet was re-hashed mid-flight → alternate write
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import type { NewFrame, NewFrameVariant } from '@/lib/db/schema';
 import type { VariantType } from '@/lib/db/schema/frame-variants';
 import type {

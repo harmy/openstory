@@ -6,7 +6,7 @@
  * (or drops a guard entirely) fails immediately.
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import {
   assertSequenceVariantPromotable,
   type SequenceVariantPromoteCandidate,
