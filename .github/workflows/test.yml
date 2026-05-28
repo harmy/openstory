@@ -104,6 +104,36 @@ jobs:
           name: e2e-output
           path: dist
 
+      - name: Write .dev.vars for wrangler dev
+        # cf-plugin / wrangler dev exposes vars on the Workerd `env` binding
+        # from `.dev.vars` (or wrangler.jsonc `vars:`). Step `env:` only sets
+        # process.env, which doesn't reach the worker. Generate the file here
+        # so Better Auth + other server code see the secrets at runtime.
+        run: |
+          cat > .dev.vars <<EOF
+          BETTER_AUTH_SECRET=${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL=http://localhost:3001
+          OPENROUTER_KEY=test-mock-key
+          OPENROUTER_BASE_URL=http://localhost:4010
+          FAL_KEY=${{ secrets.FAL_KEY }}
+          GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+          QSTASH_TOKEN=eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=
+          QSTASH_URL=http://localhost:8080
+          QSTASH_CURRENT_SIGNING_KEY=sig_7kYjw48mhY7kAjqNGcy6cr29RJ6r
+          QSTASH_NEXT_SIGNING_KEY=sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs
+          R2_ACCOUNT_ID=${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID=${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY=${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME=${{ secrets.R2_BUCKET_NAME }}
+          R2_PUBLIC_STORAGE_DOMAIN=${{ vars.R2_PUBLIC_STORAGE_DOMAIN }}
+          UPSTASH_REDIS_REST_URL=${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN=${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM=${{ secrets.EMAIL_FROM }}
+          E2E_TEST=true
+          EOF
+
       - name: Run E2E tests
         run: bun run test:e2e
         env:
@@ -214,6 +244,37 @@ jobs:
         with:
           name: e2e-output
           path: dist
+
+      - name: Write .dev.vars for wrangler dev
+        # See e2e job above — cf-plugin / wrangler dev reads the Workerd env
+        # binding from .dev.vars, not from the step's `env:` block.
+        # Full-pipeline adds FAL_PROXY_URL + E2E_FULL_PIPELINE.
+        run: |
+          cat > .dev.vars <<EOF
+          BETTER_AUTH_SECRET=${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL=http://localhost:3001
+          OPENROUTER_KEY=test-mock-key
+          OPENROUTER_BASE_URL=http://localhost:4010
+          FAL_KEY=test-mock-key
+          FAL_PROXY_URL=http://localhost:4010/fal
+          GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+          QSTASH_TOKEN=eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=
+          QSTASH_URL=http://localhost:8080
+          QSTASH_CURRENT_SIGNING_KEY=sig_7kYjw48mhY7kAjqNGcy6cr29RJ6r
+          QSTASH_NEXT_SIGNING_KEY=sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs
+          R2_ACCOUNT_ID=${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID=${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY=${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME=${{ secrets.R2_BUCKET_NAME }}
+          R2_PUBLIC_STORAGE_DOMAIN=${{ vars.R2_PUBLIC_STORAGE_DOMAIN }}
+          UPSTASH_REDIS_REST_URL=${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN=${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM=${{ secrets.EMAIL_FROM }}
+          E2E_TEST=true
+          E2E_FULL_PIPELINE=true
+          EOF
 
       - name: Run full-pipeline E2E test
         run: bun run test:e2e:full
