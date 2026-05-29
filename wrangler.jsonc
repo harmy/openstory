@@ -33,8 +33,8 @@
   // them to PostHog's /i/v1/logs endpoint. The forwarder is its own Worker
   // (workers/posthog-log-forwarder/) and must be deployed first. Previews are
   // patched to use 'openstory-log-forwarder-stg' in deploy-cloudflare.yml.
-  // tail_consumers is inheritable, so [env.production] picks this up
-  // automatically.
+  // tail_consumers is NON-inheritable, so each env block below must
+  // redeclare it (or set [] to opt out).
   "tail_consumers": [{ "service": "openstory-log-forwarder-prd" }],
   // ─────────────────────────────────────────────────────────────────────────
   // DEFAULT env = local dev. The D1 here uses a placeholder `database_id` so
@@ -104,6 +104,9 @@
       "triggers": {
         "crons": ["*/5 * * * *"],
       },
+      // Same forwarder as the top-level default — redeclared because
+      // tail_consumers is non-inheritable across env blocks.
+      "tail_consumers": [{ "service": "openstory-log-forwarder-prd" }],
     },
     // Playwright e2e environment. D1 stays local (Miniflare) for hermetic
     // setup/teardown. R2 storage is `remote: true` so RECORD-mode uploads land
@@ -136,6 +139,10 @@
           "remote": true,
         },
       ],
+      // Explicit empty array opts out of inheritance and silences wrangler's
+      // "tail_consumers not on env.test" warning. We don't want e2e runs
+      // forwarding LogTape JSON into the prod PostHog log pipeline.
+      "tail_consumers": [],
     },
   },
 }

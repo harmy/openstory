@@ -79,6 +79,9 @@ export default defineConfig({
   webServer: (() => {
     const useBuiltServer = process.env.E2E_BUILT === 'true';
     const fullPipeline = process.env.PLAYWRIGHT_FULL_PIPELINE === 'true';
+    // Absolute path to project-root .wrangler/state — see persist-to comment
+    // on the wrangler dev command below for why it's pinned here.
+    const persistTo = `${process.cwd()}/.wrangler/state`;
     const envPrefix = [
       'E2E_TEST=true',
       // CLOUDFLARE_ENV activates wrangler.jsonc's [env.test] block under
@@ -124,7 +127,15 @@ export default defineConfig({
           // No --env=test needed: `build:e2e` already builds with
           // `CLOUDFLARE_ENV=test` so the [env.test] bindings are baked into
           // this generated wrangler.json directly.
-          `${envPrefix} wrangler dev -c dist/server/wrangler.json --port=3001`
+          // --persist-to: wrangler's default Miniflare state dir is
+          // resolved relative to the config file (`dist/server/.wrangler/`),
+          // but `test:e2e:setup` applies migrations via getPlatformProxy from
+          // the project root → writes to `<project-root>/.wrangler/state/`.
+          // Point wrangler at the same dir so the worker sees the migrated
+          // D1 instead of a fresh empty one. (vite dev uses the cf-plugin
+          // which also defaults to `<project-root>/.wrangler/state/`, so the
+          // non-built path doesn't need this flag.)
+          `${envPrefix} wrangler dev -c dist/server/wrangler.json --persist-to ${persistTo} --port=3001`
         : `${envPrefix} vite dev --port=3001`,
       // Wait for the TCP port, not an HTTP 2xx — SSR errors should surface to
       // the individual specs via `page.goto()` rather than fail server boot.

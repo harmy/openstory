@@ -58,19 +58,24 @@ function wranglerBindingsBanner(): Plugin {
         const DIM = '\x1b[2m';
         const RESET = '\x1b[0m';
 
-        console.log('\n  wrangler bindings (default env):');
+        // process.stdout.write (not console.log) so this stays under the
+        // file-wide eslint/no-console rule. Vite plugins run in Node at dev
+        // startup; this banner is intentional diagnostic output.
+        process.stdout.write('\n  wrangler bindings (default env):\n');
         for (const [kind, name, remote] of rows) {
           const status = remote
             ? `${RED}REMOTE${RESET}  (writes hit real Cloudflare)`
             : `${DIM}local${RESET}   (Miniflare)`;
-          console.log(`    ${kind} ${name.padEnd(nameWidth)}  →  ${status}`);
+          process.stdout.write(
+            `    ${kind} ${name.padEnd(nameWidth)}  →  ${status}\n`
+          );
         }
         if (rows.some(([, , r]) => r)) {
-          console.log(
-            `  ${DIM}↑ remote bindings opt-in per-entry in wrangler.jsonc; D1 should always be local in dev.${RESET}\n`
+          process.stdout.write(
+            `  ${DIM}↑ remote bindings opt-in per-entry in wrangler.jsonc; D1 should always be local in dev.${RESET}\n\n`
           );
         } else {
-          console.log('');
+          process.stdout.write('\n');
         }
       });
     },
