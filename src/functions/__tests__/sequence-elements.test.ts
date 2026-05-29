@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import { isValidElementStoragePath } from '@/functions/sequence-elements';
 
 describe('isValidElementStoragePath', () => {

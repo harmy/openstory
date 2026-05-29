@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import {
   IMAGE_TO_VIDEO_MODELS,
   safeImageToVideoModel,
@@ -171,7 +171,7 @@ describe('buildModelInput', () => {
               : undefined;
 
           if (typeof duration === 'undefined') {
-            expect(allowed).toBeEmpty();
+            expect(allowed).toHaveLength(0);
           } else {
             expect(allowed).toContain(duration);
           }

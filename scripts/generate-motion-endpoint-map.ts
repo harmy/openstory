@@ -15,7 +15,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const GENERATED_DIR = join(
-  import.meta.dir,
+  import.meta.dirname,
   '..',
   'src',
   'lib',
@@ -23,7 +23,7 @@ const GENERATED_DIR = join(
   'generated'
 );
 
-const MOTION_DIR = join(import.meta.dir, '..', 'src', 'lib', 'motion');
+const MOTION_DIR = join(import.meta.dirname, '..', 'src', 'lib', 'motion');
 
 type EndpointInfo = {
   endpointId: string;

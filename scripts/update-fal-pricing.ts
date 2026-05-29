@@ -4,6 +4,7 @@
  *   bun scripts/update-fal-pricing.ts            # API pricing only
  *   bun scripts/update-fal-pricing.ts --llms-txt  # Also fetch llms.txt pricing notes
  */
+import { writeFile } from 'node:fs/promises';
 import { getEnv } from '#env';
 import {
   AUDIO_MODELS,
@@ -630,7 +631,7 @@ ${serializeMap('AUDIO_PRICING', 'AudioPricing', audioPricing)}
 export const PRICING_LAST_UPDATED = '${now}';
 `;
 
-await Bun.write(outPath, output);
+await writeFile(outPath, output);
 
 const total =
   Object.keys(imagePricing).length +

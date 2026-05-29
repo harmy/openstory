@@ -1,5 +1,5 @@
 import type { Scene } from '@/lib/ai/scene-analysis.schema';
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import { buildMusicSceneSummaries } from './music-scene-summaries';
 
 const baseMetadata: NonNullable<Scene['metadata']> = {

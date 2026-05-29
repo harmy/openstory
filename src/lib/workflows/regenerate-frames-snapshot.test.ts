@@ -9,7 +9,7 @@
  * helpers correctly detect divergence so the downstream branching is sound.
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import type { Character, Frame, SequenceLocation } from '@/lib/db/schema';
 import { validateSnapshotPayload } from '@/lib/workflow/scoped-workflow';
 import {

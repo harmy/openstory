@@ -1,8 +1,8 @@
 // @ts-nocheck — test sentinels are intentionally partial objects
-import { describe, expect, it, mock, beforeEach } from 'bun:test';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import type { NewLocationSheet } from '@/lib/db/schema';
 
-// Import pure utility functions before mock.module so they can be re-exported
+// Import pure utility functions before vi.doMock so they can be re-exported
 import {
   locationMatchesTag,
   matchLocationsToFrame,
@@ -12,29 +12,29 @@ import {
 // Sub-module mocks — we test that scoped.ts composes them correctly
 // ============================================================================
 
-const mockSequencesList = mock();
-const mockSequencesCreate = mock();
-const mockSequencesGetById = mock();
-const mockSequencesGetWithFrames = mock();
-const mockSequencesUpdate = mock();
-const mockSequencesDelete = mock();
-const mockSequencesGetForUser = mock();
-const mockSequencesUpdateTitle = mock();
-const mockSequencesUpdateAnalysisDurationMs = mock();
-const mockSequencesUpdateMusicPrompt = mock();
-const mockSequencesUpdateWorkflow = mock();
-const mockUpdateStatus = mock();
-const mockUpdateMusicFields = mock();
-const mockGetMusicStatus = mock();
+const mockSequencesList = vi.fn();
+const mockSequencesCreate = vi.fn();
+const mockSequencesGetById = vi.fn();
+const mockSequencesGetWithFrames = vi.fn();
+const mockSequencesUpdate = vi.fn();
+const mockSequencesDelete = vi.fn();
+const mockSequencesGetForUser = vi.fn();
+const mockSequencesUpdateTitle = vi.fn();
+const mockSequencesUpdateAnalysisDurationMs = vi.fn();
+const mockSequencesUpdateMusicPrompt = vi.fn();
+const mockSequencesUpdateWorkflow = vi.fn();
+const mockUpdateStatus = vi.fn();
+const mockUpdateMusicFields = vi.fn();
+const mockGetMusicStatus = vi.fn();
 
-mock.module('@/lib/db/scoped/sequences', () => ({
-  createSequencesReadMethods: mock(() => ({
+vi.doMock('@/lib/db/scoped/sequences', () => ({
+  createSequencesReadMethods: vi.fn(() => ({
     list: mockSequencesList,
     getById: mockSequencesGetById,
     getWithFrames: mockSequencesGetWithFrames,
     getForUser: mockSequencesGetForUser,
   })),
-  createSequencesMethods: mock(() => ({
+  createSequencesMethods: vi.fn(() => ({
     list: mockSequencesList,
     create: mockSequencesCreate,
     getById: mockSequencesGetById,
@@ -47,11 +47,11 @@ mock.module('@/lib/db/scoped/sequences', () => ({
     updateMusicPrompt: mockSequencesUpdateMusicPrompt,
     updateWorkflow: mockSequencesUpdateWorkflow,
   })),
-  createSequenceReadMethods: mock((_db: unknown, sequenceId: string) => ({
+  createSequenceReadMethods: vi.fn((_db: unknown, sequenceId: string) => ({
     sequenceId,
     getMusicStatus: mockGetMusicStatus,
   })),
-  createSequenceMethods: mock((_db: unknown, sequenceId: string) => ({
+  createSequenceMethods: vi.fn((_db: unknown, sequenceId: string) => ({
     sequenceId,
     updateStatus: mockUpdateStatus,
     updateMusicFields: mockUpdateMusicFields,
@@ -59,24 +59,24 @@ mock.module('@/lib/db/scoped/sequences', () => ({
   })),
 }));
 
-const mockTalentList = mock();
-const mockTalentGetByIds = mock();
-const mockTalentCreate = mock();
-const mockTalentUpdate = mock();
-const mockTalentDelete = mock();
-const mockTalentToggleFavorite = mock();
-const mockTalentGetById = mock();
-const mockTalentGetWithRelations = mock();
-const mockTalentSheetsGetById = mock();
-const mockTalentSheetsCreate = mock();
-const mockTalentSheetsUpdate = mock();
-const mockTalentSheetsDelete = mock();
-const mockTalentMediaGetById = mock();
-const mockTalentMediaCreate = mock();
-const mockTalentMediaDelete = mock();
+const mockTalentList = vi.fn();
+const mockTalentGetByIds = vi.fn();
+const mockTalentCreate = vi.fn();
+const mockTalentUpdate = vi.fn();
+const mockTalentDelete = vi.fn();
+const mockTalentToggleFavorite = vi.fn();
+const mockTalentGetById = vi.fn();
+const mockTalentGetWithRelations = vi.fn();
+const mockTalentSheetsGetById = vi.fn();
+const mockTalentSheetsCreate = vi.fn();
+const mockTalentSheetsUpdate = vi.fn();
+const mockTalentSheetsDelete = vi.fn();
+const mockTalentMediaGetById = vi.fn();
+const mockTalentMediaCreate = vi.fn();
+const mockTalentMediaDelete = vi.fn();
 
-mock.module('@/lib/db/scoped/talent', () => ({
-  createTalentReadMethods: mock(() => ({
+vi.doMock('@/lib/db/scoped/talent', () => ({
+  createTalentReadMethods: vi.fn(() => ({
     list: mockTalentList,
     getByIds: mockTalentGetByIds,
     getById: mockTalentGetById,
@@ -84,7 +84,7 @@ mock.module('@/lib/db/scoped/talent', () => ({
     sheets: { getById: mockTalentSheetsGetById },
     media: { getById: mockTalentMediaGetById },
   })),
-  createTalentMethods: mock(() => ({
+  createTalentMethods: vi.fn(() => ({
     list: mockTalentList,
     getByIds: mockTalentGetByIds,
     create: mockTalentCreate,
@@ -107,21 +107,21 @@ mock.module('@/lib/db/scoped/talent', () => ({
   })),
 }));
 
-const mockStylesList = mock();
-const mockStylesCreate = mock();
-const mockStylesUpdate = mock();
-const mockStylesDelete = mock();
-const mockStylesGetById = mock();
-const mockStylesGetPublic = mock();
-const mockStylesIncrementUsage = mock();
+const mockStylesList = vi.fn();
+const mockStylesCreate = vi.fn();
+const mockStylesUpdate = vi.fn();
+const mockStylesDelete = vi.fn();
+const mockStylesGetById = vi.fn();
+const mockStylesGetPublic = vi.fn();
+const mockStylesIncrementUsage = vi.fn();
 
-mock.module('@/lib/db/scoped/styles', () => ({
-  createStylesReadMethods: mock(() => ({
+vi.doMock('@/lib/db/scoped/styles', () => ({
+  createStylesReadMethods: vi.fn(() => ({
     list: mockStylesList,
     getById: mockStylesGetById,
     getPublic: mockStylesGetPublic,
   })),
-  createStylesMethods: mock(() => ({
+  createStylesMethods: vi.fn(() => ({
     list: mockStylesList,
     create: mockStylesCreate,
     update: mockStylesUpdate,
@@ -132,32 +132,32 @@ mock.module('@/lib/db/scoped/styles', () => ({
   })),
 }));
 
-const mockLocationsList = mock();
-const mockLocationsSearch = mock();
-const mockLocationsCreate = mock();
-const mockLocationsWithReferences = mock();
-const mockLocationsGetById = mock();
-const mockLocationsGetByIds = mock();
-const mockLocationsCreateBulk = mock();
-const mockLocationsDelete = mock();
-const mockLocationsDeleteAll = mock();
-const mockLocationsUpdate = mock();
-const mockLocationsUpdateReference = mock();
-const mockLocationSheetsList = mock();
-const mockLocationSheetsInsert = mock();
-const mockLocationSheetsDelete = mock();
-const mockLocationSheetsGetWithLocation = mock();
-const mockLocationSheetsPromoteDefault = mock();
+const mockLocationsList = vi.fn();
+const mockLocationsSearch = vi.fn();
+const mockLocationsCreate = vi.fn();
+const mockLocationsWithReferences = vi.fn();
+const mockLocationsGetById = vi.fn();
+const mockLocationsGetByIds = vi.fn();
+const mockLocationsCreateBulk = vi.fn();
+const mockLocationsDelete = vi.fn();
+const mockLocationsDeleteAll = vi.fn();
+const mockLocationsUpdate = vi.fn();
+const mockLocationsUpdateReference = vi.fn();
+const mockLocationSheetsList = vi.fn();
+const mockLocationSheetsInsert = vi.fn();
+const mockLocationSheetsDelete = vi.fn();
+const mockLocationSheetsGetWithLocation = vi.fn();
+const mockLocationSheetsPromoteDefault = vi.fn();
 
-mock.module('@/lib/db/scoped/location-library', () => ({
-  createLocationsReadMethods: mock(() => ({
+vi.doMock('@/lib/db/scoped/location-library', () => ({
+  createLocationsReadMethods: vi.fn(() => ({
     list: mockLocationsList,
     search: mockLocationsSearch,
     withReferences: mockLocationsWithReferences,
     getById: mockLocationsGetById,
     getByIds: mockLocationsGetByIds,
   })),
-  createLocationsMethods: mock(() => ({
+  createLocationsMethods: vi.fn(() => ({
     list: mockLocationsList,
     search: mockLocationsSearch,
     create: mockLocationsCreate,
@@ -170,11 +170,11 @@ mock.module('@/lib/db/scoped/location-library', () => ({
     update: mockLocationsUpdate,
     updateReference: mockLocationsUpdateReference,
   })),
-  createLocationSheetsReadMethods: mock(() => ({
+  createLocationSheetsReadMethods: vi.fn(() => ({
     list: mockLocationSheetsList,
     getWithLocation: mockLocationSheetsGetWithLocation,
   })),
-  createLocationSheetsMethods: mock(() => ({
+  createLocationSheetsMethods: vi.fn(() => ({
     list: mockLocationSheetsList,
     insert: mockLocationSheetsInsert,
     delete: mockLocationSheetsDelete,
@@ -183,66 +183,66 @@ mock.module('@/lib/db/scoped/location-library', () => ({
   })),
 }));
 
-const mockLibraryGetAll = mock();
+const mockLibraryGetAll = vi.fn();
 
-mock.module('@/lib/db/scoped/library', () => ({
-  createLibraryMethods: mock(() => ({
+vi.doMock('@/lib/db/scoped/library', () => ({
+  createLibraryMethods: vi.fn(() => ({
     getAll: mockLibraryGetAll,
   })),
 }));
 
-const mockBillingGetBalance = mock();
-const mockBillingDeductCredits = mock();
+const mockBillingGetBalance = vi.fn();
+const mockBillingDeductCredits = vi.fn();
 
-mock.module('@/lib/db/scoped/billing', () => ({
-  createBillingReadMethods: mock(() => ({
+vi.doMock('@/lib/db/scoped/billing', () => ({
+  createBillingReadMethods: vi.fn(() => ({
     getBalance: mockBillingGetBalance,
   })),
-  createBillingMethods: mock(() => ({
+  createBillingMethods: vi.fn(() => ({
     getBalance: mockBillingGetBalance,
     deductCredits: mockBillingDeductCredits,
   })),
 }));
 
-const mockApiKeysResolveKey = mock();
-const mockApiKeysSaveKey = mock();
+const mockApiKeysResolveKey = vi.fn();
+const mockApiKeysSaveKey = vi.fn();
 
-mock.module('@/lib/db/scoped/api-keys', () => ({
-  createApiKeysReadMethods: mock(() => ({
+vi.doMock('@/lib/db/scoped/api-keys', () => ({
+  createApiKeysReadMethods: vi.fn(() => ({
     resolveKey: mockApiKeysResolveKey,
   })),
-  createApiKeysMethods: mock(() => ({
+  createApiKeysMethods: vi.fn(() => ({
     resolveKey: mockApiKeysResolveKey,
     saveKey: mockApiKeysSaveKey,
   })),
 }));
 
-const mockTeamManagementGetMembers = mock();
-const mockTeamManagementCreateInvitation = mock();
+const mockTeamManagementGetMembers = vi.fn();
+const mockTeamManagementCreateInvitation = vi.fn();
 
-mock.module('@/lib/db/scoped/team-management', () => ({
-  createTeamManagementReadMethods: mock(() => ({
+vi.doMock('@/lib/db/scoped/team-management', () => ({
+  createTeamManagementReadMethods: vi.fn(() => ({
     getMembers: mockTeamManagementGetMembers,
   })),
-  createTeamManagementMethods: mock(() => ({
+  createTeamManagementMethods: vi.fn(() => ({
     getMembers: mockTeamManagementGetMembers,
     createInvitation: mockTeamManagementCreateInvitation,
   })),
 }));
 
-mock.module('@/lib/db/scoped/admin', () => ({
-  createAdminMethods: mock(() => ({})),
+vi.doMock('@/lib/db/scoped/admin', () => ({
+  createAdminMethods: vi.fn(() => ({})),
 }));
 
-const mockCharactersGetById = mock();
-const mockCharactersListWithTalent = mock();
-const mockCharactersListWithSheets = mock();
-const mockCharactersUpdateTalent = mock();
-const mockCharactersUpdateSheetStatus = mock();
-const mockCharactersGetFrameIdsForCharacter = mock();
+const mockCharactersGetById = vi.fn();
+const mockCharactersListWithTalent = vi.fn();
+const mockCharactersListWithSheets = vi.fn();
+const mockCharactersUpdateTalent = vi.fn();
+const mockCharactersUpdateSheetStatus = vi.fn();
+const mockCharactersGetFrameIdsForCharacter = vi.fn();
 
-mock.module('@/lib/db/scoped/characters', () => ({
-  createCharactersMethods: mock(() => ({
+vi.doMock('@/lib/db/scoped/characters', () => ({
+  createCharactersMethods: vi.fn(() => ({
     getById: mockCharactersGetById,
     listWithTalent: mockCharactersListWithTalent,
     listWithSheets: mockCharactersListWithSheets,
@@ -252,15 +252,15 @@ mock.module('@/lib/db/scoped/characters', () => ({
   })),
 }));
 
-const mockSeqLocationsGetById = mock();
-const mockSeqLocationsList = mock();
-const mockSeqLocationsListWithReferences = mock();
-const mockSeqLocationsUpdateReferenceStatus = mock();
-const mockSeqLocationsGetFrameIdsForLocation = mock();
-const mockSeqLocationsGetTeamLibrary = mock();
+const mockSeqLocationsGetById = vi.fn();
+const mockSeqLocationsList = vi.fn();
+const mockSeqLocationsListWithReferences = vi.fn();
+const mockSeqLocationsUpdateReferenceStatus = vi.fn();
+const mockSeqLocationsGetFrameIdsForLocation = vi.fn();
+const mockSeqLocationsGetTeamLibrary = vi.fn();
 
-mock.module('@/lib/db/scoped/sequence-locations', () => ({
-  createSequenceLocationsMethods: mock(() => ({
+vi.doMock('@/lib/db/scoped/sequence-locations', () => ({
+  createSequenceLocationsMethods: vi.fn(() => ({
     getById: mockSeqLocationsGetById,
     list: mockSeqLocationsList,
     listWithReferences: mockSeqLocationsListWithReferences,
@@ -274,9 +274,9 @@ mock.module('@/lib/db/scoped/sequence-locations', () => ({
 }));
 
 // DB chain mock for inline operations (characters, frames)
-const mockWhere = mock();
-const mockSelect = mock();
-const mockFrom = mock();
+const mockWhere = vi.fn();
+const mockSelect = vi.fn();
+const mockFrom = vi.fn();
 
 function wireDbChain() {
   const chain = {
@@ -291,9 +291,9 @@ function wireDbChain() {
 }
 
 let dbChain: ReturnType<typeof wireDbChain>;
-const mockGetDb = mock(() => dbChain);
+const mockGetDb = vi.fn(() => dbChain);
 
-mock.module('#db-client', () => ({
+vi.doMock('#db-client', () => ({
   getDb: mockGetDb,
 }));
 

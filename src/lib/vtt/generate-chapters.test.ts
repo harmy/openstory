@@ -1,6 +1,6 @@
 import type { Scene } from '@/lib/ai/scene-analysis.schema';
 import type { Frame } from '@/types/database';
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { generateChaptersVTT } from './generate-chapters';
 
 // Helper to create minimal test scene metadata

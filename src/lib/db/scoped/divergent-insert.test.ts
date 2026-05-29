@@ -7,7 +7,7 @@
  *   - Cloudflare D1's plain Error with the canonical SQLite message text
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import {
   insertDivergentRaceTolerant,
   isUniqueConstraintError,

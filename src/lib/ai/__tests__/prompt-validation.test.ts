@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Import real exports before mock.module so they can be re-exported
+// Import real exports before vi.doMock so they can be re-exported
 import * as tanstackAi from '@tanstack/ai';
 
 // Mock @tanstack/ai with all real exports preserved (script-enhancer → llm-client → @tanstack/ai)
-const mockChat = mock();
-mock.module('@tanstack/ai', () => ({
+const mockChat = vi.fn();
+vi.doMock('@tanstack/ai', () => ({
   ...tanstackAi,
   chat: mockChat,
 }));
@@ -18,9 +18,9 @@ import {
 import { enhanceScript } from '../script-enhancer';
 
 // Mock OpenAI for security tests (legacy — no longer used but kept for skipped e2e tests)
-const mockChatCompletionsCreate = mock();
+const mockChatCompletionsCreate = vi.fn();
 
-mock.module('openai', () => {
+vi.doMock('openai', () => {
   return {
     default: class MockOpenAI {
       chat = {

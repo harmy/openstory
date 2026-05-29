@@ -33,7 +33,7 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { basename, isAbsolute, join } from 'path';
 
-const REPO_ROOT = join(import.meta.dir, '..');
+const REPO_ROOT = join(import.meta.dirname, '..');
 const MIGRATIONS_DIR = join(REPO_ROOT, 'drizzle/migrations');
 const JOURNAL_PATH = join(MIGRATIONS_DIR, 'meta/_journal.json');
 const SCHEMA_DIR = join(REPO_ROOT, 'src/lib/db/schema');

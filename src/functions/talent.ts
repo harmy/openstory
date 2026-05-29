@@ -1,5 +1,4 @@
 import { deleteFile, moveFile, getSignedUploadUrl } from '#storage';
-import { getEnv } from '#env';
 import { requireTeamAdminAccess } from '@/lib/auth/action-utils';
 import { generateId } from '@/lib/db/id';
 import type { Talent, TalentWithSheets } from '@/lib/db/schema';
@@ -93,45 +92,30 @@ export const createTalentFn = createServerFn({ method: 'POST' })
       description: data.description,
       isFavorite: data.isFavorite ?? false,
       isHuman: data.isHuman ?? false,
+      isInTeamLibrary: true,
     });
 
     // Move temp files to permanent location and create media records
     const tempUrls = data.referenceImageUrls ?? [];
     const permanentUrls: string[] = [];
 
-    if (getEnv().E2E_TEST === 'true') {
-      for (const tempUrl of tempUrls) {
-        const mediaId = generateId();
-        permanentUrls.push(tempUrl);
-        await context.scopedDb.talent.media.create({
-          talentId: newTalent.id,
-          type: 'image',
-          url: tempUrl,
-          path: `e2e-mock/${mediaId}`,
-        });
-      }
-    } else {
-      for (const tempUrl of tempUrls) {
-        const tempPath = getPathFromUrl(tempUrl, STORAGE_BUCKETS.TALENT);
-        const ext = getExtensionFromUrl(tempUrl);
-        const mediaId = generateId();
-        const permanentPath = `${context.teamId}/${newTalent.id}/${mediaId}.${ext}`;
+    for (const tempUrl of tempUrls) {
+      const tempPath = getPathFromUrl(tempUrl, STORAGE_BUCKETS.TALENT);
+      const ext = getExtensionFromUrl(tempUrl);
+      const mediaId = generateId();
+      const permanentPath = `${context.teamId}/${newTalent.id}/${mediaId}.${ext}`;
 
-        await moveFile(STORAGE_BUCKETS.TALENT, tempPath, permanentPath);
+      await moveFile(STORAGE_BUCKETS.TALENT, tempPath, permanentPath);
 
-        const permanentUrl = getPublicUrl(
-          STORAGE_BUCKETS.TALENT,
-          permanentPath
-        );
-        permanentUrls.push(permanentUrl);
+      const permanentUrl = getPublicUrl(STORAGE_BUCKETS.TALENT, permanentPath);
+      permanentUrls.push(permanentUrl);
 
-        await context.scopedDb.talent.media.create({
-          talentId: newTalent.id,
-          type: 'image',
-          url: permanentUrl,
-          path: permanentPath,
-        });
-      }
+      await context.scopedDb.talent.media.create({
+        talentId: newTalent.id,
+        type: 'image',
+        url: permanentUrl,
+        path: permanentPath,
+      });
     }
 
     // Trigger talent sheet generation workflow asynchronously

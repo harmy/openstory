@@ -5,9 +5,6 @@
 
 import type { Page } from 'playwright/test';
 import { expect } from 'playwright/test';
-import { eq, and } from 'drizzle-orm';
-import { testDb } from './db-client';
-import { locationLibrary, talent } from '@/lib/db/schema';
 
 /**
  * Wait for a library page to be hydrated by checking that its Add button is enabled.
@@ -29,18 +26,11 @@ export async function cleanupLocationByName(
   teamId: string,
   name: string
 ): Promise<void> {
-  const [created] = await testDb
-    .select({ id: locationLibrary.id })
-    .from(locationLibrary)
-    .where(
-      and(eq(locationLibrary.teamId, teamId), eq(locationLibrary.name, name))
-    );
-  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB query returns undefined when no rows match
-  if (created) {
-    await testDb
-      .delete(locationLibrary)
-      .where(eq(locationLibrary.id, created.id));
-  }
+  await fetch('http://localhost:3001/api/test/location', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teamId, name }),
+  });
 }
 
 /**
@@ -51,12 +41,9 @@ export async function cleanupTalentByName(
   teamId: string,
   name: string
 ): Promise<void> {
-  const [created] = await testDb
-    .select({ id: talent.id })
-    .from(talent)
-    .where(and(eq(talent.teamId, teamId), eq(talent.name, name)));
-  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB query returns undefined when no rows match
-  if (created) {
-    await testDb.delete(talent).where(eq(talent.id, created.id));
-  }
+  await fetch('http://localhost:3001/api/test/talent', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teamId, name }),
+  });
 }

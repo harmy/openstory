@@ -14,10 +14,13 @@
  */
 
 import * as p from '@clack/prompts';
-import { $ } from 'bun';
+import { execFile } from 'node:child_process';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { PhotonImage, resize, SamplingFilter } from '@cf-wasm/photon';
+
+const execFileAsync = promisify(execFile);
 
 const PREVIEW_DIR = path.join(process.cwd(), 'preview');
 const TEMP_DIR = path.join(process.cwd(), '.tmp/r2-upload');
@@ -131,7 +134,15 @@ async function uploadToR2(
 
   const fullKey = `${bucket}/${r2Key}`;
   try {
-    await $`bunx wrangler r2 object put ${fullKey} --file=${tempFile} --remote`.quiet();
+    await execFileAsync('bunx', [
+      'wrangler',
+      'r2',
+      'object',
+      'put',
+      fullKey,
+      `--file=${tempFile}`,
+      '--remote',
+    ]);
   } catch (error) {
     const stderr =
       error && typeof error === 'object' && 'stderr' in error

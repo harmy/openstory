@@ -3,7 +3,7 @@
  * Pure math; no Mediabunny or WebCodecs surface needed.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { computeSceneOffsets } from './timeline-offsets';
 
 describe('scene timeline offsets', () => {

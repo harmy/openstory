@@ -2,7 +2,7 @@
  * Tests for sequence locations helper functions
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import {
   matchLocationsToFrame,
   locationMatchesTag,

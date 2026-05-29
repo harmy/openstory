@@ -33,7 +33,7 @@ import {
   talentMatchResponseSchema,
 } from '@/lib/ai/response-schemas';
 
-const SCHEMA_OUTPUT_DIR = join(import.meta.dir, 'schemas');
+const SCHEMA_OUTPUT_DIR = join(import.meta.dirname, 'schemas');
 
 // All result schemas are now imported from their source files
 

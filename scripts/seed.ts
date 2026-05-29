@@ -3,10 +3,10 @@
  * Seeds the database with initial template styles and system team
  *
  * Usage:
- *   bun db:seed           # Seed Turso database (requires TURSO_DATABASE_URL)
- *   bun db:seed:local     # Seed local SQLite database (file:local.db)
- *   bun db:seed:test      # Seed e2e test database (file:test.db)
- *   bun db:seed:d1        # Seed Cloudflare D1 via HTTP API
+ *   bun db:seed:local     # Wrangler local D1 (dev env)
+ *   bun db:seed:test      # Wrangler local D1 (test env, isolated state)
+ *   bun db:seed:d1        # Cloudflare D1 via HTTP API (production / CI)
+ *   bun db:seed           # Turso (legacy; only used by tooling that still has TURSO_DATABASE_URL)
  */
 
 import { createD1HttpClient } from '@/lib/db/client-d1-http';
@@ -30,7 +30,9 @@ import {
 } from '@/lib/talent/talent-templates';
 import { createClient } from '@libsql/client';
 import { and, eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/libsql';
+import { drizzle as drizzleD1 } from 'drizzle-orm/d1';
+import { drizzle as drizzleLibsql } from 'drizzle-orm/libsql';
+import { getPlatformProxy } from 'wrangler';
 
 const SYSTEM_TEAM_SLUG = 'system-templates';
 
@@ -58,8 +60,14 @@ function parseArgs() {
 async function seed() {
   const { local, test, d1 } = parseArgs();
 
-  let client: ReturnType<typeof createClient> | undefined;
-  let db: ReturnType<typeof drizzle> | ReturnType<typeof createD1HttpClient>;
+  let libsqlClient: ReturnType<typeof createClient> | undefined;
+  let platformProxy:
+    | Awaited<ReturnType<typeof getPlatformProxy<{ DB?: D1Database }>>>
+    | undefined;
+  let db:
+    | ReturnType<typeof drizzleLibsql>
+    | ReturnType<typeof drizzleD1>
+    | ReturnType<typeof createD1HttpClient>;
 
   if (d1) {
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -76,34 +84,46 @@ async function seed() {
       databaseId,
       token,
     });
-  } else if (test) {
-    console.log('🗄️  Using e2e test database (file:test.db)\n');
-    client = createClient({
-      url: 'file:test.db',
+  } else if (test || local) {
+    // getPlatformProxy spins up Miniflare against the bindings defined in
+    // wrangler.jsonc (test → [env.test] block) and hands back live D1/R2
+    // bindings backed by the same SQLite files that `wrangler dev --env=test`
+    // uses. Same code path as production via drizzle-orm/d1.
+    const environment = test ? 'test' : undefined;
+    console.log(
+      `🗄️  Using Wrangler local D1 (${environment ?? 'default'} env)\n`
+    );
+    // remoteBindings: false skips the remote-proxy session for any
+    // `remote: true` bindings (R2 buckets in [env.test]). Seeding only
+    // writes to local D1; the proxy session would otherwise demand
+    // CLOUDFLARE_API_TOKEN that CI's setup step doesn't need.
+    platformProxy = await getPlatformProxy<{ DB?: D1Database }>({
+      environment,
+      remoteBindings: false,
     });
-    db = drizzle({ client });
-  } else if (local) {
-    console.log('🗄️  Using local SQLite database (file:local.db)\n');
-    client = createClient({
-      url: 'file:local.db',
-    });
-    db = drizzle({ client });
+    const d1Binding = platformProxy.env.DB;
+    if (!d1Binding) {
+      throw new Error(
+        `[seed] D1 binding 'DB' missing from wrangler.jsonc ${environment ? `[env.${environment}]` : ''} — cannot seed.`
+      );
+    }
+    db = drizzleD1(d1Binding);
   } else {
     const tursoUrl = process.env.TURSO_DATABASE_URL;
     const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
     if (!tursoUrl) {
       throw new Error(
-        'TURSO_DATABASE_URL is required (use --local for local.db)'
+        'TURSO_DATABASE_URL is required (use --local for Wrangler local D1)'
       );
     }
 
     console.log('🗄️  Using Turso database\n');
-    client = createClient({
+    libsqlClient = createClient({
       url: tursoUrl,
       ...(tursoToken && { authToken: tursoToken }),
     });
-    db = drizzle({ client });
+    db = drizzleLibsql({ client: libsqlClient });
   }
 
   try {
@@ -393,7 +413,8 @@ async function seed() {
     console.error('❌ Error seeding database:', error);
     throw error;
   } finally {
-    client?.close();
+    libsqlClient?.close();
+    await platformProxy?.dispose();
   }
 }
 

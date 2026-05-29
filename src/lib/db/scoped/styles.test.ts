@@ -11,8 +11,8 @@ import {
   describe,
   expect,
   it,
-  spyOn,
-} from 'bun:test';
+  vi,
+} from 'vitest';
 import { type Client, createClient } from '@libsql/client';
 import { asc, desc, eq, or, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/libsql';
@@ -29,11 +29,10 @@ import {
 import { relations } from '@/lib/db/schema/relations';
 
 // scoped.test.ts registers a global module mock for @/lib/db/scoped/styles
-// via bun:test mock.module(), and bun does not reliably unwind module mocks
-// (https://github.com/oven-sh/bun/issues/7823) — so importing the real
-// createStylesMethods here would yield stubs in a full-suite run. We mirror
-// the production methods inline against an in-memory libSQL DB to exercise
-// real SQL behavior; keep these in lockstep with src/lib/db/scoped/styles.ts.
+// via vi.doMock(). vi.doMock is per-file, so it shouldn't bleed across the
+// suite, but we mirror the production methods inline against an in-memory
+// libSQL DB anyway to exercise real SQL behavior without depending on the
+// other file's mock setup. Keep these in lockstep with @/lib/db/scoped/styles.
 function makeStylesMethods(database: Database, teamId: string, userId: string) {
   return {
     list: async (
@@ -144,7 +143,7 @@ describe('createStylesMethods.incrementUsage', () => {
 
   it('logs a warning when the styleId matches zero rows', async () => {
     const methods = makeStylesMethods(db, team.id, userRow.id);
-    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       await methods.incrementUsage('does_not_exist');
       expect(warn).toHaveBeenCalledWith(

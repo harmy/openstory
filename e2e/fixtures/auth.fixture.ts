@@ -10,20 +10,17 @@
  *    - Uses `authenticatedPage` fixture for fresh authentication
  */
 
-import {
-  session,
-  teamMembers,
-  teams,
-  user,
-  verification,
-} from '@/lib/db/schema';
-import { credits } from '@/lib/db/schema/credits';
-import { eq } from 'drizzle-orm';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test as base, expect, type Page } from 'playwright/test';
-import { ulid } from 'ulid';
-import { ensureDbInit, testDb } from './db-client';
+import { z } from 'zod';
+
+const TestUserResponseSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string(),
+  teamId: z.string(),
+});
 
 type TestUser = {
   id: string;
@@ -54,94 +51,41 @@ export async function createTestUser(
   options: { name?: string } = {}
 ): Promise<TestUser> {
   const { name = 'E2E Test User' } = options;
-  await ensureDbInit();
-  const userId = ulid();
-  const teamId = ulid();
-  const now = new Date();
 
-  const email = `test-${userId.slice(-8).toLowerCase()}@e2e.test`;
-  const teamSlug = `test-team-${teamId.slice(-8).toLowerCase()}`;
-
-  // Insert user with active status
-  await testDb.insert(user).values({
-    id: userId,
-    name,
-    email,
-    emailVerified: true,
-    status: 'active',
-    createdAt: now,
-    updatedAt: now,
+  // Create via the guarded test API so all writes go through the single
+  // safe Miniflare process (instead of direct getPlatformProxy from this worker).
+  const res = await fetch('http://localhost:3001/api/test/user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
   });
 
-  // Insert team
-  await testDb.insert(teams).values({
-    id: teamId,
-    name: 'E2E Test Team',
-    slug: teamSlug,
-    createdAt: now,
-    updatedAt: now,
-  });
+  if (!res.ok) {
+    throw new Error(`Failed to create test user via API: ${res.status}`);
+  }
 
-  // Insert team membership
-  await testDb.insert(teamMembers).values({
-    teamId,
-    userId,
-    role: 'owner',
-    joinedAt: now,
-  });
-
-  // Seed credits so billing checks pass during e2e tests
-  await testDb
-    .insert(credits)
-    .values({ teamId, balance: 100_000_000, updatedAt: now });
-
-  return { id: userId, email, name, teamId };
+  const created = TestUserResponseSchema.parse(await res.json());
+  return created;
 }
 
 /**
  * Clean up test user and related data
  */
 async function cleanupTestUser(userId: string, teamId: string): Promise<void> {
-  await testDb.delete(session).where(eq(session.userId, userId));
-  await testDb.delete(teamMembers).where(eq(teamMembers.userId, userId));
-  await testDb.delete(teams).where(eq(teams.id, teamId));
-  await testDb.delete(user).where(eq(user.id, userId));
-}
-
-/**
- * Create OTP verification record directly in database
- */
-export async function createOtpVerification(
-  email: string,
-  otp: string
-): Promise<void> {
-  const id = ulid();
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes
-
-  // Better Auth uses sign-in-otp-{email} as identifier for sign-in OTP
-  const identifier = `sign-in-otp-${email}`;
-  // Value format is {otp}:{attempt_count}
-  const value = `${otp}:0`;
-
-  // Delete any existing verification for this email
-  await testDb
-    .delete(verification)
-    .where(eq(verification.identifier, identifier));
-
-  // Insert new verification record
-  await testDb.insert(verification).values({
-    id,
-    identifier,
-    value,
-    expiresAt,
-    createdAt: now,
-    updatedAt: now,
+  // Cleanup via test API so the write happens inside the safe Worker Miniflare
+  await fetch('http://localhost:3001/api/test/user', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, teamId }),
   });
 }
 
 /**
- * Authenticate a user by navigating directly to /verify and entering OTP
+ * Authenticate a user by navigating directly to /verify and entering OTP.
+ *
+ * This uses the test-only /api/test/verify backdoor, which automatically
+ * formats the record as `sign-in-otp-${email}` with the `:0` suffix that
+ * Better Auth's emailOTP plugin expects.
  */
 export async function authenticateUser(
   page: Page,
@@ -149,8 +93,13 @@ export async function authenticateUser(
 ): Promise<void> {
   const testOtp = '123456';
 
-  // Create OTP directly in database
-  await createOtpVerification(email, testOtp);
+  // Create OTP via test API (the route normalizes to the identifier
+  // Better Auth's signIn.emailOtp will actually look up).
+  await fetch('http://localhost:3001/api/test/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, otp: testOtp }),
+  });
 
   // Navigate directly to verify page with email
   await page.goto(`/verify?email=${encodeURIComponent(email)}`);

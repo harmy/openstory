@@ -8,7 +8,7 @@ AI-powered video sequence platform built with TanStack Start, deployed to Cloudf
 # Dev
 bun dev                            # All-in-one: DB migrate + seed, Vite, QStash (Docker), Stripe listener
 bun storybook                      # Storybook on :6006
-bun db:studio                      # Drizzle Studio for local DB
+bun db:studio:local                # Inspect local D1 tables (wrangler d1 execute)
 
 # Quality
 bun lint                           # oxlint (type-aware)
@@ -19,25 +19,34 @@ bun typecheck                      # tsgo --noEmit (NOT `tsc`)
 bun dead-code                      # knip (unused exports)
 
 # Tests
-bun test                           # unit (bun:test)
-bun test path/to/file.test.ts      # single file
-bun test:watch
-bun test:coverage
-bun test:e2e                       # Playwright
+bun run test                       # unit (Vitest) — NOT `bun test` (that invokes Bun's built-in test runner)
+bun run test src/path/foo.test.ts  # single file
+bun run test:watch
+bun run test:coverage
+bun test:e2e                       # Playwright (vite dev cf-plugin webServer)
 bun test:e2e:ui
-bun test:e2e:setup                 # rebuild test.db + seed
+bun test:e2e:setup                 # apply D1 migrations + seed for [env.test]
+bun test:e2e:full                  # full-pipeline e2e (real QStash + aimock)
+bun run build:e2e                  # built-server e2e build (VITE_APP_URL=:3001, devtools off)
 
-# DB
-bun db:generate                    # Generate migration from schema edits
-bun db:migrate                     # Apply migrations (local)
-bun db:setup                       # migrate + seed
+# DB (Wrangler local D1 via Miniflare)
+bun db:migrate:local               # wrangler d1 migrations apply DB --local
+bun db:migrate:test                # wrangler d1 migrations apply DB --local --env=test
+bun db:migrate:d1                  # drizzle-kit migrate against production D1 (HTTP)
+bun db:seed:local                  # seed local D1 via getPlatformProxy
+bun db:seed:d1                     # seed production D1 via HTTP API
+bun db:generate                    # generate migration from schema edits
+bun db:studio:d1                   # Drizzle Studio against production D1
 
 # Build / deploy
-bun run build                      # Vite production build (note: NOT `bun build`)
+bun run build                      # Vite production build (NOT `bun build`)
+bun cf:dev                         # wrangler dev against built worker (preview)
 bun cf:deploy:prd                  # Cloudflare Workers production deploy
 ```
 
-`bun dev` runs everything in parallel via Docker (QStash) — there is no separate `qstash:dev` terminal anymore.
+`bun dev` runs three parallel processes: vite dev (cf-plugin → Workerd via Miniflare, port 3000) + Stripe listener + Docker QStash (port 8080). The app runs in **Workerd locally** — same runtime as production — so D1, R2 bindings, env.\* access, and request lifecycle all match prod.
+
+**Bun-as-launcher pattern:** `bun script.ts` (no `--bun`) keeps Bun as the CLI launcher but executes under **Node**, while still autoloading `.env*`. Use `bun --env-file=<path>` to override the default `.env.local`. No `--bun` flag should appear in package.json scripts.
 
 ## Project Structure
 
@@ -50,7 +59,7 @@ src/
   components/       # React UI (shadcn/ui base + layout-only Tailwind)
   lib/
     ai/             #   AI model configs, prompt schemas, frame.schema
-    db/             #   Drizzle schema + clients (libSQL/D1/Turso)
+    db/             #   Drizzle schema + clients (D1 in prod + dev via Wrangler)
     services/       #   Frame, motion, etc. business services
     workflows/      #   QStash durable workflow definitions
     auth/           #   Better Auth wiring + action-utils
@@ -61,7 +70,7 @@ drizzle/migrations/ # Generated SQL (do NOT hand-edit)
 
 ## Architecture
 
-**Stack:** Bun · TanStack Start + Router + Vite · Turso (libSQL/SQLite) + Drizzle · QStash (durable workflows) · Cloudflare R2 · Better Auth · Tailwind v4 + shadcn/ui · `bun:test`.
+**Stack:** Bun (package manager + script launcher; Node is the runtime) · TanStack Start + Router + Vite (`@cloudflare/vite-plugin`) · Cloudflare D1 + Drizzle · QStash (durable workflows) · Cloudflare R2 · Better Auth · Tailwind v4 + shadcn/ui · Vitest.
 
 **Core rules:**
 
@@ -216,6 +225,26 @@ bun db:migrate   # Apply migrations to local.db
 - **ULID** primary keys (not UUID).
 - **Typed JSONB:** `frame.metadata` typed as `Scene`.
 
+### wrangler.jsonc env layout + `@cloudflare/vite-plugin` remoteBindings footgun — READ BEFORE TOUCHING EITHER
+
+**The footgun.** `@cloudflare/vite-plugin` defaults `remoteBindings: true`. With Cloudflare credentials present, that auto-routes bindings to real Cloudflare — `bun dev` writes can land in prod D1 / prod R2. We've been bitten by this already (Better Auth verification rows leaking to `openstory-prd` D1 mid-#755).
+
+**The structure.** `wrangler.jsonc` separates dev from prod via env blocks:
+
+- **default** (no env) — used by `bun dev` / `vite dev`. D1 binding has a **placeholder** `database_id: "dev-local-d1"` so even if cf-plugin promotes it remote, it 404s against Cloudflare rather than silently writing to prod. R2 buckets are `remote: true` (real R2) so public-CDN reads via `R2_PUBLIC_STORAGE_DOMAIN` resolve.
+- **`[env.production]`** — real prod D1 (`database_id: d6a35f64-...`). Production deploys MUST use `wrangler deploy --env=production` (already wired in `cf:deploy:prd`).
+- **`[env.test]`** — Playwright e2e. Local Miniflare D1 (`database_id: "openstory-test-local"`), real staging R2. Activated via `CLOUDFLARE_ENV=test` (set in `playwright.config.ts` envPrefix and CI workflow env block) for `vite dev`, or `wrangler dev --env=test` for the built-server path.
+
+**Rules:**
+
+- Never add `"remote": true` to a D1 binding. The placeholder-id strategy is the safety net.
+- Production deploys go through `bun cf:deploy:prd` which passes `--env=production`. Don't bypass with raw `wrangler deploy` — that hits the default block (placeholder D1) and fails.
+- PR-preview deploys patch the default block at runtime in `.github/workflows/deploy-cloudflare.yml` and deploy without `--env`. Each PR gets its own real D1 named `openstory-pr-<n>`.
+
+**Local guardrail:** `bun dev` prints a wrangler-bindings banner on startup showing each binding's `local` / `REMOTE` status. If `DB` ever shows REMOTE, kill the server immediately and fix the config before any write lands in prod.
+
+**Reproducing a prod bug locally:** temporarily set the default D1's `database_id` to the real prod value, restart `bun dev`, and revert when done. **Never commit a real prod D1 id into the default block.**
+
 ### D1 / Turso table-rebuild trap — READ BEFORE CHANGING SCHEMA
 
 drizzle-kit's HTTP migrators (`d1-http`, `turso`) join all migration statements into a single HTTP body. Both D1 and Turso libSQL wrap multi-statement bodies in an implicit transaction, and SQLite **silently** ignores `PRAGMA foreign_keys = OFF` inside a transaction. So when the standard SQLite "table rebuild" pattern (`CREATE __new_X` → `INSERT SELECT` → `DROP X` → `RENAME`) drops the parent table, every inbound `ON DELETE CASCADE` FK fires and child rows are deleted.
@@ -330,34 +359,40 @@ See `src/components/` for the house pattern.
 
 ## Testing
 
-**Framework:** `bun:test` (migrated from Vitest).
+**Unit-test framework:** Vitest (run via `bun run test`, never `bun test` — that invokes Bun's built-in runner and ignores `vitest.config.ts`).
 
 - Server handlers: `__tests__/` alongside routes.
 - Services/utils: co-located (`service.test.ts`).
 - Focus: business logic, not React components.
-- DB: mock Drizzle/Turso clients (not real connections); ULID primary keys.
+- DB: mock `#db-client` via `vi.doMock` (not real connections); ULID primary keys.
 - Workflows: mock workflow context + AI calls; pass auth (userId/teamId) through context.
+- `vitest.config.ts` is **self-contained** — it does not extend `vite.config.ts`, because the Cloudflare Vite plugin rejects the SSR-externals shape Vitest injects.
 
-**Bun mock module pattern** (avoid shared state across files):
+**Module-mocking pattern** (preserves the runtime-ordered semantics bun:test's `mock.module` had — `vi.doMock` is NOT hoisted, so dynamic-import the target after mocking):
 
 ```typescript
-const mockDb = mock(() => ({
-  /* impl */
-}));
+import { describe, expect, it, vi } from 'vitest';
+import * as realModule from '@/lib/some-module';
 
-mock.module('@/lib/db/client', () => ({ db: mockDb }));
+const mockFn = vi.fn();
+vi.doMock('@/lib/some-module', () => ({ ...realModule, someExport: mockFn }));
 
-beforeEach(async () => {
-  mockDb.mockClear();
-  const module = await import('./module-under-test');
-});
+// Dynamic import so the mock applies. Static imports are hoisted above
+// vi.doMock and would bypass it. Prefer vi.mock + vi.hoisted for top-of-file
+// mocks if you need static imports; vi.doMock + await import is the most
+// direct port of the bun:test pattern.
+const { thingUnderTest } = await import('./thing-under-test');
 ```
+
+When re-mocking inside an `it()` block to test a different code path, call `vi.resetModules()` first — otherwise the dynamic import returns the cached module from the prior mock.
+
+**E2E:** Playwright drives `vite dev` (cf-plugin → Workerd) on port 3001 with `E2E_TEST=true`. `bun test:e2e:setup` applies D1 migrations against the isolated `[env.test]` block in `wrangler.jsonc` and seeds via `getPlatformProxy()`. Aimock (`:4010`) intercepts LLM/fal calls; the new **r2-mock sidecar** (`:4011`) brokers R2 fixture lookup/record so the worker (no `node:fs`) can replay through `r2-recorder.ts`. Recording (`E2E_RECORD=1`) writes through the `remote: true` R2 binding to staging; replay short-circuits via fixtures.
 
 ## Platform & Deployment
 
 Automatic platform detection: `getDeploymentPlatform()` / `getAppUrl()` in `src/lib/utils/environment.ts` resolve `CF_PAGES_URL` / `VERCEL_URL` / etc.
 
-Production target: **Cloudflare Workers**. CI auto-deploys main; PRs get preview deployments with unique Turso databases. See `.env.example` for required vars (or `bun setup` for local defaults).
+Production target: **Cloudflare Workers**. CI auto-deploys main; PRs get preview deployments with unique D1 databases. See `.env.example` for required vars (or `bun setup` for local defaults).
 
 <!-- intent-skills:start -->
 

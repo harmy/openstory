@@ -12,7 +12,7 @@ import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 
 const OUTPUT_PATH = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   '../src/lib/prompts/workflow-prompts.ts'
 );
 

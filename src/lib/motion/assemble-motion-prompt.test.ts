@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import type { MotionPrompt } from '../ai/scene-analysis.schema';
 import { assembleMotionPrompt } from './assemble-motion-prompt';
 
@@ -73,7 +73,7 @@ describe('assembleMotionPrompt', () => {
         model,
       });
 
-      expect(result).toStartWith(fullPromptText);
+      expect(result.startsWith(fullPromptText)).toBe(true);
     });
 
     it('appends character labels with tone and dialogue text', () => {
@@ -120,7 +120,7 @@ describe('assembleMotionPrompt', () => {
 
       expect(result).not.toContain('[Sarah');
       // Still has fullPrompt + audio
-      expect(result).toStartWith(fullPromptText);
+      expect(result.startsWith(fullPromptText)).toBe(true);
       expect(result).toContain('Ambient sounds:');
     });
 
@@ -149,7 +149,7 @@ describe('assembleMotionPrompt', () => {
         model,
       });
 
-      expect(result).toStartWith(fullPromptText);
+      expect(result.startsWith(fullPromptText)).toBe(true);
     });
 
     it('appends dialogue as natural narrative with inline quotes', () => {
@@ -193,7 +193,7 @@ describe('assembleMotionPrompt', () => {
       });
 
       expect(result).not.toContain('Sarah says');
-      expect(result).toStartWith(fullPromptText);
+      expect(result.startsWith(fullPromptText)).toBe(true);
     });
   });
 

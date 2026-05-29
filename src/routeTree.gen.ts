@@ -30,6 +30,7 @@ import { Route as MarketingTermsRouteImport } from './routes/_marketing/terms'
 import { Route as MarketingPrivacyRouteImport } from './routes/_marketing/privacy'
 import { Route as AuthVerifyRouteImport } from './routes/_auth/verify'
 import { Route as AuthLoginRouteImport } from './routes/_auth/login'
+import { Route as ApiTestRouteRouteImport } from './routes/api/test/route'
 import { Route as ProtectedSettingsRouteRouteImport } from './routes/_protected/settings/route'
 import { Route as ProtectedAdminRouteRouteImport } from './routes/_protected/admin/route'
 import { Route as ProtectedTalentIndexRouteImport } from './routes/_protected/talent/index'
@@ -37,7 +38,16 @@ import { Route as ProtectedSettingsIndexRouteImport } from './routes/_protected/
 import { Route as ProtectedSequencesIndexRouteImport } from './routes/_protected/sequences/index'
 import { Route as ProtectedLocationsIndexRouteImport } from './routes/_protected/locations/index'
 import { Route as ApiWorkflowsSplatRouteImport } from './routes/api/workflows/$'
+import { Route as ApiTestVerifyRouteImport } from './routes/api/test/verify'
+import { Route as ApiTestUserRouteImport } from './routes/api/test/user'
+import { Route as ApiTestTalentRouteImport } from './routes/api/test/talent'
+import { Route as ApiTestStyleRouteImport } from './routes/api/test/style'
+import { Route as ApiTestSequenceRouteImport } from './routes/api/test/sequence'
+import { Route as ApiTestLocationRouteImport } from './routes/api/test/location'
 import { Route as ApiTestImageRouteImport } from './routes/api/test/image'
+import { Route as ApiTestFrameRouteImport } from './routes/api/test/frame'
+import { Route as ApiTestCleanupRouteImport } from './routes/api/test/cleanup'
+import { Route as ApiTestCharacterRouteImport } from './routes/api/test/character'
 import { Route as ApiStorageUploadRouteImport } from './routes/api/storage/upload'
 import { Route as ApiOpenrouterCallbackRouteImport } from './routes/api/openrouter/callback'
 import { Route as ApiDevMemoryRouteImport } from './routes/api/dev/memory'
@@ -162,6 +172,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => AuthRouteRoute,
 } as any)
+const ApiTestRouteRoute = ApiTestRouteRouteImport.update({
+  id: '/api/test',
+  path: '/api/test',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProtectedSettingsRouteRoute = ProtectedSettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -197,10 +212,55 @@ const ApiWorkflowsSplatRoute = ApiWorkflowsSplatRouteImport.update({
   path: '/api/workflows/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiTestVerifyRoute = ApiTestVerifyRouteImport.update({
+  id: '/verify',
+  path: '/verify',
+  getParentRoute: () => ApiTestRouteRoute,
+} as any)
+const ApiTestUserRoute = ApiTestUserRouteImport.update({
+  id: '/user',
+  path: '/user',
+  getParentRoute: () => ApiTestRouteRoute,
+} as any)
+const ApiTestTalentRoute = ApiTestTalentRouteImport.update({
+  id: '/talent',
+  path: '/talent',
+  getParentRoute: () => ApiTestRouteRoute,
+} as any)
+const ApiTestStyleRoute = ApiTestStyleRouteImport.update({
+  id: '/style',
+  path: '/style',
+  getParentRoute: () => ApiTestRouteRoute,
+} as any)
+const ApiTestSequenceRoute = ApiTestSequenceRouteImport.update({
+  id: '/sequence',
+  path: '/sequence',
+  getParentRoute: () => ApiTestRouteRoute,
+} as any)
+const ApiTestLocationRoute = ApiTestLocationRouteImport.update({
+  id: '/location',
+  path: '/location',
+  getParentRoute: () => ApiTestRouteRoute,
+} as any)
 const ApiTestImageRoute = ApiTestImageRouteImport.update({
-  id: '/api/test/image',
-  path: '/api/test/image',
-  getParentRoute: () => rootRouteImport,
+  id: '/image',
+  path: '/image',
+  getParentRoute: () => ApiTestRouteRoute,
+} as any)
+const ApiTestFrameRoute = ApiTestFrameRouteImport.update({
+  id: '/frame',
+  path: '/frame',
+  getParentRoute: () => ApiTestRouteRoute,
+} as any)
+const ApiTestCleanupRoute = ApiTestCleanupRouteImport.update({
+  id: '/cleanup',
+  path: '/cleanup',
+  getParentRoute: () => ApiTestRouteRoute,
+} as any)
+const ApiTestCharacterRoute = ApiTestCharacterRouteImport.update({
+  id: '/character',
+  path: '/character',
+  getParentRoute: () => ApiTestRouteRoute,
 } as any)
 const ApiStorageUploadRoute = ApiStorageUploadRouteImport.update({
   id: '/api/storage/upload',
@@ -329,6 +389,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin': typeof ProtectedAdminRouteRouteWithChildren
   '/settings': typeof ProtectedSettingsRouteRouteWithChildren
+  '/api/test': typeof ApiTestRouteRouteWithChildren
   '/login': typeof AuthLoginRoute
   '/verify': typeof AuthVerifyRoute
   '/privacy': typeof MarketingPrivacyRoute
@@ -354,7 +415,16 @@ export interface FileRoutesByFullPath {
   '/api/dev/memory': typeof ApiDevMemoryRoute
   '/api/openrouter/callback': typeof ApiOpenrouterCallbackRoute
   '/api/storage/upload': typeof ApiStorageUploadRoute
+  '/api/test/character': typeof ApiTestCharacterRoute
+  '/api/test/cleanup': typeof ApiTestCleanupRoute
+  '/api/test/frame': typeof ApiTestFrameRoute
   '/api/test/image': typeof ApiTestImageRoute
+  '/api/test/location': typeof ApiTestLocationRoute
+  '/api/test/sequence': typeof ApiTestSequenceRoute
+  '/api/test/style': typeof ApiTestStyleRoute
+  '/api/test/talent': typeof ApiTestTalentRoute
+  '/api/test/user': typeof ApiTestUserRoute
+  '/api/test/verify': typeof ApiTestVerifyRoute
   '/api/workflows/$': typeof ApiWorkflowsSplatRoute
   '/locations/': typeof ProtectedLocationsIndexRoute
   '/sequences/': typeof ProtectedSequencesIndexRoute
@@ -376,6 +446,7 @@ export interface FileRoutesByTo {
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin': typeof ProtectedAdminRouteRouteWithChildren
+  '/api/test': typeof ApiTestRouteRouteWithChildren
   '/login': typeof AuthLoginRoute
   '/verify': typeof AuthVerifyRoute
   '/privacy': typeof MarketingPrivacyRoute
@@ -401,7 +472,16 @@ export interface FileRoutesByTo {
   '/api/dev/memory': typeof ApiDevMemoryRoute
   '/api/openrouter/callback': typeof ApiOpenrouterCallbackRoute
   '/api/storage/upload': typeof ApiStorageUploadRoute
+  '/api/test/character': typeof ApiTestCharacterRoute
+  '/api/test/cleanup': typeof ApiTestCleanupRoute
+  '/api/test/frame': typeof ApiTestFrameRoute
   '/api/test/image': typeof ApiTestImageRoute
+  '/api/test/location': typeof ApiTestLocationRoute
+  '/api/test/sequence': typeof ApiTestSequenceRoute
+  '/api/test/style': typeof ApiTestStyleRoute
+  '/api/test/talent': typeof ApiTestTalentRoute
+  '/api/test/user': typeof ApiTestUserRoute
+  '/api/test/verify': typeof ApiTestVerifyRoute
   '/api/workflows/$': typeof ApiWorkflowsSplatRoute
   '/locations': typeof ProtectedLocationsIndexRoute
   '/sequences': typeof ProtectedSequencesIndexRoute
@@ -428,6 +508,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_protected/admin': typeof ProtectedAdminRouteRouteWithChildren
   '/_protected/settings': typeof ProtectedSettingsRouteRouteWithChildren
+  '/api/test': typeof ApiTestRouteRouteWithChildren
   '/_auth/login': typeof AuthLoginRoute
   '/_auth/verify': typeof AuthVerifyRoute
   '/_marketing/privacy': typeof MarketingPrivacyRoute
@@ -454,7 +535,16 @@ export interface FileRoutesById {
   '/api/dev/memory': typeof ApiDevMemoryRoute
   '/api/openrouter/callback': typeof ApiOpenrouterCallbackRoute
   '/api/storage/upload': typeof ApiStorageUploadRoute
+  '/api/test/character': typeof ApiTestCharacterRoute
+  '/api/test/cleanup': typeof ApiTestCleanupRoute
+  '/api/test/frame': typeof ApiTestFrameRoute
   '/api/test/image': typeof ApiTestImageRoute
+  '/api/test/location': typeof ApiTestLocationRoute
+  '/api/test/sequence': typeof ApiTestSequenceRoute
+  '/api/test/style': typeof ApiTestStyleRoute
+  '/api/test/talent': typeof ApiTestTalentRoute
+  '/api/test/user': typeof ApiTestUserRoute
+  '/api/test/verify': typeof ApiTestVerifyRoute
   '/api/workflows/$': typeof ApiWorkflowsSplatRoute
   '/_protected/locations/': typeof ProtectedLocationsIndexRoute
   '/_protected/sequences/': typeof ProtectedSequencesIndexRoute
@@ -480,6 +570,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/admin'
     | '/settings'
+    | '/api/test'
     | '/login'
     | '/verify'
     | '/privacy'
@@ -505,7 +596,16 @@ export interface FileRouteTypes {
     | '/api/dev/memory'
     | '/api/openrouter/callback'
     | '/api/storage/upload'
+    | '/api/test/character'
+    | '/api/test/cleanup'
+    | '/api/test/frame'
     | '/api/test/image'
+    | '/api/test/location'
+    | '/api/test/sequence'
+    | '/api/test/style'
+    | '/api/test/talent'
+    | '/api/test/user'
+    | '/api/test/verify'
     | '/api/workflows/$'
     | '/locations/'
     | '/sequences/'
@@ -527,6 +627,7 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/sitemap.xml'
     | '/admin'
+    | '/api/test'
     | '/login'
     | '/verify'
     | '/privacy'
@@ -552,7 +653,16 @@ export interface FileRouteTypes {
     | '/api/dev/memory'
     | '/api/openrouter/callback'
     | '/api/storage/upload'
+    | '/api/test/character'
+    | '/api/test/cleanup'
+    | '/api/test/frame'
     | '/api/test/image'
+    | '/api/test/location'
+    | '/api/test/sequence'
+    | '/api/test/style'
+    | '/api/test/talent'
+    | '/api/test/user'
+    | '/api/test/verify'
     | '/api/workflows/$'
     | '/locations'
     | '/sequences'
@@ -578,6 +688,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/_protected/admin'
     | '/_protected/settings'
+    | '/api/test'
     | '/_auth/login'
     | '/_auth/verify'
     | '/_marketing/privacy'
@@ -604,7 +715,16 @@ export interface FileRouteTypes {
     | '/api/dev/memory'
     | '/api/openrouter/callback'
     | '/api/storage/upload'
+    | '/api/test/character'
+    | '/api/test/cleanup'
+    | '/api/test/frame'
     | '/api/test/image'
+    | '/api/test/location'
+    | '/api/test/sequence'
+    | '/api/test/style'
+    | '/api/test/talent'
+    | '/api/test/user'
+    | '/api/test/verify'
     | '/api/workflows/$'
     | '/_protected/locations/'
     | '/_protected/sequences/'
@@ -629,6 +749,7 @@ export interface RootRouteChildren {
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  ApiTestRouteRoute: typeof ApiTestRouteRouteWithChildren
   ApiRealtimeRoute: typeof ApiRealtimeRoute
   GiftCodeRoute: typeof GiftCodeRoute
   MetaOgRoute: typeof MetaOgRoute
@@ -639,7 +760,6 @@ export interface RootRouteChildren {
   ApiDevMemoryRoute: typeof ApiDevMemoryRoute
   ApiOpenrouterCallbackRoute: typeof ApiOpenrouterCallbackRoute
   ApiStorageUploadRoute: typeof ApiStorageUploadRoute
-  ApiTestImageRoute: typeof ApiTestImageRoute
   ApiWorkflowsSplatRoute: typeof ApiWorkflowsSplatRoute
 }
 
@@ -792,6 +912,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof AuthRouteRoute
     }
+    '/api/test': {
+      id: '/api/test'
+      path: '/api/test'
+      fullPath: '/api/test'
+      preLoaderRoute: typeof ApiTestRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_protected/settings': {
       id: '/_protected/settings'
       path: '/settings'
@@ -841,12 +968,75 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWorkflowsSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/test/verify': {
+      id: '/api/test/verify'
+      path: '/verify'
+      fullPath: '/api/test/verify'
+      preLoaderRoute: typeof ApiTestVerifyRouteImport
+      parentRoute: typeof ApiTestRouteRoute
+    }
+    '/api/test/user': {
+      id: '/api/test/user'
+      path: '/user'
+      fullPath: '/api/test/user'
+      preLoaderRoute: typeof ApiTestUserRouteImport
+      parentRoute: typeof ApiTestRouteRoute
+    }
+    '/api/test/talent': {
+      id: '/api/test/talent'
+      path: '/talent'
+      fullPath: '/api/test/talent'
+      preLoaderRoute: typeof ApiTestTalentRouteImport
+      parentRoute: typeof ApiTestRouteRoute
+    }
+    '/api/test/style': {
+      id: '/api/test/style'
+      path: '/style'
+      fullPath: '/api/test/style'
+      preLoaderRoute: typeof ApiTestStyleRouteImport
+      parentRoute: typeof ApiTestRouteRoute
+    }
+    '/api/test/sequence': {
+      id: '/api/test/sequence'
+      path: '/sequence'
+      fullPath: '/api/test/sequence'
+      preLoaderRoute: typeof ApiTestSequenceRouteImport
+      parentRoute: typeof ApiTestRouteRoute
+    }
+    '/api/test/location': {
+      id: '/api/test/location'
+      path: '/location'
+      fullPath: '/api/test/location'
+      preLoaderRoute: typeof ApiTestLocationRouteImport
+      parentRoute: typeof ApiTestRouteRoute
+    }
     '/api/test/image': {
       id: '/api/test/image'
-      path: '/api/test/image'
+      path: '/image'
       fullPath: '/api/test/image'
       preLoaderRoute: typeof ApiTestImageRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof ApiTestRouteRoute
+    }
+    '/api/test/frame': {
+      id: '/api/test/frame'
+      path: '/frame'
+      fullPath: '/api/test/frame'
+      preLoaderRoute: typeof ApiTestFrameRouteImport
+      parentRoute: typeof ApiTestRouteRoute
+    }
+    '/api/test/cleanup': {
+      id: '/api/test/cleanup'
+      path: '/cleanup'
+      fullPath: '/api/test/cleanup'
+      preLoaderRoute: typeof ApiTestCleanupRouteImport
+      parentRoute: typeof ApiTestRouteRoute
+    }
+    '/api/test/character': {
+      id: '/api/test/character'
+      path: '/character'
+      fullPath: '/api/test/character'
+      preLoaderRoute: typeof ApiTestCharacterRouteImport
+      parentRoute: typeof ApiTestRouteRoute
     }
     '/api/storage/upload': {
       id: '/api/storage/upload'
@@ -1134,6 +1324,36 @@ const DocsRouteChildren: DocsRouteChildren = {
 
 const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
 
+interface ApiTestRouteRouteChildren {
+  ApiTestCharacterRoute: typeof ApiTestCharacterRoute
+  ApiTestCleanupRoute: typeof ApiTestCleanupRoute
+  ApiTestFrameRoute: typeof ApiTestFrameRoute
+  ApiTestImageRoute: typeof ApiTestImageRoute
+  ApiTestLocationRoute: typeof ApiTestLocationRoute
+  ApiTestSequenceRoute: typeof ApiTestSequenceRoute
+  ApiTestStyleRoute: typeof ApiTestStyleRoute
+  ApiTestTalentRoute: typeof ApiTestTalentRoute
+  ApiTestUserRoute: typeof ApiTestUserRoute
+  ApiTestVerifyRoute: typeof ApiTestVerifyRoute
+}
+
+const ApiTestRouteRouteChildren: ApiTestRouteRouteChildren = {
+  ApiTestCharacterRoute: ApiTestCharacterRoute,
+  ApiTestCleanupRoute: ApiTestCleanupRoute,
+  ApiTestFrameRoute: ApiTestFrameRoute,
+  ApiTestImageRoute: ApiTestImageRoute,
+  ApiTestLocationRoute: ApiTestLocationRoute,
+  ApiTestSequenceRoute: ApiTestSequenceRoute,
+  ApiTestStyleRoute: ApiTestStyleRoute,
+  ApiTestTalentRoute: ApiTestTalentRoute,
+  ApiTestUserRoute: ApiTestUserRoute,
+  ApiTestVerifyRoute: ApiTestVerifyRoute,
+}
+
+const ApiTestRouteRouteWithChildren = ApiTestRouteRoute._addFileChildren(
+  ApiTestRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   AuthRouteRoute: AuthRouteRouteWithChildren,
   ProtectedRouteRoute: ProtectedRouteRouteWithChildren,
@@ -1142,6 +1362,7 @@ const rootRouteChildren: RootRouteChildren = {
   LlmsDottxtRoute: LlmsDottxtRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  ApiTestRouteRoute: ApiTestRouteRouteWithChildren,
   ApiRealtimeRoute: ApiRealtimeRoute,
   GiftCodeRoute: GiftCodeRoute,
   MetaOgRoute: MetaOgRoute,
@@ -1152,7 +1373,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDevMemoryRoute: ApiDevMemoryRoute,
   ApiOpenrouterCallbackRoute: ApiOpenrouterCallbackRoute,
   ApiStorageUploadRoute: ApiStorageUploadRoute,
-  ApiTestImageRoute: ApiTestImageRoute,
   ApiWorkflowsSplatRoute: ApiWorkflowsSplatRoute,
 }
 export const routeTree = rootRouteImport

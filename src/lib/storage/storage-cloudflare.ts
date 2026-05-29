@@ -5,7 +5,8 @@
  * Signed URLs are not supported by R2 bindings and lazy-import the S3 SDK.
  */
 
-import { getEnv } from '../env/cloudflare';
+import { env as workerEnv } from 'cloudflare:workers';
+import { getEnv } from '#env';
 import {
   buildR2Key,
   getPublicUrl,
@@ -15,13 +16,41 @@ import {
 } from './buckets';
 
 function getR2Bucket(): R2Bucket {
-  const bucket = getEnv().R2_STORAGE_BUCKET;
+  // Reach for the binding via `cloudflare:workers` directly so the type
+  // resolves to R2Bucket. `#env` resolves to a process.env shim at typecheck
+  // time (because tsgo doesn't apply the `workerd` import condition), which
+  // would type bindings as `string`.
+  const bucket = workerEnv.R2_STORAGE_BUCKET;
   if (!bucket) {
     throw new Error(
       'R2 binding "R2_STORAGE_BUCKET" not found. Ensure r2_buckets is configured in wrangler.jsonc'
     );
   }
   return bucket;
+}
+
+const R2_MOCK_URL = 'http://localhost:4011';
+
+type LookupResponse = { hit: true; response: UploadResult } | { hit: false };
+
+// Drains any of the union members into a Uint8Array for hashing + r2.put().
+// We have to materialise once to compute the fingerprint hash; the same buffer
+// is then forwarded to the binding so we don't pay the read twice.
+async function toUint8Array(
+  file: File | Blob | ArrayBuffer | Uint8Array | ReadableStream<Uint8Array>
+): Promise<Uint8Array> {
+  if (file instanceof Uint8Array) return file;
+  if (file instanceof ArrayBuffer) return new Uint8Array(file);
+  if (file instanceof ReadableStream) {
+    return new Uint8Array(await new Response(file).arrayBuffer());
+  }
+  return new Uint8Array(await file.arrayBuffer());
+}
+
+function hexHash(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 export async function uploadFile(
@@ -34,10 +63,59 @@ export async function uploadFile(
     cacheControl?: string;
   }
 ): Promise<UploadResult> {
-  const r2 = getR2Bucket();
   const key = buildR2Key(bucket, path);
+  const env = getEnv();
 
   try {
+    // E2E: route through the r2-mock sidecar (which owns r2-recorder + the
+    // fixture files). On replay we never invoke the R2 binding; on record we
+    // do the real put (binding is `remote: true` in [env.test]) and persist
+    // the fingerprint via the sidecar's record endpoint.
+    if (env.E2E_TEST === 'true') {
+      const body = await toUint8Array(file);
+      // .slice() forces a non-shared ArrayBuffer so BufferSource accepts it
+      // (Uint8Array<ArrayBufferLike>.buffer could otherwise be SharedArrayBuffer).
+      const bodyHash = hexHash(
+        await crypto.subtle.digest('SHA-256', body.slice().buffer)
+      );
+      const fp = { bucket, key, contentType: options?.contentType, bodyHash };
+
+      const lookupRes = await fetch(`${R2_MOCK_URL}/e2e/r2/lookup`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(fp),
+      });
+      const lookup: LookupResponse = await lookupRes.json();
+      if (lookup.hit) return lookup.response;
+
+      const recording = env.E2E_RECORD === '1';
+      if (!recording) {
+        throw new Error(
+          `[r2-mock] No fixture for ${bucket}/${path}. Re-record with E2E_RECORD=1.`
+        );
+      }
+
+      // Recording: write to real R2 via the binding (which is `remote: true`
+      // in [env.test]), then persist the fixture via the sidecar.
+      const r2 = getR2Bucket();
+      await r2.put(key, body, {
+        httpMetadata: {
+          contentType: options?.contentType,
+          cacheControl: options?.cacheControl ?? 'public, max-age=31536000',
+        },
+      });
+      const publicUrl = getPublicUrl(bucket, path);
+      const response: UploadResult = { path: key, publicUrl, fullPath: key };
+
+      await fetch(`${R2_MOCK_URL}/e2e/r2/record`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...fp, bodySize: body.byteLength, response }),
+      });
+      return response;
+    }
+
+    const r2 = getR2Bucket();
     // R2 natively accepts all types in our union (ReadableStream, ArrayBuffer,
     // ArrayBufferView, Blob) — no conversion needed.
     await r2.put(key, file, {
@@ -108,6 +186,13 @@ export async function deleteFile(
   bucket: StorageBucket,
   path: string
 ): Promise<void> {
+  const env = getEnv();
+
+  if (env.E2E_TEST === 'true') {
+    // See copyFile for rationale: objects only exist via the r2-mock in e2e.
+    return;
+  }
+
   const r2 = getR2Bucket();
   const key = buildR2Key(bucket, path);
 
@@ -125,6 +210,13 @@ export async function deleteFiles(
   paths: string[]
 ): Promise<void> {
   if (paths.length === 0) return;
+
+  const env = getEnv();
+
+  if (env.E2E_TEST === 'true') {
+    // See copyFile for rationale.
+    return;
+  }
 
   const r2 = getR2Bucket();
 
@@ -191,6 +283,19 @@ export async function copyFile(
   fromPath: string,
   toPath: string
 ): Promise<void> {
+  const env = getEnv();
+
+  // In E2E tests, reference media and element uploads go through the r2-mock
+  // sidecar (lookup/record). The objects are never present in the R2 binding
+  // that getR2Bucket() sees during normal replay. Performing real copy/move
+  // operations here would fail with "Source file not found".
+  //
+  // We short-circuit so callers (createTalentFn, location library, sequence
+  // element promotion, etc.) can keep their normal production code paths.
+  if (env.E2E_TEST === 'true') {
+    return;
+  }
+
   const r2 = getR2Bucket();
   const sourceKey = buildR2Key(bucket, fromPath);
   const destKey = buildR2Key(bucket, toPath);

@@ -22,12 +22,11 @@
  * matches were inside JSDoc comments).
  */
 
-import { Glob } from 'bun';
-import { readFile, writeFile } from 'node:fs/promises';
+import { glob, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import ts from 'typescript';
 
-const ROOT = path.resolve(import.meta.dir, '..');
+const ROOT = path.resolve(import.meta.dirname, '..');
 const SRC = path.join(ROOT, 'src');
 
 const SKIP_FILE_RE =
@@ -251,16 +250,17 @@ async function processFile(filePath: string): Promise<{
 }
 
 async function main(): Promise<void> {
-  const glob = new Glob('**/*.{ts,tsx}');
   let totalFiles = 0;
   let totalPatches = 0;
   let totalStripped = 0;
 
-  for await (const rel of glob.scan({ cwd: SRC, onlyFiles: true })) {
-    const filePath = path.join(SRC, rel);
-    if (SKIP_FILE_RE.test(filePath)) continue;
+  for await (const filePath of glob('**/*.{ts,tsx}', { cwd: SRC })) {
+    const absPath = path.isAbsolute(filePath)
+      ? filePath
+      : path.join(SRC, filePath);
+    if (SKIP_FILE_RE.test(absPath)) continue;
 
-    const { patched, strippedUnused } = await processFile(filePath);
+    const { patched, strippedUnused } = await processFile(absPath);
     if (patched === 0 && !strippedUnused) continue;
 
     totalFiles += 1;
@@ -269,7 +269,7 @@ async function main(): Promise<void> {
 
     const tag = strippedUnused ? ' (-unused logger)' : '';
     process.stdout.write(
-      `${path.relative(ROOT, filePath)}: ${patched} patch${patched === 1 ? '' : 'es'}${tag}\n`
+      `${path.relative(ROOT, absPath)}: ${patched} patch${patched === 1 ? '' : 'es'}${tag}\n`
     );
   }
 

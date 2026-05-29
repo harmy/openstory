@@ -9,14 +9,7 @@
  *     `promoteAtomically` method, including its all-or-nothing semantics.
  */
 
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { type Client, createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';

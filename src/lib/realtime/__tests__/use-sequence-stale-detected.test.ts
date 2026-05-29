@@ -4,7 +4,7 @@
  * cleanup are covered by manual smoke testing in the music route.
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import { formatSequenceStaleToastMessage } from '@/lib/realtime/use-sequence-stale-detected';
 
 describe('formatSequenceStaleToastMessage', () => {

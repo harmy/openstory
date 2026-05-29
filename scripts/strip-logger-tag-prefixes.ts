@@ -16,12 +16,11 @@
  *     -> reverted to original if the interpolation occurs INSIDE the bracket
  */
 
-import { Glob } from 'bun';
-import { readFile, writeFile } from 'node:fs/promises';
+import { glob, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import ts from 'typescript';
 
-const ROOT = path.resolve(import.meta.dir, '..');
+const ROOT = path.resolve(import.meta.dirname, '..');
 const SRC = path.join(ROOT, 'src');
 
 const SKIP_FILE_RE =
@@ -153,12 +152,11 @@ async function processFile(filePath: string): Promise<number> {
 }
 
 async function main(): Promise<void> {
-  const glob = new Glob('**/*.{ts,tsx}');
   let totalFiles = 0;
   let totalPatches = 0;
 
-  for await (const rel of glob.scan({ cwd: SRC, onlyFiles: true })) {
-    const filePath = path.join(SRC, rel);
+  for await (const entry of glob('**/*.{ts,tsx}', { cwd: SRC })) {
+    const filePath = path.isAbsolute(entry) ? entry : path.join(SRC, entry);
     if (SKIP_FILE_RE.test(filePath)) continue;
 
     const n = await processFile(filePath);

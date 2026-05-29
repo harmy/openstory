@@ -5,7 +5,7 @@
  * read-side ACL on `talent.getWithRelations`.
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import { assertTalentAccessible } from './sequence-characters';
 
 describe('assertTalentAccessible', () => {

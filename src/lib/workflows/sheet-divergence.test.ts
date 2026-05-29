@@ -1,24 +1,24 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SheetDivergenceScopedDb } from './sheet-divergence';
 
-const generationEmit = mock(async () => undefined);
-const locationEmit = mock(async () => undefined);
-const talentEmit = mock(async () => undefined);
+const generationEmit = vi.fn(async () => undefined);
+const locationEmit = vi.fn(async () => undefined);
+const talentEmit = vi.fn(async () => undefined);
 
-const getGenerationChannel = mock((sequenceId?: string) => {
+const getGenerationChannel = vi.fn((sequenceId?: string) => {
   generationEmit.mockClear();
   return { id: sequenceId, emit: generationEmit };
 });
-const getLocationChannel = mock((locationId?: string) => {
+const getLocationChannel = vi.fn((locationId?: string) => {
   locationEmit.mockClear();
   return { id: locationId, emit: locationEmit };
 });
-const getTalentChannel = mock((talentId?: string) => {
+const getTalentChannel = vi.fn((talentId?: string) => {
   talentEmit.mockClear();
   return { id: talentId, emit: talentEmit };
 });
 
-mock.module('@/lib/realtime', () => ({
+vi.doMock('@/lib/realtime', () => ({
   getGenerationChannel,
   getLocationChannel,
   getTalentChannel,
@@ -34,15 +34,15 @@ type TalInsertArgs = Parameters<
   SheetDivergenceScopedDb['talentSheetVariants']['insertDivergent']
 >[0];
 
-const characterInsertDivergent = mock(async (values: CharInsertArgs) => ({
+const characterInsertDivergent = vi.fn(async (values: CharInsertArgs) => ({
   id: 'character-variant-id',
   ...values,
 }));
-const locationInsertDivergent = mock(async (values: LocInsertArgs) => ({
+const locationInsertDivergent = vi.fn(async (values: LocInsertArgs) => ({
   id: 'location-variant-id',
   ...values,
 }));
-const talentInsertDivergent = mock(async (values: TalInsertArgs) => ({
+const talentInsertDivergent = vi.fn(async (values: TalInsertArgs) => ({
   id: 'talent-variant-id',
   ...values,
 }));

@@ -75,7 +75,8 @@
         "**/functions/middleware.ts",
         "**/workflow/scoped-workflow.ts",
         "**/cron/reconcile-all.ts",
-        "**/openrouter/callback.ts"
+        "**/openrouter/callback.ts",
+        "**/lib/test/seed.ts"
       ],
       "rules": {
         "no-restricted-imports": "off"

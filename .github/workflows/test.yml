@@ -36,8 +36,8 @@ jobs:
       - name: Check formatting
         run: bun format:check
 
-      - name: Run testsß
-        run: bun test
+      - name: Run tests
+        run: bun run test
 
   build-e2e:
     runs-on: ubuntu-latest
@@ -57,23 +57,19 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Build app for E2E
+      - name: Build worker for E2E
+        # build:e2e bakes in VITE_APP_URL=http://localhost:3001 and
+        # VITE_DISABLE_DEVTOOLS=true at build time (Vite inlines VITE_* envs).
         run: bun run build:e2e
         env:
-          # Activates the `e2e` key in package.json `imports.#db-client` so the
-          # built server uses Bun's local sqlite (file:test.db) instead of Turso.
-          BUILD_E2E: '1'
-          VITE_APP_URL: http://localhost:3001
-          VITE_DISABLE_DEVTOOLS: 'true'
           VITE_R2_PUBLIC_ASSETS_DOMAIN: ${{ vars.VITE_R2_PUBLIC_ASSETS_DOMAIN }}
 
-      - name: Upload .output artifact
+      - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: e2e-output
-          # `.output` starts with a dot; v4 skips hidden paths by default.
           include-hidden-files: true
-          path: .output
+          path: dist
           retention-days: 1
           if-no-files-found: error
 
@@ -99,21 +95,95 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
-      - name: Setup test database
-        run: bun test:e2e:setup
+      - name: Setup test D1 + seed
+        run: bun run test:e2e:setup
 
-      - name: Download .output artifact
+      - name: Download dist artifact
         uses: actions/download-artifact@v4
         with:
           name: e2e-output
-          path: .output
+          path: dist
+
+      - name: Write .dev.vars for wrangler dev
+        # cf-plugin / wrangler dev exposes vars on the Workerd `env` binding
+        # from `.dev.vars` (or wrangler.jsonc `vars:`). Step `env:` only sets
+        # process.env, which doesn't reach the worker.
+        # IMPORTANT: wrangler dev resolves `.dev.vars` relative to the config
+        # file. The built e2e path uses `-c dist/server/wrangler.json`, so the
+        # file MUST live next to that config (`dist/server/.dev.vars`) —
+        # writing it at the project root is invisible to `wrangler -c`.
+        env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          FAL_KEY: ${{ secrets.FAL_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_PUBLIC_STORAGE_DOMAIN: ${{ vars.R2_PUBLIC_STORAGE_DOMAIN }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+        run: |
+          if [ -z "$BETTER_AUTH_SECRET" ]; then
+            echo "::error::BETTER_AUTH_SECRET is empty — secret not exposed to this job (check environment: staging scoping)"
+            exit 1
+          fi
+          cat > dist/server/.dev.vars <<EOF
+          BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET
+          BETTER_AUTH_URL=http://localhost:3001
+          OPENROUTER_KEY=test-mock-key
+          OPENROUTER_BASE_URL=http://localhost:4010
+          FAL_KEY=$FAL_KEY
+          GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+          GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
+          QSTASH_TOKEN=eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=
+          QSTASH_URL=http://localhost:8080
+          QSTASH_CURRENT_SIGNING_KEY=sig_7kYjw48mhY7kAjqNGcy6cr29RJ6r
+          QSTASH_NEXT_SIGNING_KEY=sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs
+          R2_ACCOUNT_ID=$R2_ACCOUNT_ID
+          R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID
+          R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
+          R2_BUCKET_NAME=$R2_BUCKET_NAME
+          R2_PUBLIC_STORAGE_DOMAIN=$R2_PUBLIC_STORAGE_DOMAIN
+          UPSTASH_REDIS_REST_URL=$UPSTASH_REDIS_REST_URL
+          UPSTASH_REDIS_REST_TOKEN=$UPSTASH_REDIS_REST_TOKEN
+          RESEND_API_KEY=$RESEND_API_KEY
+          EMAIL_FROM=$EMAIL_FROM
+          E2E_TEST=true
+          EOF
+          # Mirror at project root for the non-built (vite dev) path.
+          cp dist/server/.dev.vars .dev.vars
+
+      - name: Prepare .wrangler/deploy/config.json for built e2e (vite preview + CF plugin)
+        # @cloudflare/vite-plugin writes this file during `vite build` (its
+        # writeBundle hook → writeDeployConfig). It lives at the Vite project
+        # root, NOT under dist/, so the upload-artifact step above (path:
+        # dist) doesn't include it. wrangler only *reads* this file — it
+        # never writes it — so a `wrangler ... --dry-run` "prepare" step is a
+        # no-op. We recreate it directly with the same content vite build
+        # would have produced. configPath is relative to .wrangler/deploy/.
+        run: |
+          mkdir -p .wrangler/deploy
+          printf '%s' '{"configPath":"../../dist/server/wrangler.json","auxiliaryWorkers":[]}' \
+            > .wrangler/deploy/config.json
 
       - name: Run E2E tests
-        run: bun test:e2e
+        run: bun run test:e2e
         env:
           E2E_TEST: 'true'
           E2E_BUILT: 'true'
-          DATABASE_URL: file:test.db
+          # NOT setting CLOUDFLARE_ENV: built path uses
+          # dist/server/wrangler.json where [env.test] bindings are already
+          # baked into the top level (build:e2e ran with CLOUDFLARE_ENV=test).
+          # Re-setting it would trigger a "no environment named test" warning.
+          # wrangler dev needs CF auth to start the remote-proxy session for
+          # R2 bindings flagged `remote: true`. Replay mode never actually
+          # calls the R2 binding, but wrangler validates auth at startup.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           BETTER_AUTH_URL: http://localhost:3001
           # QStash - local Docker service
           QSTASH_TOKEN: eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=
@@ -176,8 +246,8 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
-      - name: Setup test database
-        run: bun test:e2e:setup
+      - name: Setup test D1 + seed
+        run: bun run test:e2e:setup
 
       - name: Start QStash
         run: |
@@ -203,20 +273,81 @@ jobs:
           timeout 60 sh -c 'until curl -s -o /dev/null http://localhost:8080/ 2>/dev/null; do sleep 1; done' \
             || (echo "::error::QStash did not become ready within 60s" && docker logs qstash && exit 1)
 
-      - name: Download .output artifact
+      - name: Download dist artifact
         uses: actions/download-artifact@v4
         with:
           name: e2e-output
-          path: .output
+          path: dist
+
+      - name: Write .dev.vars for wrangler dev
+        # See e2e job above. Built path uses `wrangler dev -c
+        # dist/server/wrangler.json` which resolves `.dev.vars` relative to
+        # the config, so the file must live in dist/server/.
+        env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_PUBLIC_STORAGE_DOMAIN: ${{ vars.R2_PUBLIC_STORAGE_DOMAIN }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+        run: |
+          if [ -z "$BETTER_AUTH_SECRET" ]; then
+            echo "::error::BETTER_AUTH_SECRET is empty — secret not exposed to this job (check environment: staging scoping)"
+            exit 1
+          fi
+          cat > dist/server/.dev.vars <<EOF
+          BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET
+          BETTER_AUTH_URL=http://localhost:3001
+          OPENROUTER_KEY=test-mock-key
+          OPENROUTER_BASE_URL=http://localhost:4010
+          FAL_KEY=test-mock-key
+          FAL_PROXY_URL=http://localhost:4010/fal
+          GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+          GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
+          QSTASH_TOKEN=eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=
+          QSTASH_URL=http://localhost:8080
+          QSTASH_CURRENT_SIGNING_KEY=sig_7kYjw48mhY7kAjqNGcy6cr29RJ6r
+          QSTASH_NEXT_SIGNING_KEY=sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs
+          R2_ACCOUNT_ID=$R2_ACCOUNT_ID
+          R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID
+          R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
+          R2_BUCKET_NAME=$R2_BUCKET_NAME
+          R2_PUBLIC_STORAGE_DOMAIN=$R2_PUBLIC_STORAGE_DOMAIN
+          UPSTASH_REDIS_REST_URL=$UPSTASH_REDIS_REST_URL
+          UPSTASH_REDIS_REST_TOKEN=$UPSTASH_REDIS_REST_TOKEN
+          RESEND_API_KEY=$RESEND_API_KEY
+          EMAIL_FROM=$EMAIL_FROM
+          E2E_TEST=true
+          E2E_FULL_PIPELINE=true
+          EOF
+          cp dist/server/.dev.vars .dev.vars
+
+      - name: Prepare .wrangler/deploy/config.json for built e2e (vite preview + CF plugin)
+        # Same as the regular e2e job — see comment there for rationale.
+        run: |
+          mkdir -p .wrangler/deploy
+          printf '%s' '{"configPath":"../../dist/server/wrangler.json","auxiliaryWorkers":[]}' \
+            > .wrangler/deploy/config.json
 
       - name: Run full-pipeline E2E test
-        run: bun test:e2e:full
+        run: bun run test:e2e:full
         env:
           PLAYWRIGHT_FULL_PIPELINE: 'true'
           E2E_TEST: 'true'
           E2E_BUILT: 'true'
           E2E_FULL_PIPELINE: 'true'
-          DATABASE_URL: file:test.db
+          # No CLOUDFLARE_ENV: bindings baked into dist/server/wrangler.json
+          # at build time. See e2e job above for full rationale.
+          # wrangler dev needs CF auth at startup for remote-flagged R2
+          # bindings — see e2e job above for rationale.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           BETTER_AUTH_URL: http://localhost:3001
           # QStash - local Docker service started above
           QSTASH_TOKEN: eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=

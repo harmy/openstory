@@ -25,6 +25,12 @@ import {
   type Sink,
   type TextFormatter,
 } from '@logtape/logtape';
+// Pretty formatter for dev. Static ESM import — @logtape/pretty is marked
+// `sideEffects: false`, so Vite tree-shakes it out of the prod worker bundle
+// once `dev` resolves to `false` at build time (process.env.NODE_ENV is
+// statically replaced). require() doesn't work for this ESM-only package in
+// Workerd, which is what broke pretty output under `bun dev`.
+import { getPrettyFormatter } from '@logtape/pretty';
 import { redactByPattern, type RedactionPattern } from '@logtape/redaction';
 import { z } from 'zod';
 import { handleApiError, OpenStoryError } from '@/lib/errors';
@@ -95,32 +101,26 @@ export function configureLogging(): void {
 }
 
 function buildServerSinks(dev: boolean): Record<string, Sink> {
-  // In dev, lazily try to load @logtape/pretty for nicer output. The package
-  // ships as a devDependency and the dynamic import lets Vite tree-shake it
-  // out of the production worker bundle entirely.
+  // `dev` is statically known at build time (via process.env.NODE_ENV
+  // replacement), so the unused branch is dropped and only the live
+  // formatter's dependency stays in the bundle.
   const formatter: TextFormatter = dev
-    ? redactByPattern(loadDevFormatter(), SECRET_PATTERNS)
+    ? redactByPattern(
+        // wordWrap: false → no hanging-indent continuation. `bun --parallel`
+        // (via concurrently) re-prefixes every wrapped line with
+        // `dev:app | dev:vite | `, which eats ~33 columns and makes the
+        // pretty formatter's default auto-wrap look ragged. Letting the
+        // terminal hard-wrap keeps the `dev:app | dev:vite |` prefix on
+        // only one row per log record.
+        // timestamp: 'disabled' → drop the per-record clock; concurrently's
+        // own prefix already anchors when a line was emitted relative to its
+        // neighbours, and skipping the column buys ~13 cols of message width.
+        getPrettyFormatter({ timestamp: 'disabled', wordWrap: false }),
+        SECRET_PATTERNS
+      )
     : redactByPattern(getJsonLinesFormatter(), SECRET_PATTERNS);
 
   return { console: getConsoleSink({ formatter }) };
-}
-
-type PrettyModule = typeof import('@logtape/pretty');
-
-function loadDevFormatter(): TextFormatter {
-  try {
-    // Synchronous require keeps configureLogging() sync. The whole `dev`
-    // branch is dead-code-eliminated in prod because process.env.NODE_ENV is
-    // statically replaced — so the prod bundle never ships @logtape/pretty.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const mod = require('@logtape/pretty') as PrettyModule;
-    return mod.getPrettyFormatter({ timestamp: 'time' });
-  } catch {
-    // Pretty formatter unavailable (production build that stripped it) — fall
-    // back to JSON. Shouldn't happen in dev because @logtape/pretty is a
-    // devDependency.
-    return getJsonLinesFormatter();
-  }
 }
 
 function buildBrowserSinks(dev: boolean): Record<string, Sink> {

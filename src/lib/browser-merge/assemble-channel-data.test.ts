@@ -12,7 +12,7 @@
  * the "primingPaddingScenario" assertion below will fail.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { assembleChannelData } from './mix-audio-tracks';
 
 type MockFrame = {

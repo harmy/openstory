@@ -3,10 +3,7 @@
  * Creates test library locations for testing location library flows
  */
 
-import { and, eq } from 'drizzle-orm';
-import { ulid } from 'ulid';
-import { testDb } from './db-client';
-import { locationLibrary } from '@/lib/db/schema';
+import { z } from 'zod';
 
 export type TestLibraryLocation = {
   id: string;
@@ -22,21 +19,28 @@ export async function createTestLibraryLocation(
   teamId: string,
   name: string
 ): Promise<TestLibraryLocation> {
-  const locationId = ulid();
-  const now = new Date();
-  const referenceImageUrl = `http://localhost:3001/api/test/image?w=1024&h=576&label=location`;
-
-  await testDb.insert(locationLibrary).values({
-    id: locationId,
-    teamId,
-    name,
-    description: 'A test location for e2e testing',
-    referenceImageUrl,
-    createdAt: now,
-    updatedAt: now,
+  const res = await fetch('http://localhost:3001/api/test/location', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teamId, name }),
   });
 
-  return { id: locationId, name, teamId, referenceImageUrl };
+  if (!res.ok) {
+    throw new Error(`Failed to create test location via API: ${res.status}`);
+  }
+
+  const created = z
+    .object({
+      id: z.string(),
+      teamId: z.string(),
+      name: z.string(),
+    })
+    .parse(await res.json());
+
+  return {
+    ...created,
+    referenceImageUrl: `http://localhost:3001/api/test/image?w=1024&h=576&label=location`,
+  };
 }
 
 /**
@@ -58,18 +62,22 @@ export async function createTestLibraryLocationSet(
  * Clean up test library locations by team ID (use only when test isolation isn't needed)
  */
 export async function cleanupTestLocations(teamId: string): Promise<void> {
-  await testDb
-    .delete(locationLibrary)
-    .where(eq(locationLibrary.teamId, teamId));
+  await fetch('http://localhost:3001/api/test/location', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teamId }),
+  });
 }
 
 /**
  * Clean up a specific location by ID (use for parallel test isolation)
  */
 export async function cleanupLocationById(locationId: string): Promise<void> {
-  await testDb
-    .delete(locationLibrary)
-    .where(eq(locationLibrary.id, locationId));
+  await fetch('http://localhost:3001/api/test/location', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ locationId }),
+  });
 }
 
 /**
@@ -81,26 +89,21 @@ export async function cleanupLocationById(locationId: string): Promise<void> {
 export async function getSystemLocationByName(
   name: string
 ): Promise<TestLibraryLocation> {
-  const rows = await testDb
-    .select()
-    .from(locationLibrary)
-    .where(
-      and(eq(locationLibrary.name, name), eq(locationLibrary.isPublic, true))
-    )
-    .limit(1);
-  if (rows.length === 0) {
+  const res = await fetch(
+    `http://localhost:3001/api/test/location?name=${encodeURIComponent(name)}`
+  );
+  if (!res.ok) {
     throw new Error(
-      `System location "${name}" not found in test DB — was \`bun scripts/seed.ts --test\` run during global setup?`
+      `System location "${name}" not found via test API — was \`bun scripts/seed.ts --test\` run during global setup?`
     );
   }
-  const found = rows[0];
-  if (!found) {
-    throw new Error('test setup: expected location row');
-  }
-  return {
-    id: found.id,
-    name: found.name,
-    teamId: found.teamId,
-    referenceImageUrl: found.referenceImageUrl ?? '',
-  };
+  const loc = z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      teamId: z.string(),
+      referenceImageUrl: z.string(),
+    })
+    .parse(await res.json());
+  return loc;
 }

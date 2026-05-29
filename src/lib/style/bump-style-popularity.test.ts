@@ -1,15 +1,17 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockCapture = mock();
-const mockGetClient: ReturnType<
-  typeof mock<() => { capture: typeof mockCapture } | null>
-> = mock(() => ({ capture: mockCapture }));
+const mockCapture = vi.fn();
+const mockGetClient = vi.fn<() => { capture: typeof mockCapture } | null>(
+  () => ({
+    capture: mockCapture,
+  })
+);
 
-const mockLoggerError = mock();
-const mockLoggerInfo = mock();
-const mockLoggerWarn = mock();
-const mockLoggerDebug = mock();
-const mockLoggerWith = mock(() => mockLoggerInstance);
+const mockLoggerError = vi.fn();
+const mockLoggerInfo = vi.fn();
+const mockLoggerWarn = vi.fn();
+const mockLoggerDebug = vi.fn();
+const mockLoggerWith = vi.fn(() => mockLoggerInstance);
 const mockLoggerInstance = {
   info: mockLoggerInfo,
   warn: mockLoggerWarn,
@@ -19,11 +21,11 @@ const mockLoggerInstance = {
   getChild: () => mockLoggerInstance,
 };
 
-mock.module('@/lib/posthog-server', () => ({
+vi.doMock('@/lib/posthog-server', () => ({
   getPostHogClient: mockGetClient,
 }));
 
-mock.module('@/lib/observability/logger', () => ({
+vi.doMock('@/lib/observability/logger', () => ({
   getLogger: () => mockLoggerInstance,
 }));
 
@@ -45,7 +47,7 @@ describe('bumpStylePopularity', () => {
   });
 
   it('calls incrementUsage exactly once with the styleId', () => {
-    const incrementUsage = mock(() => Promise.resolve());
+    const incrementUsage = vi.fn(() => Promise.resolve());
     bumpStylePopularity({
       ...baseArgs,
       scopedDb: { styles: { incrementUsage } },
@@ -57,7 +59,7 @@ describe('bumpStylePopularity', () => {
   it('captures style_selected exactly once when posthog is configured', () => {
     bumpStylePopularity({
       ...baseArgs,
-      scopedDb: { styles: { incrementUsage: mock(() => Promise.resolve()) } },
+      scopedDb: { styles: { incrementUsage: vi.fn(() => Promise.resolve()) } },
     });
     expect(mockCapture).toHaveBeenCalledTimes(1);
     expect(mockCapture).toHaveBeenCalledWith({
@@ -75,14 +77,14 @@ describe('bumpStylePopularity', () => {
     mockGetClient.mockReturnValueOnce(null);
     bumpStylePopularity({
       ...baseArgs,
-      scopedDb: { styles: { incrementUsage: mock(() => Promise.resolve()) } },
+      scopedDb: { styles: { incrementUsage: vi.fn(() => Promise.resolve()) } },
     });
     expect(mockCapture).not.toHaveBeenCalled();
   });
 
   it('does not throw or reject when incrementUsage rejects', async () => {
     const err = new Error('db down');
-    const incrementUsage = mock(() => Promise.reject(err));
+    const incrementUsage = vi.fn(() => Promise.reject(err));
 
     // Synchronous call must not throw.
     expect(() =>

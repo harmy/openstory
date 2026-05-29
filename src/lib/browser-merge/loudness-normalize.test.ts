@@ -3,7 +3,7 @@
  * gain normalization match expected reference values within ±0.5 dB.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import {
   applyGain,
   DEFAULT_MUSIC_LOUDNESS_LUFS,

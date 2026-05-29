@@ -1,12 +1,11 @@
 /**
  * Playwright Route Handlers for E2E Tests
- * Intercepts external API calls (fal.ai, QStash, R2) to return mock responses
+ * Intercepts external API calls (fal.ai, QStash) to return mock responses.
+ * R2 traffic is handled server-side by the r2-mock sidecar (port 4011) —
+ * see e2e/mocks/r2-mock-server.ts.
  */
 
 import type { Page, Route } from 'playwright/test';
-
-/** Counter for generating unique mock file IDs */
-let mockFileCounter = 0;
 
 /**
  * Mock image generation response
@@ -138,37 +137,11 @@ export async function setupMockRoutes(page: Page): Promise<void> {
     });
   });
 
-  // Mock R2 storage uploads (PutObject operations)
-  await page.route('**/*.r2.cloudflarestorage.com/**', async (route: Route) => {
-    const method = route.request().method();
-
-    if (method === 'PUT') {
-      // Successfully mock file upload
-      await route.fulfill({
-        status: 200,
-        headers: {
-          ETag: `"mock-etag-${++mockFileCounter}"`,
-        },
-      });
-    } else if (method === 'GET' || method === 'HEAD') {
-      // Mock file exists/download
-      await route.fulfill({
-        status: 200,
-        headers: {
-          'Content-Type': 'image/jpeg',
-          'Content-Length': '1024',
-        },
-        body: Buffer.from([]),
-      });
-    } else if (method === 'DELETE') {
-      // Mock file deletion
-      await route.fulfill({
-        status: 204,
-      });
-    } else {
-      await route.continue();
-    }
-  });
+  // R2 traffic note: under the cf-plugin runtime, the browser never PUTs
+  // directly to `*.r2.cloudflarestorage.com` — uploads go through the worker
+  // (storage-cloudflare.ts), which routes through the r2-mock sidecar on
+  // :4011 for fixture replay/record. Image reads via R2_PUBLIC_STORAGE_DOMAIN
+  // go straight to real R2 where the bytes were uploaded during recording.
 }
 
 /**

@@ -33,13 +33,26 @@
   // them to PostHog's /i/v1/logs endpoint. The forwarder is its own Worker
   // (workers/posthog-log-forwarder/) and must be deployed first. Previews are
   // patched to use 'openstory-log-forwarder-stg' in deploy-cloudflare.yml.
-  // See workers/posthog-log-forwarder/README.md for setup.
+  // tail_consumers is NON-inheritable, so each env block below must
+  // redeclare it (or set [] to opt out).
   "tail_consumers": [{ "service": "openstory-log-forwarder-prd" }],
+  // ─────────────────────────────────────────────────────────────────────────
+  // DEFAULT env = local dev. The D1 here uses a placeholder `database_id` so
+  // it can ONLY resolve to a local Miniflare D1 — there is no real Cloudflare
+  // D1 with this id. If @cloudflare/vite-plugin ever auto-promotes a binding
+  // to remote (it has done in the past with `remoteBindings` defaulting to
+  // true), the request would 404 against Cloudflare rather than silently
+  // writing to production.
+  //
+  // PROD D1 lives in [env.production] below. Deploys MUST pass
+  // `--env=production` (see .github/workflows/deploy-cloudflare.yml).
+  // PR-preview deploys patch this default block in CI before deploying.
+  // ─────────────────────────────────────────────────────────────────────────
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "openstory-prd",
-      "database_id": "d6a35f64-abb0-4a34-a092-dc20b29f5812",
+      "database_name": "openstory-dev",
+      "database_id": "dev-local-d1",
       "migrations_dir": "drizzle/migrations",
     },
   ],
@@ -51,7 +64,100 @@
     },
     {
       "binding": "R2_STORAGE_BUCKET",
-      "bucket_name": "openstory-storage",
+      // Dev-only bucket — separate from prod's `openstory-storage` so local
+      // dev writes (sequence videos, character images, talent sheets) never
+      // overwrite production user content. PROD bucket lives in
+      // [env.production]; preview deploys patch this default to
+      // `openstory-storage-stg` (see deploy-cloudflare.yml).
+      "bucket_name": "openstory-dev",
+      // remote: true so writes go to a real R2 bucket and browser fetches via
+      // R2_PUBLIC_STORAGE_DOMAIN (which must point at the same dev bucket's
+      // public domain for local-dev images to resolve).
+      "remote": true,
     },
   ],
+  "env": {
+    // Production deploy target. Activated via `wrangler deploy --env=production`
+    // — without --env, deploys hit the default block (whose D1 id is a
+    // placeholder), which fails loudly rather than overwriting prod.
+    "production": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "openstory-prd",
+          "database_id": "d6a35f64-abb0-4a34-a092-dc20b29f5812",
+          "migrations_dir": "drizzle/migrations",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "bucket_name": "openstory-public-assets",
+          "binding": "R2_PUBLIC_ASSETS_BUCKET",
+          "remote": true,
+        },
+        {
+          "binding": "R2_STORAGE_BUCKET",
+          "bucket_name": "openstory-storage",
+          "remote": true,
+        },
+      ],
+      "triggers": {
+        "crons": ["*/5 * * * *"],
+      },
+      // Same forwarder as the top-level default — redeclared because
+      // tail_consumers is non-inheritable across env blocks.
+      "tail_consumers": [{ "service": "openstory-log-forwarder-prd" }],
+    },
+    // Playwright e2e environment. D1 stays local (Miniflare) for hermetic
+    // setup/teardown. R2 storage is `remote: true` so RECORD-mode uploads land
+    // in a real R2 bucket whose URLs persist for replay. Replay never invokes
+    // the binding (storage-cloudflare.ts short-circuits via aimock fixture
+    // lookup), so credentials are only required when recording.
+    //
+    // R2_STORAGE_BUCKET = `openstory-dev` — same bucket the developer's local
+    // `bun dev` writes to. Recordings happen locally with
+    // `bun test:e2e:record`; fixtures then reference openstory-dev URLs which
+    // resolve via openstory-dev's public CDN domain anywhere (local or CI).
+    "test": {
+      // These vars are visible inside the worker via getEnv() when
+      // CLOUDFLARE_ENV=test (used by Playwright webServer + CI).
+      // E2E_TEST gates the entire /api/test/* route tree via testOnlyGuard.
+      "vars": {
+        // E2E_TEST gates /api/test/* routes (via testOnlyGuard) and many
+        // test-specific branches in storage / workflow client code.
+        "E2E_TEST": "true",
+        // The following are "false" by default for normal `bun test:e2e`.
+        // For `bun test:e2e:full` the outer process receives the true value
+        // via envPrefix; full worker injection for these two is handled by
+        // the fact that full-pipeline runs still go through the same [env.test]
+        // (advanced overrides can be done via plugin config if needed).
+        "E2E_FULL_PIPELINE": "false",
+        "E2E_RECORD": "false",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "openstory-test",
+          "database_id": "openstory-test-local",
+          "migrations_dir": "drizzle/migrations",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "bucket_name": "openstory-public-assets",
+          "binding": "R2_PUBLIC_ASSETS_BUCKET",
+          "remote": true,
+        },
+        {
+          "binding": "R2_STORAGE_BUCKET",
+          "bucket_name": "openstory-dev",
+          "remote": true,
+        },
+      ],
+      // Explicit empty array opts out of inheritance and silences wrangler's
+      // "tail_consumers not on env.test" warning. We don't want e2e runs
+      // forwarding LogTape JSON into the prod PostHog log pipeline.
+      "tail_consumers": [],
+    },
+  },
 }

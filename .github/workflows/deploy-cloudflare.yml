@@ -46,14 +46,14 @@ jobs:
         run: bun install
 
       - name: Migrate D1 (production)
-        run: bun --bun drizzle-kit migrate --config=drizzle.config.d1.ts
+        run: bun drizzle-kit migrate --config=drizzle.config.d1.ts
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_D1_DATABASE_ID: d6a35f64-abb0-4a34-a092-dc20b29f5812
 
       - name: Seed D1 (production)
-        run: bun db:seed:d1
+        run: bun run db:seed:d1
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -135,14 +135,14 @@ jobs:
           fi
 
       - name: Migrate D1 (preview)
-        run: bun --bun drizzle-kit migrate --config=drizzle.config.d1.ts
+        run: bun drizzle-kit migrate --config=drizzle.config.d1.ts
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_D1_DATABASE_ID: ${{ steps.d1.outputs.database-id }}
 
       - name: Seed D1 (preview)
-        run: bun db:seed:d1
+        run: bun run db:seed:d1
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -193,7 +193,7 @@ jobs:
           VITE_PUBLIC_POSTHOG_HOST: ${{ vars.VITE_PUBLIC_POSTHOG_HOST }}
         run: |
           bunx wrangler types
-          BUILD_CLOUDFLARE=1 bun --bun run build
+          bun run build
 
       - name: Deploy preview
         id: deploy

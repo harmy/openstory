@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'vitest';
 import { sceneAnalysisExample } from './scene-analysis.example';
 import { sceneAnalysisSchema } from './scene-analysis.schema';
 

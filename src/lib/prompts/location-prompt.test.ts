@@ -2,7 +2,7 @@
  * Tests for location prompt building functions
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import type { LocationBibleEntry } from '@/lib/ai/scene-analysis.schema';
 import type { SequenceLocationMinimal, StyleConfig } from '@/lib/db/schema';
 import {
