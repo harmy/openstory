@@ -124,6 +124,30 @@ export function isLocalDevelopment(): boolean {
 }
 
 /**
+ * Is this request being served on a local/network-dev host (localhost or a
+ * bare IP)? Mirrors the local-access check in src/routes/__root.tsx: real
+ * deployments — wherever they are hosted — are always reached by hostname,
+ * never a bare IP or localhost.
+ *
+ * This is a host-based, env-independent signal. Unlike isProductionDeployment(),
+ * it does not rely on VITE_APP_URL / NODE_ENV being present in the worker env
+ * (they are only declared under wrangler.jsonc [env.test].vars, so they are
+ * undefined in production and in the e2e-built worker alike).
+ */
+export function isLocalRequestHost(request: Request): boolean {
+  const host =
+    request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+  if (!host) return false;
+  const hostname = (host.split(':')[0] ?? host).toLowerCase();
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '::1' ||
+    /^\d+\.\d+\.\d+\.\d+$/.test(hostname)
+  );
+}
+
+/**
  * Server function to check if the current request is from a preview deployment.
  * Safe to call from client code (executes server-side via RPC).
  */

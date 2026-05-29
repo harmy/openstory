@@ -1,19 +1,31 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { createMiddleware } from '@tanstack/react-start';
+import { getRequest } from '@tanstack/react-start/server';
 import { getEnv } from '#env';
+import { isLocalRequestHost } from '@/lib/utils/environment';
 
 /**
  * Guard middleware for all test-only API endpoints.
  *
- * This is the single source of truth for "these routes only exist
- * when E2E_TEST=true".
+ * These endpoints are powerful (they forge Better Auth verification rows,
+ * create/delete users, and can wipe the database via /api/test/cleanup), so
+ * the guard enforces TWO independent gates — both must pass:
  *
- * Uses getEnv() so the value is read from the Cloudflare Workers env
- * (populated from wrangler.jsonc [env.test].vars when CLOUDFLARE_ENV=test,
- * which is set by the Playwright webServer config and CI).
+ *  1. Local-host backstop: the request must be served on a local/network-dev
+ *     host (localhost or a bare IP — see isLocalRequestHost). This is a
+ *     defense-in-depth check that CANNOT be flipped by an env var, and is
+ *     domain-agnostic (it keeps holding wherever the app is hosted). Real
+ *     deployments are always reached by hostname, so even if E2E_TEST were
+ *     ever wrongly present in a production-reachable env block (a stray `vars`
+ *     entry added to [env.production], or a preview-patch step copying
+ *     [env.test].vars), these routes stay 404 on any deployed host.
+ *  2. Explicit E2E_TEST opt-in, read via getEnv() from the Cloudflare Workers
+ *     env (populated from wrangler.jsonc [env.test].vars when CLOUDFLARE_ENV=test,
+ *     which is set by the Playwright webServer config and CI).
  */
 export const testOnlyGuard = createMiddleware().server(async ({ next }) => {
-  if (getEnv().E2E_TEST !== 'true') {
+  const request = getRequest();
+  if (!isLocalRequestHost(request) || getEnv().E2E_TEST !== 'true') {
     return new Response('Not Found', { status: 404 });
   }
   return next();
