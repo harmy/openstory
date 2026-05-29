@@ -158,14 +158,17 @@ jobs:
           cp dist/server/.dev.vars .dev.vars
 
       - name: Prepare .wrangler/deploy/config.json for built e2e (vite preview + CF plugin)
-        # The baked wrangler.json lives in dist/server/. When wrangler runs from
-        # that directory it writes its internal deploy config to dist/server/.wrangler/deploy/config.json.
-        # We then copy it to the project root so the @cloudflare/vite-plugin can find it
-        # when `vite preview` starts from the repo root.
+        # @cloudflare/vite-plugin writes this file during `vite build` (its
+        # writeBundle hook → writeDeployConfig). It lives at the Vite project
+        # root, NOT under dist/, so the upload-artifact step above (path:
+        # dist) doesn't include it. wrangler only *reads* this file — it
+        # never writes it — so a `wrangler ... --dry-run` "prepare" step is a
+        # no-op. We recreate it directly with the same content vite build
+        # would have produced. configPath is relative to .wrangler/deploy/.
         run: |
-          (cd dist/server && npx wrangler deploy --dry-run)
           mkdir -p .wrangler/deploy
-          cp -r dist/server/.wrangler/deploy/* .wrangler/deploy/ 2>/dev/null || true
+          printf '%s' '{"configPath":"../../dist/server/wrangler.json","auxiliaryWorkers":[]}' \
+            > .wrangler/deploy/config.json
 
       - name: Run E2E tests
         run: bun run test:e2e
@@ -326,11 +329,11 @@ jobs:
           cp dist/server/.dev.vars .dev.vars
 
       - name: Prepare .wrangler/deploy/config.json for built e2e (vite preview + CF plugin)
-        # Same as the regular e2e job.
+        # Same as the regular e2e job — see comment there for rationale.
         run: |
-          (cd dist/server && npx wrangler deploy --dry-run)
           mkdir -p .wrangler/deploy
-          cp -r dist/server/.wrangler/deploy/* .wrangler/deploy/ 2>/dev/null || true
+          printf '%s' '{"configPath":"../../dist/server/wrangler.json","auxiliaryWorkers":[]}' \
+            > .wrangler/deploy/config.json
 
       - name: Run full-pipeline E2E test
         run: bun run test:e2e:full

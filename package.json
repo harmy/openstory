@@ -71,7 +71,7 @@
     "test:e2e:record": "E2E_RECORD=1 bun playwright test",
     "test:e2e:full:record": "E2E_RECORD=1 PLAYWRIGHT_FULL_PIPELINE=true bun playwright test full-sequence",
     "test:e2e:full:record:built": "bun run build:e2e && bun run prepare:e2e-built && E2E_BUILT=true E2E_RECORD=1 PLAYWRIGHT_FULL_PIPELINE=true bun playwright test full-sequence",
-    "prepare:e2e-built": "(cd dist/server && npx wrangler deploy --dry-run); mkdir -p .wrangler/deploy; cp -r dist/server/.wrangler/deploy/* .wrangler/deploy/ 2>/dev/null || true",
+    "prepare:e2e-built": "mkdir -p .wrangler/deploy && printf '%s' '{\"configPath\":\"../../dist/server/wrangler.json\",\"auxiliaryWorkers\":[]}' > .wrangler/deploy/config.json",
     "test:e2e:setup": "bun run db:migrate:test && bun scripts/seed.ts --test",
     "auth:generate": "bunx @better-auth/cli generate --config src/lib/auth/cli-config.ts",
     "db:generate": "bun drizzle-kit generate --config=drizzle.config.d1.ts",
