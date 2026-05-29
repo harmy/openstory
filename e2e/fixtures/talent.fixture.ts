@@ -3,11 +3,7 @@
  * Creates test talent with sheets for testing talent selection flows
  */
 
-import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { ulid } from 'ulid';
-import { testDb } from './db-client';
-import { talent, talentSheets, talentMedia } from '@/lib/db/schema';
 
 export type TestTalent = {
   id: string;
@@ -78,64 +74,51 @@ export async function createTestTalentWithMedia(
   name: string,
   mediaCount = 2
 ): Promise<TestTalentWithMedia> {
-  const talentId = ulid();
-  const sheetId = ulid();
-  const now = new Date();
-
-  // Insert talent
-  await testDb.insert(talent).values({
-    id: talentId,
-    teamId,
-    name,
-    isInTeamLibrary: true,
-    createdAt: now,
-    updatedAt: now,
+  const res = await fetch('http://localhost:3001/api/test/talent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teamId, name, mediaCount }),
   });
 
-  // Insert default sheet with local test image (no external dependencies)
-  await testDb.insert(talentSheets).values({
-    id: sheetId,
-    talentId,
-    name: 'Default',
-    imageUrl: `http://localhost:3001/api/test/image?w=512&h=512&label=sheet`,
-    isDefault: true,
-    source: 'manual_upload',
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  // Insert media records
-  const mediaIds: string[] = [];
-  for (let i = 0; i < mediaCount; i++) {
-    const mediaId = ulid();
-    mediaIds.push(mediaId);
-    await testDb.insert(talentMedia).values({
-      id: mediaId,
-      talentId,
-      type: 'image',
-      url: `http://localhost:3001/api/test/image?w=400&h=400&label=media`,
-      path: `${teamId}/${talentId}/${mediaId}.jpg`,
-      createdAt: now,
-      updatedAt: now,
-    });
+  if (!res.ok) {
+    throw new Error(
+      `Failed to create test talent with media via API: ${res.status}`
+    );
   }
 
-  return { id: talentId, name, teamId, sheetId, mediaIds };
+  const created = z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      teamId: z.string(),
+      sheetId: z.string(),
+      mediaIds: z.array(z.string()),
+    })
+    .parse(await res.json());
+
+  return created;
 }
 
 /**
  * Clean up test talent by team ID (use only when test isolation isn't needed)
  */
 export async function cleanupTestTalent(teamId: string): Promise<void> {
-  // talent_sheets and talent_media will cascade delete from talent
-  await testDb.delete(talent).where(eq(talent.teamId, teamId));
+  await fetch('http://localhost:3001/api/test/talent', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teamId }),
+  });
 }
 
 /**
  * Clean up a specific talent by ID (use for parallel test isolation)
  */
 export async function cleanupTalentById(talentId: string): Promise<void> {
-  await testDb.delete(talent).where(eq(talent.id, talentId));
+  await fetch('http://localhost:3001/api/test/talent', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ talentId }),
+  });
 }
 
 /**
@@ -146,34 +129,21 @@ export async function cleanupTalentById(talentId: string): Promise<void> {
  * with placeholder URLs.
  */
 export async function getSystemTalentByName(name: string): Promise<TestTalent> {
-  const rows = await testDb
-    .select()
-    .from(talent)
-    .where(and(eq(talent.name, name), eq(talent.isPublic, true)))
-    .limit(1);
-  const found = rows[0];
-  if (!found) {
+  const res = await fetch(
+    `http://localhost:3001/api/test/talent?name=${encodeURIComponent(name)}`
+  );
+  if (!res.ok) {
     throw new Error(
-      `System talent "${name}" not found in test DB — was \`bun scripts/seed.ts --test\` run during global setup?`
+      `System talent "${name}" not found via test API — was \`bun scripts/seed.ts --test\` run during global setup?`
     );
   }
-  const sheets = await testDb
-    .select()
-    .from(talentSheets)
-    .where(
-      and(eq(talentSheets.talentId, found.id), eq(talentSheets.isDefault, true))
-    )
-    .limit(1);
-  const defaultSheet = sheets[0];
-  if (!defaultSheet) {
-    throw new Error(
-      `System talent "${name}" has no default sheet — re-run seed`
-    );
-  }
-  return {
-    id: found.id,
-    name: found.name,
-    teamId: found.teamId,
-    sheetId: defaultSheet.id,
-  };
+  const t = z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      teamId: z.string(),
+      sheetId: z.string(),
+    })
+    .parse(await res.json());
+  return t;
 }

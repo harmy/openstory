@@ -46,6 +46,8 @@ import { Route as ApiTestSequenceRouteImport } from './routes/api/test/sequence'
 import { Route as ApiTestLocationRouteImport } from './routes/api/test/location'
 import { Route as ApiTestImageRouteImport } from './routes/api/test/image'
 import { Route as ApiTestFrameRouteImport } from './routes/api/test/frame'
+import { Route as ApiTestCleanupRouteImport } from './routes/api/test/cleanup'
+import { Route as ApiTestCharacterRouteImport } from './routes/api/test/character'
 import { Route as ApiStorageUploadRouteImport } from './routes/api/storage/upload'
 import { Route as ApiOpenrouterCallbackRouteImport } from './routes/api/openrouter/callback'
 import { Route as ApiDevMemoryRouteImport } from './routes/api/dev/memory'
@@ -250,6 +252,16 @@ const ApiTestFrameRoute = ApiTestFrameRouteImport.update({
   path: '/frame',
   getParentRoute: () => ApiTestRouteRoute,
 } as any)
+const ApiTestCleanupRoute = ApiTestCleanupRouteImport.update({
+  id: '/cleanup',
+  path: '/cleanup',
+  getParentRoute: () => ApiTestRouteRoute,
+} as any)
+const ApiTestCharacterRoute = ApiTestCharacterRouteImport.update({
+  id: '/character',
+  path: '/character',
+  getParentRoute: () => ApiTestRouteRoute,
+} as any)
 const ApiStorageUploadRoute = ApiStorageUploadRouteImport.update({
   id: '/api/storage/upload',
   path: '/api/storage/upload',
@@ -403,6 +415,8 @@ export interface FileRoutesByFullPath {
   '/api/dev/memory': typeof ApiDevMemoryRoute
   '/api/openrouter/callback': typeof ApiOpenrouterCallbackRoute
   '/api/storage/upload': typeof ApiStorageUploadRoute
+  '/api/test/character': typeof ApiTestCharacterRoute
+  '/api/test/cleanup': typeof ApiTestCleanupRoute
   '/api/test/frame': typeof ApiTestFrameRoute
   '/api/test/image': typeof ApiTestImageRoute
   '/api/test/location': typeof ApiTestLocationRoute
@@ -458,6 +472,8 @@ export interface FileRoutesByTo {
   '/api/dev/memory': typeof ApiDevMemoryRoute
   '/api/openrouter/callback': typeof ApiOpenrouterCallbackRoute
   '/api/storage/upload': typeof ApiStorageUploadRoute
+  '/api/test/character': typeof ApiTestCharacterRoute
+  '/api/test/cleanup': typeof ApiTestCleanupRoute
   '/api/test/frame': typeof ApiTestFrameRoute
   '/api/test/image': typeof ApiTestImageRoute
   '/api/test/location': typeof ApiTestLocationRoute
@@ -519,6 +535,8 @@ export interface FileRoutesById {
   '/api/dev/memory': typeof ApiDevMemoryRoute
   '/api/openrouter/callback': typeof ApiOpenrouterCallbackRoute
   '/api/storage/upload': typeof ApiStorageUploadRoute
+  '/api/test/character': typeof ApiTestCharacterRoute
+  '/api/test/cleanup': typeof ApiTestCleanupRoute
   '/api/test/frame': typeof ApiTestFrameRoute
   '/api/test/image': typeof ApiTestImageRoute
   '/api/test/location': typeof ApiTestLocationRoute
@@ -578,6 +596,8 @@ export interface FileRouteTypes {
     | '/api/dev/memory'
     | '/api/openrouter/callback'
     | '/api/storage/upload'
+    | '/api/test/character'
+    | '/api/test/cleanup'
     | '/api/test/frame'
     | '/api/test/image'
     | '/api/test/location'
@@ -633,6 +653,8 @@ export interface FileRouteTypes {
     | '/api/dev/memory'
     | '/api/openrouter/callback'
     | '/api/storage/upload'
+    | '/api/test/character'
+    | '/api/test/cleanup'
     | '/api/test/frame'
     | '/api/test/image'
     | '/api/test/location'
@@ -693,6 +715,8 @@ export interface FileRouteTypes {
     | '/api/dev/memory'
     | '/api/openrouter/callback'
     | '/api/storage/upload'
+    | '/api/test/character'
+    | '/api/test/cleanup'
     | '/api/test/frame'
     | '/api/test/image'
     | '/api/test/location'
@@ -1000,6 +1024,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTestFrameRouteImport
       parentRoute: typeof ApiTestRouteRoute
     }
+    '/api/test/cleanup': {
+      id: '/api/test/cleanup'
+      path: '/cleanup'
+      fullPath: '/api/test/cleanup'
+      preLoaderRoute: typeof ApiTestCleanupRouteImport
+      parentRoute: typeof ApiTestRouteRoute
+    }
+    '/api/test/character': {
+      id: '/api/test/character'
+      path: '/character'
+      fullPath: '/api/test/character'
+      preLoaderRoute: typeof ApiTestCharacterRouteImport
+      parentRoute: typeof ApiTestRouteRoute
+    }
     '/api/storage/upload': {
       id: '/api/storage/upload'
       path: '/api/storage/upload'
@@ -1287,6 +1325,8 @@ const DocsRouteChildren: DocsRouteChildren = {
 const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
 
 interface ApiTestRouteRouteChildren {
+  ApiTestCharacterRoute: typeof ApiTestCharacterRoute
+  ApiTestCleanupRoute: typeof ApiTestCleanupRoute
   ApiTestFrameRoute: typeof ApiTestFrameRoute
   ApiTestImageRoute: typeof ApiTestImageRoute
   ApiTestLocationRoute: typeof ApiTestLocationRoute
@@ -1298,6 +1338,8 @@ interface ApiTestRouteRouteChildren {
 }
 
 const ApiTestRouteRouteChildren: ApiTestRouteRouteChildren = {
+  ApiTestCharacterRoute: ApiTestCharacterRoute,
+  ApiTestCleanupRoute: ApiTestCleanupRoute,
   ApiTestFrameRoute: ApiTestFrameRoute,
   ApiTestImageRoute: ApiTestImageRoute,
   ApiTestLocationRoute: ApiTestLocationRoute,

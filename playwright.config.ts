@@ -111,13 +111,14 @@ export default defineConfig({
     //
     // Why `vite preview` (not `wrangler dev`)? Both serve a built worker,
     // but `wrangler dev` spawns a *separate* Node + Workerd process with its
-    // own Miniflare, while the test fixtures (e2e/fixtures/db-client.ts)
-    // already spawn their own Miniflare via getPlatformProxy. Two Miniflare
-    // instances opening the same SQLite file race for the exclusive write
-    // lock → `D1_ERROR: NOSENTRY database is locked: SQLITE_BUSY` under any
-    // real workflow load. `vite preview` runs the built worker through the
-    // cf-plugin's in-process Miniflare, the same as `vite dev`, so the lock
-    // semantics match the working local path.
+    // own Miniflare. Historically, e2e fixtures also spawned Miniflare via
+    // getPlatformProxy for direct D1 access, causing SQLITE_BUSY lock races
+    // on the shared .wrangler D1 SQLite under parallel workers. All direct DB
+    // access from playwright fixtures has been migrated to the guarded
+    // /api/test/* routes (which execute inside the single in-process Miniflare
+    // of the vite server). The comment above is retained for history; the
+    // lock risk from fixtures is now eliminated. `vite preview` still provides
+    // consistent built-server testing.
     return {
       command: useBuiltServer
         ? `${envPrefix} vite preview --port=3001`

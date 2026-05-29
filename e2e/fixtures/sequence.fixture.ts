@@ -3,10 +3,7 @@
  * Creates pre-seeded sequences with frames and characters for testing
  */
 
-import { eq } from 'drizzle-orm';
-import { ulid } from 'ulid';
-import { testDb } from './db-client';
-import { styles, sequences, frames, characters } from '@/lib/db/schema';
+import { z } from 'zod';
 
 export type TestSequence = {
   id: string;
@@ -28,44 +25,22 @@ export type TestCharacter = {
   name: string;
 };
 
-// Local test images served by /api/test/image endpoint (no external dependencies)
-const E2E_IMAGE_BASE = 'http://localhost:3001/api/test/image';
-
-const TEST_IMAGES = {
-  thumbnail: (_seed: string) => `${E2E_IMAGE_BASE}?w=1024&h=576&label=thumb`,
-  variantGrid: (_seed: string) =>
-    `${E2E_IMAGE_BASE}?w=3072&h=3072&label=variants`,
-  characterSheet: (_seed: string) =>
-    `${E2E_IMAGE_BASE}?w=1920&h=1080&label=character`,
-};
-
 /**
  * Create a test style for the team (required by sequence)
  */
 export async function createTestStyle(teamId: string): Promise<string> {
-  const styleId = ulid();
-  const now = new Date();
-
-  const styleConfig = {
-    artStyle: 'Cinematic',
-    colorPalette: ['#000000', '#FFFFFF'],
-    lighting: 'Natural',
-    cameraWork: 'Standard',
-    mood: 'Dramatic',
-    referenceFilms: ['Test Film'],
-    colorGrading: 'Natural',
-  };
-
-  await testDb.insert(styles).values({
-    id: styleId,
-    teamId,
-    name: 'E2E Test Style',
-    config: styleConfig,
-    createdAt: now,
-    updatedAt: now,
+  const res = await fetch('http://localhost:3001/api/test/style', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teamId }),
   });
 
-  return styleId;
+  if (!res.ok) {
+    throw new Error(`Failed to create test style via API: ${res.status}`);
+  }
+
+  const created = z.object({ id: z.string() }).parse(await res.json());
+  return created.id;
 }
 
 /**
@@ -76,22 +51,27 @@ export async function createTestSequence(
   userId: string,
   title = 'E2E Test Sequence'
 ): Promise<TestSequence> {
-  const sequenceId = ulid();
-  const styleId = await createTestStyle(teamId);
-  const now = new Date();
+  await createTestStyle(teamId); // ensures a style exists for the team
 
-  await testDb.insert(sequences).values({
-    id: sequenceId,
-    teamId,
-    title,
-    status: 'completed',
-    styleId,
-    createdBy: userId,
-    createdAt: now,
-    updatedAt: now,
+  const res = await fetch('http://localhost:3001/api/test/sequence', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teamId, userId, title }),
   });
 
-  return { id: sequenceId, teamId, styleId, title };
+  if (!res.ok) {
+    throw new Error(`Failed to create test sequence via API: ${res.status}`);
+  }
+
+  const created = z
+    .object({
+      id: z.string(),
+      teamId: z.string(),
+      styleId: z.string(),
+      title: z.string(),
+    })
+    .parse(await res.json());
+  return created;
 }
 
 /**
@@ -106,28 +86,20 @@ export async function createTestFrame(
     variantImageStatus?: 'pending' | 'generating' | 'completed' | 'failed';
   } = {}
 ): Promise<TestFrame> {
-  const frameId = ulid();
-  const now = new Date();
-
-  const {
-    thumbnailUrl = TEST_IMAGES.thumbnail(frameId),
-    variantImageUrl = null,
-    variantImageStatus = 'pending',
-  } = options;
-
-  await testDb.insert(frames).values({
-    id: frameId,
-    sequenceId,
-    orderIndex,
-    thumbnailUrl,
-    thumbnailStatus: 'completed',
-    variantImageUrl,
-    variantImageStatus,
-    createdAt: now,
-    updatedAt: now,
+  const res = await fetch('http://localhost:3001/api/test/frame', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sequenceId, orderIndex, ...options }),
   });
 
-  return { id: frameId, sequenceId, orderIndex };
+  if (!res.ok) {
+    throw new Error(`Failed to create test frame via API: ${res.status}`);
+  }
+
+  const created = z
+    .object({ id: z.string(), sequenceId: z.string(), orderIndex: z.number() })
+    .parse(await res.json());
+  return created;
 }
 
 /**
@@ -143,28 +115,31 @@ export async function createTestCharacter(
     sheetStatus?: 'pending' | 'generating' | 'completed' | 'failed';
   } = {}
 ): Promise<TestCharacter> {
-  const id = ulid();
-  const now = new Date();
-
-  const {
-    sheetImageUrl = TEST_IMAGES.characterSheet(id),
-    sheetStatus = 'completed',
-  } = options;
-
-  await testDb.insert(characters).values({
-    id,
-    sequenceId,
-    characterId,
-    name,
-    talentId,
-    age: '30s',
-    sheetImageUrl,
-    sheetStatus,
-    createdAt: now,
-    updatedAt: now,
+  const res = await fetch('http://localhost:3001/api/test/character', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sequenceId,
+      characterId,
+      name,
+      talentId,
+      ...options,
+    }),
   });
 
-  return { id, sequenceId, characterId, name };
+  if (!res.ok) {
+    throw new Error(`Failed to create test character via API: ${res.status}`);
+  }
+
+  const created = z
+    .object({
+      id: z.string(),
+      sequenceId: z.string(),
+      characterId: z.string(),
+      name: z.string(),
+    })
+    .parse(await res.json());
+  return created;
 }
 
 /**
@@ -184,20 +159,28 @@ export async function getTestSequenceFrames(sequenceId: string): Promise<
     audioStatus: string | null;
   }>
 > {
-  const rows = await testDb.query.frames.findMany({
-    where: { sequenceId },
-    columns: {
-      id: true,
-      orderIndex: true,
-      thumbnailUrl: true,
-      thumbnailStatus: true,
-      videoUrl: true,
-      videoStatus: true,
-      audioUrl: true,
-      audioStatus: true,
-    },
-  });
-  return rows.sort((a, b) => a.orderIndex - b.orderIndex);
+  const res = await fetch(
+    `http://localhost:3001/api/test/frame?sequenceId=${encodeURIComponent(sequenceId)}`
+  );
+  if (!res.ok) {
+    throw new Error(
+      `Failed to get frames for sequence ${sequenceId}: ${res.status}`
+    );
+  }
+  return z
+    .array(
+      z.object({
+        id: z.string(),
+        orderIndex: z.number(),
+        thumbnailUrl: z.string().nullable(),
+        thumbnailStatus: z.string().nullable(),
+        videoUrl: z.string().nullable(),
+        videoStatus: z.string().nullable(),
+        audioUrl: z.string().nullable(),
+        audioStatus: z.string().nullable(),
+      })
+    )
+    .parse(await res.json());
 }
 
 /**
@@ -208,22 +191,17 @@ export async function getTestFrame(frameId: string): Promise<{
   thumbnailUrl: string | null;
   variantImageStatus: string | null;
 } | null> {
-  const result = await testDb.query.frames.findFirst({
-    where: { id: frameId },
-    columns: {
-      id: true,
-      thumbnailUrl: true,
-      variantImageStatus: true,
-    },
-  });
-
-  if (!result) return null;
-
-  return {
-    id: result.id,
-    thumbnailUrl: result.thumbnailUrl,
-    variantImageStatus: result.variantImageStatus,
-  };
+  const res = await fetch(
+    `http://localhost:3001/api/test/frame?id=${encodeURIComponent(frameId)}`
+  );
+  if (!res.ok) return null;
+  return z
+    .object({
+      id: z.string(),
+      thumbnailUrl: z.string().nullable(),
+      variantImageStatus: z.string().nullable(),
+    })
+    .parse(await res.json());
 }
 
 /**
@@ -235,24 +213,18 @@ export async function getTestCharacter(characterId: string): Promise<{
   talentId: string | null;
   sheetStatus: string | null;
 } | null> {
-  const result = await testDb.query.characters.findFirst({
-    where: { id: characterId },
-    columns: {
-      id: true,
-      name: true,
-      talentId: true,
-      sheetStatus: true,
-    },
-  });
-
-  if (!result) return null;
-
-  return {
-    id: result.id,
-    name: result.name,
-    talentId: result.talentId,
-    sheetStatus: result.sheetStatus,
-  };
+  const res = await fetch(
+    `http://localhost:3001/api/test/character?id=${encodeURIComponent(characterId)}`
+  );
+  if (!res.ok) return null;
+  return z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      talentId: z.string().nullable(),
+      sheetStatus: z.string().nullable(),
+    })
+    .parse(await res.json());
 }
 
 /**
@@ -266,24 +238,28 @@ export async function getTestSequenceStatus(sequenceId: string): Promise<{
   musicStatus: string | null;
   musicUrl: string | null;
 } | null> {
-  const row = await testDb.query.sequences.findFirst({
-    where: { id: sequenceId },
-    columns: {
-      musicStatus: true,
-      musicUrl: true,
-    },
-  });
-  return row ?? null;
+  const res = await fetch(
+    `http://localhost:3001/api/test/sequence?sequenceId=${encodeURIComponent(sequenceId)}`
+  );
+  if (!res.ok) return null;
+  return z
+    .object({
+      musicStatus: z.string().nullable(),
+      musicUrl: z.string().nullable(),
+    })
+    .nullable()
+    .parse(await res.json());
 }
 
 /**
  * Clean up all test sequences and related data for a team (use only when test isolation isn't needed)
  */
 export async function cleanupTestSequences(teamId: string): Promise<void> {
-  // characters and frames cascade delete from sequences
-  await testDb.delete(sequences).where(eq(sequences.teamId, teamId));
-  // Also clean up styles
-  await testDb.delete(styles).where(eq(styles.teamId, teamId));
+  await fetch('http://localhost:3001/api/test/sequence', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teamId }),
+  });
 }
 
 /**
@@ -293,7 +269,9 @@ export async function cleanupSequenceById(
   sequenceId: string,
   styleId: string
 ): Promise<void> {
-  // characters and frames cascade delete from sequences
-  await testDb.delete(sequences).where(eq(sequences.id, sequenceId));
-  await testDb.delete(styles).where(eq(styles.id, styleId));
+  await fetch('http://localhost:3001/api/test/sequence', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sequenceId, styleId }),
+  });
 }

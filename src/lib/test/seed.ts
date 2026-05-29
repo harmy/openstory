@@ -10,6 +10,7 @@
 
 import { generateId } from '@/lib/db/id';
 import {
+  characters,
   credits,
   frames,
   locationLibrary,
@@ -18,6 +19,7 @@ import {
   session,
   styles,
   talent,
+  talentMedia,
   talentSheets,
   teamMembers,
   teams,
@@ -25,7 +27,7 @@ import {
   verification,
 } from '@/lib/db/schema';
 import { getDb } from '#db-client';
-import { eq } from 'drizzle-orm';
+import { and, eq, like, sql } from 'drizzle-orm';
 
 export type CreatedTestUser = {
   id: string;
@@ -112,22 +114,27 @@ export async function createTestUser(
 
 /**
  * Create a verification record (OTP) for a test user.
+ *
+ * This is a low-level primitive. Callers (e.g. the /api/test/verify route)
+ * are responsible for passing the exact `identifier` that Better Auth will
+ * look up (e.g. `sign-in-otp-${userEmail}`) and the value in the format it
+ * expects (usually `${otp}:0`).
  */
 export async function createOtpVerification(
-  email: string,
-  otp: string
+  identifier: string,
+  value: string
 ): Promise<void> {
   const db = getDb();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 10 * 60 * 1000); // 10 minutes
 
-  // Delete any existing verification for this email first (mirrors old logic)
-  await db.delete(verification).where(eq(verification.identifier, email));
+  // Delete any existing verification for this identifier first
+  await db.delete(verification).where(eq(verification.identifier, identifier));
 
   await db.insert(verification).values({
     id: generateId(),
-    identifier: email,
-    value: otp,
+    identifier,
+    value,
     expiresAt,
     createdAt: now,
     updatedAt: now,
@@ -283,6 +290,63 @@ export async function createTestTalent(
 }
 
 /**
+ * Create test talent with reference media (multiple media items).
+ */
+export async function createTestTalentWithMedia(
+  teamId: string,
+  name: string,
+  mediaCount = 2
+): Promise<{
+  id: string;
+  name: string;
+  teamId: string;
+  sheetId: string;
+  mediaIds: string[];
+}> {
+  const db = getDb();
+  const now = new Date();
+  const talentId = generateId();
+  const sheetId = generateId();
+
+  await db.insert(talent).values({
+    id: talentId,
+    teamId,
+    name,
+    isInTeamLibrary: true,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await db.insert(talentSheets).values({
+    id: sheetId,
+    talentId,
+    name: 'Default',
+    imageUrl: `http://localhost:3001/api/test/image?w=512&h=512&label=sheet`,
+    isDefault: true,
+    source: 'manual_upload',
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const mediaIds: string[] = [];
+  for (let i = 0; i < mediaCount; i++) {
+    const mediaId = generateId();
+    mediaIds.push(mediaId);
+    await db.insert(talentMedia).values({
+      id: mediaId,
+      talentId,
+      type: 'image',
+      url: `http://localhost:3001/api/test/image?w=400&h=400&label=media`,
+      path: `${teamId}/${talentId}/${mediaId}.jpg`,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  return { id: talentId, name, teamId, sheetId, mediaIds };
+}
+
+/**
  * Create a test location + default sheet.
  */
 export async function createTestLocation(
@@ -337,4 +401,357 @@ export async function cleanupTeamTestData(teamId: string): Promise<void> {
   await db.delete(styles).where(eq(styles.teamId, teamId));
   await db.delete(talent).where(eq(talent.teamId, teamId));
   await db.delete(locationLibrary).where(eq(locationLibrary.teamId, teamId));
+}
+
+/**
+ * Targeted cleanup of common E2E test data patterns (used by cleanTestData).
+ */
+export async function cleanTestData(): Promise<void> {
+  const db = getDb();
+
+  await db.delete(user).where(like(user.email, '%@e2e.test'));
+  await db.delete(teams).where(like(teams.slug, 'test-team-%'));
+
+  try {
+    await db.delete(sequences).where(like(sequences.title, 'E2E Test%'));
+  } catch {
+    // table may not exist yet
+  }
+
+  try {
+    await db.delete(talent).where(like(talent.name, 'E2E Test%'));
+  } catch {
+    // table may not exist yet
+  }
+}
+
+/**
+ * Nuclear option: delete all rows from all user tables.
+ * Use very sparingly.
+ */
+export async function resetTestDatabase(): Promise<void> {
+  const db = getDb();
+
+  const tables = await db.all<{ name: string }>(
+    sql`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_litestream%'`
+  );
+
+  for (const row of tables) {
+    await db.run(sql.raw(`DELETE FROM "${row.name}"`));
+  }
+}
+
+/**
+ * Create a test character for a sequence.
+ */
+export async function createTestCharacter(
+  sequenceId: string,
+  characterId: string,
+  name: string,
+  talentId: string | null = null,
+  options: {
+    sheetImageUrl?: string;
+    sheetStatus?: 'pending' | 'generating' | 'completed' | 'failed';
+  } = {}
+): Promise<{
+  id: string;
+  sequenceId: string;
+  characterId: string;
+  name: string;
+}> {
+  const db = getDb();
+  const now = new Date();
+  const id = generateId();
+
+  const {
+    sheetImageUrl = `http://localhost:3001/api/test/image?w=512&h=512&label=character`,
+    sheetStatus = 'completed',
+  } = options;
+
+  await db.insert(characters).values({
+    id,
+    sequenceId,
+    characterId,
+    name,
+    talentId,
+    age: '30s',
+    sheetImageUrl,
+    sheetStatus,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return { id, sequenceId, characterId, name };
+}
+
+/**
+ * Clean up all sequences and styles for a team.
+ */
+export async function cleanupTestSequences(teamId: string): Promise<void> {
+  const db = getDb();
+  await db.delete(sequences).where(eq(sequences.teamId, teamId));
+  await db.delete(styles).where(eq(styles.teamId, teamId));
+}
+
+/**
+ * Clean up a specific sequence and its style.
+ */
+export async function cleanupSequenceById(
+  sequenceId: string,
+  styleId: string
+): Promise<void> {
+  const db = getDb();
+  await db.delete(sequences).where(eq(sequences.id, sequenceId));
+  await db.delete(styles).where(eq(styles.id, styleId));
+}
+
+/**
+ * Clean up test talent (and cascaded sheets/media) for a team.
+ */
+export async function cleanupTestTalent(teamId: string): Promise<void> {
+  const db = getDb();
+  await db.delete(talent).where(eq(talent.teamId, teamId));
+}
+
+/**
+ * Clean up a specific talent by ID (cascades to sheets/media).
+ */
+export async function cleanupTalentById(talentId: string): Promise<void> {
+  const db = getDb();
+  await db.delete(talent).where(eq(talent.id, talentId));
+}
+
+/**
+ * Clean up test locations for a team (cascades to sheets).
+ */
+export async function cleanupTestLocations(teamId: string): Promise<void> {
+  const db = getDb();
+  await db.delete(locationLibrary).where(eq(locationLibrary.teamId, teamId));
+}
+
+/**
+ * Clean up a specific location by ID.
+ */
+export async function cleanupLocationById(locationId: string): Promise<void> {
+  const db = getDb();
+  await db.delete(locationLibrary).where(eq(locationLibrary.id, locationId));
+}
+
+/**
+ * Find and clean up a location by team + name (for UI-created test entities).
+ */
+export async function cleanupLocationByName(
+  teamId: string,
+  name: string
+): Promise<void> {
+  const db = getDb();
+  const [created] = await db
+    .select({ id: locationLibrary.id })
+    .from(locationLibrary)
+    .where(
+      and(eq(locationLibrary.teamId, teamId), eq(locationLibrary.name, name))
+    );
+  if (created) {
+    await db.delete(locationLibrary).where(eq(locationLibrary.id, created.id));
+  }
+}
+
+/**
+ * Find and clean up a talent by team + name.
+ */
+export async function cleanupTalentByName(
+  teamId: string,
+  name: string
+): Promise<void> {
+  const db = getDb();
+  const [created] = await db
+    .select({ id: talent.id })
+    .from(talent)
+    .where(and(eq(talent.teamId, teamId), eq(talent.name, name)));
+  if (created) {
+    await db.delete(talent).where(eq(talent.id, created.id));
+  }
+}
+
+/**
+ * Look up a seeded system location by name (isPublic).
+ */
+export async function getSystemLocationByName(name: string): Promise<{
+  id: string;
+  name: string;
+  teamId: string;
+  referenceImageUrl: string;
+}> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(locationLibrary)
+    .where(
+      and(eq(locationLibrary.name, name), eq(locationLibrary.isPublic, true))
+    )
+    .limit(1);
+  if (rows.length === 0) {
+    throw new Error(
+      `System location "${name}" not found in test DB — was \`bun scripts/seed.ts --test\` run during global setup?`
+    );
+  }
+  const found = rows[0];
+  if (!found) {
+    throw new Error('test setup: expected location row');
+  }
+  return {
+    id: found.id,
+    name: found.name,
+    teamId: found.teamId,
+    referenceImageUrl: found.referenceImageUrl ?? '',
+  };
+}
+
+/**
+ * Look up a seeded system talent by name (isPublic + default sheet).
+ */
+export async function getSystemTalentByName(name: string): Promise<{
+  id: string;
+  name: string;
+  teamId: string;
+  sheetId: string;
+}> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(talent)
+    .where(and(eq(talent.name, name), eq(talent.isPublic, true)))
+    .limit(1);
+  const found = rows[0];
+  if (!found) {
+    throw new Error(
+      `System talent "${name}" not found in test DB — was \`bun scripts/seed.ts --test\` run during global setup?`
+    );
+  }
+  const sheets = await db
+    .select()
+    .from(talentSheets)
+    .where(
+      and(eq(talentSheets.talentId, found.id), eq(talentSheets.isDefault, true))
+    )
+    .limit(1);
+  const defaultSheet = sheets[0];
+  if (!defaultSheet) {
+    throw new Error(
+      `System talent "${name}" has no default sheet — re-run seed`
+    );
+  }
+  return {
+    id: found.id,
+    name: found.name,
+    teamId: found.teamId,
+    sheetId: defaultSheet.id,
+  };
+}
+
+/**
+ * Get all frames for a sequence (for polling workflow progress).
+ */
+export async function getTestSequenceFrames(sequenceId: string): Promise<
+  Array<{
+    id: string;
+    orderIndex: number;
+    thumbnailUrl: string | null;
+    thumbnailStatus: string | null;
+    videoUrl: string | null;
+    videoStatus: string | null;
+    audioUrl: string | null;
+    audioStatus: string | null;
+  }>
+> {
+  const db = getDb();
+  const rows = await db.query.frames.findMany({
+    where: { sequenceId },
+    columns: {
+      id: true,
+      orderIndex: true,
+      thumbnailUrl: true,
+      thumbnailStatus: true,
+      videoUrl: true,
+      videoStatus: true,
+      audioUrl: true,
+      audioStatus: true,
+    },
+  });
+  return rows.sort((a, b) => a.orderIndex - b.orderIndex);
+}
+
+/**
+ * Get a frame by ID (for verify/poll assertions).
+ */
+export async function getTestFrame(frameId: string): Promise<{
+  id: string;
+  thumbnailUrl: string | null;
+  variantImageStatus: string | null;
+} | null> {
+  const db = getDb();
+  const result = await db.query.frames.findFirst({
+    where: { id: frameId },
+    columns: {
+      id: true,
+      thumbnailUrl: true,
+      variantImageStatus: true,
+    },
+  });
+
+  if (!result) return null;
+
+  return {
+    id: result.id,
+    thumbnailUrl: result.thumbnailUrl,
+    variantImageStatus: result.variantImageStatus,
+  };
+}
+
+/**
+ * Get a character by ID (for verify/poll assertions).
+ */
+export async function getTestCharacter(characterId: string): Promise<{
+  id: string;
+  name: string;
+  talentId: string | null;
+  sheetStatus: string | null;
+} | null> {
+  const db = getDb();
+  const result = await db.query.characters.findFirst({
+    where: { id: characterId },
+    columns: {
+      id: true,
+      name: true,
+      talentId: true,
+      sheetStatus: true,
+    },
+  });
+
+  if (!result) return null;
+
+  return {
+    id: result.id,
+    name: result.name,
+    talentId: result.talentId,
+    sheetStatus: result.sheetStatus,
+  };
+}
+
+/**
+ * Get sequence-level music status.
+ */
+export async function getTestSequenceStatus(sequenceId: string): Promise<{
+  musicStatus: string | null;
+  musicUrl: string | null;
+} | null> {
+  const db = getDb();
+  const row = await db.query.sequences.findFirst({
+    where: { id: sequenceId },
+    columns: {
+      musicStatus: true,
+      musicUrl: true,
+    },
+  });
+  return row ?? null;
 }

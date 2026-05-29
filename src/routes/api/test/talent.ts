@@ -1,35 +1,98 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { json } from '@tanstack/react-start';
 import { z } from 'zod';
-import { createTestTalent } from '@/lib/test/seed';
+import {
+  cleanupTalentById,
+  cleanupTestTalent,
+  createTestTalent,
+  createTestTalentWithMedia,
+  getSystemTalentByName,
+} from '@/lib/test/seed';
 import { testOnlyGuard } from './route';
 
 const CreateTalentSchema = z.object({
   teamId: z.string(),
   name: z.string(),
+  mediaCount: z.number().int().min(0).optional(),
+});
+
+const DeleteTalentSchema = z.object({
+  teamId: z.string().optional(),
+  talentId: z.string().optional(),
 });
 
 export const Route = createFileRoute('/api/test/talent')({
   server: {
     middleware: [testOnlyGuard],
-    handlers: {
-      /**
-       * POST /api/test/talent
-       * Body: { teamId: string; name: string }
-       */
-      POST: async ({ request }) => {
-        const { teamId, name } = CreateTalentSchema.parse(await request.json());
-
-        if (!teamId || !name) {
-          return json(
-            { error: 'teamId and name are required' },
-            { status: 400 }
+    handlers: ({ createHandlers }) =>
+      createHandlers({
+        /**
+         * POST /api/test/talent
+         */
+        POST: async ({ request }) => {
+          const { teamId, name, mediaCount } = CreateTalentSchema.parse(
+            await request.json()
           );
-        }
 
-        const created = await createTestTalent(teamId, name);
-        return json(created);
-      },
-    },
+          if (!teamId || !name) {
+            return Response.json(
+              { error: 'teamId and name are required' },
+              { status: 400 }
+            );
+          }
+
+          const created =
+            mediaCount && mediaCount > 0
+              ? await createTestTalentWithMedia(teamId, name, mediaCount)
+              : await createTestTalent(teamId, name);
+
+          return Response.json(created);
+        },
+
+        /**
+         * DELETE /api/test/talent
+         */
+        DELETE: async ({ request }) => {
+          const { teamId, talentId } = DeleteTalentSchema.parse(
+            await request.json()
+          );
+
+          if (teamId) {
+            await cleanupTestTalent(teamId);
+          } else if (talentId) {
+            await cleanupTalentById(talentId);
+          } else {
+            return Response.json(
+              { error: 'teamId or talentId is required' },
+              { status: 400 }
+            );
+          }
+
+          return Response.json({ success: true });
+        },
+
+        /**
+         * GET /api/test/talent?name=...
+         * Used for system (public) talent lookup by name (includes default sheet).
+         */
+        GET: async ({ request }) => {
+          const url = new URL(request.url);
+          const name = url.searchParams.get('name');
+          if (!name) {
+            return Response.json(
+              { error: 'name query param required' },
+              { status: 400 }
+            );
+          }
+          try {
+            const t = await getSystemTalentByName(name);
+            return Response.json(t);
+          } catch (err) {
+            return Response.json(
+              { error: err instanceof Error ? err.message : 'not found' },
+              { status: 404 }
+            );
+          }
+        },
+      }),
   },
 });

@@ -1,4 +1,3 @@
-import { getEnv } from '#env';
 import { moveFile } from '#storage';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { generateId } from '@/lib/db/id';
@@ -85,18 +84,13 @@ export async function promoteTempElements(params: {
     const permanentRelative = `${teamId}/${sequenceId}/${newId}.${ext}`;
     const permanentPath = `elements/${permanentRelative}`;
 
-    if (getEnv().E2E_TEST !== 'true') {
-      await moveFile(
-        STORAGE_BUCKETS.ELEMENTS,
-        relativeTempPath,
-        permanentRelative
-      );
-    }
+    await moveFile(
+      STORAGE_BUCKETS.ELEMENTS,
+      relativeTempPath,
+      permanentRelative
+    );
 
-    const publicUrl =
-      getEnv().E2E_TEST === 'true'
-        ? upload.tempPublicUrl
-        : getPublicUrl(STORAGE_BUCKETS.ELEMENTS, permanentRelative);
+    const publicUrl = getPublicUrl(STORAGE_BUCKETS.ELEMENTS, permanentRelative);
 
     const rawToken =
       upload.token && upload.token.length > 0

@@ -14,7 +14,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test as base, expect, type Page } from 'playwright/test';
 import { z } from 'zod';
-import { ensureDbInit } from './db-client';
 
 const TestUserResponseSchema = z.object({
   id: z.string(),
@@ -52,7 +51,6 @@ export async function createTestUser(
   options: { name?: string } = {}
 ): Promise<TestUser> {
   const { name = 'E2E Test User' } = options;
-  await ensureDbInit();
 
   // Create via the guarded test API so all writes go through the single
   // safe Miniflare process (instead of direct getPlatformProxy from this worker).
@@ -83,29 +81,11 @@ async function cleanupTestUser(userId: string, teamId: string): Promise<void> {
 }
 
 /**
- * Create OTP verification record directly in database
- */
-/**
- * Create OTP verification record via the guarded test API.
- * This ensures the write happens inside the single safe Miniflare process.
- */
-export async function createOtpVerification(
-  email: string,
-  otp: string
-): Promise<void> {
-  // Better Auth uses sign-in-otp-{email} as identifier
-  const identifier = `sign-in-otp-${email}`;
-  const value = `${otp}:0`;
-
-  await fetch('http://localhost:3001/api/test/verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: identifier, otp: value }),
-  });
-}
-
-/**
- * Authenticate a user by navigating directly to /verify and entering OTP
+ * Authenticate a user by navigating directly to /verify and entering OTP.
+ *
+ * This uses the test-only /api/test/verify backdoor, which automatically
+ * formats the record as `sign-in-otp-${email}` with the `:0` suffix that
+ * Better Auth's emailOTP plugin expects.
  */
 export async function authenticateUser(
   page: Page,
@@ -113,7 +93,8 @@ export async function authenticateUser(
 ): Promise<void> {
   const testOtp = '123456';
 
-  // Create OTP via test API (so it runs inside the safe Worker process)
+  // Create OTP via test API (the route normalizes to the identifier
+  // Better Auth's signIn.emailOtp will actually look up).
   await fetch('http://localhost:3001/api/test/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

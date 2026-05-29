@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { json } from '@tanstack/react-start';
 import { z } from 'zod';
 import { createOtpVerification } from '@/lib/test/seed';
 import { testOnlyGuard } from './route';
@@ -12,22 +11,28 @@ const VerifySchema = z.object({
 export const Route = createFileRoute('/api/test/verify')({
   server: {
     middleware: [testOnlyGuard],
-    handlers: {
-      /**
-       * POST /api/test/verify
-       * Body: { email: string; otp: string }
-       * Creates a verification record so the test auth flow can "login" with a known OTP.
-       */
-      POST: async ({ request }) => {
-        const { email, otp } = VerifySchema.parse(await request.json());
+    handlers: ({ createHandlers }) =>
+      createHandlers({
+        POST: async ({ request }) => {
+          const { email, otp } = VerifySchema.parse(await request.json());
 
-        if (!email || !otp) {
-          return json({ error: 'email and otp are required' }, { status: 400 });
-        }
+          if (!email || !otp) {
+            return Response.json(
+              { error: 'email and otp are required' },
+              { status: 400 }
+            );
+          }
 
-        await createOtpVerification(email, otp);
-        return json({ success: true });
-      },
-    },
+          // Better Auth's emailOTP plugin (used by signIn.emailOtp on the client)
+          // stores the record under `sign-in-otp-${email}` with a `:0` attempt suffix.
+          // The e2e backdoor accepts the raw user email and normalizes it so the
+          // magic OTP login flow (`123456`) works on the /verify page.
+          const identifier = `sign-in-otp-${email}`;
+          const value = `${otp}:0`;
+
+          await createOtpVerification(identifier, value);
+          return Response.json({ success: true });
+        },
+      }),
   },
 });

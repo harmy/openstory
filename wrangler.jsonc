@@ -119,6 +119,21 @@
     // `bun test:e2e:record`; fixtures then reference openstory-dev URLs which
     // resolve via openstory-dev's public CDN domain anywhere (local or CI).
     "test": {
+      // These vars are visible inside the worker via getEnv() when
+      // CLOUDFLARE_ENV=test (used by Playwright webServer + CI).
+      // E2E_TEST gates the entire /api/test/* route tree via testOnlyGuard.
+      "vars": {
+        // E2E_TEST gates /api/test/* routes (via testOnlyGuard) and many
+        // test-specific branches in storage / workflow client code.
+        "E2E_TEST": "true",
+        // The following are "false" by default for normal `bun test:e2e`.
+        // For `bun test:e2e:full` the outer process receives the true value
+        // via envPrefix; full worker injection for these two is handled by
+        // the fact that full-pipeline runs still go through the same [env.test]
+        // (advanced overrides can be done via plugin config if needed).
+        "E2E_FULL_PIPELINE": "false",
+        "E2E_RECORD": "false",
+      },
       "d1_databases": [
         {
           "binding": "DB",

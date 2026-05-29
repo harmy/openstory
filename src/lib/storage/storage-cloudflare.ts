@@ -186,6 +186,13 @@ export async function deleteFile(
   bucket: StorageBucket,
   path: string
 ): Promise<void> {
+  const env = getEnv();
+
+  if (env.E2E_TEST === 'true') {
+    // See copyFile for rationale: objects only exist via the r2-mock in e2e.
+    return;
+  }
+
   const r2 = getR2Bucket();
   const key = buildR2Key(bucket, path);
 
@@ -203,6 +210,13 @@ export async function deleteFiles(
   paths: string[]
 ): Promise<void> {
   if (paths.length === 0) return;
+
+  const env = getEnv();
+
+  if (env.E2E_TEST === 'true') {
+    // See copyFile for rationale.
+    return;
+  }
 
   const r2 = getR2Bucket();
 
@@ -269,6 +283,19 @@ export async function copyFile(
   fromPath: string,
   toPath: string
 ): Promise<void> {
+  const env = getEnv();
+
+  // In E2E tests, reference media and element uploads go through the r2-mock
+  // sidecar (lookup/record). The objects are never present in the R2 binding
+  // that getR2Bucket() sees during normal replay. Performing real copy/move
+  // operations here would fail with "Source file not found".
+  //
+  // We short-circuit so callers (createTalentFn, location library, sequence
+  // element promotion, etc.) can keep their normal production code paths.
+  if (env.E2E_TEST === 'true') {
+    return;
+  }
+
   const r2 = getR2Bucket();
   const sourceKey = buildR2Key(bucket, fromPath);
   const destKey = buildR2Key(bucket, toPath);

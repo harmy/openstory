@@ -1,14 +1,19 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { createMiddleware } from '@tanstack/react-start';
+import { getEnv } from '#env';
 
 /**
  * Guard middleware for all test-only API endpoints.
  *
  * This is the single source of truth for "these routes only exist
  * when E2E_TEST=true".
+ *
+ * Uses getEnv() so the value is read from the Cloudflare Workers env
+ * (populated from wrangler.jsonc [env.test].vars when CLOUDFLARE_ENV=test,
+ * which is set by the Playwright webServer config and CI).
  */
 export const testOnlyGuard = createMiddleware().server(async ({ next }) => {
-  if (process.env.E2E_TEST !== 'true') {
+  if (getEnv().E2E_TEST !== 'true') {
     return new Response('Not Found', { status: 404 });
   }
   return next();

@@ -6,7 +6,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test as setup } from 'playwright/test';
-import { ensureDbInit } from '../fixtures/db-client';
 import { authenticateUser, createTestUser } from '../fixtures/auth.fixture';
 
 const authDir = path.join(import.meta.dirname, '../.auth');
@@ -14,8 +13,6 @@ const authFile = path.join(authDir, 'user.json');
 const userInfoFile = path.join(authDir, 'user-info.json');
 
 setup('authenticate', async ({ page }) => {
-  await ensureDbInit();
-
   if (!fs.existsSync(authDir)) {
     fs.mkdirSync(authDir, { recursive: true });
   }

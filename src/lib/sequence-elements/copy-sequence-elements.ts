@@ -1,4 +1,3 @@
-import { getEnv } from '#env';
 import { copyFile } from '#storage';
 import { generateId } from '@/lib/db/id';
 import type { ScopedDb } from '@/lib/db/scoped';
@@ -30,24 +29,18 @@ export async function copySequenceElements(params: {
   const sourceElements = await scopedDb.sequenceElements.list(sourceSequenceId);
   if (sourceElements.length === 0) return;
 
-  const isE2E = getEnv().E2E_TEST === 'true';
-
   for (const source of sourceElements) {
     const newId = generateId();
     const ext = getExtensionFromUrl(source.imagePath);
     const targetRelative = `${teamId}/${targetSequenceId}/${newId}.${ext}`;
     const targetPath = `elements/${targetRelative}`;
 
-    if (!isE2E) {
-      const sourceRelative = source.imagePath.startsWith('elements/')
-        ? source.imagePath.slice('elements/'.length)
-        : source.imagePath;
-      await copyFile(STORAGE_BUCKETS.ELEMENTS, sourceRelative, targetRelative);
-    }
+    const sourceRelative = source.imagePath.startsWith('elements/')
+      ? source.imagePath.slice('elements/'.length)
+      : source.imagePath;
+    await copyFile(STORAGE_BUCKETS.ELEMENTS, sourceRelative, targetRelative);
 
-    const publicUrl = isE2E
-      ? source.imageUrl
-      : getPublicUrl(STORAGE_BUCKETS.ELEMENTS, targetRelative);
+    const publicUrl = getPublicUrl(STORAGE_BUCKETS.ELEMENTS, targetRelative);
 
     const carryVision = source.visionStatus === 'completed';
 
@@ -64,7 +57,7 @@ export async function copySequenceElements(params: {
       visionGeneratedAt: carryVision ? source.visionGeneratedAt : null,
     });
 
-    if (!carryVision && !isE2E) {
+    if (!carryVision) {
       const input: ElementVisionWorkflowInput = {
         userId,
         teamId,
