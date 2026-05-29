@@ -77,11 +77,11 @@
     },
   ],
   "workflows": [
-    // CF Workflows PoC (issue #728). The class is exported from src/server.ts
-    // and the binding is consulted by `triggerWorkflow()` when the per-workflow
-    // engine registry routes the workflow to `'cloudflare'`. Defaults to QStash —
-    // flip via `CF_WORKFLOWS_ENABLED=<name>` env var or by editing the
-    // registry. See docs/investigations/cloudflare-workflows-poc.md.
+    // All durable async work runs on Cloudflare Workflows. Each class is
+    // re-exported from src/server.ts (so it lands in the Worker bundle) and
+    // its binding is resolved by `triggerWorkflow()` via TRIGGER_TO_BINDING in
+    // src/lib/workflow/trigger-bindings.ts. Keep these three in sync — the
+    // wiring-consistency test enforces it.
     {
       "name": "image-workflow",
       "binding": "IMAGE_WORKFLOW",

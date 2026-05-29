@@ -26,8 +26,8 @@ import {
   notifyParent,
   notifyParentOfFailure,
   type ParentNotifyHint,
-} from '@/lib/workflow/cf/await-child';
-import type { CloudflareEnv } from '@/lib/workflow/cf/types';
+} from '@/lib/workflow/await-child';
+import type { CloudflareEnv } from '@/lib/workflow/types';
 import {
   WorkflowEntrypoint,
   type WorkflowEvent,
@@ -114,8 +114,10 @@ export abstract class OpenStoryWorkflowEntrypoint<
       return result;
     } catch (error) {
       const sanitized = sanitizeFailResponse(error);
-      logger.error(`[${this.constructor.name}] Failure:`, {
-        sanitized,
+      // Sanitized message inline in the headline; `err` carries the full
+      // original error (with stack) as a structured property.
+      logger.error(`[${this.constructor.name}] Failure: ${sanitized}`, {
+        err: error,
       });
 
       if (this.onFailure) {
@@ -145,10 +147,10 @@ export abstract class OpenStoryWorkflowEntrypoint<
         await notifyParentOfFailure(this.env, parentHint, sanitized);
       }
 
-      // `WorkflowValidationError` extends `@upstash/workflow`'s non-retryable
-      // base, which CF doesn't recognize — so without this re-wrap CF would
-      // retry validation throws up to the step's retry limit (10× by default).
-      // Re-throw as CF's `NonRetryableError` so the instance fails immediately.
+      // `WorkflowValidationError` is a plain Error subclass, which CF treats as
+      // retryable — so without this re-wrap CF would retry validation throws up
+      // to the step's retry limit (10× by default). Re-throw as CF's
+      // `NonRetryableError` so the instance fails immediately.
       if (error instanceof WorkflowValidationError) {
         throw new NonRetryableError(sanitized, error.name);
       }

@@ -1,38 +1,53 @@
+/**
+ * Cloudflare Workflows port of `generateMusicPromptWorflow`.
+ *
+ * Mirrors the QStash version (`src/lib/workflows/music-prompt-workflow.ts`)
+ * step for step — same step names, same control flow, same side effects.
+ * The only differences are:
+ *
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - Reads payload from `event.payload` instead of `context.requestPayload`.
+ *
+ * The LLM call goes through `durableLLMCallCf` (the CF port of
+ * `durableLLMCall`); see `src/lib/workflows/llm-call-helper.ts`.
+ *
+ * Class name `MusicPromptWorkflow` intentionally fixes the legacy typo in
+ * the prior export name (`generateMusicPromptWorflow`).
+ */
+
+import { computeMusicPromptInputHash } from '@/lib/ai/input-hash';
+import { musicDesignResultSchema } from '@/lib/ai/response-schemas';
+import type { ScopedDb } from '@/lib/db/scoped';
+import { reinforceInstrumentalTags } from '@/lib/prompts/music-prompt';
 import { getGenerationChannel } from '@/lib/realtime';
-import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
-import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import type {
   MusicPromptWorkflowInput,
   MusicPromptWorkflowResult,
 } from '@/lib/workflow/types';
-import { computeMusicPromptInputHash } from '../ai/input-hash';
-import { musicDesignResultSchema } from '../ai/response-schemas';
-import { reinforceInstrumentalTags } from '../prompts/music-prompt';
-import { durableLLMCall } from './llm-call-helper';
-
+import { durableLLMCallCf } from '@/lib/workflows/llm-call-helper';
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'music-prompt']);
 
-export const generateMusicPromptWorflow = createScopedWorkflow<
-  MusicPromptWorkflowInput,
-  MusicPromptWorkflowResult
->(
-  async (context, scopedDb) => {
-    const input = context.requestPayload;
+export class MusicPromptWorkflow extends OpenStoryWorkflowEntrypoint<MusicPromptWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<MusicPromptWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<MusicPromptWorkflowResult> {
+    const input = event.payload;
     const { sceneSummaries, analysisModelId, sequenceId } = input;
 
-    const llmCallContext = {
-      sequenceId,
-      userId: input.userId,
-      scopedDb,
-    };
-
-    const musicDesignResult: MusicPromptWorkflowResult = await durableLLMCall(
-      context,
+    const musicDesignResult: MusicPromptWorkflowResult = await durableLLMCallCf(
+      step,
       {
         name: 'music-prompt-generation',
-        phase: { number: 6, name: 'Composing music\u2026' },
+        phase: { number: 6, name: 'Composing music…' },
         promptName: 'phase/music-design-chat',
         promptVariables: {
           scenes: JSON.stringify(sceneSummaries, null, 2),
@@ -40,7 +55,11 @@ export const generateMusicPromptWorflow = createScopedWorkflow<
         modelId: analysisModelId,
         responseSchema: musicDesignResultSchema,
       },
-      llmCallContext
+      {
+        sequenceId,
+        userId: input.userId,
+        scopedDb,
+      }
     );
 
     if (sequenceId) {
@@ -59,7 +78,7 @@ export const generateMusicPromptWorflow = createScopedWorkflow<
         analysisModel: analysisModelId,
       });
 
-      await context.run('save-music-prompt-to-db', async () => {
+      await step.do('save-music-prompt-to-db', async () => {
         const reinforcedTags = reinforceInstrumentalTags(
           musicDesignResult.tags
         );
@@ -81,35 +100,42 @@ export const generateMusicPromptWorflow = createScopedWorkflow<
     }
 
     return musicDesignResult;
-  },
-  {
-    failureFunction: async ({ context, scopedDb, failResponse }) => {
-      const input = context.requestPayload;
-      const error = sanitizeFailResponse(failResponse);
-      if (input.sequenceId) {
-        const failSeq = scopedDb.sequence(input.sequenceId);
-
-        await failSeq.updateMusicFields({
-          musicStatus: 'failed',
-          musicError: error,
-        });
-
-        try {
-          await getGenerationChannel(input.sequenceId).emit(
-            'generation.audio:progress',
-            { status: 'failed' }
-          );
-        } catch (emitError) {
-          logger.error(
-            `Failed to emit generation.audio:progress for sequence ${input.sequenceId}:`,
-            { err: emitError }
-          );
-        }
-      }
-      logger.error('[MusicWorkflow]', {
-        data: `Music generation failed for sequence ${input.sequenceId}: ${error}`,
-      });
-      return `Music generation failed for sequence ${input.sequenceId}`;
-    },
   }
-);
+
+  protected override async onFailure({
+    event,
+    error,
+    scopedDb,
+  }: {
+    event: Readonly<WorkflowEvent<MusicPromptWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): Promise<void> {
+    const input = event.payload;
+    if (input.sequenceId) {
+      const failSeq = scopedDb.sequence(input.sequenceId);
+
+      await failSeq.updateMusicFields({
+        musicStatus: 'failed',
+        musicError: error,
+      });
+
+      try {
+        await getGenerationChannel(input.sequenceId).emit(
+          'generation.audio:progress',
+          { status: 'failed' }
+        );
+      } catch (emitError) {
+        logger.error(
+          `[MusicPromptWorkflow:cf] Failed to emit generation.audio:progress for sequence ${input.sequenceId}:`,
+          {
+            err: emitError,
+          }
+        );
+      }
+    }
+    logger.error(
+      `[MusicPromptWorkflow:cf] Music generation failed for sequence ${input.sequenceId}: ${error}`
+    );
+  }
+}

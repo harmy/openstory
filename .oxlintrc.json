@@ -40,7 +40,7 @@
           {
             "name": "@/lib/db/scoped",
             "importNames": ["createScopedDb"],
-            "message": "createScopedDb only allowed in middleware.ts, scoped-workflow.ts, and authorized route handlers. Use context.scopedDb."
+            "message": "createScopedDb only allowed in middleware.ts, workflow/base-workflow.ts, and authorized route handlers. Use context.scopedDb."
           }
         ]
       }
@@ -73,8 +73,7 @@
         "**/db/client.ts",
         "**/auth/config.ts",
         "**/functions/middleware.ts",
-        "**/workflow/scoped-workflow.ts",
-        "**/workflow/cf/base-workflow.ts",
+        "**/workflow/base-workflow.ts",
         "**/cron/reconcile-all.ts",
         "**/openrouter/callback.ts",
         "**/lib/test/seed.ts"

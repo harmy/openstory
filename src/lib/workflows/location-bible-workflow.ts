@@ -1,47 +1,71 @@
 /**
- * Location Bible Workflow
+ * Cloudflare Workflows port of `locationBibleWorkflow`.
  *
- * Generates location reference images for all locations in a sequence.
- * Creates establishing shots that are used for visual consistency across scenes.
+ * Mirrors the QStash version (`src/lib/workflows/location-bible-workflow.ts`)
+ * step for step — same step names, same control flow, same side effects. The
+ * key differences are:
  *
- * This workflow:
- * 1. Inserts location records into the database from the location bible
- * 2. Generates reference images for each location
- * 3. Updates database with reference image URLs
- */
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - Reads payload from `event.payload` and the run id from
+ *     `event.instanceId` instead of `context.requestPayload` /
+ *     `context.workflowRunId`.
+ *   - Mid-tier orchestrator: instead of generating each location reference
+ *     image inline, it fans out to child `LocationSheetWorkflow` instances
+ *     via Pattern 3 (`spawnAndAwaitChild`). The QStash version did the
+ *     equivalent work inline because `context.invoke()` returned the child's
+ *     value directly; CF has no equivalent so we spawn-and-await. */
 
-import { uploadResponse } from '@/lib/storage/upload-response';
 import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
-import {
-  deductWorkflowCredits,
-  extractImageCost,
-} from '@/lib/billing/workflow-deduction';
 import { generateId } from '@/lib/db/id';
+import type { ScopedDb } from '@/lib/db/scoped';
 import type {
   NewSequenceLocation,
   SequenceLocationMinimal,
 } from '@/lib/db/schema';
-import { generateImageWithProvider } from '@/lib/image/image-generation';
-import { buildLocationSheetPrompt } from '@/lib/prompts/location-prompt';
-import { STORAGE_BUCKETS } from '@/lib/storage/buckets';
-import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
-import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
+import { spawnAndAwaitChild } from '@/lib/workflow/await-child';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
+import { WorkflowValidationError } from '@/lib/workflow/errors';
+import type {
+  LibraryLocationMatch,
+  LocationBibleWorkflowInput,
+  LocationSheetWorkflowInput,
+  LocationSheetWorkflowResult,
+} from '@/lib/workflow/types';
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
+import { NonRetryableError } from 'cloudflare:workflows';
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'location-bible']);
 
-import type {
-  LibraryLocationMatch,
-  LocationBibleWorkflowInput,
-} from '@/lib/workflow/types';
-
-export const locationBibleWorkflow = createScopedWorkflow<
-  LocationBibleWorkflowInput,
-  SequenceLocationMinimal[]
->(
-  async (context, scopedDb) => {
-    const input = context.requestPayload;
+export class LocationBibleWorkflow extends OpenStoryWorkflowEntrypoint<LocationBibleWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<LocationBibleWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<SequenceLocationMinimal[]> {
+    const input = event.payload;
+    const parentInstanceId = event.instanceId;
     const { libraryLocationMatches = [] } = input;
+
+    // Validation throws happen at the top of runImpl so the base class can
+    // re-wrap them as CF `NonRetryableError`s (see `WorkflowValidationError`
+    // handling in `base-workflow.ts`).
+    if (!input.sequenceId) {
+      throw new WorkflowValidationError(
+        'sequenceId is required for location bible generation'
+      );
+    }
+    if (!input.teamId) {
+      throw new WorkflowValidationError(
+        'teamId is required for location bible generation'
+      );
+    }
+
+    const sequenceId = input.sequenceId;
+    const teamId = input.teamId;
 
     // Create lookup map for library location matches
     const matchMap = new Map<string, LibraryLocationMatch>(
@@ -49,14 +73,9 @@ export const locationBibleWorkflow = createScopedWorkflow<
     );
 
     // Step 1: Insert locations into database
-    const createdLocations = await context.run(
+    const createdLocations = await step.do(
       'create-location-records',
       async () => {
-        const sequenceId = input.sequenceId;
-        if (!sequenceId) {
-          return [];
-        }
-
         const locationInserts: NewSequenceLocation[] = input.locationBible.map(
           (location) => {
             // Check if there's a library match for this location
@@ -98,7 +117,14 @@ export const locationBibleWorkflow = createScopedWorkflow<
           }
         );
 
-        return await scopedDb.sequenceLocations.createBulk(locationInserts);
+        const created =
+          await scopedDb.sequenceLocations.createBulk(locationInserts);
+        if (created.length !== input.locationBible.length) {
+          throw new NonRetryableError(
+            `[LocationBibleWorkflow:cf] expected ${input.locationBible.length} location records, created ${created.length}`
+          );
+        }
+        return created;
       }
     );
 
@@ -107,104 +133,80 @@ export const locationBibleWorkflow = createScopedWorkflow<
       createdLocations.map((loc) => [loc.locationId, loc.id])
     );
 
-    // Step 2: Generate reference images for each location in parallel
-    const seqLocations: SequenceLocationMinimal[] = await Promise.all(
-      input.locationBible.map(async (location, index) => {
+    const childBinding = this.env.LOCATION_SHEET_WORKFLOW;
+    if (!childBinding) {
+      throw new NonRetryableError(
+        '[LocationBibleWorkflow:cf] LOCATION_SHEET_WORKFLOW binding is missing from env — check wrangler.jsonc'
+      );
+    }
+
+    const model = input.imageModel ?? DEFAULT_IMAGE_MODEL;
+
+    // Step 2: Spawn one LocationSheetWorkflow per location in parallel.
+    // `Promise.all` for the spawn fan-out so a single spawn error fails fast;
+    // `Promise.allSettled` for the await so one slow/failed sibling does not
+    // hide outcomes for the others.
+    const spawnAwaitPromises = input.locationBible.map(
+      async (location, index) => {
+        const locationDbId = locationIdToDbId.get(location.locationId);
+        if (!locationDbId) {
+          throw new NonRetryableError(
+            `[LocationBibleWorkflow:cf] could not resolve dbId for location ${location.locationId}`
+          );
+        }
+
+        const libraryMatch = matchMap.get(location.locationId);
+
+        const childPayload: LocationSheetWorkflowInput = {
+          userId: input.userId,
+          teamId,
+          sequenceId,
+          locationDbId,
+          locationName: location.name,
+          locationMetadata: location,
+          imageModel: model,
+          referenceImageUrl: libraryMatch?.referenceImageUrl,
+          libraryLocationDescription: libraryMatch?.description,
+          styleConfig: input.styleConfig,
+        };
+
+        return await spawnAndAwaitChild<
+          LocationSheetWorkflowInput,
+          LocationSheetWorkflowResult
+        >(step, {
+          binding: childBinding,
+          parentBindingName: 'LOCATION_BIBLE_WORKFLOW',
+          parentInstanceId,
+          childId: `location-sheet:${locationDbId}`,
+          childPayload,
+          spawnStepName: `spawn-location-sheet-${index}`,
+          awaitStepName: `await-location-sheet-${index}`,
+          timeout: '30 minutes',
+        });
+      }
+    );
+
+    const settled = await Promise.allSettled(spawnAwaitPromises);
+
+    // Re-assemble the SequenceLocationMinimal[] result in input order. For any
+    // child that failed, fall back to the inserted DB row (the child workflow's
+    // `onFailure` already marked the row `failed` and emitted the realtime
+    // event, so the UI is up to date — we just need a non-throwing return so
+    // the rest of the bible succeeds).
+    const seqLocations: SequenceLocationMinimal[] = input.locationBible.map(
+      (location, index) => {
+        // Promise.allSettled returns one entry per input promise, so `outcome`
+        // is always defined for `index < input.locationBible.length`.
+        const outcome = settled[index];
         const dbId = locationIdToDbId.get(location.locationId);
 
-        return await context.run(`location-sheet-${index}`, async () => {
-          // Check if location has a library match
-          const libraryMatch = matchMap.get(location.locationId);
-
-          // Build location sheet prompt (with library overrides if matched + sequence style)
-          const { prompt, referenceUrls } = libraryMatch
-            ? buildLocationSheetPrompt(
-                location,
-                {
-                  description: libraryMatch.description,
-                  referenceImageUrl: libraryMatch.referenceImageUrl,
-                },
-                input.styleConfig
-              )
-            : buildLocationSheetPrompt(location, undefined, input.styleConfig);
-
-          const model = input.imageModel ?? DEFAULT_IMAGE_MODEL;
-
-          // Generate location reference image
-          const imageResult = await generateImageWithProvider(
-            {
-              model,
-              prompt,
-              imageSize: 'landscape_16_9' as const,
-              numImages: 1,
-              referenceImageUrls:
-                referenceUrls.length > 0 ? referenceUrls : undefined,
-              traceName: 'location-bible-image',
-            },
-            { scopedDb }
-          );
-
-          // Deduct credits (skip if team used own fal key)
-          await deductWorkflowCredits({
-            scopedDb,
-            costMicros: extractImageCost(imageResult.metadata),
-            usedOwnKey: imageResult.metadata.usedOwnKey,
-            description: `Location bible sheet (${model})`,
-            metadata: { model, locationId: location.locationId },
-            workflowName: 'LocationBibleWorkflow',
-          });
-
-          const imageUrl = imageResult.imageUrls[0];
-          if (!imageUrl) {
-            throw new Error('No image URL returned from generation');
-          }
-
-          // Save to R2 and update DB if we have all required IDs
-          if (dbId && input.sequenceId && input.teamId) {
-            const uniqueId = generateId();
-            const storagePath = `${input.teamId}/${input.sequenceId}/${dbId}/${uniqueId}.png`;
-
-            // Fetch and stream directly to R2
-            const response = await fetch(imageUrl);
-            if (!response.ok) {
-              throw new Error(
-                `Failed to fetch generated image: ${response.status}`
-              );
-            }
-
-            const storageResult = await uploadResponse(
-              response,
-              STORAGE_BUCKETS.LOCATIONS,
-              storagePath,
-              { contentType: 'image/png' }
-            );
-
-            // Update location record with reference image
-            await scopedDb.sequenceLocations.updateReference(
-              dbId,
-              storageResult.publicUrl,
-              storageResult.path
-            );
-
-            return {
-              id: dbId,
-              locationId: location.locationId,
-              name: location.name,
-              referenceImageUrl: storageResult.publicUrl,
-              referenceStatus: 'completed' as const,
-              referenceInputHash: null,
-              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
-              description: location.description ?? null,
-              // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
-              consistencyTag: location.consistencyTag ?? null,
-            };
-          }
-
+        if (outcome?.status === 'fulfilled') {
+          const childResult = outcome.value;
           return {
-            id: dbId ?? generateId(),
+            id: dbId ?? childResult.locationDbId ?? generateId(),
             locationId: location.locationId,
             name: location.name,
-            referenceImageUrl: imageUrl,
+            referenceImageUrl: childResult.referenceImageUrl,
             referenceStatus: 'completed' as const,
             referenceInputHash: null,
             // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
@@ -212,21 +214,54 @@ export const locationBibleWorkflow = createScopedWorkflow<
             // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
             consistencyTag: location.consistencyTag ?? null,
           };
-        });
-      })
+        }
+
+        const rejectionReason = outcome?.reason;
+        const reason =
+          rejectionReason instanceof Error
+            ? rejectionReason.message
+            : rejectionReason !== undefined
+              ? String(rejectionReason)
+              : 'unknown';
+        logger.warn(
+          `[LocationBibleWorkflow:cf] Child location-sheet for ${location.locationId} did not complete: ${reason}`
+        );
+
+        return {
+          id: dbId ?? generateId(),
+          locationId: location.locationId,
+          name: location.name,
+          referenceImageUrl: null,
+          referenceStatus: 'failed' as const,
+          referenceInputHash: null,
+          // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
+          description: location.description ?? null,
+          // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
+          consistencyTag: location.consistencyTag ?? null,
+        };
+      }
+    );
+
+    logger.info(
+      `[LocationBibleWorkflow:cf] Location bible completed for sequence ${sequenceId}: ${seqLocations.length} locations processed`
     );
 
     return seqLocations;
-  },
-  {
-    failureFunction: async ({ failResponse }) => {
-      const error = sanitizeFailResponse(failResponse);
-
-      logger.error('[LocationBibleWorkflow]', {
-        data: `Location reference generation failed: ${error}`,
-      });
-
-      return `Location bible generation failed`;
-    },
   }
-);
+
+  protected override onFailure({
+    error,
+  }: {
+    event: Readonly<WorkflowEvent<LocationBibleWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): void {
+    // QStash's `failureFunction` here just logged + returned a friendly
+    // message — no DB writes (the inserted `sequence_locations` rows stay in
+    // `generating` and each child's own `onFailure` writes per-row failure).
+    // Mirror that behaviour exactly: log and let the base class rethrow.
+    logger.error(
+      `[LocationBibleWorkflow:cf] Location reference generation failed: ${error}`
+    );
+  }
+}

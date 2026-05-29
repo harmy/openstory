@@ -221,22 +221,76 @@ export async function callLLM<T>(
   });
 }
 
-function throwIfRunError(event: unknown): void {
+/**
+ * Diagnostic detail pulled from a streaming `RUN_ERROR` event.
+ *
+ * The `@tanstack/ai-openrouter` adapter collapses the provider's error to
+ * `{ message, code }` before it reaches us — its `processStreamChunks`
+ * rethrows `new Error(chunk.error.message)`, dropping OpenRouter's
+ * `error.metadata` (provider name, raw upstream body). So `message` is
+ * frequently the provider's opaque headline like "Provider returned error".
+ * We surface `code` and `model` alongside it, and the caller logs the full
+ * event, so that context isn't lost when the error propagates (e.g. up to a
+ * parent workflow's "Child workflow … failed: …").
+ */
+export type RunErrorDetail = {
+  message: string;
+  code: string | undefined;
+  model: string | undefined;
+  /** The full RUN_ERROR event, for structured logging. */
+  event: unknown;
+};
+
+/**
+ * Narrow a stream event to a `RUN_ERROR` and extract its diagnostic fields,
+ * or return `null` for any other event. Takes `unknown` because `chat()`'s
+ * yielded event union is wide and not cleanly nameable — this is a type guard
+ * over an arbitrary (possibly malformed) provider frame. Fields are read
+ * defensively: a bad frame can carry a non-string `message`.
+ */
+export function extractRunError(event: unknown): RunErrorDetail | null {
   if (
     !event ||
     typeof event !== 'object' ||
     !('type' in event) ||
     event.type !== 'RUN_ERROR'
   ) {
-    return;
+    return null;
   }
   const message =
     'message' in event && typeof event.message === 'string'
       ? event.message
-      : JSON.stringify('message' in event ? event.message : undefined);
-  const suffix =
-    'code' in event && typeof event.code === 'string' ? ` [${event.code}]` : '';
-  throw new Error(`LLM stream error${suffix}: ${message}`);
+      : JSON.stringify(
+          'message' in event ? event.message : 'Unknown LLM error'
+        );
+  const code =
+    'code' in event && typeof event.code === 'string' ? event.code : undefined;
+  const model =
+    'model' in event && typeof event.model === 'string'
+      ? event.model
+      : undefined;
+  return { message, code, model, event };
+}
+
+/**
+ * Build the surfaced `Error.message` from a {@link RunErrorDetail}. `code` and
+ * `model` (when present) ride along in a bracketed prefix so they survive in
+ * the error string all the way up the call chain.
+ */
+export function formatRunErrorMessage(detail: RunErrorDetail): string {
+  const tags = [
+    detail.code,
+    detail.model ? `model=${detail.model}` : undefined,
+  ].filter((tag): tag is string => tag !== undefined);
+  const suffix = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
+  return `LLM stream error${suffix}: ${detail.message}`;
+}
+
+function throwIfRunError(event: unknown): void {
+  const detail = extractRunError(event);
+  if (!detail) return;
+  logger.error('LLM stream RUN_ERROR', { runError: detail.event });
+  throw new Error(formatRunErrorMessage(detail));
 }
 
 export function callLLMStream<T>(

@@ -1,36 +1,58 @@
-import { buildLocationMatchingPromptVariables } from '../ai/location-matching-prompt';
-import { locationMatchResponseSchema } from '../ai/response-schemas';
-import { getGenerationChannel } from '../realtime';
-import { sanitizeFailResponse } from '../workflow/sanitize-fail-response';
-import { createScopedWorkflow } from '../workflow/scoped-workflow';
+/**
+ * Cloudflare Workflows port of `locationMatchingWorkflow`.
+ *
+ * Mirrors the QStash version (`src/lib/workflows/location-matching-workflow.ts`)
+ * step for step — same step names, same control flow, same side effects. The
+ * only differences are:
+ *
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - Reads payload from `event.payload` instead of `context.requestPayload`.
+ *
+ * The LLM call goes through `durableLLMCallCf` (the CF port of
+ * `durableLLMCall`); see `src/lib/workflows/llm-call-helper.ts`.
+ *
+ * This workflow does not invoke any child workflows — it's a leaf
+ * orchestrator that runs a single LLM call and assembles matches.
+ */
+
+import { buildLocationMatchingPromptVariables } from '@/lib/ai/location-matching-prompt';
+import { locationMatchResponseSchema } from '@/lib/ai/response-schemas';
+import type { ScopedDb } from '@/lib/db/scoped';
+import { getGenerationChannel } from '@/lib/realtime';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
+import { durableLLMCallCf } from '@/lib/workflows/llm-call-helper';
 import type {
   LibraryLocationMatch,
   LocationMatchingWorkflowInput,
   LocationMatchingWorkflowOutput,
-} from '../workflow/types';
-import { durableLLMCall } from './llm-call-helper';
+} from '@/lib/workflow/types';
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
+import { getLogger } from '@/lib/observability/logger';
 
-export const locationMatchingWorkflow = createScopedWorkflow<
-  LocationMatchingWorkflowInput,
-  LocationMatchingWorkflowOutput
->(
-  async (context, scopedDb) => {
-    const input = context.requestPayload;
-    const { analysisModelId, suggestedLocationIds } = input;
-    const { sequenceId, userId, teamId } = input;
+const logger = getLogger(['openstory', 'workflow', 'location-matching']);
 
-    const llmCallContext = {
-      sequenceId,
-      userId,
-      teamId,
-    };
+type LocationMatchEntry = {
+  libraryLocationId: string;
+  locationId: string;
+  confidence: number;
+};
 
-    // Use pre-extracted bible from scene splitting, or fall back to LLM extraction
+export class LocationMatchingWorkflow extends OpenStoryWorkflowEntrypoint<LocationMatchingWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<LocationMatchingWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<LocationMatchingWorkflowOutput> {
+    const input = event.payload;
+    const { suggestedLocationIds, sequenceId, analysisModelId } = input;
+
     const locationBible = input.locationBible;
 
-    // Location matching (conditional)
     const { libraryLocationList, locationMatchingPromptVariables } =
-      await context.run('get-library-locations', async () => {
+      await step.do('get-library-locations', async () => {
         if (!suggestedLocationIds?.length || !input.teamId) {
           return {
             libraryLocationList: [],
@@ -50,22 +72,25 @@ export const locationMatchingWorkflow = createScopedWorkflow<
 
     const { matches: locationMatches } =
       libraryLocationList.length > 0
-        ? await durableLLMCall(
-            context,
+        ? await durableLLMCallCf(
+            step,
             {
               name: 'location-matching',
               phase: { number: 2, name: 'Matching locations…' },
-
               promptName: 'phase/location-matching-chat',
               promptVariables: locationMatchingPromptVariables,
               modelId: analysisModelId,
               responseSchema: locationMatchResponseSchema,
             },
-            llmCallContext
+            {
+              sequenceId,
+              userId: input.userId,
+              scopedDb,
+            }
           )
-        : { matches: [] };
+        : { matches: [] as LocationMatchEntry[] };
 
-    const libraryLocationMatches: LibraryLocationMatch[] = await context.run(
+    const libraryLocationMatches: LibraryLocationMatch[] = await step.do(
       'build-location-matches',
       async () => {
         const usedLibraryIds = new Set<string>();
@@ -98,7 +123,7 @@ export const locationMatchingWorkflow = createScopedWorkflow<
           });
         }
 
-        if (matches.length > 0) {
+        if (matches.length > 0 && sequenceId) {
           await getGenerationChannel(sequenceId).emit(
             'generation.location:matched',
             {
@@ -123,15 +148,26 @@ export const locationMatchingWorkflow = createScopedWorkflow<
       }
     );
 
+    logger.info(
+      `[LocationMatchingWorkflow:cf] Resolved ${libraryLocationMatches.length} library location match(es) for sequence ${sequenceId ?? '(none)'}`
+    );
+
     return {
-      locationBible,
       matches: libraryLocationMatches,
     };
-  },
-  {
-    failureFunction: async ({ failResponse }) => {
-      const error = sanitizeFailResponse(failResponse);
-      return `Location matching failed: ${error}`;
-    },
   }
-);
+
+  protected override async onFailure({
+    event,
+    error,
+  }: {
+    event: Readonly<WorkflowEvent<LocationMatchingWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): Promise<void> {
+    const input = event.payload;
+    logger.error(
+      `[LocationMatchingWorkflow:cf] Location matching failed for sequence ${input.sequenceId ?? '(none)'}: ${error}`
+    );
+  }
+}

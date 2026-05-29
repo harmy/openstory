@@ -76,11 +76,11 @@ const dbMock = {
 
 vi.doMock('#db-client', () => ({ getDb: () => dbMock }));
 
-// QStash stub: "still running" — verified passes are no-ops unless overridden.
-vi.doMock('@/lib/workflow/client', () => ({
-  getWorkflowClient: () => ({
-    logs: async () => ({ runs: [{ workflowState: 'RUN_STARTED' }] }),
-  }),
+// resolveRunState stub: "still in flight" (null) — verified passes are no-ops
+// unless a test overrides the run-state outcome.
+vi.doMock('@/lib/workflow/reconcile', () => ({
+  resolveRunState: async () => null,
+  STALE_THRESHOLD_MS: 5 * 60 * 1000,
 }));
 
 beforeEach(() => {
@@ -147,7 +147,7 @@ describe('reconcileAllStuckJobs — pass isolation', () => {
   });
 });
 
-describe('reconcileAllStuckJobs — QStash-verified passes', () => {
+describe('reconcileAllStuckJobs — run-id-verified passes', () => {
   test('caps stuck-row selection at MAX_ROWS_PER_PASS (100) per verified pass', async () => {
     const { reconcileAllStuckJobs } = await import('./reconcile-all');
     await reconcileAllStuckJobs();
@@ -155,7 +155,7 @@ describe('reconcileAllStuckJobs — QStash-verified passes', () => {
     expect(limitArgs.filter((n) => n === 100)).toHaveLength(6);
   });
 
-  test('RUN_STARTED from QStash → no per-row update on verified tables', async () => {
+  test('in-flight instance (resolveRunState null) → no per-row update on verified tables', async () => {
     stuckRows = [{ id: 'frm_1', runId: 'wf_running' }];
     const { reconcileAllStuckJobs } = await import('./reconcile-all');
 

@@ -1,3 +1,17 @@
+/**
+ * Cloudflare Workflows port of `generateShotVariantWorkflow`.
+ *
+ * Mirrors the QStash version (`src/lib/workflows/shot-variant-workflow.ts`)
+ * step for step — same step names, same control flow, same side effects.
+ * The only differences are:
+ *
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - Reads the workflow run id from `event.instanceId` instead of
+ *     `context.workflowRunId`. */
+
 import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS } from '@/lib/ai/models';
 import {
   deductWorkflowCredits,
@@ -7,6 +21,7 @@ import {
   DEFAULT_IMAGE_SIZE,
   getVariantGridConfig,
 } from '@/lib/constants/aspect-ratios';
+import type { ScopedDb } from '@/lib/db/scoped';
 import {
   generateImageWithProvider,
   type ImageGenerationParams,
@@ -18,29 +33,30 @@ import {
 } from '@/lib/prompts/reference-image-prompt';
 import { getVariantImagePrompt } from '@/lib/prompts/variant-image';
 import { getGenerationChannel } from '@/lib/realtime';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
-import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
-import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
-import { getLogger } from '@/lib/observability/logger';
-
-const logger = getLogger(['openstory', 'workflow', 'shot-variant']);
-
 import type {
   ShotVariantWorkflowInput,
   ShotVariantWorkflowResult,
 } from '@/lib/workflow/types';
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
+import { getLogger } from '@/lib/observability/logger';
 
-export const generateShotVariantWorkflow = createScopedWorkflow<
-  ShotVariantWorkflowInput,
-  ShotVariantWorkflowResult
->(
-  async (context, scopedDb) => {
-    const input = context.requestPayload;
+const logger = getLogger(['openstory', 'workflow', 'shot-variant']);
+
+export class ShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<ShotVariantWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<ShotVariantWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<ShotVariantWorkflowResult> {
+    const input = event.payload;
+    const workflowRunId = event.instanceId;
 
     // Step 1: Set status to generating if frameId is provided
-    const generationParams: ImageGenerationParams | null = await context.run(
+    const generationParams = await step.do(
       'set-generating-status',
-      async () => {
+      async (): Promise<ImageGenerationParams | null> => {
         // Validate required fields
         if (!input.thumbnailUrl || input.thumbnailUrl.trim().length === 0) {
           throw new WorkflowValidationError(
@@ -48,9 +64,9 @@ export const generateShotVariantWorkflow = createScopedWorkflow<
           );
         }
 
-        logger.info('[ShotVariantWorkflow]', {
-          data: `Starting variant image generation workflow for user ${input.userId}`,
-        });
+        logger.info(
+          `[ShotVariantWorkflow:cf] Starting variant image generation workflow for user ${input.userId}`
+        );
 
         const model = input.model || DEFAULT_IMAGE_MODEL;
         const gridConfig = input.aspectRatio
@@ -65,15 +81,15 @@ export const generateShotVariantWorkflow = createScopedWorkflow<
             input.frameId,
             {
               variantImageStatus: 'generating',
-              variantWorkflowRunId: context.workflowRunId,
+              variantWorkflowRunId: workflowRunId,
             },
             { throwOnMissing: false }
           );
 
           if (!frame) {
-            logger.info('[ShotVariantWorkflow]', {
-              data: `Frame ${input.frameId} was deleted, skipping workflow`,
-            });
+            logger.info(
+              `[ShotVariantWorkflow:cf] Frame ${input.frameId} was deleted, skipping workflow`
+            );
             return null; // Signal to skip
           }
 
@@ -85,7 +101,7 @@ export const generateShotVariantWorkflow = createScopedWorkflow<
               model,
               {
                 shotVariantStatus: 'generating',
-                shotVariantWorkflowRunId: context.workflowRunId,
+                shotVariantWorkflowRunId: workflowRunId,
               }
             );
           }
@@ -147,16 +163,16 @@ export const generateShotVariantWorkflow = createScopedWorkflow<
     }
 
     // Step 2: Generate image
-    const imageResult = await context.run('generate-image', async () => {
-      logger.info('[ShotVariantWorkflow]', {
-        data: `Generating variant image ${input.frameId} with model ${generationParams.model}`,
-      });
+    const imageResult = await step.do('generate-image', async () => {
+      logger.info(
+        `[ShotVariantWorkflow:cf] Generating variant image ${input.frameId} with model ${generationParams.model}`
+      );
 
       return await generateImageWithProvider(generationParams, { scopedDb });
     });
 
     // Deduct credits for image generation (skip if team used own fal key)
-    await context.run('deduct-credits', async () => {
+    await step.do('deduct-credits', async () => {
       await deductWorkflowCredits({
         scopedDb,
         costMicros: extractImageCost(imageResult.metadata),
@@ -167,7 +183,7 @@ export const generateShotVariantWorkflow = createScopedWorkflow<
           frameId: input.frameId,
           sequenceId: input.sequenceId,
         },
-        workflowName: 'ShotVariantWorkflow',
+        workflowName: 'ShotVariantWorkflow:cf',
       });
     });
 
@@ -178,7 +194,7 @@ export const generateShotVariantWorkflow = createScopedWorkflow<
     let imageUrl: string = generatedImageUrl;
 
     if (input.frameId && input.sequenceId && input.teamId) {
-      await context.run('upload-to-storage', async () => {
+      const uploadResult = await step.do('upload-to-storage', async () => {
         if (
           !input.frameId ||
           !input.sequenceId ||
@@ -201,8 +217,6 @@ export const generateShotVariantWorkflow = createScopedWorkflow<
           throw new Error('Failed to upload image to storage');
         }
 
-        imageUrl = result.url;
-
         const updatedFrame = await scopedDb.frames.update(
           input.frameId,
           {
@@ -213,9 +227,9 @@ export const generateShotVariantWorkflow = createScopedWorkflow<
         );
 
         if (!updatedFrame) {
-          logger.info('[ShotVariantWorkflow]', {
-            data: `Frame ${input.frameId} was deleted, skipping final update`,
-          });
+          logger.info(
+            `[ShotVariantWorkflow:cf] Frame ${input.frameId} was deleted, skipping final update`
+          );
           return { url: result.url, path: result.path };
         }
 
@@ -242,68 +256,74 @@ export const generateShotVariantWorkflow = createScopedWorkflow<
           }
         );
 
-        logger.info('[ShotVariantWorkflow]', {
-          data: `Image uploaded to storage: ${result.path}`,
-        });
+        logger.info(
+          `[ShotVariantWorkflow:cf] Image uploaded to storage: ${result.path}`
+        );
         return { url: result.url, path: result.path };
       });
+
+      if (uploadResult.url) {
+        imageUrl = uploadResult.url;
+      }
     }
 
     // Return workflow result
-    const result: ShotVariantWorkflowResult = {
+    return {
       variantImageUrl: imageUrl,
     };
+  }
 
-    return result;
-  },
-  {
-    failureFunction: async ({ context, scopedDb, failResponse }) => {
-      const input = context.requestPayload;
-      const error = sanitizeFailResponse(failResponse);
+  protected override async onFailure({
+    event,
+    error,
+    scopedDb,
+  }: {
+    event: Readonly<WorkflowEvent<ShotVariantWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): Promise<void> {
+    const input = event.payload;
 
-      // Set frame variant status to 'failed' after all retries exhausted
-      if (input.frameId && input.teamId) {
-        await scopedDb.frames.update(
+    // Set frame variant status to 'failed' after all retries exhausted
+    if (input.frameId && input.teamId) {
+      await scopedDb.frames.update(
+        input.frameId,
+        {
+          variantImageStatus: 'failed',
+          variantImageError: error,
+        },
+        { throwOnMissing: false }
+      );
+
+      // Dual-write: update shot variant status on frame_variants row (returns null if row doesn't exist)
+      const model = input.model || DEFAULT_IMAGE_MODEL;
+      if (input.sequenceId) {
+        await scopedDb.frameVariants.updateByFrameAndModel(
           input.frameId,
-          {
-            variantImageStatus: 'failed',
-            variantImageError: error,
-          },
-          { throwOnMissing: false }
+          'image',
+          model,
+          { shotVariantStatus: 'failed' }
         );
-
-        // Dual-write: update shot variant status on frame_variants row (returns null if row doesn't exist)
-        const model = input.model || DEFAULT_IMAGE_MODEL;
-        if (input.sequenceId) {
-          await scopedDb.frameVariants.updateByFrameAndModel(
-            input.frameId,
-            'image',
-            model,
-            { shotVariantStatus: 'failed' }
-          );
-        }
-
-        // Emit failure progress
-        if (input.sequenceId) {
-          try {
-            await getGenerationChannel(input.sequenceId).emit(
-              'generation.variant-image:progress',
-              {
-                frameId: input.frameId,
-                status: 'failed',
-              }
-            );
-          } catch {
-            // Ignore emit errors
-          }
-        }
-
-        logger.error('[ShotVariantWorkflow]', {
-          data: `Image generation failed for frame ${input.frameId}: ${error}`,
-        });
       }
 
-      return `Image generation failed for frame ${input.frameId}`;
-    },
+      // Emit failure progress
+      if (input.sequenceId) {
+        try {
+          await getGenerationChannel(input.sequenceId).emit(
+            'generation.variant-image:progress',
+            {
+              frameId: input.frameId,
+              status: 'failed',
+            }
+          );
+        } catch {
+          // Ignore emit errors
+        }
+      }
+
+      logger.error(
+        `[ShotVariantWorkflow:cf] Image generation failed for frame ${input.frameId}: ${error}`
+      );
+    }
   }
-);
+}

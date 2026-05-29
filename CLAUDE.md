@@ -6,7 +6,7 @@ AI-powered video sequence platform built with TanStack Start, deployed to Cloudf
 
 ```bash
 # Dev
-bun dev                            # All-in-one: DB migrate + seed, Vite, QStash (Docker), Stripe listener
+bun dev                            # All-in-one: DB migrate + seed, Vite (Workerd via cf-plugin)
 bun storybook                      # Storybook on :6006
 bun db:studio:local                # Inspect local D1 tables (wrangler d1 execute)
 
@@ -26,7 +26,7 @@ bun run test:coverage
 bun test:e2e                       # Playwright (vite dev cf-plugin webServer)
 bun test:e2e:ui
 bun test:e2e:setup                 # apply D1 migrations + seed for [env.test]
-bun test:e2e:full                  # full-pipeline e2e (real QStash + aimock)
+bun test:e2e:full                  # full-pipeline e2e (Cloudflare Workflows + aimock)
 bun run build:e2e                  # built-server e2e build (VITE_APP_URL=:3001, devtools off)
 
 # DB (Wrangler local D1 via Miniflare)
@@ -44,7 +44,7 @@ bun cf:dev                         # wrangler dev against built worker (preview)
 bun cf:deploy:prd                  # Cloudflare Workers production deploy
 ```
 
-`bun dev` runs three parallel processes: vite dev (cf-plugin → Workerd via Miniflare, port 3000) + Stripe listener + Docker QStash (port 8080). The app runs in **Workerd locally** — same runtime as production — so D1, R2 bindings, env.\* access, and request lifecycle all match prod.
+`bun dev` runs vite dev (cf-plugin → Workerd via Miniflare, port 3000) alongside the Stripe listener. The app runs in **Workerd locally** — same runtime as production — so D1, R2 bindings, **Cloudflare Workflows**, env.\* access, and request lifecycle all match prod. No QStash/Docker needed: workflows execute in-process in Workerd.
 
 **Bun-as-launcher pattern:** `bun script.ts` (no `--bun`) keeps Bun as the CLI launcher but executes under **Node**, while still autoloading `.env*`. Use `bun --env-file=<path>` to override the default `.env.local`. No `--bun` flag should appear in package.json scripts.
 
@@ -61,7 +61,7 @@ src/
     ai/             #   AI model configs, prompt schemas, frame.schema
     db/             #   Drizzle schema + clients (D1 in prod + dev via Wrangler)
     services/       #   Frame, motion, etc. business services
-    workflows/      #   QStash durable workflow definitions
+    workflows/      #   Cloudflare Workflows durable definitions
     auth/           #   Better Auth wiring + action-utils
 e2e/                # Playwright tests
 scripts/            # CLI tooling and setup
@@ -70,7 +70,7 @@ drizzle/migrations/ # Generated SQL (do NOT hand-edit)
 
 ## Architecture
 
-**Stack:** Bun (package manager + script launcher; Node is the runtime) · TanStack Start + Router + Vite (`@cloudflare/vite-plugin`) · Cloudflare D1 + Drizzle · QStash (durable workflows) · Cloudflare R2 · Better Auth · Tailwind v4 + shadcn/ui · Vitest.
+**Stack:** Bun (package manager + script launcher; Node is the runtime) · TanStack Start + Router + Vite (`@cloudflare/vite-plugin`) · Cloudflare D1 + Drizzle · Cloudflare Workflows (durable async) · Cloudflare R2 · Better Auth · Tailwind v4 + shadcn/ui · Vitest.
 
 **Core rules:**
 
@@ -93,7 +93,7 @@ teams
 
 ```bash
 bun install
-bun setup                          # Auto-configure local dev (SQLite + QStash)
+bun setup                          # Auto-configure local dev (SQLite + secrets)
 bun db:setup                       # Migrate + seed database
 ```
 
@@ -119,13 +119,14 @@ export const Route = createFileRoute('/api/example/$id')({
             .insert(table)
             .values({ ...input, teamId: user.teamId });
 
-          // Trigger workflows via QStash (see Workflow Pattern below)
-          const { messageId } = await qstash.publishJSON({
-            url: `${getQStashWebhookUrl()}/workflows/image`,
-            body: { userId: user.id, teamId: user.teamId, ...input },
+          // Trigger a durable workflow (see Workflow Pattern below)
+          const workflowRunId = await triggerWorkflow('/image', {
+            userId: user.id,
+            teamId: user.teamId,
+            ...input,
           });
 
-          return json({ id: record.id, workflowRunId: messageId });
+          return json({ id: record.id, workflowRunId });
         } catch (error) {
           const handled = handleApiError(error);
           return json(
@@ -143,33 +144,42 @@ Steps: 1) validate input · 2) `requireUser()` · 3) DB writes (only here) · 4)
 
 ## Workflow Pattern
 
-**Triggering workflows — MUST use `qstash.publishJSON`, not `fetch`** (raw fetch skips QStash signatures):
+Durable async work runs on **Cloudflare Workflows**. Each workflow is a
+`WorkflowEntrypoint` subclass; there is no QStash and no HTTP callback route.
+
+**Triggering workflows — use `triggerWorkflow(path, body)`** from
+`@/lib/workflow/client`. It resolves the workflow binding for `path` (see
+`TRIGGER_TO_BINDING` in `src/lib/workflow/trigger-bindings.ts`) and calls
+`binding.create()`, returning the workflow instance id (store it as
+`workflowRunId`):
 
 ```typescript
-// ❌ WRONG — no signatures
-await fetch('/api/workflows/image', {
-  method: 'POST',
-  body: JSON.stringify(data),
-});
-
-// ✅ CORRECT
-const { messageId } = await getQStashClient().publishJSON({
-  url: `${getQStashWebhookUrl()}/workflows/image`,
-  body: { userId, teamId, prompt, ...params },
+const workflowRunId = await triggerWorkflow('/image', {
+  userId,
+  teamId,
+  prompt,
+  ...params,
 });
 ```
 
-**Registering workflows** — `src/routes/api/workflows/$.ts` uses `serveMany` from `@upstash/workflow/tanstack`:
+Pass a stable `deduplicationId` in the options to make a trigger idempotent.
 
-```typescript
-const handler = serveMany({
-  image: generateImageWorkflow,
-  motion: generateMotionWorkflow,
-  storyboard: generateStoryboardWorkflow,
-});
-```
+**Defining workflows** — each lives in `src/lib/workflows/<name>-workflow.ts`,
+extends `OpenStoryWorkflowEntrypoint` (`src/lib/workflow/base-workflow.ts`),
+and must be wired in three places (a test in
+`src/lib/workflow/wiring-consistency.test.ts` enforces this):
 
-Each workflow validates auth from `context.requestPayload`, runs steps via `context.run('step-name', async () => { ... })`, and writes DB updates directly. Steps are durable (auto-retried on failure); pass `userId`/`teamId` through context, not via global state.
+1. `wrangler.jsonc` `workflows[]` — declares the binding + `class_name`.
+2. `src/server.ts` — re-exports the class so it lands in the Worker bundle.
+3. `TRIGGER_TO_BINDING` in `src/lib/workflow/trigger-bindings.ts` — maps the
+   trigger path to the binding name.
+
+The base class validates `userId`/`teamId` on the payload, builds a
+`ScopedDb`, and sanitizes/handles failures. Subclasses implement
+`runImpl(event, step, scopedDb)`, run steps via
+`step.do('step-name', async () => { ... })` (durable, auto-retried), and write
+DB updates directly. For parent→child fan-out (await a child's result), use
+`spawnAndAwaitChild` from `src/lib/workflow/await-child.ts`.
 
 ## Frame System
 

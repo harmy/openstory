@@ -39,13 +39,6 @@ const mockMotionResponse = {
 };
 
 /**
- * Mock QStash publish response
- */
-const mockQStashResponse = {
-  messageId: 'mock-message-id-12345',
-};
-
-/**
  * Set up route handlers on a page to mock external APIs
  */
 export async function setupMockRoutes(page: Page): Promise<void> {
@@ -103,15 +96,6 @@ export async function setupMockRoutes(page: Page): Promise<void> {
     } else {
       await route.continue();
     }
-  });
-
-  // Mock QStash publish
-  await page.route('**/qstash.upstash.io/**', async (route: Route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(mockQStashResponse),
-    });
   });
 
   // Mock upload proxy (used in e2e when getSignedUploadUrl returns proxy URL)

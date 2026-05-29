@@ -1,17 +1,26 @@
 /**
- * Character Sheet Generation Workflow
+ * Cloudflare Workflows port of `characterSheetWorkflow`.
  *
- * Generates character reference sheets (full body turnaround) for visual consistency.
- * These sheets are later used as reference images when generating scene images.
- */
+ * Mirrors the QStash version (`src/lib/workflows/character-sheet-workflow.ts`)
+ * step for step — same step names, same control flow, same side effects. The
+ * only differences are:
+ *
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - Reads the workflow run id from `event.instanceId` instead of
+ *     `context.workflowRunId`.
+ *   - Calls the snapshot DTO computers directly instead of going through
+ *     the `context.snapshot.*` extension. */
 
-import { uploadResponse } from '@/lib/storage/upload-response';
 import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
 import {
   deductWorkflowCredits,
   extractImageCost,
 } from '@/lib/billing/workflow-deduction';
 import { generateId } from '@/lib/db/id';
+import type { ScopedDb } from '@/lib/db/scoped';
 import {
   generateImageWithProvider,
   type ImageGenerationParams,
@@ -19,44 +28,51 @@ import {
 import { buildCharacterSheetPrompt } from '@/lib/prompts/character-prompt';
 import { getGenerationChannel } from '@/lib/realtime';
 import { STORAGE_BUCKETS } from '@/lib/storage/buckets';
+import { uploadResponse } from '@/lib/storage/upload-response';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
-import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
-import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
-import { getLogger } from '@/lib/observability/logger';
-
-const logger = getLogger(['openstory', 'workflow', 'character-sheet']);
-
 import type {
   CharacterSheetWorkflowInput,
   CharacterSheetWorkflowResult,
 } from '@/lib/workflow/types';
 import {
-  computeCharacterSheetHashCurrent,
-  computeCharacterSheetHashFromDto,
-} from './sheet-snapshots';
-import {
   decideSheetDivergence,
   saveDivergentCharacterSheet,
-} from './sheet-divergence';
+} from '@/lib/workflows/sheet-divergence';
+import {
+  computeCharacterSheetHashCurrent,
+  computeCharacterSheetHashFromDto,
+} from '@/lib/workflows/sheet-snapshots';
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
+import { getLogger } from '@/lib/observability/logger';
 
-export const characterSheetWorkflow = createScopedWorkflow<
-  CharacterSheetWorkflowInput,
-  CharacterSheetWorkflowResult
->(
-  async (context, scopedDb) => {
-    const input = context.requestPayload;
+const logger = getLogger(['openstory', 'workflow', 'character-sheet']);
 
-    // Validate snapshot hash inside the workflow body. Upstash swallows
-    // runStarted-middleware throws to logger.error; the only place a
-    // tampered payload halts the run is inside `context.run`.
-    await context.run('validate-snapshot', async () => {
-      if (context.snapshot) {
-        await context.snapshot.validate();
+export class CharacterSheetWorkflow extends OpenStoryWorkflowEntrypoint<CharacterSheetWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<CharacterSheetWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<CharacterSheetWorkflowResult> {
+    const input = event.payload;
+    const workflowRunId = event.instanceId;
+
+    // Validate snapshot hash inside the workflow body. Matches QStash parity:
+    // tampered payloads must halt the run from inside a step, not silently.
+    await step.do('validate-snapshot', async () => {
+      if (input.snapshotInputHash) {
+        const expected = input.snapshotInputHash;
+        const recomputed = await computeCharacterSheetHashFromDto(input);
+        if (recomputed !== expected) {
+          throw new WorkflowValidationError(
+            'snapshotInputHash does not match the inlined DTO; payload was tampered with or serialized inconsistently'
+          );
+        }
       }
     });
 
     // Emit realtime event that generation has started
-    await context.run('emit-start-event', async () => {
+    await step.do('emit-start-event', async () => {
       if (input.sequenceId && input.characterDbId) {
         await getGenerationChannel(input.sequenceId).emit(
           'generation.character-sheet:progress',
@@ -69,7 +85,7 @@ export const characterSheetWorkflow = createScopedWorkflow<
     });
 
     // Step 1: Validate and build prompt
-    const generationParams: ImageGenerationParams = await context.run(
+    const generationParams: ImageGenerationParams = await step.do(
       'build-prompt',
       async () => {
         // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
@@ -78,9 +94,9 @@ export const characterSheetWorkflow = createScopedWorkflow<
         }
 
         const hasTalent = !!(input.talentMetadata || input.talentDescription);
-        logger.info('[CharacterSheetWorkflow]', {
-          data: `Starting sheet generation for character ${input.characterName}${hasTalent ? ' with talent appearance' : ''}`,
-        });
+        logger.info(
+          `[CharacterSheetWorkflow:cf] Starting sheet generation for character ${input.characterName}${hasTalent ? ' with talent appearance' : ''}`
+        );
 
         // Build talent overrides if talent data is provided (for casting)
         const talentOverrides = hasTalent
@@ -114,16 +130,16 @@ export const characterSheetWorkflow = createScopedWorkflow<
     );
 
     // Step 2: Generate the character sheet image
-    const imageResult = await context.run('generate-sheet-image', async () => {
-      logger.info('[CharacterSheetWorkflow]', {
-        data: `Generating sheet for ${input.characterName} with model ${generationParams.model}`,
-      });
+    const imageResult = await step.do('generate-sheet-image', async () => {
+      logger.info(
+        `[CharacterSheetWorkflow:cf] Generating sheet for ${input.characterName} with model ${generationParams.model}`
+      );
 
       return await generateImageWithProvider(generationParams, { scopedDb });
     });
 
     // Deduct credits for image generation (skip if team used own fal key)
-    await context.run('deduct-credits', async () => {
+    await step.do('deduct-credits', async () => {
       await deductWorkflowCredits({
         scopedDb,
         costMicros: extractImageCost(imageResult.metadata),
@@ -152,15 +168,15 @@ export const characterSheetWorkflow = createScopedWorkflow<
       const sequenceId = input.sequenceId;
 
       // Step 3: Upload to R2 storage
-      const storageResult = await context.run('upload-to-storage', async () => {
+      const storageResult = await step.do('upload-to-storage', async () => {
         const imageUrl = imageResult.imageUrls[0];
         if (!imageUrl) {
           throw new Error('No image URL returned from generation');
         }
 
-        logger.info('[CharacterSheetWorkflow]', {
-          data: `Uploading sheet to storage for ${input.characterName}`,
-        });
+        logger.info(
+          `[CharacterSheetWorkflow:cf] Uploading sheet to storage for ${input.characterName}`
+        );
 
         // Fetch and stream directly to R2
         const response = await fetch(imageUrl);
@@ -193,21 +209,25 @@ export const characterSheetWorkflow = createScopedWorkflow<
       // character's primary sheet. On divergent, preserve the artifact as a
       // variant row (the helper emits `stale:detected`) and skip the primary
       // update so the in-flight run does not overwrite a now-stale identity.
-      const snapshot = context.snapshot;
-      const reconcileOutcome = await context.run(
+      const snapshotInputHash = input.snapshotInputHash ?? null;
+      const reconcileOutcome = await step.do(
         'reconcile-database',
         async (): Promise<{ kind: 'convergent' } | { kind: 'divergent' }> => {
-          logger.info('[CharacterSheetWorkflow]', {
-            data: `Updating database for ${input.characterName}`,
-          });
+          logger.info(
+            `[CharacterSheetWorkflow:cf] Updating database for ${input.characterName}`
+          );
+
+          const currentHash = snapshotInputHash
+            ? await computeCharacterSheetHashCurrent(input, scopedDb)
+            : null;
 
           const decision = decideSheetDivergence(
-            snapshot?.snapshotInputHash,
-            snapshot ? await snapshot.computeCurrent() : null
+            snapshotInputHash,
+            currentHash
           );
 
           if (decision.kind === 'divergent') {
-            logger.warn('divergence detected', {
+            logger.warn('[CharacterSheetWorkflow:cf] divergence detected', {
               characterDbId: input.characterDbId,
               snapshotInputHash: decision.snapshotInputHash,
               currentInputHash: decision.currentInputHash,
@@ -220,7 +240,7 @@ export const characterSheetWorkflow = createScopedWorkflow<
               model: generationParams.model,
               url: storageResult.url,
               storagePath: storageResult.path,
-              workflowRunId: context.workflowRunId,
+              workflowRunId,
               snapshotInputHash: decision.snapshotInputHash,
             });
             return { kind: 'divergent' };
@@ -230,7 +250,7 @@ export const characterSheetWorkflow = createScopedWorkflow<
             input.characterDbId,
             storageResult.url,
             storageResult.path,
-            snapshot?.snapshotInputHash ?? null
+            snapshotInputHash
           );
           return { kind: 'convergent' };
         }
@@ -248,7 +268,7 @@ export const characterSheetWorkflow = createScopedWorkflow<
         // null sheetImageUrl; the user can manually retry. Either way,
         // flipping status to `completed` reflects "generation finished,
         // primary unchanged, divergent variant saved alongside".
-        await context.run('settle-divergent-status', async () => {
+        await step.do('settle-divergent-status', async () => {
           await scopedDb.characters.updateSheetStatus(
             characterDbId,
             'completed'
@@ -261,9 +281,9 @@ export const characterSheetWorkflow = createScopedWorkflow<
             }
           );
         });
-        logger.info('[CharacterSheetWorkflow]', {
-          data: `Diverged for ${input.characterName}; saved as variant`,
-        });
+        logger.info(
+          `[CharacterSheetWorkflow:cf] Diverged for ${input.characterName}; saved as variant`
+        );
         return {
           sheetImageUrl,
           sheetImagePath,
@@ -272,7 +292,7 @@ export const characterSheetWorkflow = createScopedWorkflow<
       }
     }
     // Emit realtime event that generation is complete
-    await context.run('emit-complete-event', async () => {
+    await step.do('emit-complete-event', async () => {
       if (input.sequenceId && input.characterDbId) {
         await getGenerationChannel(input.sequenceId).emit(
           'generation.character-sheet:progress',
@@ -292,43 +312,42 @@ export const characterSheetWorkflow = createScopedWorkflow<
     };
 
     return result;
-  },
-  {
-    failureFunction: async ({ context, scopedDb, failResponse }) => {
-      const input = context.requestPayload;
-      const error = sanitizeFailResponse(failResponse);
+  }
 
-      // Mark character sheet as failed
-      if (input.characterDbId) {
-        await scopedDb.characters.updateSheetStatus(
-          input.characterDbId,
-          'failed',
-          error
+  protected override async onFailure({
+    event,
+    error,
+    scopedDb,
+  }: {
+    event: Readonly<WorkflowEvent<CharacterSheetWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): Promise<void> {
+    const input = event.payload;
+
+    // Mark character sheet as failed
+    if (input.characterDbId) {
+      await scopedDb.characters.updateSheetStatus(
+        input.characterDbId,
+        'failed',
+        error
+      );
+
+      // Emit failure event for realtime UI update
+      if (input.sequenceId) {
+        await getGenerationChannel(input.sequenceId).emit(
+          'generation.character-sheet:progress',
+          {
+            characterId: input.characterDbId,
+            status: 'failed',
+            error,
+          }
         );
-
-        // Emit failure event for realtime UI update
-        if (input.sequenceId) {
-          await getGenerationChannel(input.sequenceId).emit(
-            'generation.character-sheet:progress',
-            {
-              characterId: input.characterDbId,
-              status: 'failed',
-              error,
-            }
-          );
-        }
-
-        logger.error('[CharacterSheetWorkflow]', {
-          data: `Sheet generation failed for character ${input.characterName}: ${error}`,
-        });
       }
 
-      return `Character sheet generation failed for ${input.characterName}`;
-    },
-    snapshot: {
-      computeFromDto: (input) => computeCharacterSheetHashFromDto(input),
-      computeCurrent: (input, scopedDb) =>
-        computeCharacterSheetHashCurrent(input, scopedDb),
-    },
+      logger.error(
+        `[CharacterSheetWorkflow:cf] Sheet generation failed for character ${input.characterName}: ${error}`
+      );
+    }
   }
-);
+}

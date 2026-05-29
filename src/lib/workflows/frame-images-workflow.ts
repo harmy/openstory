@@ -1,54 +1,101 @@
 /**
- * Frame Images Workflow
+ * Cloudflare Workflows port of `frameImagesWorkflow`.
  *
- * Orchestrates frame image generation + automatic variant generation.
- * Runs as one strand in parallel with motion-music-prompts-workflow.
- */
+ * Mirrors the QStash version (`src/lib/workflows/frame-images-workflow.ts`)
+ * step for step — same step names, same control flow, same side effects.
+ * Differences (all infrastructure-level, not behavioural):
+ *
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - Reads payload from `event.payload` and the run id from
+ *     `event.instanceId` instead of `context.requestPayload` /
+ *     `context.workflowRunId`.
+ *   - Calls the snapshot DTO computer directly in a `validate-snapshot`
+ *     step instead of going through the `context.snapshot.*` extension.
+ *   - Per-scene × per-model fan-out uses Pattern 3 — `spawnAndAwaitChild`
+ *     against `IMAGE_WORKFLOW`. `Promise.allSettled` so a single failing
+ *     image (or timeout) doesn't kill the rest of the batch.
+ *   - The variant-image (shot-grid) fire-and-forget kick remains routed
+ *     through `triggerWorkflow('/variant-image', …)` for parity with the
+ *     QStash original — the engine registry decides whether that hits CF
+ *     or QStash per-deploy. */
 
 import { resolveImageModels } from '@/lib/ai/resolve-image-models';
 import { aspectRatioToImageSize } from '@/lib/constants/aspect-ratios';
+import type { ScopedDb } from '@/lib/db/scoped';
 import { buildCharacterReferenceImages } from '@/lib/prompts/character-prompt';
 import { buildElementReferenceImages } from '@/lib/prompts/element-prompt';
 import { buildLocationReferenceImages } from '@/lib/prompts/location-prompt';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
+import { spawnAndAwaitChild } from '@/lib/workflow/await-child';
 import { triggerWorkflow } from '@/lib/workflow/client';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
-import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
-import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
+import { NonRetryableError } from 'cloudflare:workflows';
 import type {
   FrameImagesWorkflowInput,
   FrameImagesWorkflowResult,
   ImageWorkflowInput,
   ShotVariantWorkflowInput,
 } from '@/lib/workflow/types';
-import { generateImageWorkflow } from './image-workflow';
-import { getLogger } from '@/lib/observability/logger';
-
-const logger = getLogger(['openstory', 'workflow', 'frame-images']);
-
 import {
   matchCharactersToScene,
   matchElementsToScene,
   matchLocationsToScene,
-} from './scene-matching';
+} from '@/lib/workflows/scene-matching';
 import {
   computeFrameImageSceneHash,
   computeFrameImagesHashFromDto,
   type FrameImageSceneSnapshot,
-} from './sheet-snapshots';
+} from '@/lib/workflows/sheet-snapshots';
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
+import { getLogger } from '@/lib/observability/logger';
 
-export const frameImagesWorkflow = createScopedWorkflow<
-  FrameImagesWorkflowInput,
-  FrameImagesWorkflowResult
->(
-  async (context, scopedDb) => {
-    const input = context.requestPayload;
+const logger = getLogger(['openstory', 'workflow', 'frame-images']);
 
-    await context.run('validate-snapshot', async () => {
-      if (context.snapshot) {
-        await context.snapshot.validate();
+type ImageChildResult = {
+  imageUrl: string;
+  frameId?: string;
+  sequenceId?: string;
+};
+
+export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImagesWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<FrameImagesWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<FrameImagesWorkflowResult> {
+    const input = event.payload;
+    const parentInstanceId = event.instanceId;
+
+    // Snapshot validation. The QStash original calls
+    // `context.snapshot.validate()` inside a `context.run`; the CF base
+    // class has no snapshot extension, so we recompute the DTO hash and
+    // compare directly. Top-level throw → `WorkflowValidationError` (the
+    // base class re-wraps as CF `NonRetryableError`).
+    await step.do('validate-snapshot', async () => {
+      if (!input.sceneSnapshots || input.sceneSnapshots.length === 0) {
+        // Snapshots are optional — when absent there's nothing to validate.
+        return;
+      }
+      const expected = input.snapshotInputHash ?? '';
+      const recomputed = await computeFrameImagesHashFromDto({
+        ...input,
+        sceneSnapshots: input.sceneSnapshots,
+      });
+      if (recomputed !== expected) {
+        // NonRetryableError (not WorkflowValidationError) because the base
+        // class's re-wrap only runs at the runImpl catch boundary; a throw
+        // inside step.do gets retried by CF's step machinery first.
+        throw new NonRetryableError(
+          'snapshotInputHash does not match the inlined DTO; payload was tampered with or serialized inconsistently',
+          'WorkflowValidationError'
+        );
       }
     });
+
     const {
       scenesWithVisualPrompts,
       charactersWithSheets,
@@ -65,14 +112,13 @@ export const frameImagesWorkflow = createScopedWorkflow<
 
     const label = buildWorkflowLabel(sequenceId);
 
-    // Build per-scene character, location, and element maps for reference image lookup.
-    //
-    // Re-fetch elements from the DB here (rather than relying on the snapshot
-    // taken at analyze-script start). Vision analysis for a slow element may
-    // have finished during phases 2–3 — re-fetching picks up the fresh
-    // description so the reference image isn't dropped downstream.
+    // Build per-scene character, location, and element maps for reference
+    // image lookup. Re-fetch elements from the DB here (rather than relying
+    // on the snapshot taken at analyze-script start) — vision analysis for
+    // a slow element may have finished during phases 2–3, so re-fetching
+    // picks up the fresh description.
     const { sceneCharacterMap, sceneLocationMap, sceneElementMap } =
-      await context.run('build-reference-maps', async () => {
+      await step.do('build-reference-maps', async () => {
         const elements = sequenceId
           ? await scopedDb.sequenceElements.list(sequenceId)
           : elementsFromInput;
@@ -111,29 +157,19 @@ export const frameImagesWorkflow = createScopedWorkflow<
 
     const imageSize = aspectRatioToImageSize(aspectRatio);
 
-    // Build a sceneId→snapshot index once so the per-(scene, model) inner loop
-    // doesn't repeat O(snapshots) `find` work for every frame × model combo.
+    // Build a sceneId→snapshot index once so the per-(scene, model) inner
+    // loop doesn't repeat O(snapshots) `find` work for every frame × model.
     const sceneSnapshotsById = new Map<string, FrameImageSceneSnapshot>(
       (input.sceneSnapshots ?? []).map((s) => [s.sceneId, s])
     );
 
     // Pre-compute every (sceneId, model) snapshot hash once and persist via
-    // `context.run`. Two reasons:
-    //   1. The hash awaits would otherwise sit inside the parallel
-    //      `context.invoke` branches below; Upstash Workflow assigns step
-    //      indices in the order each branch first reaches `context.invoke`,
-    //      not in source order, so racing async work in front of it produces
-    //      `Incompatible step name` on retry. Hoisting + persisting keeps
-    //      the parallel branches' first await synchronous (the framework's
-    //      `deferExecution` microtask drain) so registration follows source
-    //      order.
-    //   2. Workflow bodies replay from the top on every step callback. A
-    //      plain `await` here would recompute every hash on every callback;
-    //      wrapping in `context.run` snapshots the result so replays just
-    //      read the persisted Record.
+    // `step.do`. Workflow bodies replay from the top on every step callback,
+    // so wrapping in `step.do` snapshots the result — replays just read the
+    // persisted Record instead of re-hashing on each callback.
     const snapshotHashKey = (sceneId: string, model: string) =>
       `${sceneId}::${model}`;
-    const snapshotHashByKey = await context.run(
+    const snapshotHashByKey = await step.do(
       'compute-snapshot-hashes',
       async () => {
         const out: Record<string, string | undefined> = {};
@@ -149,8 +185,21 @@ export const frameImagesWorkflow = createScopedWorkflow<
       }
     );
 
-    // Generate frame images in parallel (for each scene, for each model)
-    const imageUrls = await Promise.all(
+    // Resolve the child IMAGE_WORKFLOW binding once. Missing binding is a
+    // deployment misconfiguration — fail fast with a non-retryable throw so
+    // the dispatcher routes future runs through QStash instead of churning.
+    const imageBinding = this.env.IMAGE_WORKFLOW;
+    if (!imageBinding) {
+      throw new WorkflowValidationError(
+        '[FrameImagesWorkflow:cf] IMAGE_WORKFLOW binding missing on env — check wrangler.jsonc and run `bun cf:typegen`'
+      );
+    }
+
+    // Fan out one IMAGE_WORKFLOW child per (scene, model). `Promise.allSettled`
+    // so a single image timeout / failure doesn't poison the rest of the
+    // batch — we surface per-scene failures via WorkflowValidationError below
+    // for parity with the QStash version's `result.isFailed` check.
+    const sceneResults = await Promise.allSettled(
       scenesWithVisualPrompts.map(async (scene) => {
         const visualPrompt = scene.prompts?.visual?.fullPrompt;
         if (!visualPrompt) {
@@ -186,38 +235,54 @@ export const frameImagesWorkflow = createScopedWorkflow<
         // right.
         const sceneSnapshot = sceneSnapshotsById.get(scene.sceneId);
 
-        // Generate with each selected model in parallel
-        const modelResults = await Promise.all(
+        // Generate with each selected model in parallel. Each (scene, model)
+        // becomes one Pattern 3 child invocation. `Promise.allSettled` here
+        // too so one model failure doesn't poison the other models for the
+        // same scene.
+        const modelResults = await Promise.allSettled(
           imageModels.map(async (model) => {
             const perFrameSnapshotInputHash =
               snapshotHashByKey[snapshotHashKey(scene.sceneId, model)];
 
-            const result = await context.invoke(
-              `image-${scene.sceneId}-${model}`,
-              {
-                workflow: generateImageWorkflow,
-                label,
-                body: {
-                  userId: input.userId,
-                  teamId: input.teamId,
-                  prompt: visualPrompt,
-                  model,
-                  imageSize,
-                  aspectRatio,
-                  numImages: 1,
-                  frameId: matchedFrame?.frameId,
-                  sequenceId,
-                  referenceImages:
-                    allReferences.length > 0 ? allReferences : undefined,
-                  sceneSnapshot,
-                  snapshotInputHash: perFrameSnapshotInputHash,
-                } satisfies ImageWorkflowInput,
-                retries: 3,
-                retryDelay: 'pow(2, retried) * 1000',
-              }
-            );
+            const childBody: ImageWorkflowInput = {
+              userId: input.userId,
+              teamId: input.teamId,
+              prompt: visualPrompt,
+              model,
+              imageSize,
+              aspectRatio,
+              numImages: 1,
+              frameId: matchedFrame?.frameId,
+              sequenceId,
+              referenceImages:
+                allReferences.length > 0 ? allReferences : undefined,
+              sceneSnapshot,
+              snapshotInputHash: perFrameSnapshotInputHash,
+            };
 
-            if (result.isFailed || result.isCanceled || !result.body.imageUrl) {
+            // Per-spawn unique IDs. Include the model so the per-(scene,
+            // model) fan-out gets distinct CF instance IDs — siblings
+            // would otherwise collide on `image:${sequenceId}:${frameId}`
+            // (CF instance IDs are global per Worker script).
+            const childIdSuffix = matchedFrame?.frameId
+              ? `image:${sequenceId ?? 'no-seq'}:${matchedFrame.frameId}:${model}`
+              : `image:${sequenceId ?? 'no-seq'}:${scene.sceneId}:${model}`;
+
+            const childOutput = await spawnAndAwaitChild<
+              ImageWorkflowInput,
+              ImageChildResult
+            >(step, {
+              binding: imageBinding,
+              parentBindingName: 'FRAME_IMAGES_WORKFLOW',
+              parentInstanceId,
+              childId: childIdSuffix,
+              childPayload: childBody,
+              spawnStepName: `spawn-image-${scene.sceneId}-${model}`,
+              awaitStepName: `await-image-${scene.sceneId}-${model}`,
+              timeout: '30 minutes',
+            });
+
+            if (!childOutput.imageUrl) {
               throw new WorkflowValidationError(
                 `Image generation failed for scene ${scene.sceneId} model ${model}`
               );
@@ -226,8 +291,9 @@ export const frameImagesWorkflow = createScopedWorkflow<
             // Trigger variant (shot grid) workflow as a separate top-level
             // run. Fire-and-forget — frame-images shouldn't block on it,
             // since the variant just enriches the frame after the fact and
-            // its progress is tracked independently via frame.variantImageStatus.
-            await context.run(
+            // its progress is tracked independently via
+            // `frame.variantImageStatus`.
+            await step.do(
               `trigger-variant-${scene.sceneId}-${model}`,
               async () => {
                 await triggerWorkflow<ShotVariantWorkflowInput>(
@@ -237,7 +303,7 @@ export const frameImagesWorkflow = createScopedWorkflow<
                     teamId: input.teamId,
                     sequenceId,
                     frameId: matchedFrame?.frameId,
-                    thumbnailUrl: result.body.imageUrl,
+                    thumbnailUrl: childOutput.imageUrl,
                     scenePrompt: scene.prompts?.visual?.fullPrompt,
                     characterReferences:
                       characterRefs.length > 0 ? characterRefs : undefined,
@@ -257,56 +323,76 @@ export const frameImagesWorkflow = createScopedWorkflow<
               }
             );
 
-            return result.body.imageUrl;
+            return childOutput.imageUrl;
           })
         );
 
-        // Return the primary (first) model's image URL
-        const primaryImageUrl = modelResults[0];
-        if (!primaryImageUrl) {
+        // Surface per-model failures. The primary (index 0) result is what
+        // gets returned as this scene's `imageUrl`; if it failed we throw
+        // for parity with the QStash original's `result.isFailed` check.
+        // Sibling-model failures are logged but don't block — they're
+        // alternates that enrich `frame_variants`, not the primary.
+        const primary = modelResults[0];
+        if (!primary) {
           throw new WorkflowValidationError(
-            `No image URLs returned for scene ${scene.sceneId}`
+            `Primary image generation failed for scene ${scene.sceneId}: no models configured`
           );
         }
-        return primaryImageUrl;
+        if (primary.status === 'rejected') {
+          throw new WorkflowValidationError(
+            `Primary image generation failed for scene ${scene.sceneId}: ${String(primary.reason)}`
+          );
+        }
+        for (let i = 1; i < modelResults.length; i++) {
+          const r = modelResults[i];
+          if (r?.status === 'rejected') {
+            logger.warn(
+              `[FrameImagesWorkflow:cf] Alternate model ${imageModels[i]} failed for scene ${scene.sceneId}:`,
+              {
+                err: r.reason,
+              }
+            );
+          }
+        }
+        return primary.value;
       })
     );
 
+    // Collect successes; rejections at the scene level get reported but
+    // don't kill the workflow — same shape as the per-model handling above
+    // so a single scene with no visual prompt (or a deleted frame mid-flight)
+    // can't poison the rest of the batch.
+    const imageUrls: string[] = [];
+    for (let i = 0; i < sceneResults.length; i++) {
+      const r = sceneResults[i];
+      if (!r) continue;
+      if (r.status === 'fulfilled') {
+        imageUrls.push(r.value);
+      } else {
+        const scene = scenesWithVisualPrompts[i];
+        logger.error(
+          `[FrameImagesWorkflow:cf] Scene ${scene?.sceneId ?? '(unknown)'} failed:`,
+          {
+            err: r.reason,
+          }
+        );
+      }
+    }
+
     return { imageUrls };
-  },
-  {
-    failureFunction: async ({ context, failResponse }) => {
-      const input = context.requestPayload;
-      const error = sanitizeFailResponse(failResponse);
-      logger.error('[FrameImagesWorkflow]', {
-        data: `Frame image generation failed for sequence ${input.sequenceId}: ${error}`,
-      });
-      return `Frame image generation failed for sequence ${input.sequenceId}: ${error}`;
-    },
-    snapshot: {
-      // The payload binds per-scene character/location/element sheet hashes
-      // alongside each reference URL. Validation rejects payloads where the
-      // inlined hashes were swapped without recomputing snapshotInputHash.
-      // Per-frame divergence routing into `frame_variants` is performed by
-      // the downstream image-workflow (which writes the actual artifact);
-      // this snapshot config only enforces payload integrity at the batch
-      // boundary. See workflow-snapshots-and-content-hash-staleness.md.
-      computeFromDto: (input) => {
-        const sceneSnapshots: FrameImageSceneSnapshot[] =
-          input.sceneSnapshots ?? [];
-        return computeFrameImagesHashFromDto({ ...input, sceneSnapshots });
-      },
-      // NOTE: `computeCurrent` is intentionally an alias of `computeFromDto`
-      // here — both hash the same inlined `sceneSnapshots`. This means the
-      // batch-level `validate()` only catches payload tampering, not genuine
-      // upstream drift. Real drift detection happens per-frame downstream in
-      // `generateImageWorkflow`, which re-resolves sheet hashes at write
-      // time and routes divergent frames into `frame_variants`.
-      computeCurrent: (input) => {
-        const sceneSnapshots: FrameImageSceneSnapshot[] =
-          input.sceneSnapshots ?? [];
-        return computeFrameImagesHashFromDto({ ...input, sceneSnapshots });
-      },
-    },
   }
-);
+
+  protected override onFailure({
+    event,
+    error,
+  }: {
+    event: Readonly<WorkflowEvent<FrameImagesWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): void {
+    const input = event.payload;
+    logger.error(
+      `[FrameImagesWorkflow:cf] Frame image generation failed for sequence ${input.sequenceId}: ${error}`
+    );
+  }
+}

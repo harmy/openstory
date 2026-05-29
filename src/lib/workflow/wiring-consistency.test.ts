@@ -1,14 +1,14 @@
 /**
  * Wiring consistency checks for Cloudflare Workflows.
  *
- * Every CF-backed workflow needs entries in four places:
+ * Every workflow needs entries in four places:
  *
  *   1. `wrangler.jsonc` workflows[]   — declares the runtime binding so
  *                                       miniflare/CF actually creates it
  *   2. `src/server.ts` re-export      — keeps the class in the Worker bundle
- *   3. `src/lib/workflow/cf/types.ts` — adds the binding to `CloudflareEnv`
+ *   3. `src/lib/workflow/types.ts`    — adds the binding to `CloudflareEnv`
  *                                       so TypeScript can see it
- *   4. `src/lib/workflow/cf/trigger-bindings.ts` `TRIGGER_TO_BINDING`
+ *   4. `src/lib/workflow/trigger-bindings.ts` `TRIGGER_TO_BINDING`
  *                                     — maps the trigger path that
  *                                       `triggerWorkflow('/foo', ...)` uses
  *                                       to the env binding name
@@ -17,7 +17,7 @@
  *   - wrangler.jsonc missing → "env binding is missing or not a Workflow"
  *   - server.ts missing → wrangler can't find the class on deploy
  *   - types.ts missing → typecheck blocks `this.env.X`
- *   - trigger map missing → "no binding map entry found; falling back to qstash"
+ *   - trigger map missing → "no workflow binding mapped for trigger path"
  *
  * These tests fail loudly the next time someone adds a workflow and forgets
  * one of the four steps.
@@ -28,12 +28,12 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
-import { buildInstanceId } from '@/lib/workflow/cf/instance-id';
+import { buildInstanceId } from '@/lib/workflow/instance-id';
 
 const WRANGLER_PATH = 'wrangler.jsonc';
 const SERVER_PATH = 'src/server.ts';
-const TYPES_PATH = 'src/lib/workflow/cf/types.ts';
-const TRIGGER_BINDINGS_PATH = 'src/lib/workflow/cf/trigger-bindings.ts';
+const TYPES_PATH = 'src/lib/workflow/types.ts';
+const TRIGGER_BINDINGS_PATH = 'src/lib/workflow/trigger-bindings.ts';
 
 type WranglerWorkflowEntry = {
   name: string;
@@ -91,11 +91,11 @@ function extractTriggerMapValues(): Set<string> {
 
 function extractServerExports(): Set<string> {
   const text = readFileSync(SERVER_PATH, 'utf8');
-  // `export { ClassName } from '@/lib/workflows/cf/...';`
+  // `export { ClassName } from '@/lib/workflows/...';`
   return new Set(
     captureAll(
       text,
-      /export\s*\{\s*([A-Za-z0-9_]+)\s*\}\s*from\s*['"]@\/lib\/workflows\/cf\//g
+      /export\s*\{\s*([A-Za-z0-9_]+)\s*\}\s*from\s*['"]@\/lib\/workflows\//g
     )
   );
 }

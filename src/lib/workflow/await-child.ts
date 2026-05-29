@@ -28,7 +28,7 @@
  * See docs/investigations/cloudflare-workflows.md §4 Gap A.
  */
 
-import type { CloudflareEnv } from '@/lib/workflow/cf/types';
+import type { CloudflareEnv } from '@/lib/workflow/types';
 import type { WorkflowSleepDuration, WorkflowStep } from 'cloudflare:workers';
 import { getLogger } from '@/lib/observability/logger';
 

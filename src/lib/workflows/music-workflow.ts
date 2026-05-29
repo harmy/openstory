@@ -1,21 +1,41 @@
+/**
+ * Cloudflare Workflows port of `generateMusicWorkflow`.
+ *
+ * Mirrors the QStash version (`src/lib/workflows/music-workflow.ts`) step
+ * for step — same step names, same control flow, same side effects. The
+ * only differences are:
+ *
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - Reads payload from `event.payload` instead of `context.requestPayload`. */
+
 import { computeSequenceMusicInputHash } from '@/lib/ai/input-hash';
 import { DEFAULT_MUSIC_MODEL } from '@/lib/ai/models';
 import { uploadAudioToStorage } from '@/lib/audio/audio-storage';
 import { generateMusic } from '@/lib/audio/music-generation';
 import { ZERO_MICROS, microsToUsd } from '@/lib/billing/money';
+import type { ScopedDb } from '@/lib/db/scoped';
 import { getGenerationChannel } from '@/lib/realtime';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
-import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
-import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
-import type { MusicWorkflowInput } from '@/lib/workflow/types';
-
+import type {
+  MusicWorkflowInput,
+  MusicWorkflowResult,
+} from '@/lib/workflow/types';
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'music']);
 
-export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
-  async (context, scopedDb) => {
-    const input = context.requestPayload;
+export class MusicWorkflow extends OpenStoryWorkflowEntrypoint<MusicWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<MusicWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<MusicWorkflowResult> {
+    const input = event.payload;
     const { prompt, tags, duration } = input;
 
     if (!prompt || !tags || !duration) {
@@ -28,7 +48,7 @@ export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
     const model = input.model || DEFAULT_MUSIC_MODEL;
 
     if (sequenceId) {
-      await context.run('set-generating-status', async () => {
+      await step.do('set-generating-status', async () => {
         await scopedDb.sequence(sequenceId).updateMusicFields({
           musicStatus: 'generating',
           musicModel: model,
@@ -44,7 +64,7 @@ export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
       });
     }
 
-    const audioResult = await context.run('generate-music', async () => {
+    const audioResult = await step.do('generate-music', async () => {
       const result = await generateMusic({
         prompt,
         tags,
@@ -73,12 +93,12 @@ export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
     // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
     const musicCostMicros = audioResult.metadata?.cost ?? ZERO_MICROS;
     if (musicCostMicros > 0 && !audioResult.metadata.usedOwnKey) {
-      await context.run('deduct-credits', async () => {
+      await step.do('deduct-credits', async () => {
         const canAfford =
           await scopedDb.billing.hasEnoughCredits(musicCostMicros);
         if (!canAfford) {
           logger.warn(
-            `Insufficient credits for team ${teamId} (cost: $${microsToUsd(musicCostMicros).toFixed(4)}), skipping deduction`
+            `[MusicWorkflow:cf] Insufficient credits for team ${teamId} (cost: $${microsToUsd(musicCostMicros).toFixed(4)}), skipping deduction`
           );
           return;
         }
@@ -99,7 +119,7 @@ export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
     }
     let audioUrl = audioResult.audioUrl;
     if (sequenceId) {
-      const storageResult = await context.run('upload-to-storage', async () => {
+      const storageResult = await step.do('upload-to-storage', async () => {
         const result = await uploadAudioToStorage({
           audioUrl,
           teamId,
@@ -124,7 +144,7 @@ export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
         audioModel: model,
       });
 
-      const writeResult = await context.run('write-music-variant', async () => {
+      const writeResult = await step.do('write-music-variant', async () => {
         return scopedDb.sequenceVariants.writeMusicVariant({
           sequenceId,
           url: audioUrl,
@@ -147,7 +167,7 @@ export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
         // a spinner. The alternate is preserved in `sequence_music_variants`
         // for future surfacing.
         const divergedVariantId = writeResult.variant.id;
-        await context.run('update-sequence-music-divergent', async () => {
+        await step.do('update-sequence-music-divergent', async () => {
           const seq = scopedDb.sequence(sequenceId);
           const status = await seq.getMusicStatus();
           await seq.updateMusicFields({
@@ -169,10 +189,10 @@ export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
           });
         });
         logger.info(
-          `Diverged music result for sequence ${sequenceId}; preserved as alternate (variant=${divergedVariantId})`
+          `[MusicWorkflow:cf] Diverged music result for sequence ${sequenceId}; preserved as alternate (variant=${divergedVariantId})`
         );
       } else {
-        await context.run('update-sequence-music', async () => {
+        await step.do('update-sequence-music', async () => {
           await scopedDb.sequence(sequenceId).updateMusicFields({
             musicUrl: audioUrl,
             musicPath: storageResult.path,
@@ -195,35 +215,42 @@ export const generateMusicWorkflow = createScopedWorkflow<MusicWorkflowInput>(
     }
 
     return { audioUrl: audioUrl, duration: actualDuration };
-  },
-  {
-    failureFunction: async ({ context, scopedDb, failResponse }) => {
-      const input = context.requestPayload;
-      const error = sanitizeFailResponse(failResponse);
-      if (input.sequenceId) {
-        const failSeq = scopedDb.sequence(input.sequenceId);
-
-        await failSeq.updateMusicFields({
-          musicStatus: 'failed',
-          musicError: error,
-        });
-
-        try {
-          await getGenerationChannel(input.sequenceId).emit(
-            'generation.audio:progress',
-            { status: 'failed' }
-          );
-        } catch (emitError) {
-          logger.error(
-            `Failed to emit failure event for sequence ${input.sequenceId}:`,
-            { err: emitError }
-          );
-        }
-      }
-      logger.error('[MusicWorkflow]', {
-        data: `Music generation failed for sequence ${input.sequenceId}: ${error}`,
-      });
-      return `Music generation failed for sequence ${input.sequenceId}`;
-    },
   }
-);
+
+  protected override async onFailure({
+    event,
+    error,
+    scopedDb,
+  }: {
+    event: Readonly<WorkflowEvent<MusicWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): Promise<void> {
+    const input = event.payload;
+    if (input.sequenceId) {
+      const failSeq = scopedDb.sequence(input.sequenceId);
+
+      await failSeq.updateMusicFields({
+        musicStatus: 'failed',
+        musicError: error,
+      });
+
+      try {
+        await getGenerationChannel(input.sequenceId).emit(
+          'generation.audio:progress',
+          { status: 'failed' }
+        );
+      } catch (emitError) {
+        logger.error(
+          `[MusicWorkflow:cf] Failed to emit failure event for sequence ${input.sequenceId}:`,
+          {
+            err: emitError,
+          }
+        );
+      }
+    }
+    logger.error(
+      `[MusicWorkflow:cf] Music generation failed for sequence ${input.sequenceId}: ${error}`
+    );
+  }
+}

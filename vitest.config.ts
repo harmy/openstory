@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import viteReact from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
@@ -10,6 +11,17 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: {
     tsconfigPaths: true,
+    alias: {
+      // `cloudflare:*` are Workerd-only virtual modules. Stub them so unit
+      // tests that transitively import workflow entrypoint classes resolve in
+      // Node. See src/test/cloudflare-*.stub.ts.
+      'cloudflare:workers': fileURLToPath(
+        new URL('./src/test/cloudflare-workers.stub.ts', import.meta.url)
+      ),
+      'cloudflare:workflows': fileURLToPath(
+        new URL('./src/test/cloudflare-workflows.stub.ts', import.meta.url)
+      ),
+    },
   },
   plugins: [viteReact()],
   test: {

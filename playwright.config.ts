@@ -86,14 +86,7 @@ export default defineConfig({
       // which reads the source wrangler.jsonc with its nested env blocks).
       'CLOUDFLARE_ENV=test',
       ...(fullPipeline
-        ? [
-            'E2E_FULL_PIPELINE=true',
-            'FAL_PROXY_URL=http://localhost:4010/fal',
-            // Route every workflow through Cloudflare Workflows. The workerd
-            // runtime supplies the bindings; resolveEngineForTrigger falls
-            // back to QStash if a binding is missing, so this stays safe.
-            'CF_WORKFLOWS_ENABLED=all',
-          ]
+        ? ['E2E_FULL_PIPELINE=true', 'FAL_PROXY_URL=http://localhost:4010/fal']
         : []),
       // Propagate the record flag so the dev server's adapter factory can
       // disable the OpenRouter SDK's retry loop — see create-adapter.ts. We

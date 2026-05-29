@@ -852,3 +852,44 @@ export interface ReplaceElementWorkflowResult {
   successCount: number;
   failedCount: number;
 }
+
+/**
+ * Worker env slice for Cloudflare Workflows.
+ *
+ * The runtime types (`WorkflowEntrypoint`, `WorkflowStep`, `WorkflowEvent`,
+ * `Workflow`, `WorkflowInstance`) are declared globally by `cloudflare-env.d.ts`
+ * via the wrangler runtime-types generator. Each binding below maps to an entry
+ * in `wrangler.jsonc` under `workflows[]` and is optional because it only
+ * exists in CF-deployed builds — local Node/Vercel runs don't bind workflows.
+ */
+export type CloudflareEnv = Cloudflare.Env & {
+  IMAGE_WORKFLOW?: Workflow<unknown>;
+  ELEMENT_VISION_WORKFLOW?: Workflow<unknown>;
+  MUSIC_WORKFLOW?: Workflow<unknown>;
+  MOTION_WORKFLOW?: Workflow<unknown>;
+  MOTION_BATCH_WORKFLOW?: Workflow<unknown>;
+  CHARACTER_SHEET_WORKFLOW?: Workflow<unknown>;
+  LOCATION_SHEET_WORKFLOW?: Workflow<unknown>;
+  LIBRARY_TALENT_SHEET_WORKFLOW?: Workflow<unknown>;
+  LIBRARY_LOCATION_SHEET_WORKFLOW?: Workflow<unknown>;
+  LOCATION_BIBLE_WORKFLOW?: Workflow<unknown>;
+  SHOT_VARIANT_WORKFLOW?: Workflow<unknown>;
+  UPSCALE_SHOT_VARIANT_WORKFLOW?: Workflow<unknown>;
+  VISUAL_PROMPT_SCENE_WORKFLOW?: Workflow<unknown>;
+  MOTION_PROMPT_SCENE_WORKFLOW?: Workflow<unknown>;
+  MOTION_PROMPT_WORKFLOW?: Workflow<unknown>;
+  MUSIC_PROMPT_WORKFLOW?: Workflow<unknown>;
+  MOTION_MUSIC_PROMPTS_WORKFLOW?: Workflow<unknown>;
+  RECAST_CHARACTER_WORKFLOW?: Workflow<unknown>;
+  RECAST_LOCATION_WORKFLOW?: Workflow<unknown>;
+  LOCATION_MATCHING_WORKFLOW?: Workflow<unknown>;
+  TALENT_MATCHING_WORKFLOW?: Workflow<unknown>;
+  CHARACTER_BIBLE_WORKFLOW?: Workflow<unknown>;
+  VISUAL_PROMPT_WORKFLOW?: Workflow<unknown>;
+  FRAME_IMAGES_WORKFLOW?: Workflow<unknown>;
+  REGENERATE_FRAMES_WORKFLOW?: Workflow<unknown>;
+  REPLACE_ELEMENT_WORKFLOW?: Workflow<unknown>;
+  STORYBOARD_WORKFLOW?: Workflow<unknown>;
+  ANALYZE_SCRIPT_WORKFLOW?: Workflow<unknown>;
+  SCENE_SPLIT_WORKFLOW?: Workflow<unknown>;
+};

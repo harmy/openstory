@@ -1,23 +1,60 @@
 /**
- * Visual Prompt Generation Workflow
+ * Cloudflare Workflows port of `visualPromptWorkflow`.
  *
- * Generates visual prompts for scenes based on character bible and style config.
- * Uses three-step durable pattern: prepare → context.call → log
- */
+ * Mirrors the QStash version (`src/lib/workflows/visual-prompt-workflow.ts`)
+ * step for step — same step names, same control flow, same side effects. The
+ * only differences are:
+ *
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - The QStash original fanned out N scenes via `context.invoke`; this port
+ *     fans out to the `VisualPromptSceneWorkflow` child via Pattern 3
+ *     (`spawnAndAwaitChild`) so the parent stays thin and each scene's spawn /
+ *     await pair gets its own retry budget. See await-child.ts.
+ *   - Reads payload from `event.payload` instead of `context.requestPayload`. */
 
-import type { Scene } from '@/lib/ai/scene-analysis.schema';
-import { WorkflowValidationError } from '@/lib/workflow/errors';
-import { buildWorkflowLabel } from '@/lib/workflow/labels';
-import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
-import type { VisualPromptWorkflowInput } from '@/lib/workflow/types';
-import { visualPromptSceneWorkflow } from './visual-prompt-scene-workflow';
-
-export const visualPromptWorkflow = createScopedWorkflow<
+import type {
+  Scene,
+  VisualPromptWithContinuity,
+} from '@/lib/ai/scene-analysis.schema';
+import type { ScopedDb } from '@/lib/db/scoped';
+import { spawnAndAwaitChild } from '@/lib/workflow/await-child';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
+import type {
+  VisualPromptSceneWorkflowInput,
   VisualPromptWorkflowInput,
-  Scene[]
->(
-  async (context) => {
-    const input = context.requestPayload;
+} from '@/lib/workflow/types';
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
+import { NonRetryableError } from 'cloudflare:workflows';
+import { getLogger } from '@/lib/observability/logger';
+
+const logger = getLogger(['openstory', 'workflow', 'visual-prompt']);
+
+// NOTE: `VISUAL_PROMPT_WORKFLOW` is not yet declared on `CloudflareEnv` —
+// the parent binding gets wired into `src/lib/workflow/types.ts` and
+// `wrangler.jsonc` as part of the follow-on infra PR. Until then, the
+// `parentBindingName` below is a string cast; the runtime lookup in
+// `notifyParent` / `notifyParentOfFailure` would only fire if this workflow
+// itself were spawned as a child (it's a top-level orchestrator today, so
+// `_parent` is always undefined and the cast is dormant).
+// TODO(#728-wire-up): drop the cast once types.ts knows about
+// VISUAL_PROMPT_WORKFLOW.
+// oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- binding name not yet declared on CloudflareEnv; see TODO above
+const PARENT_BINDING_NAME = 'VISUAL_PROMPT_WORKFLOW' as unknown as Parameters<
+  typeof spawnAndAwaitChild
+>[1]['parentBindingName'];
+
+type VisualPromptSceneResult = { sceneId: string } & VisualPromptWithContinuity;
+
+export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualPromptWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<VisualPromptWorkflowInput>>,
+    step: WorkflowStep,
+    _scopedDb: ScopedDb
+  ): Promise<Scene[]> {
+    const input = event.payload;
     const {
       scenes,
       aspectRatio,
@@ -27,95 +64,152 @@ export const visualPromptWorkflow = createScopedWorkflow<
       styleConfig,
       analysisModelId,
       frameMapping,
+      sequenceId,
     } = input;
 
-    const label = buildWorkflowLabel(input.sequenceId);
+    if (scenes.length === 0) {
+      return [];
+    }
+
+    // Resolve the child binding once. Cast to the typed child binding so
+    // `spawnAndAwaitChild`'s generic param infers correctly. The base-class
+    // payload validation guarantees the binding is present at runtime when
+    // the workflow is canaried.
+    const childBinding = this.env.VISUAL_PROMPT_SCENE_WORKFLOW;
+    if (!childBinding) {
+      throw new NonRetryableError(
+        '[VisualPromptWorkflow:cf] VISUAL_PROMPT_SCENE_WORKFLOW binding missing on env; ' +
+          'check wrangler.jsonc and ensure bun cf:typegen has been run'
+      );
+    }
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- the registered binding's runtime payload shape is enforced by the child's typed entrypoint
+    const visualPromptSceneBinding =
+      childBinding as Workflow<VisualPromptSceneWorkflowInput>;
 
     // ============================================================
-    // PHASE 3: Visual Prompt Generation (using durableLLMCall helper)
+    // PHASE 3: Visual Prompt Generation — fan out one
+    // VisualPromptSceneWorkflow child per scene. Spawns happen in parallel
+    // via Promise.all; the awaits are wrapped in Promise.allSettled so a
+    // single timed-out child does not tank the entire parent run (matches
+    // the per-scene retry semantics the QStash version got from
+    // `context.invoke` + `retries: 3`).
     // ============================================================
-    const visualPromptResults = await Promise.all(
-      scenes.map(async (scene, sceneIndex) => {
-        const sceneBefore = sceneIndex > 0 ? scenes[sceneIndex - 1] : undefined;
-        const sceneAfter =
-          sceneIndex < scenes.length - 1 ? scenes[sceneIndex + 1] : undefined;
+    const spawnPromises = scenes.map(async (scene, sceneIndex) => {
+      const sceneBefore = sceneIndex > 0 ? scenes[sceneIndex - 1] : undefined;
+      const sceneAfter =
+        sceneIndex < scenes.length - 1 ? scenes[sceneIndex + 1] : undefined;
 
-        return await context.invoke('visual-prompt-scene', {
-          workflow: visualPromptSceneWorkflow,
-          label,
-          body: {
-            scene,
-            sceneBefore,
-            sceneAfter,
-            aspectRatio,
-            characterBible,
-            locationBible,
-            elementBible,
-            styleConfig,
-            analysisModelId,
-            teamId: input.teamId,
-            userId: input.userId,
-            sequenceId: input.sequenceId,
-            // Frame id of the scene to save the visual prompt to
-            frameId: frameMapping?.find((f) => f.sceneId === scene.sceneId)
-              ?.frameId,
-          },
-          retries: 3,
-          retryDelay: '10000 * pow(2, retried)',
-        });
-      })
-    );
+      const childPayload: VisualPromptSceneWorkflowInput = {
+        scene,
+        sceneBefore,
+        sceneAfter,
+        aspectRatio,
+        characterBible,
+        locationBible,
+        elementBible,
+        styleConfig,
+        analysisModelId,
+        teamId: input.teamId,
+        userId: input.userId,
+        sequenceId: input.sequenceId,
+        // Frame id of the scene to save the visual prompt to
+        frameId: frameMapping?.find((f) => f.sceneId === scene.sceneId)
+          ?.frameId,
+      };
 
-    // Not sure this actually needs to be a workflow step, but it's here for now
-    // Merge in the response (visual prompts AND continuity)
-    const { scenes: scenesWithVisualPrompts } = await context.run(
+      const childResult = await spawnAndAwaitChild<
+        VisualPromptSceneWorkflowInput,
+        VisualPromptSceneResult
+      >(step, {
+        binding: visualPromptSceneBinding,
+        parentBindingName: PARENT_BINDING_NAME,
+        parentInstanceId: event.instanceId,
+        childId: `visual-prompt-scene:${sequenceId ?? 'no-seq'}:${scene.sceneId}`,
+        childPayload,
+        spawnStepName: `spawn-vp-scene-${sceneIndex}`,
+        awaitStepName: `await-vp-scene-${sceneIndex}`,
+        timeout: '30 minutes',
+      });
+
+      return { scene, childResult };
+    });
+
+    const settled = await Promise.allSettled(spawnPromises);
+
+    // Not sure this actually needs to be a workflow step, but mirroring the
+    // QStash original's `merge-visual-prompts` step name keeps trace parity.
+    const scenesWithVisualPrompts = await step.do(
       'merge-visual-prompts',
-      async () => {
-        const failedInvokes = visualPromptResults
-          .map((result, index) => ({ result, sceneId: scenes[index]?.sceneId }))
-          .filter(
-            ({ result }) => result.isFailed || result.isCanceled || !result.body
-          );
-        if (failedInvokes.length > 0) {
-          throw new WorkflowValidationError(
-            `visual-prompt-scene invoke(s) returned no body for scene(s) [${failedInvokes
-              .map(
-                ({ result, sceneId }) =>
-                  `${sceneId}${result.isFailed ? ' (failed)' : ''}${result.isCanceled ? ' (canceled)' : ''}`
-              )
-              .join(', ')}]. Check sub-workflow logs for the upstream failure.`
+      async (): Promise<Scene[]> => {
+        const successResults: Array<{
+          scene: Scene;
+          childResult: VisualPromptSceneResult;
+        }> = [];
+        const failedSceneIds: string[] = [];
+
+        for (const [index, outcome] of settled.entries()) {
+          const scene = scenes[index];
+          if (outcome.status === 'rejected') {
+            logger.error(
+              `[VisualPromptWorkflow:cf] Child visual-prompt-scene failed for scene ${scene?.sceneId ?? `index ${index}`}:`,
+              {
+                err: outcome.reason,
+              }
+            );
+            if (scene) failedSceneIds.push(scene.sceneId);
+            continue;
+          }
+          successResults.push(outcome.value);
+        }
+
+        if (failedSceneIds.length > 0) {
+          // NonRetryableError (not WorkflowValidationError) because the base
+          // class's re-wrap only runs at the runImpl catch boundary; a throw
+          // inside step.do gets retried by CF's step machinery first.
+          throw new NonRetryableError(
+            `visual-prompt-scene child(ren) returned no body for scene(s) [${failedSceneIds.join(', ')}]. ` +
+              `Check sub-workflow logs for the upstream failure.`,
+            'WorkflowValidationError'
           );
         }
 
-        return {
-          scenes: scenes.map((scene) => {
-            const enrichment = visualPromptResults.find(
-              (s) => s.body.sceneId === scene.sceneId
+        return scenes.map((scene) => {
+          const enrichment = successResults.find(
+            (s) => s.childResult.sceneId === scene.sceneId
+          );
+          if (!enrichment) {
+            throw new NonRetryableError(
+              `Scene ID mismatch in visual prompts: expected "${scene.sceneId}" but AI returned [${successResults
+                .map((s) => s.childResult.sceneId)
+                .join(', ')}]. ` +
+                `Input had [${scenes.map((s) => s.sceneId).join(', ')}].`,
+              'WorkflowValidationError'
             );
-            if (!enrichment) {
-              throw new WorkflowValidationError(
-                `Scene ID mismatch in visual prompts: expected "${scene.sceneId}" but AI returned [${visualPromptResults.map((s) => s.body.sceneId).join(', ')}]. ` +
-                  `Input had [${scenes.map((s) => s.sceneId).join(', ')}].`
-              );
-            }
-            return {
-              ...scene,
-              prompts: {
-                ...scene.prompts,
-                visual: enrichment.body.visual,
-              },
-              continuity: enrichment.body.continuity,
-            };
-          }),
-        };
+          }
+          return {
+            ...scene,
+            prompts: {
+              ...scene.prompts,
+              visual: enrichment.childResult.visual,
+            },
+            continuity: enrichment.childResult.continuity,
+          };
+        });
       }
     );
 
     return scenesWithVisualPrompts;
-  },
-  {
-    failureFunction: async () => {
-      return `Visual prompt generation failed`;
-    },
   }
-);
+
+  protected override onFailure({
+    error,
+  }: {
+    event: Readonly<WorkflowEvent<VisualPromptWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): void {
+    logger.error(
+      `[VisualPromptWorkflow:cf] Visual prompt generation failed: ${error}`
+    );
+  }
+}

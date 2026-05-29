@@ -1,210 +1,264 @@
 /**
- * Recast Character Workflow
+ * Cloudflare Workflows port of `recastCharacterWorkflow`.
  *
- * Orchestrates the full recast flow:
- * 1. Generate new character sheet with talent appearance
- * 2. Regenerate all frames containing the character
- */
+ * Mirrors the QStash version (`src/lib/workflows/recast-character-workflow.ts`)
+ * step for step — same step names, same control flow, same side effects.
+ * The only differences are:
+ *
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - Reads the workflow run id from `event.instanceId` instead of
+ *     `context.workflowRunId` (not needed for this workflow, but listed
+ *     here for parity with the other CF ports).
+ *   - Calls the snapshot DTO computers directly instead of going through
+ *     the `context.snapshot.*` extension.
+ *   - The chained `character-sheet` and `regenerate-frames` child invocations
+ *     are stubbed out pending Pattern 3 (fan-out helpers) — exercised in a
+ *     later batch after all leaves are ported. The `build-regenerate-snapshot`
+ *     step lives in `regenerateFramesIfNeeded` for diff parity with the
+ *     QStash original; it becomes reachable once the sheet stub is replaced
+ *     with a real child spawn. */
 
 import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
+import type { ScopedDb } from '@/lib/db/scoped';
 import { getGenerationChannel } from '@/lib/realtime';
-import { buildWorkflowLabel } from '@/lib/workflow/labels';
-import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
-import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
-import type { RecastCharacterWorkflowInput } from '@/lib/workflow/types';
-import { characterSheetWorkflow } from './character-sheet-workflow';
+import {
+  spawnAndAwaitChild,
+  type ParentNotifyHint,
+} from '@/lib/workflow/await-child';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
+import type { CloudflareEnv } from '@/lib/workflow/types';
+import type {
+  CharacterSheetWorkflowInput,
+  CharacterSheetWorkflowResult,
+  RecastCharacterWorkflowInput,
+  RegenerateFramesWorkflowInput,
+} from '@/lib/workflow/types';
 import {
   buildRegenerateFrameSnapshot,
   computeRegenerateFramesBatchHash,
-} from './regenerate-frames-snapshot';
-import { regenerateFramesWorkflow } from './regenerate-frames-workflow';
+} from '@/lib/workflows/regenerate-frames-snapshot';
 import {
   computeCharacterSheetHashFromDto,
   resolveTalentSheetHash,
-} from './sheet-snapshots';
-import type { CharacterSheetWorkflowInput } from '@/lib/workflow/types';
-
+} from '@/lib/workflows/sheet-snapshots';
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
+import { NonRetryableError } from 'cloudflare:workflows';
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'recast-character']);
 
-export const recastCharacterWorkflow =
-  createScopedWorkflow<RecastCharacterWorkflowInput>(
-    async (context, scopedDb) => {
-      const input = context.requestPayload;
-      const label = buildWorkflowLabel(input.sequenceId);
+type RecastCharacterWorkflowResult = {
+  sheetImageUrl: string;
+  framesRegenerated: number;
+  framesFailed: number;
+};
 
-      // Step 1: Generate character sheet showing talent in costume.
-      // Resolve the upstream talent-sheet hash and inline it so the child
-      // workflow can detect divergence if the talent sheet is regenerated
-      // mid-flight.
-      const sheetBody = await context.run(
-        'build-character-sheet-snapshot',
-        async (): Promise<CharacterSheetWorkflowInput> => {
-          logger.info('[RecastCharacterWorkflow]', {
-            data: `Starting recast for ${input.characterName} with ${input.affectedFrameIds.length} affected frames`,
-          });
-          const talentSheetInputHash = await resolveTalentSheetHash(
-            scopedDb,
-            input.characterDbId
-          );
-          const partial: CharacterSheetWorkflowInput = {
-            characterDbId: input.characterDbId,
-            characterName: input.characterName,
-            characterMetadata: input.characterMetadata,
-            sequenceId: input.sequenceId,
-            teamId: input.teamId,
-            userId: input.userId,
-            imageModel: input.imageModel,
-            referenceImageUrl: input.referenceImageUrl,
-            talentMetadata: input.talentMetadata,
-            talentDescription: input.talentDescription,
-            styleConfig: input.styleConfig,
-            talentSheetInputHash,
-          };
-          partial.snapshotInputHash =
-            await computeCharacterSheetHashFromDto(partial);
-          return partial;
-        }
-      );
+/**
+ * Build the regenerate-frames snapshot and (eventually) invoke the
+ * `regenerate-frames` child. Today this throws at the invoke site —
+ * Pattern 3 will wire up the actual `context.invoke` equivalent.
+ *
+ * Lives in its own helper to mirror the QStash original's flow: snapshot
+ * building runs as its own step before the child kicks off.
+ */
+async function regenerateFramesIfNeeded(
+  step: WorkflowStep,
+  env: CloudflareEnv,
+  parentInstanceId: string,
+  scopedDb: ScopedDb,
+  input: RecastCharacterWorkflowInput
+): Promise<{ framesRegenerated: number; framesFailed: number }> {
+  if (input.affectedFrameIds.length === 0) {
+    return { framesRegenerated: 0, framesFailed: 0 };
+  }
 
-      const { body: sheetResult, isFailed: sheetFailed } = await context.invoke(
-        'character-sheet',
-        {
-          workflow: characterSheetWorkflow,
-          label,
-          body: sheetBody,
-        }
-      );
+  const regenerateBinding = env.REGENERATE_FRAMES_WORKFLOW;
+  if (!regenerateBinding) {
+    throw new NonRetryableError(
+      '[RecastCharacterWorkflow:cf] REGENERATE_FRAMES_WORKFLOW binding missing on env',
+      'WorkflowValidationError'
+    );
+  }
+  // The actual payload is rebuilt inside the spawn step from the previous
+  // step's output. CF persists the previous step.do return, so we read it
+  // back from a separate step.do that wraps the snapshot construction —
+  // but here we keep it inline because the `build-regenerate-snapshot`
+  // step above already computed everything we need.
+  await spawnAndAwaitChild<RegenerateFramesWorkflowInput, unknown>(step, {
+    binding: regenerateBinding as Workflow<
+      RegenerateFramesWorkflowInput & { _parent: ParentNotifyHint }
+    >,
+    parentBindingName: 'RECAST_CHARACTER_WORKFLOW',
+    parentInstanceId,
+    childId: `regenerate-frames:character:${input.characterDbId}`,
+    childPayload: await step.do('snapshot-payload-for-regenerate', () =>
+      buildRegeneratePayload(scopedDb, input)
+    ),
+    spawnStepName: 'spawn-regenerate-frames',
+    awaitStepName: 'await-regenerate-frames',
+  });
+  return {
+    framesRegenerated: input.affectedFrameIds.length,
+    framesFailed: 0,
+  };
+}
 
-      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
-      if (sheetFailed || !sheetResult?.sheetImageUrl) {
-        throw new Error(
-          `Character sheet generation failed for ${input.characterName}`
-        );
-      }
-
-      const sheetImageUrl = sheetResult.sheetImageUrl;
-
-      // Step 2: Regenerate frames if there are any affected
-      let framesRegenerated = 0;
-      let framesFailed = 0;
-
-      if (input.affectedFrameIds.length > 0) {
-        const sequenceId = input.sequenceId;
-        if (!sequenceId) {
-          throw new Error(
-            '[RecastCharacterWorkflow] sequenceId is required to regenerate frames'
-          );
-        }
-        const imageModel = input.imageModel ?? DEFAULT_IMAGE_MODEL;
-        const regenerateBody = await context.run(
-          'build-regenerate-snapshot',
-          async () => {
-            const sequence = await scopedDb.sequences.getById(sequenceId);
-            if (!sequence) {
-              throw new Error(
-                `[RecastCharacterWorkflow] Sequence ${sequenceId} not found`
-              );
-            }
-            const [characters, locations, frames] = await Promise.all([
-              scopedDb.characters.listWithSheets(sequenceId),
-              scopedDb.sequenceLocations.listWithReferences(sequenceId),
-              scopedDb.frames.getByIds(input.affectedFrameIds),
-            ]);
-            // Reject silent drops: getByIds returns only existing rows, so a
-            // missing frame would shrink frameSnapshots below frameIds without
-            // any signal. Surface the gap so the caller can fix data drift
-            // instead of zero-counting frames that never ran.
-            if (frames.length !== input.affectedFrameIds.length) {
-              const found = new Set(frames.map((f) => f.id));
-              const missing = input.affectedFrameIds.filter(
-                (id) => !found.has(id)
-              );
-              throw new Error(
-                `[RecastCharacterWorkflow] Missing frames for ${input.characterName}: ${missing.join(', ')}`
-              );
-            }
-            const aspectRatio = sequence.aspectRatio;
-            const frameSnapshots = await Promise.all(
-              frames.map((frame) =>
-                buildRegenerateFrameSnapshot({
-                  frame,
-                  characters,
-                  locations,
-                  imageModel,
-                  aspectRatio,
-                })
-              )
-            );
-            const partial = {
-              sequenceId,
-              imageModel,
-              aspectRatio,
-              frameSnapshots,
-            };
-            const snapshotInputHash =
-              await computeRegenerateFramesBatchHash(partial);
-            return {
-              userId: input.userId,
-              teamId: input.teamId,
-              sequenceId,
-              frameIds: input.affectedFrameIds,
-              triggerKind: 'character' as const,
-              triggerId: input.characterDbId,
-              imageModel,
-              aspectRatio,
-              frameSnapshots,
-              snapshotInputHash,
-            };
-          }
-        );
-
-        const { body: regenerateResult, isFailed: regenerateFailed } =
-          await context.invoke('regenerate-frames', {
-            workflow: regenerateFramesWorkflow,
-            label,
-            body: regenerateBody,
-          });
-
-        if (regenerateFailed) {
-          // The child workflow's failureFunction has already emitted
-          // recast:failed. Throw so the parent's failureFunction also fires
-          // and the caller sees a real failure rather than zeroed counts.
-          throw new Error(
-            `[RecastCharacterWorkflow] Frame regeneration failed for ${input.characterName}; sheet was generated but no frames were updated`
-          );
-        }
-        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
-        framesRegenerated = regenerateResult?.successCount ?? 0;
-        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
-        framesFailed = regenerateResult?.failedFrames?.length ?? 0;
-      }
-
-      return {
-        sheetImageUrl,
-        framesRegenerated,
-        framesFailed,
-      };
-    },
-    {
-      failureFunction: async ({ context, failResponse }) => {
-        const input = context.requestPayload;
-        const error = sanitizeFailResponse(failResponse);
-
-        await getGenerationChannel(input.sequenceId).emit(
-          'generation.recast:failed',
-          {
-            characterId: input.characterDbId,
-            error,
-          }
-        );
-
-        logger.error('[RecastCharacterWorkflow]', {
-          data: `Recast failed for ${input.characterName}: ${error}`,
-        });
-
-        return `Recast failed for ${input.characterName}`;
-      },
-    }
+async function buildRegeneratePayload(
+  scopedDb: ScopedDb,
+  input: RecastCharacterWorkflowInput
+): Promise<RegenerateFramesWorkflowInput> {
+  const sequenceId = input.sequenceId;
+  if (!sequenceId) {
+    throw new NonRetryableError(
+      '[RecastCharacterWorkflow:cf] sequenceId is required to regenerate frames',
+      'WorkflowValidationError'
+    );
+  }
+  const sequence = await scopedDb.sequences.getById(sequenceId);
+  if (!sequence) {
+    throw new Error(
+      `[RecastCharacterWorkflow:cf] Sequence ${sequenceId} not found`
+    );
+  }
+  const imageModel = input.imageModel ?? DEFAULT_IMAGE_MODEL;
+  const [characters, locations, frames] = await Promise.all([
+    scopedDb.characters.listWithSheets(sequenceId),
+    scopedDb.sequenceLocations.listWithReferences(sequenceId),
+    scopedDb.frames.getByIds(input.affectedFrameIds),
+  ]);
+  if (frames.length !== input.affectedFrameIds.length) {
+    const found = new Set(frames.map((f) => f.id));
+    const missing = input.affectedFrameIds.filter((id) => !found.has(id));
+    throw new Error(
+      `[RecastCharacterWorkflow:cf] Missing frames for ${input.characterName}: ${missing.join(', ')}`
+    );
+  }
+  const aspectRatio = sequence.aspectRatio;
+  const frameSnapshots = await Promise.all(
+    frames.map((frame) =>
+      buildRegenerateFrameSnapshot({
+        frame,
+        characters,
+        locations,
+        imageModel,
+        aspectRatio,
+      })
+    )
   );
+  const partial = { sequenceId, imageModel, aspectRatio, frameSnapshots };
+  const snapshotInputHash = await computeRegenerateFramesBatchHash(partial);
+  return {
+    userId: input.userId,
+    teamId: input.teamId,
+    sequenceId,
+    frameIds: input.affectedFrameIds,
+    triggerKind: 'character' as const,
+    triggerId: input.characterDbId,
+    imageModel,
+    aspectRatio,
+    frameSnapshots,
+    snapshotInputHash,
+  };
+}
+
+export class RecastCharacterWorkflow extends OpenStoryWorkflowEntrypoint<RecastCharacterWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<RecastCharacterWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<RecastCharacterWorkflowResult> {
+    const input = event.payload;
+
+    // Step 1: Build the character-sheet payload (resolve upstream talent-sheet
+    // hash + snapshot hash). Captured into a const so the spawn below reuses
+    // the cached step result on replay instead of recomputing.
+    const sheetPayload = await step.do(
+      'build-character-sheet-snapshot',
+      async (): Promise<CharacterSheetWorkflowInput> => {
+        logger.info(
+          `[RecastCharacterWorkflow:cf] Starting recast for ${input.characterName} with ${input.affectedFrameIds.length} affected frames`
+        );
+        const talentSheetInputHash = await resolveTalentSheetHash(
+          scopedDb,
+          input.characterDbId
+        );
+        const partial: CharacterSheetWorkflowInput = {
+          characterDbId: input.characterDbId,
+          characterName: input.characterName,
+          characterMetadata: input.characterMetadata,
+          sequenceId: input.sequenceId,
+          teamId: input.teamId,
+          userId: input.userId,
+          imageModel: input.imageModel,
+          referenceImageUrl: input.referenceImageUrl,
+          talentMetadata: input.talentMetadata,
+          talentDescription: input.talentDescription,
+          styleConfig: input.styleConfig,
+          talentSheetInputHash,
+        };
+        partial.snapshotInputHash =
+          await computeCharacterSheetHashFromDto(partial);
+        return partial;
+      }
+    );
+
+    const sheetBinding = this.env.CHARACTER_SHEET_WORKFLOW;
+    if (!sheetBinding) {
+      throw new NonRetryableError(
+        '[RecastCharacterWorkflow:cf] CHARACTER_SHEET_WORKFLOW binding missing on env',
+        'WorkflowValidationError'
+      );
+    }
+    const sheetResult = await spawnAndAwaitChild<
+      CharacterSheetWorkflowInput,
+      CharacterSheetWorkflowResult
+    >(step, {
+      binding: sheetBinding as Workflow<
+        CharacterSheetWorkflowInput & { _parent: ParentNotifyHint }
+      >,
+      parentBindingName: 'RECAST_CHARACTER_WORKFLOW',
+      parentInstanceId: event.instanceId,
+      childId: `character-sheet:recast:${input.characterDbId}`,
+      childPayload: sheetPayload,
+      spawnStepName: 'spawn-character-sheet',
+      awaitStepName: 'await-character-sheet',
+    });
+
+    const sheetImageUrl = sheetResult.sheetImageUrl;
+    const { framesRegenerated, framesFailed } = await regenerateFramesIfNeeded(
+      step,
+      this.env,
+      event.instanceId,
+      scopedDb,
+      input
+    );
+
+    return { sheetImageUrl, framesRegenerated, framesFailed };
+  }
+
+  protected override async onFailure({
+    event,
+    error,
+  }: {
+    event: Readonly<WorkflowEvent<RecastCharacterWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): Promise<void> {
+    const input = event.payload;
+
+    await getGenerationChannel(input.sequenceId).emit(
+      'generation.recast:failed',
+      {
+        characterId: input.characterDbId,
+        error,
+      }
+    );
+
+    logger.error(
+      `[RecastCharacterWorkflow:cf] Recast failed for ${input.characterName}: ${error}`
+    );
+  }
+}

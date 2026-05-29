@@ -1,32 +1,60 @@
 /**
- * Visual Prompt Generation Workflow
+ * Cloudflare Workflows port of `visualPromptSceneWorkflow`.
  *
- * Generates visual prompts for scenes based on character bible and style config.
- * Uses three-step durable pattern: prepare → context.call → log
- */
+ * Mirrors the QStash version (`src/lib/workflows/visual-prompt-scene-workflow.ts`)
+ * step for step — same step names, same control flow, same side effects. The
+ * only differences are:
+ *
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - Reads payload from `event.payload` instead of `context.requestPayload`.
+ *   - Inlines the LLM call logic from `durableStreamingLLMCall` because that
+ *     helper is bound to QStash's `WorkflowContext`. The step names match
+ *     the helper's exactly (`prepare-visual-prompts`, `visual-prompts` or
+ *     `visual-prompts-stream`, `deduct-llm-credits-visual-prompts`) so a
+ *     side-by-side comparison stays trivial. */
 
-import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
-import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
-import type { VisualPromptSceneWorkflowInput } from '@/lib/workflow/types';
-import { computeVisualPromptInputHash } from '../ai/input-hash';
-import { narrowFramePromptContext } from '../ai/prompt-context';
+import { createAdapter } from '@/lib/ai/create-adapter';
+import { computeVisualPromptInputHash } from '@/lib/ai/input-hash';
+import { getContextWindow } from '@/lib/ai/models.config';
+import { narrowFramePromptContext } from '@/lib/ai/prompt-context';
 import {
   type VisualPromptWithContinuity,
   visualPromptWithContinuitySchema,
-} from '../ai/scene-analysis.schema';
-import { getFramePromptChannel, getGenerationChannel } from '../realtime';
-import { durableStreamingLLMCall } from './llm-call-helper';
-
+} from '@/lib/ai/scene-analysis.schema';
+import { extractRunError, formatRunErrorMessage } from '@/lib/ai/llm-client';
+import { extractStreamingStringField } from '@/lib/ai/stream-extract';
+import { ZERO_MICROS } from '@/lib/billing/money';
+import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
+import type { ScopedDb } from '@/lib/db/scoped';
+import { getChatPrompt } from '@/lib/prompts';
+import { getFramePromptChannel, getGenerationChannel } from '@/lib/realtime';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
+import { WorkflowValidationError } from '@/lib/workflow/errors';
+import type { VisualPromptSceneWorkflowInput } from '@/lib/workflow/types';
+import { chat, convertSchemaToJsonSchema } from '@tanstack/ai';
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'visual-prompt-scene']);
 
-export const visualPromptSceneWorkflow = createScopedWorkflow<
-  VisualPromptSceneWorkflowInput,
-  { sceneId: string } & VisualPromptWithContinuity
->(
-  async (context, scopedDb) => {
-    const input = context.requestPayload;
+type VisualPromptSceneResult = { sceneId: string } & VisualPromptWithContinuity;
+
+const PHASE = { number: 3, name: 'Writing image prompts…' } as const;
+const STEP_NAME = 'visual-prompts';
+const LOG_NAME = `phase-${PHASE.number}-${STEP_NAME}`;
+const LOG_TAGS = [STEP_NAME, `phase-${PHASE.number}`, 'analysis'] as const;
+const LOG_TAGS_STREAM = [...LOG_TAGS, 'stream'] as const;
+
+export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<VisualPromptSceneWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<VisualPromptSceneWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<VisualPromptSceneResult> {
+    const input = event.payload;
     const {
       scene,
       sceneBefore,
@@ -39,54 +67,249 @@ export const visualPromptSceneWorkflow = createScopedWorkflow<
       analysisModelId,
       frameId,
       sequenceId,
+      userId,
+      emitStreaming,
     } = input;
 
-    // Streaming kicks in only when emitStreaming is set (force-regen path
-    // from the "Regenerate Prompt" button). For script-analysis the helper
-    // degrades to a plain durable call, so the auto-generation flows don't
-    // pay the realtime publish cost.
-    const result = await durableStreamingLLMCall(
-      context,
-      {
-        name: 'visual-prompts',
-        phase: { number: 3, name: 'Writing image prompts…' },
+    const streamConfig =
+      emitStreaming && frameId
+        ? { frameId, promptType: 'visual' as const, flushIntervalMs: 80 }
+        : undefined;
 
-        promptName: 'phase/visual-prompt-scene-generation-chat',
-        promptVariables: {
-          sceneBefore: sceneBefore
-            ? JSON.stringify(sceneBefore, null, 2)
-            : '(none)',
-          sceneAfter: sceneAfter
-            ? JSON.stringify(sceneAfter, null, 2)
-            : '(none)',
-          scene: JSON.stringify(scene, null, 2),
-          characterBible: JSON.stringify(characterBible, null, 2),
-          locationBible: JSON.stringify(locationBible, null, 2),
-          elementBible: JSON.stringify(elementBible, null, 2),
-          styleConfig: JSON.stringify(styleConfig, null, 2),
-          aspectRatio,
-        },
+    const logMetadata = {
+      phase: PHASE.number,
+      phaseName: PHASE.name,
+      frameId,
+    };
 
-        modelId: analysisModelId,
-        responseSchema: visualPromptWithContinuitySchema,
-
-        additionalMetadata: {
-          frameId,
-        },
-      },
-      {
-        sequenceId,
-        scopedDb,
-        framePromptStream:
-          input.emitStreaming && frameId
-            ? { frameId, promptType: 'visual' }
-            : undefined,
+    // Step 1: Prepare — fetch prompt from Langfuse.
+    const { messages, promptReference } = await step.do(
+      `prepare-${STEP_NAME}`,
+      async () => {
+        const { messages: msgs } = await getChatPrompt(
+          'phase/visual-prompt-scene-generation-chat',
+          {
+            sceneBefore: sceneBefore
+              ? JSON.stringify(sceneBefore, null, 2)
+              : '(none)',
+            sceneAfter: sceneAfter
+              ? JSON.stringify(sceneAfter, null, 2)
+              : '(none)',
+            scene: JSON.stringify(scene, null, 2),
+            characterBible: JSON.stringify(characterBible, null, 2),
+            locationBible: JSON.stringify(locationBible, null, 2),
+            elementBible: JSON.stringify(elementBible, null, 2),
+            styleConfig: JSON.stringify(styleConfig, null, 2),
+            aspectRatio,
+          }
+        );
+        return { messages: msgs, promptReference: undefined };
       }
     );
 
+    // Step 2: Durable LLM call (streaming or non-streaming depending on
+    // whether `emitStreaming` was set by the caller). Step name matches
+    // `durableStreamingLLMCall`'s exactly so trace parity holds.
+    const llmStepName = streamConfig ? `${STEP_NAME}-stream` : STEP_NAME;
+
+    // VisualPromptWithContinuity is a Zod-inferred object that doesn't
+    // satisfy CF's `Rpc.Serializable<T>` constraint structurally (the
+    // discriminated union members confuse the check), but is JSON-safe
+    // at runtime. JSON-stringify around the step boundary so the type
+    // round-trips through Serializable cleanly.
+    const resultJson = await step.do(llmStepName, async (): Promise<string> => {
+      const openRouterApiKeyInfo =
+        await scopedDb.apiKeys.resolveKey('openrouter');
+      const adapter = createAdapter(analysisModelId, openRouterApiKeyInfo.key);
+
+      logger.info(
+        `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Starting${
+          streamConfig ? ' streaming' : ''
+        } call`,
+        {
+          model: analysisModelId,
+          keySource: openRouterApiKeyInfo.source,
+          messageCount: messages.length,
+          ...(streamConfig
+            ? {
+                frameId: streamConfig.frameId,
+                promptType: streamConfig.promptType,
+              }
+            : {}),
+        }
+      );
+
+      const systemPrompts: string[] = [];
+      const chatMessages: Array<{
+        role: 'user' | 'assistant';
+        content: string;
+      }> = [];
+      for (const msg of messages) {
+        const flat =
+          typeof msg.content === 'string'
+            ? msg.content
+            : msg.content
+                .map((part) => (part.type === 'text' ? part.content : ''))
+                .filter(Boolean)
+                .join('\n');
+        if (msg.role === 'system') {
+          systemPrompts.push(flat);
+        } else {
+          chatMessages.push({ role: msg.role, content: flat });
+        }
+      }
+
+      const abortController = new AbortController();
+      const timeout = setTimeout(() => abortController.abort(), 300_000);
+
+      const strictSchema = convertSchemaToJsonSchema(
+        visualPromptWithContinuitySchema,
+        { forStructuredOutput: true }
+      );
+
+      try {
+        if (!streamConfig) {
+          const text = await chat({
+            adapter,
+            messages: chatMessages,
+            systemPrompts,
+            stream: false,
+            maxTokens: Math.floor(getContextWindow(analysisModelId) * 0.5),
+            abortController,
+            metadata: {
+              observationName: LOG_NAME,
+              prompt: promptReference,
+              tags: [...LOG_TAGS],
+              metadata: logMetadata,
+              sessionId: sequenceId,
+              userId,
+            },
+            modelOptions: {
+              responseFormat: {
+                type: 'json_schema',
+                jsonSchema: {
+                  name: 'structured_output',
+                  schema: strictSchema,
+                  strict: true,
+                },
+              },
+            },
+            debug: false,
+          });
+          logger.info(
+            `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Call succeeded`
+          );
+          return JSON.stringify(
+            visualPromptWithContinuitySchema.parse(JSON.parse(text))
+          );
+        }
+
+        // Streaming path — emit visible `fullPrompt` deltas while accumulating.
+        const channel = getFramePromptChannel(streamConfig.frameId);
+        let accumulated = '';
+        let lastExtracted = '';
+        let pendingDelta = '';
+        let lastEmitAt = 0;
+
+        const flushDelta = async () => {
+          if (!pendingDelta) return;
+          const delta = pendingDelta;
+          pendingDelta = '';
+          lastEmitAt = Date.now();
+          await channel.emit('framePrompt.streaming', {
+            promptType: streamConfig.promptType,
+            delta,
+          });
+        };
+
+        for await (const streamEvent of chat({
+          adapter,
+          messages: chatMessages,
+          systemPrompts,
+          stream: true,
+          maxTokens: Math.floor(getContextWindow(analysisModelId) * 0.5),
+          abortController,
+          metadata: {
+            observationName: LOG_NAME,
+            prompt: promptReference,
+            tags: [...LOG_TAGS_STREAM],
+            metadata: logMetadata,
+            sessionId: sequenceId,
+            userId,
+          },
+          modelOptions: {
+            responseFormat: {
+              type: 'json_schema',
+              jsonSchema: {
+                name: 'structured_output',
+                schema: strictSchema,
+                strict: true,
+              },
+            },
+          },
+          debug: false,
+        })) {
+          if (
+            streamEvent.type === 'TEXT_MESSAGE_CONTENT' &&
+            typeof streamEvent.delta === 'string'
+          ) {
+            accumulated += streamEvent.delta;
+            const next = extractStreamingStringField(accumulated, 'fullPrompt');
+            if (next.length > lastExtracted.length) {
+              pendingDelta += next.slice(lastExtracted.length);
+              lastExtracted = next;
+            }
+            if (
+              pendingDelta &&
+              Date.now() - lastEmitAt >= streamConfig.flushIntervalMs
+            ) {
+              await flushDelta();
+            }
+            continue;
+          }
+          const runError = extractRunError(streamEvent);
+          if (runError) {
+            logger.error(
+              `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Streaming call RUN_ERROR`,
+              { runError: runError.event }
+            );
+            throw new Error(formatRunErrorMessage(runError));
+          }
+        }
+        await flushDelta();
+        logger.info(
+          `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Streaming call succeeded`
+        );
+        return JSON.stringify(
+          visualPromptWithContinuitySchema.parse(JSON.parse(accumulated))
+        );
+      } finally {
+        clearTimeout(timeout);
+      }
+    });
+    const result: VisualPromptWithContinuity =
+      visualPromptWithContinuitySchema.parse(JSON.parse(resultJson));
+
+    // Step 3: Deduct LLM credits.
+    await step.do(`deduct-llm-credits-${STEP_NAME}`, async () => {
+      await deductWorkflowCredits({
+        scopedDb,
+        costMicros: ZERO_MICROS,
+        usedOwnKey: false,
+        description: `LLM analysis (${analysisModelId})`,
+        metadata: {
+          model: analysisModelId,
+          phase: PHASE.number,
+          phaseName: PHASE.name,
+          stepName: STEP_NAME,
+          sequenceId,
+        },
+      });
+    });
+
     if (sequenceId && frameId) {
       if (!result.visual.fullPrompt) {
-        throw new Error(
+        throw new WorkflowValidationError(
           `Visual prompt generation returned empty fullPrompt for scene ${scene.sceneId}`
         );
       }
@@ -114,7 +337,7 @@ export const visualPromptSceneWorkflow = createScopedWorkflow<
       });
       const inputHash = await computeVisualPromptInputHash(narrowed);
 
-      await context.run('save-visual-prompt-to-db', async () => {
+      await step.do('save-visual-prompt-to-db', async () => {
         const previous = await scopedDb.framePromptVariants.getLatest(
           frameId,
           'visual'
@@ -154,7 +377,7 @@ export const visualPromptSceneWorkflow = createScopedWorkflow<
 
         // Signal end-of-stream to the per-frame channel so the UI can swap
         // out the streamed-deltas buffer for the persisted prompt.
-        if (input.emitStreaming) {
+        if (emitStreaming) {
           await getFramePromptChannel(frameId).emit('framePrompt.completed', {
             promptType: 'visual',
           });
@@ -163,30 +386,34 @@ export const visualPromptSceneWorkflow = createScopedWorkflow<
     }
 
     return { sceneId: scene.sceneId, ...result };
-  },
-  {
-    failureFunction: async ({ context, failStatus, failResponse }) => {
-      const error = sanitizeFailResponse(failResponse);
-      logger.error('Failed', {
-        workflowRunId: context.workflowRunId,
-        failStatus,
-        failResponse: error,
-      });
-      // Surface the failure on the per-frame channel so an actively-viewing
-      // client can clear its streaming state and toast. Best-effort — the
-      // input isn't available here, so we read it off the workflow context.
-      try {
-        const payload = context.requestPayload;
-        if (payload.emitStreaming && payload.frameId) {
-          await getFramePromptChannel(payload.frameId).emit(
-            'framePrompt.failed',
-            { promptType: 'visual', error }
-          );
-        }
-      } catch (emitErr) {
-        logger.warn('failed to emit failure', { err: emitErr });
-      }
-      return `Visual prompt generation failed: ${error}`;
-    },
   }
-);
+
+  protected override async onFailure({
+    event,
+    error,
+  }: {
+    event: Readonly<WorkflowEvent<VisualPromptSceneWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): Promise<void> {
+    const payload = event.payload;
+    logger.error('[VisualPromptSceneWorkflow:cf] Failed', {
+      workflowRunId: event.instanceId,
+      error,
+    });
+    // Surface the failure on the per-frame channel so an actively-viewing
+    // client can clear its streaming state and toast. Best-effort.
+    try {
+      if (payload.emitStreaming && payload.frameId) {
+        await getFramePromptChannel(payload.frameId).emit(
+          'framePrompt.failed',
+          { promptType: 'visual', error }
+        );
+      }
+    } catch (emitErr) {
+      logger.warn('[VisualPromptSceneWorkflow:cf] failed to emit failure', {
+        err: emitErr,
+      });
+    }
+  }
+}

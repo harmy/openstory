@@ -1,45 +1,55 @@
 /**
- * Regenerate Frames Workflow
+ * Cloudflare Workflows port of `regenerateFramesWorkflow`.
  *
- * Bulk regenerates frame images after character/location recast. Operates
- * entirely from an inlined snapshot DTO assembled at trigger time — no live
- * mutable reads inside `context.run`.
+ * Wave 3 fan-out leaf: bulk regenerates frame images after a character or
+ * location recast. Mirrors the QStash version
+ * (`src/lib/workflows/regenerate-frames-workflow.ts`) step for step — same
+ * step names, same control flow, same side effects. The only differences are:
  *
- * Convergent path (current inputs match snapshot): records `thumbnailInputHash`
- * on the frame and the matching `frame_variants` row alongside the primary
- * write that `image-workflow` already performed.
- * Divergent path (something changed mid-flight): leaves the primary frame
- * artifact alone and rewrites the per-model `frame_variants` row as a
- * divergence (input_hash + diverged_at) so the UI can offer it as an
- * alternative without disturbing the user's live thumbnail.
- *
- * See docs/architecture/workflow-snapshots-and-content-hash-staleness.md.
- */
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - Reads payload from `event.payload` instead of `context.requestPayload`
+ *     and the workflow run id from `event.instanceId` instead of
+ *     `context.workflowRunId`.
+ *   - The Promise.all over `context.invoke('image', ...)` becomes
+ *     `Promise.all` spawn + `Promise.allSettled` await of
+ *     `spawnAndAwaitChild` (Pattern 3 fan-out helpers in
+ *     `await-child.ts`). Each child gets a deterministic instance ID
+ *     (`image:${sequenceId}:${frameId}`) and a unique event-type qualifier so
+ *     siblings cannot match each other's completion events.
+ *   - Calls the snapshot DTO computer (`computeRegenerateFramesBatchHash`)
+ *     directly inside `step.do('validate-snapshot')` instead of going
+ *     through the `context.snapshot.*` extension.
+ *   - `failureFunction` → `onFailure`. */
 
 import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
 import { aspectRatioToImageSize } from '@/lib/constants/aspect-ratios';
+import type { ScopedDb } from '@/lib/db/scoped';
 import { getGenerationChannel } from '@/lib/realtime';
 import { triggerWorkflow } from '@/lib/workflow/client';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
-import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
-import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
+import { spawnAndAwaitChild } from '@/lib/workflow/await-child';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import type {
+  ImageWorkflowInput,
   RegenerateFramesWorkflowInput,
   ShotVariantWorkflowInput,
 } from '@/lib/workflow/types';
-import { generateImageWorkflow } from './image-workflow';
-import { getLogger } from '@/lib/observability/logger';
-
-const logger = getLogger(['openstory', 'workflow', 'regenerate-frames']);
-
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
+import { NonRetryableError } from 'cloudflare:workflows';
 import {
   buildConvergentWrites,
   buildDivergentWrites,
   buildRegenerateFrameSnapshot,
   computeRegenerateFramesBatchHash,
   emitRecastEvent,
-} from './regenerate-frames-snapshot';
+} from '@/lib/workflows/regenerate-frames-snapshot';
+import { getLogger } from '@/lib/observability/logger';
+
+const logger = getLogger(['openstory', 'workflow', 'regenerate-frames']);
 
 type FrameResult =
   | { frameId: string; success: true; imageUrl: string }
@@ -52,26 +62,52 @@ type RegenerateFramesResult = {
   divergedFrameIds: string[];
 };
 
-export const regenerateFramesWorkflow = createScopedWorkflow<
-  RegenerateFramesWorkflowInput,
-  RegenerateFramesResult
->(
-  async (context, scopedDb) => {
-    const input = context.requestPayload;
+type ImageChildOutput = {
+  imageUrl: string;
+  frameId?: string;
+  sequenceId?: string;
+};
+
+export class RegenerateFramesWorkflow extends OpenStoryWorkflowEntrypoint<RegenerateFramesWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<RegenerateFramesWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<RegenerateFramesResult> {
+    const input = event.payload;
+    const parentInstanceId = event.instanceId;
     const { sequenceId, teamId, triggerKind, triggerId } = input;
     const label = buildWorkflowLabel(sequenceId);
 
+    // ============================================================
+    // Top-level validation (re-throws as NonRetryableError via the base
+    // class's WorkflowValidationError re-wrap). Inside step.do we use
+    // CF's NonRetryableError directly so the step machinery doesn't burn
+    // its retry budget on programmer errors.
+    // ============================================================
     if (!sequenceId) {
       throw new WorkflowValidationError('Sequence ID is required');
     }
 
-    // Validate the snapshot hash inside the workflow body. Upstash swallows
-    // runStarted-middleware throws to logger.error, so the only place a
-    // tampered payload actually halts the run is inside `context.run`, where
-    // the throw propagates to QStash and triggers the failureFunction.
-    await context.run('validate-snapshot', async () => {
-      if (context.snapshot) {
-        await context.snapshot.validate();
+    const childBinding = this.env.IMAGE_WORKFLOW;
+    if (!childBinding) {
+      throw new WorkflowValidationError(
+        '[RegenerateFramesWorkflow:cf] IMAGE_WORKFLOW binding is missing on env; check wrangler.jsonc'
+      );
+    }
+
+    // Validate the snapshot hash inside the workflow body. Mirrors the QStash
+    // `validate-snapshot` step but calls the DTO computer directly because CF
+    // has no `context.snapshot.*` extension.
+    await step.do('validate-snapshot', async () => {
+      const expected = input.snapshotInputHash;
+      if (!expected) return;
+      const recomputed = await computeRegenerateFramesBatchHash(input);
+      if (recomputed !== expected) {
+        throw new NonRetryableError(
+          'snapshotInputHash does not match the inlined DTO; payload was tampered with or serialized inconsistently',
+          'WorkflowValidationError'
+        );
       }
     });
 
@@ -88,7 +124,7 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
     const imageModel = input.imageModel ?? DEFAULT_IMAGE_MODEL;
     const aspectRatio = input.aspectRatio;
 
-    await context.run('emit-start', async () => {
+    await step.do('emit-start', async () => {
       await emitRecastEvent({
         kind: triggerKind,
         event: 'start',
@@ -98,15 +134,22 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
       });
     });
 
-    const imageResults: FrameResult[] = await Promise.all(
-      snapshots.map(async (snapshot): Promise<FrameResult> => {
+    // ============================================================
+    // PHASE: Per-frame image regeneration — fan out via Pattern 3.
+    // Use Promise.allSettled so a single child timeout / failure does not
+    // kill the parent — each sibling resolves independently, and per-frame
+    // failures become `FrameResult` entries that the reconcile pass below
+    // handles individually.
+    // ============================================================
+    const settled = await Promise.allSettled(
+      snapshots.map((snapshot, frameIndex): Promise<FrameResult> => {
         if (!snapshot.imagePrompt) {
           // Per-frame failure — peer frames in the batch should still run.
-          return {
+          return Promise.resolve({
             frameId: snapshot.frameId,
             success: false,
             error: 'no image prompt',
-          };
+          });
         }
 
         const referenceImages = [
@@ -114,56 +157,83 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
           ...snapshot.locationRefs,
         ];
 
-        const { body, isFailed, isCanceled } = await context.invoke('image', {
-          workflow: generateImageWorkflow,
-          label,
-          body: {
-            userId: input.userId,
-            teamId,
-            sequenceId,
-            frameId: snapshot.frameId,
-            prompt: snapshot.imagePrompt,
-            model: imageModel,
-            imageSize: aspectRatioToImageSize(aspectRatio),
-            numImages: 1,
-            referenceImages,
-          },
-          retries: 3,
-          retryDelay: 'pow(2, retried) * 1000',
-        });
-
-        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
-        if (isFailed || isCanceled || !body?.imageUrl) {
-          const reason = isCanceled
-            ? 'canceled'
-            : isFailed
-              ? 'failed'
-              : 'no imageUrl';
-          logger.error('[RegenerateFramesWorkflow]', {
-            data: `Image generation failed frame=${snapshot.frameId} reason=${reason}`,
-          });
-          return {
-            frameId: snapshot.frameId,
-            success: false,
-            error: `Image generation ${reason}`,
-          };
-        }
-
-        return {
+        const childPayload: ImageWorkflowInput = {
+          userId: input.userId,
+          teamId,
+          sequenceId,
           frameId: snapshot.frameId,
-          success: true,
-          imageUrl: body.imageUrl,
+          prompt: snapshot.imagePrompt,
+          model: imageModel,
+          imageSize: aspectRatioToImageSize(aspectRatio),
+          numImages: 1,
+          referenceImages,
         };
+
+        return spawnAndAwaitChild<ImageWorkflowInput, ImageChildOutput>(step, {
+          binding: childBinding,
+          parentBindingName: 'REGENERATE_FRAMES_WORKFLOW',
+          parentInstanceId,
+          childId: `image:${sequenceId}:${snapshot.frameId}`,
+          childPayload,
+          spawnStepName: `spawn-image-${frameIndex}`,
+          awaitStepName: `await-image-${frameIndex}`,
+        }).then(
+          (body): FrameResult => {
+            if (!body.imageUrl) {
+              logger.error(
+                `[RegenerateFramesWorkflow:cf] Image generation failed frame=${snapshot.frameId} reason=no imageUrl`
+              );
+              return {
+                frameId: snapshot.frameId,
+                success: false,
+                error: 'Image generation no imageUrl',
+              };
+            }
+            return {
+              frameId: snapshot.frameId,
+              success: true,
+              imageUrl: body.imageUrl,
+            };
+          },
+          (err: unknown): FrameResult => {
+            const reason = err instanceof Error ? err.message : String(err);
+            logger.error(
+              `[RegenerateFramesWorkflow:cf] Image generation failed frame=${snapshot.frameId} reason=${reason}`
+            );
+            return {
+              frameId: snapshot.frameId,
+              success: false,
+              error: `Image generation failed: ${reason}`,
+            };
+          }
+        );
       })
     );
+
+    // Promise.allSettled with onfulfilled/onrejected mappers above means every
+    // entry is a resolved FrameResult. Collect them into the same shape the
+    // QStash original produced.
+    const imageResults: FrameResult[] = settled.map((outcome, i) => {
+      if (outcome.status === 'fulfilled') return outcome.value;
+      const snapshot = snapshots[i];
+      const reason =
+        outcome.reason instanceof Error
+          ? outcome.reason.message
+          : String(outcome.reason);
+      return {
+        frameId: snapshot?.frameId ?? `#${i}`,
+        success: false,
+        error: `Image generation failed: ${reason}`,
+      };
+    });
 
     // Shared batch reads — pulled out of the per-frame loop so each frame's
     // reconcile step is independent (one frame's DB blip can't poison the
     // batch's character/location lookup).
-    const allCharacters = await context.run('load-characters', () =>
+    const allCharacters = await step.do('load-characters', () =>
       scopedDb.characters.listWithSheets(sequenceId)
     );
-    const allLocations = await context.run('load-locations', () =>
+    const allLocations = await step.do('load-locations', () =>
       scopedDb.sequenceLocations.listWithReferences(sequenceId)
     );
 
@@ -175,9 +245,9 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
 
     const reconcileOutcomes = new Map<string, ReconcileOutcome>();
 
-    // Per-frame `context.run` so one frame's failure does not abort siblings.
+    // Per-frame `step.do` so one frame's failure does not abort siblings.
     // Known-permanent states return tagged outcomes (no retries burned).
-    // Unknown throws propagate inside the step so QStash applies its retry
+    // Unknown throws propagate inside the step so CF applies its retry
     // policy; only after retries exhaust does the outer catch convert to a
     // `failed` outcome.
     for (const result of imageResults) {
@@ -185,7 +255,7 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
 
       let outcome: ReconcileOutcome;
       try {
-        outcome = await context.run(
+        outcome = await step.do(
           `reconcile-frame-${result.frameId}`,
           async (): Promise<ReconcileOutcome> => {
             const snapshot = snapshots.find(
@@ -310,15 +380,15 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
               divergedVariantId: divergentVariant.id,
             });
 
-            logger.info('[RegenerateFramesWorkflow]', {
-              data: `Diverged frame ${result.frameId}: snapshot=${snapshot.snapshotInputHash.slice(0, 8)} current=${currentSnapshot.snapshotInputHash.slice(0, 8)}`,
-            });
+            logger.info(
+              `[RegenerateFramesWorkflow:cf] Diverged frame ${result.frameId}: snapshot=${snapshot.snapshotInputHash.slice(0, 8)} current=${currentSnapshot.snapshotInputHash.slice(0, 8)}`
+            );
 
             return { kind: 'divergent' };
           }
         );
       } catch (err) {
-        // QStash exhausted retries on this frame's step. Capture as a failed
+        // CF exhausted retries on this frame's step. Capture as a failed
         // outcome so siblings still reconcile.
         outcome = {
           kind: 'failed',
@@ -328,13 +398,13 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
 
       reconcileOutcomes.set(result.frameId, outcome);
       if (outcome.kind === 'failed') {
-        logger.error('[RegenerateFramesWorkflow]', {
-          data: `Reconcile failed for frame ${result.frameId}: ${outcome.error}`,
-        });
+        logger.error(
+          `[RegenerateFramesWorkflow:cf] Reconcile failed for frame ${result.frameId}: ${outcome.error}`
+        );
       } else if (outcome.kind === 'skipped-deleted') {
-        logger.warn('[RegenerateFramesWorkflow]', {
-          data: `Frame ${result.frameId} deleted mid-flight; skipping reconciliation`,
-        });
+        logger.warn(
+          `[RegenerateFramesWorkflow:cf] Frame ${result.frameId} deleted mid-flight; skipping reconciliation`
+        );
       }
     }
 
@@ -362,7 +432,7 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
         default: {
           const _exhaustive: never = outcome;
           throw new Error(
-            `[RegenerateFramesWorkflow] Unhandled ReconcileOutcome: ${JSON.stringify(_exhaustive)}`
+            `[RegenerateFramesWorkflow:cf] Unhandled ReconcileOutcome: ${JSON.stringify(_exhaustive)}`
           );
         }
       }
@@ -375,7 +445,7 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
     // primaries are reconciled. Only fan out for convergent frames — divergent
     // frames preserve the user's live primary, so their existing shot
     // variants are still correct.
-    await context.run('trigger-variant-regen', async () => {
+    await step.do('trigger-variant-regen', async () => {
       const convergentFrameIdSet = new Set(convergentFrameIds);
       const convergent = imageResults.filter(
         (r): r is Extract<FrameResult, { success: true }> =>
@@ -409,7 +479,7 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
             },
             {
               label,
-              // Dedupe: a retry of this context.run mustn't re-fire variants.
+              // Dedupe: a retry of this step.do mustn't re-fire variants.
               deduplicationId: `variant-image-${result.frameId}-${imageModel}-${snapshot.snapshotInputHash.slice(0, 16)}`,
             }
           );
@@ -427,7 +497,7 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
     const failedFrames = [...imageFailedFrameIds, ...reconcileFailedFrameIds];
     const successCount = convergentFrameIds.length + divergedFrameIds.length;
 
-    await context.run('emit-complete', async () => {
+    await step.do('emit-complete', async () => {
       await emitRecastEvent({
         kind: triggerKind,
         event: 'complete',
@@ -438,9 +508,9 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
       });
     });
 
-    logger.info('[RegenerateFramesWorkflow]', {
-      data: `Completed: ${successCount} success, ${failedFrames.length} failed, ${divergedFrameIds.length} diverged, ${skippedDeletedFrameIds.length} skipped-deleted`,
-    });
+    logger.info(
+      `[RegenerateFramesWorkflow:cf] Completed: ${successCount} success, ${failedFrames.length} failed, ${divergedFrameIds.length} diverged, ${skippedDeletedFrameIds.length} skipped-deleted`
+    );
 
     return {
       totalFrames: snapshots.length,
@@ -448,61 +518,30 @@ export const regenerateFramesWorkflow = createScopedWorkflow<
       failedFrames,
       divergedFrameIds,
     };
-  },
-  {
-    failureFunction: async ({ context, failResponse }) => {
-      const input = context.requestPayload;
-      const error = sanitizeFailResponse(failResponse);
-
-      if (input.sequenceId) {
-        await emitRecastEvent({
-          kind: input.triggerKind,
-          event: 'failed',
-          sequenceId: input.sequenceId,
-          triggerId: input.triggerId,
-          error,
-        });
-      }
-
-      logger.error('[RegenerateFramesWorkflow]', {
-        data: `Frame regeneration failed: ${error}`,
-      });
-
-      return `Frame regeneration failed: ${error}`;
-    },
-    snapshot: {
-      computeFromDto: (input) => computeRegenerateFramesBatchHash(input),
-      computeCurrent: async (input, scopedDb) => {
-        if (!input.sequenceId) {
-          throw new WorkflowValidationError(
-            'Sequence ID is required for snapshot computation'
-          );
-        }
-        const characters = await scopedDb.characters.listWithSheets(
-          input.sequenceId
-        );
-        const locations = await scopedDb.sequenceLocations.listWithReferences(
-          input.sequenceId
-        );
-        const frames = await scopedDb.frames.getByIds(input.frameIds);
-        const aspectRatio = input.aspectRatio;
-        const imageModel = input.imageModel ?? DEFAULT_IMAGE_MODEL;
-        const fresh = await Promise.all(
-          frames.map((frame) =>
-            buildRegenerateFrameSnapshot({
-              frame,
-              characters,
-              locations,
-              imageModel,
-              aspectRatio,
-            })
-          )
-        );
-        return computeRegenerateFramesBatchHash({
-          ...input,
-          frameSnapshots: fresh,
-        });
-      },
-    },
   }
-);
+
+  protected override async onFailure({
+    event,
+    error,
+  }: {
+    event: Readonly<WorkflowEvent<RegenerateFramesWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): Promise<void> {
+    const input = event.payload;
+
+    if (input.sequenceId) {
+      await emitRecastEvent({
+        kind: input.triggerKind,
+        event: 'failed',
+        sequenceId: input.sequenceId,
+        triggerId: input.triggerId,
+        error,
+      });
+    }
+
+    logger.error(
+      `[RegenerateFramesWorkflow:cf] Frame regeneration failed: ${error}`
+    );
+  }
+}

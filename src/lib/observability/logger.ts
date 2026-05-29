@@ -107,15 +107,23 @@ function buildServerSinks(dev: boolean): Record<string, Sink> {
   const formatter: TextFormatter = dev
     ? redactByPattern(
         // wordWrap: false → no hanging-indent continuation. `bun --parallel`
-        // (via concurrently) re-prefixes every wrapped line with
-        // `dev:app | dev:vite | `, which eats ~33 columns and makes the
+        // (via concurrently, e.g. `dev:all`) re-prefixes every wrapped line
+        // with `dev | dev:vite | `, which eats ~33 columns and makes the
         // pretty formatter's default auto-wrap look ragged. Letting the
-        // terminal hard-wrap keeps the `dev:app | dev:vite |` prefix on
-        // only one row per log record.
+        // terminal hard-wrap keeps the runner prefix on only one row per
+        // log record.
         // timestamp: 'disabled' → drop the per-record clock; concurrently's
         // own prefix already anchors when a line was emitted relative to its
         // neighbours, and skipping the column buys ~13 cols of message width.
-        getPrettyFormatter({ timestamp: 'disabled', wordWrap: false }),
+        // properties: true → render structured fields (e.g. `{ err }` on
+        // failure logs) on indented continuation lines. Without this the dev
+        // formatter drops them entirely, so logger.error('…', { err }) shows
+        // only the headline and the actual error/stack is invisible.
+        getPrettyFormatter({
+          timestamp: 'disabled',
+          wordWrap: false,
+          properties: true,
+        }),
         SECRET_PATTERNS
       )
     : redactByPattern(getJsonLinesFormatter(), SECRET_PATTERNS);

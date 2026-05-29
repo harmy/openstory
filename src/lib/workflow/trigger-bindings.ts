@@ -1,23 +1,18 @@
 /**
  * Maps trigger paths (the URL fragment passed to `triggerWorkflow`) to the
- * env binding name declared in `wrangler.jsonc`. Only workflows with a CF
- * port appear here — the rest stay on QStash.
+ * env binding name declared in `wrangler.jsonc`. Every workflow is a
+ * Cloudflare Workflow — `triggerWorkflow` resolves the binding here and calls
+ * `binding.create()`.
  *
- * To add a new CF-backed workflow:
+ * To add a new workflow:
  *   1. Add the `class_name` + `binding` to `wrangler.jsonc` under `workflows[]`
  *   2. Re-export the entrypoint class from `src/server.ts` so the bundler
  *      includes it.
  *   3. Add an entry here.
- *   4. (Optional) Flip it on by default in `engine-registry.ts`, or canary
- *      via the `CF_WORKFLOWS_ENABLED` env var.
  */
 
-import type { CloudflareEnv, WorkflowEngine } from '@/lib/workflow/cf/types';
-import { buildInstanceId } from '@/lib/workflow/cf/instance-id';
-import { getEngineForWorkflow } from '@/lib/workflow/cf/engine-registry';
-import { getLogger } from '@/lib/observability/logger';
-
-const logger = getLogger(['openstory', 'workflow', 'cf', 'trigger-bindings']);
+import type { CloudflareEnv } from '@/lib/workflow/types';
+import { buildInstanceId } from '@/lib/workflow/instance-id';
 
 const TRIGGER_TO_BINDING: Record<string, keyof CloudflareEnv> = {
   image: 'IMAGE_WORKFLOW',
@@ -53,21 +48,35 @@ const TRIGGER_TO_BINDING: Record<string, keyof CloudflareEnv> = {
 
 export type CfTriggerResult = { workflowRunId: string };
 
+function normaliseTriggerPath(triggerPath: string): string {
+  return triggerPath.startsWith('/') ? triggerPath.slice(1) : triggerPath;
+}
+
+function isWorkflowBinding(value: unknown): value is Workflow<unknown> {
+  return typeof value === 'object' && value !== null && 'create' in value;
+}
+
 /**
- * Look up the CF binding for a trigger path. Returns null when the workflow
- * isn't CF-backed.
+ * Look up the CF binding for a trigger path. Throws when the path is unknown
+ * or the binding is missing — both are deploy/config errors (a workflow with
+ * no `wrangler.jsonc` entry, or `bun cf:typegen` not run), not runtime states
+ * we should silently swallow.
  */
 export function getCfBindingForTriggerPath(
   triggerPath: string,
   env: CloudflareEnv
-): Workflow<unknown> | null {
-  const key = triggerPath.startsWith('/') ? triggerPath.slice(1) : triggerPath;
+): Workflow<unknown> {
+  const key = normaliseTriggerPath(triggerPath);
   const bindingName = TRIGGER_TO_BINDING[key];
-  if (!bindingName) return null;
-  const binding = env[bindingName];
-  if (!binding || typeof binding !== 'object' || !('create' in binding)) {
+  if (!bindingName) {
     throw new Error(
-      `[triggerWorkflow] CF engine selected for '${key}' but env binding '${String(bindingName)}' is missing or not a Workflow binding. ` +
+      `[triggerWorkflow] no workflow binding mapped for trigger path '${key}'. Add it to TRIGGER_TO_BINDING in src/lib/workflow/trigger-bindings.ts.`
+    );
+  }
+  const binding = env[bindingName];
+  if (!isWorkflowBinding(binding)) {
+    throw new Error(
+      `[triggerWorkflow] binding '${String(bindingName)}' for '${key}' is missing or not a Workflow binding. ` +
         `Check wrangler.jsonc and ensure 'bun cf:typegen' has been run.`
     );
   }
@@ -75,32 +84,28 @@ export function getCfBindingForTriggerPath(
 }
 
 /**
- * Decide which engine to use for a given trigger path. Pure — no side
- * effects, safe to call before doing any work. Bundles the engine choice
- * with the env binding lookup so `triggerWorkflow` only has one place to
- * branch.
+ * Resolve the CF binding for a stored workflow run id, used by the
+ * reconciler to query instance status. Run ids built by `buildInstanceId`
+ * have the shape `${envSlug}_${workflowName}_${suffix}` — the workflow name
+ * is the second underscore-delimited segment. Returns null for ids that don't
+ * map to a known workflow (e.g. legacy QStash run ids), so callers can treat
+ * them as unresolvable.
  */
-export function resolveEngineForTrigger(
-  triggerPath: string,
+export function getCfBindingForRunId(
+  runId: string,
   env: CloudflareEnv
-): { engine: WorkflowEngine; binding: Workflow<unknown> | null } {
-  const engine = getEngineForWorkflow(triggerPath);
-  if (engine !== 'cloudflare') return { engine, binding: null };
-
-  const binding = getCfBindingForTriggerPath(triggerPath, env);
-  if (!binding) {
-    // Registry says CF but no binding registered — fall back so the system
-    // stays available; log loudly so it's obvious in production.
-    logger.warn(
-      `[triggerWorkflow] engine=cloudflare for '${triggerPath}' but no binding map entry found; falling back to qstash`
-    );
-    return { engine: 'qstash', binding: null };
-  }
-  return { engine, binding };
+): Workflow<unknown> | null {
+  const segments = runId.split('_');
+  const workflowName = segments[1];
+  if (!workflowName) return null;
+  const bindingName = TRIGGER_TO_BINDING[workflowName];
+  if (!bindingName) return null;
+  const binding = env[bindingName];
+  return isWorkflowBinding(binding) ? binding : null;
 }
 
 /**
- * Trigger a CF-backed workflow.
+ * Trigger a workflow.
  */
 export async function triggerCfWorkflow<T extends Rpc.Serializable<T>>({
   binding,
@@ -115,9 +120,7 @@ export async function triggerCfWorkflow<T extends Rpc.Serializable<T>>({
   env: CloudflareEnv;
   deduplicationId?: string;
 }): Promise<CfTriggerResult> {
-  const workflowName = triggerPath.startsWith('/')
-    ? triggerPath.slice(1)
-    : triggerPath;
+  const workflowName = normaliseTriggerPath(triggerPath);
   const id = buildInstanceId({
     env,
     workflowName,

@@ -5,73 +5,66 @@
  */
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import type { WorkflowRunState } from './status';
 
-type LogsResult = {
-  runs: ReadonlyArray<{ workflowState: WorkflowRunState }>;
-};
+const statusMock = vi.fn<() => Promise<{ status: string }>>();
+const getInstanceMock = vi.fn(async () => ({ status: statusMock }));
+const getCfBindingForRunIdMock = vi.fn<
+  (runId: string, env: unknown) => { get: typeof getInstanceMock } | null
+>(() => ({ get: getInstanceMock }));
 
-const logsMock = vi.fn<
-  (args: { workflowRunId: string; count: number }) => Promise<LogsResult>
->(async () => ({ runs: [] }));
-
-vi.doMock('./client', () => ({
-  getWorkflowClient: () => ({ logs: logsMock }),
+vi.doMock('#env', () => ({ getEnv: () => ({}) }));
+vi.doMock('@/lib/workflow/trigger-bindings', () => ({
+  getCfBindingForRunId: getCfBindingForRunIdMock,
 }));
 
 describe('resolveRunState', () => {
   beforeEach(() => {
-    logsMock.mockReset();
-  });
-
-  test('returns "failed" when QStash reports RUN_CANCELED', async () => {
-    logsMock.mockResolvedValueOnce({
-      runs: [{ workflowState: 'RUN_CANCELED' }],
-    });
-    const { resolveRunState } = await import('./reconcile');
-    expect(await resolveRunState('run_1')).toBe('failed');
-  });
-
-  test('returns "failed" when QStash reports RUN_FAILED', async () => {
-    logsMock.mockResolvedValueOnce({ runs: [{ workflowState: 'RUN_FAILED' }] });
-    const { resolveRunState } = await import('./reconcile');
-    expect(await resolveRunState('run_2')).toBe('failed');
-  });
-
-  test('returns "completed" on RUN_SUCCESS', async () => {
-    logsMock.mockResolvedValueOnce({
-      runs: [{ workflowState: 'RUN_SUCCESS' }],
-    });
-    const { resolveRunState } = await import('./reconcile');
-    expect(await resolveRunState('run_3')).toBe('completed');
-  });
-
-  test('returns null on RUN_STARTED (still running, leave alone)', async () => {
-    logsMock.mockResolvedValueOnce({
-      runs: [{ workflowState: 'RUN_STARTED' }],
-    });
-    const { resolveRunState } = await import('./reconcile');
-    expect(await resolveRunState('run_4')).toBeNull();
-  });
-
-  test('returns null when QStash returns an empty runs array (safer: leave row alone)', async () => {
-    // Conservative: an empty response could be a transient blip or a
-    // not-yet-logged run. We'd rather skip and retry than falsely mark
-    // a healthy row failed.
-    logsMock.mockResolvedValueOnce({ runs: [] });
-    const { resolveRunState } = await import('./reconcile');
-    expect(await resolveRunState('run_5')).toBeNull();
+    statusMock.mockReset();
+    getInstanceMock.mockClear();
+    getCfBindingForRunIdMock.mockReset();
+    getCfBindingForRunIdMock.mockReturnValue({ get: getInstanceMock });
   });
 
   test('returns "failed" when runId is empty (workflow was never tracked)', async () => {
     const { resolveRunState } = await import('./reconcile');
     expect(await resolveRunState('')).toBe('failed');
-    expect(logsMock).not.toHaveBeenCalled();
+    expect(getCfBindingForRunIdMock).not.toHaveBeenCalled();
   });
 
-  test('swallows QStash errors and returns null (best-effort)', async () => {
-    logsMock.mockRejectedValueOnce(new Error('network'));
+  test('returns "failed" when the run id maps to no known workflow binding', async () => {
+    // e.g. a legacy QStash run id from before the cutover.
+    getCfBindingForRunIdMock.mockReturnValueOnce(null);
     const { resolveRunState } = await import('./reconcile');
-    expect(await resolveRunState('run_6')).toBeNull();
+    expect(await resolveRunState('legacy-qstash-id')).toBe('failed');
+  });
+
+  test('returns "completed" when the instance reports complete', async () => {
+    statusMock.mockResolvedValueOnce({ status: 'complete' });
+    const { resolveRunState } = await import('./reconcile');
+    expect(await resolveRunState('local_image_1')).toBe('completed');
+  });
+
+  test('returns "failed" when the instance reports errored', async () => {
+    statusMock.mockResolvedValueOnce({ status: 'errored' });
+    const { resolveRunState } = await import('./reconcile');
+    expect(await resolveRunState('local_image_2')).toBe('failed');
+  });
+
+  test('returns "failed" when the instance reports terminated', async () => {
+    statusMock.mockResolvedValueOnce({ status: 'terminated' });
+    const { resolveRunState } = await import('./reconcile');
+    expect(await resolveRunState('local_image_3')).toBe('failed');
+  });
+
+  test('returns null while the instance is still running (leave alone)', async () => {
+    statusMock.mockResolvedValueOnce({ status: 'running' });
+    const { resolveRunState } = await import('./reconcile');
+    expect(await resolveRunState('local_image_4')).toBeNull();
+  });
+
+  test('swallows status lookup errors and returns null (best-effort)', async () => {
+    statusMock.mockRejectedValueOnce(new Error('network'));
+    const { resolveRunState } = await import('./reconcile');
+    expect(await resolveRunState('local_image_5')).toBeNull();
   });
 });

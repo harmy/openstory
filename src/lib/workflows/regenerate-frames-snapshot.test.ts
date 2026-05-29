@@ -11,7 +11,6 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Character, Frame, SequenceLocation } from '@/lib/db/schema';
-import { validateSnapshotPayload } from '@/lib/workflow/scoped-workflow';
 import {
   buildConvergentWrites,
   buildDivergentWrites,
@@ -452,46 +451,7 @@ describe('buildDivergentWrites', () => {
   });
 });
 
-describe('validateSnapshotPayload', () => {
-  it('passes when the payload hash matches the recompute', async () => {
-    await validateSnapshotPayload(
-      { snapshotInputHash: 'matching-hash' },
-      () => 'matching-hash'
-    );
-  });
-
-  it('throws when the payload hash differs from the recompute (tamper)', () => {
-    expect(
-      validateSnapshotPayload(
-        { snapshotInputHash: 'stale-hash' },
-        () => 'fresh-hash'
-      )
-    ).rejects.toThrow(/snapshotInputHash does not match the inlined DTO/);
-  });
-
-  it('throws when snapshotInputHash is missing entirely', () => {
-    expect(
-      validateSnapshotPayload(
-        // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- intentionally constructing an invalid payload to verify the runtime guard
-        { snapshotInputHash: undefined } as unknown as {
-          snapshotInputHash: string;
-        },
-        () => 'fresh-hash'
-      )
-    ).rejects.toThrow(/snapshotInputHash is required/);
-  });
-
-  it('awaits an async computeFromDto', async () => {
-    const asyncMatching = async () => 'async-hash';
-    await validateSnapshotPayload(
-      { snapshotInputHash: 'async-hash' },
-      asyncMatching
-    );
-    expect(
-      validateSnapshotPayload(
-        { snapshotInputHash: 'wrong-hash' },
-        asyncMatching
-      )
-    ).rejects.toThrow();
-  });
-});
+// `validateSnapshotPayload` lived in the QStash `scoped-workflow` middleware
+// (removed in the Cloudflare Workflows cutover). Cloudflare workflows validate
+// the snapshot hash inline at `runImpl` start — see
+// `regenerate-frames-workflow.ts`.

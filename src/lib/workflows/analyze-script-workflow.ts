@@ -1,15 +1,39 @@
 /**
- * Frame generation workflow
- * Orchestrates script analysis, frame creation, and thumbnail generation
- */
+ * Cloudflare Workflows port of `analyzeScriptWorkflow` — the deepest
+ * orchestrator in the system. Sequences scene-split → talent/location
+ * matching → character/location bibles + visual prompts → frame images +
+ * motion/music prompts → motion-batch.
+ *
+ * Mirrors the QStash version (`src/lib/workflows/analyze-script-workflow.ts`)
+ * phase for phase. Key differences:
+ *
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - Every `context.invoke('child', { workflow, body })` becomes a
+ *     `spawnAndAwaitChild` Pattern 3 call (await-child.ts). Parallel
+ *     `Promise.all([context.invoke, context.invoke])` becomes
+ *     `Promise.all` over `spawnAndAwaitChild` calls; we use
+ *     `Promise.allSettled` where the QStash original individually checked
+ *     `.isFailed` so a single child failure surfaces as a typed error
+ *     instead of an unhandled rejection.
+ *
+ * Every child workflow is CF-ported and spawned via `spawnAndAwaitChild`,
+ * including `scene-split` (Gap C — LLM streaming wrapped in a single
+ * `step.do` per `docs/investigations/cloudflare-workflows.md`) and
+ * `motion-batch` (Phase 5 motion + music + merge tree). */
 
 import { sanitizeScriptContent } from '@/lib/ai/prompt-validation';
 import { resolveImageModels } from '@/lib/ai/resolve-image-models';
 import type { Scene } from '@/lib/ai/scene-analysis.schema';
+import type { ScopedDb } from '@/lib/db/scoped';
+import { assembleMotionPrompt } from '@/lib/motion/assemble-motion-prompt';
 import { recordWorkflowTrace } from '@/lib/observability/langfuse';
 import { getGenerationChannel } from '@/lib/realtime';
+import { spawnAndAwaitChild } from '@/lib/workflow/await-child';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
-import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import {
   isOpenRouterAuthError,
   sanitizeFailResponse,
@@ -17,42 +41,49 @@ import {
 import type {
   AnalyzeScriptWorkflowInput,
   BatchMotionMusicWorkflowInput,
+  CharacterBibleWorkflowInput,
   FrameImagesWorkflowInput,
+  FrameImagesWorkflowResult,
+  LocationBibleWorkflowInput,
+  LocationMatchingWorkflowInput,
+  LocationMatchingWorkflowOutput,
   MotionMusicPromptsWorkflowInput,
+  MotionMusicPromptsWorkflowResult,
+  SceneSplitWorkflowInput,
+  SceneSplitWorkflowResult,
+  TalentMatchingWorkflowInput,
+  TalentMatchingWorkflowOutput,
+  VisualPromptWorkflowInput,
 } from '@/lib/workflow/types';
-
-import { assembleMotionPrompt } from '@/lib/motion/assemble-motion-prompt';
-import { motionBatchWorkflow } from '@/lib/workflows/motion-batch-workflow';
-import { characterBibleWorkflow } from './character-bible-workflow';
-import { frameImagesWorkflow } from './frame-images-workflow';
-import { locationBibleWorkflow } from './location-bible-workflow';
-import { motionMusicPromptsWorkflow } from './motion-music-prompts-workflow';
-import {
-  computeFrameImagesHashFromDto,
-  type FrameImageSceneSnapshot,
-} from './sheet-snapshots';
 import {
   matchCharactersToScene,
   matchElementsToScene,
   matchLocationsToScene,
-} from './scene-matching';
-
-import { createScopedWorkflow } from '../workflow/scoped-workflow';
-import { locationMatchingWorkflow } from './location-matching-workflow';
-import { sceneSplitWorkflow } from './scene-split-workflow';
-import { talentMatchingWorkflow } from './talent-matching-workflow';
-import { visualPromptWorkflow } from './visual-prompt-workflow';
-
+} from '@/lib/workflows/scene-matching';
+import {
+  computeFrameImagesHashFromDto,
+  type FrameImageSceneSnapshot,
+} from '@/lib/workflows/sheet-snapshots';
+import type {
+  CharacterMinimal,
+  SequenceLocationMinimal,
+} from '@/lib/db/schema';
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
+import { NonRetryableError } from 'cloudflare:workflows';
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'analyze-script']);
 
-export const analyzeScriptWorkflow = createScopedWorkflow<
-  AnalyzeScriptWorkflowInput,
-  Scene[]
->(
-  async (context, scopedDb) => {
-    const input = context.requestPayload;
+const PARENT_BINDING_NAME = 'ANALYZE_SCRIPT_WORKFLOW' as const;
+
+export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeScriptWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<AnalyzeScriptWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<Scene[]> {
+    const input = event.payload;
+    const parentInstanceId = event.instanceId;
     const {
       sequenceId,
       script,
@@ -71,45 +102,42 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
 
     const imageModels = resolveImageModels(imageModelsInput, imageModel);
 
-    const label = buildWorkflowLabel(sequenceId);
-
-    // Phase 1: Scene splitting
+    // Top-level validation — base class re-wraps as CF NonRetryableError.
     if (!script) {
       throw new WorkflowValidationError('No script found');
     }
-    // Record start time of analysis
-    const startTime = await context.run('start-time', () => Date.now());
 
-    // Phase 1 START
-    await context.run('phase-1-start', async () => {
+    // Record start time of analysis (used for analysis-duration metric below).
+    const startTime = await step.do('start-time', () =>
+      Promise.resolve(Date.now())
+    );
+
+    // ----------------------------------------------------------------------
+    // PHASE 1: scene-split (LLM stream → scenes/bibles/frameMapping)
+    // ----------------------------------------------------------------------
+    await step.do('phase-1-start', async () => {
       await getGenerationChannel(sequenceId).emit('generation.phase:start', {
         phase: 1,
-        phaseName: 'Analyzing script\u2026',
+        phaseName: 'Analyzing script…',
       });
     });
 
-    // Load sequence elements. Element vision MUST be terminal (`completed` or
-    // `failed`) before scene-split runs — otherwise the LLM would see a
-    // placeholder description and the prompt-input hashes stamped on each frame
-    // would diverge from the live hash once vision completes, surfacing as
-    // false-positive "out of sync" indicators on every scene's Image/Motion tab.
-    //
-    // The UI gates Generate on `isBusy` (`element-selector.tsx`) which tracks
-    // pending/analyzing vision status, so a draft upload with in-flight vision
-    // can never reach here through the happy path. This check is defence in
-    // depth — if a `pending` row does sneak in (e.g. a stale tab triggering
-    // the mutation, or a developer wiring), we fail loudly rather than
-    // degrading.
-    const elements = await context.run('load-elements', async () => {
+    // Load sequence elements. Vision MUST be terminal before scene-split.
+    // See QStash original for the full rationale.
+    const elements = await step.do('load-elements', async () => {
       if (!sequenceId) return [];
       const list = await scopedDb.sequenceElements.list(sequenceId);
       const stillRunning = list.filter(
         (el) => el.visionStatus === 'pending' || el.visionStatus === 'analyzing'
       );
       if (stillRunning.length > 0) {
-        throw new WorkflowValidationError(
+        // NonRetryableError (not WorkflowValidationError) because the base
+        // class's re-wrap only runs at the runImpl catch boundary; a throw
+        // inside step.do gets retried by CF's step machinery first.
+        throw new NonRetryableError(
           `Element vision is still running for ${stillRunning.length} element(s). ` +
-            `Wait for vision analysis to finish before regenerating.`
+            `Wait for vision analysis to finish before regenerating.`,
+          'WorkflowValidationError'
         );
       }
       return list;
@@ -123,10 +151,26 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
       consistencyTag: el.consistencyTag,
     }));
 
-    const sceneSplitResult = await context.invoke('scene-split', {
-      workflow: sceneSplitWorkflow,
-      label,
-      body: {
+    const sceneSplitBinding = this.env.SCENE_SPLIT_WORKFLOW;
+    if (!sceneSplitBinding) {
+      throw new NonRetryableError(
+        '[AnalyzeScriptWorkflow:cf] SCENE_SPLIT_WORKFLOW binding missing on env; check wrangler.jsonc',
+        'WorkflowValidationError'
+      );
+    }
+    const sceneSplitResult = await spawnAndAwaitChild<
+      SceneSplitWorkflowInput,
+      SceneSplitWorkflowResult
+    >(step, {
+      binding: sceneSplitBinding as Workflow<
+        SceneSplitWorkflowInput & {
+          _parent: import('@/lib/workflow/await-child').ParentNotifyHint;
+        }
+      >,
+      parentBindingName: 'ANALYZE_SCRIPT_WORKFLOW',
+      parentInstanceId: event.instanceId,
+      childId: `scene-split:${sequenceId ?? 'no-seq'}`,
+      childPayload: {
         userId: input.userId,
         teamId: input.teamId,
         sequenceId,
@@ -137,11 +181,9 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
         modelId: analysisModelId,
         elements: elementsMinimal,
       },
+      spawnStepName: 'spawn-scene-split',
+      awaitStepName: 'await-scene-split',
     });
-
-    if (sceneSplitResult.isFailed || sceneSplitResult.isCanceled) {
-      throw new Error('Scene split workflow failed');
-    }
 
     const {
       scenes,
@@ -149,126 +191,227 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
       characterBible,
       locationBible,
       elementBible,
-    } = sceneSplitResult.body;
+    } = sceneSplitResult;
 
-    // Phase 2: Talent + location matching in parallel
-    // Pass pre-extracted bibles to skip redundant extraction LLM calls
-    // Phase 2 start event is emitted from scene-split-workflow when the
-    // characterBible starts streaming. If bibles are empty (fallback path
-    // or script has no characters), phase 3 start marks phase 2 complete
-    // in the reducer — no separate emit needed.
-    const [characterMatchingResult, locationMatchingResult] = await Promise.all(
-      [
-        context.invoke('talent-matching', {
-          workflow: talentMatchingWorkflow,
-          label,
-          body: {
-            sequenceId,
-            userId: input.userId,
-            teamId: input.teamId,
-            analysisModelId,
-            suggestedTalentIds,
-            characterBible,
-          },
-        }),
-        context.invoke('location-matching', {
-          workflow: locationMatchingWorkflow,
-          label,
-          body: {
-            sequenceId,
-            userId: input.userId,
-            teamId: input.teamId,
-            analysisModelId,
-            suggestedLocationIds,
-            locationBible,
-          },
-        }),
-      ]
-    );
-    if (characterMatchingResult.isFailed || characterMatchingResult.isCanceled)
-      throw new Error('Character sheet generation failed');
-    if (locationMatchingResult.isFailed || locationMatchingResult.isCanceled)
-      throw new Error('Location sheet generation failed');
+    // ----------------------------------------------------------------------
+    // PHASE 2: talent + location matching in parallel
+    // ----------------------------------------------------------------------
+    const talentBinding = this.env.TALENT_MATCHING_WORKFLOW;
+    if (!talentBinding) {
+      throw new NonRetryableError(
+        '[AnalyzeScriptWorkflow:cf] TALENT_MATCHING_WORKFLOW binding missing on env; check wrangler.jsonc',
+        'WorkflowValidationError'
+      );
+    }
+    const locationMatchingBinding = this.env.LOCATION_MATCHING_WORKFLOW;
+    if (!locationMatchingBinding) {
+      throw new NonRetryableError(
+        '[AnalyzeScriptWorkflow:cf] LOCATION_MATCHING_WORKFLOW binding missing on env; check wrangler.jsonc',
+        'WorkflowValidationError'
+      );
+    }
 
-    const { matches: talentCharacterMatches } = characterMatchingResult.body;
-    const { matches: libraryLocationMatches } = locationMatchingResult.body;
-
-    // Phase 3 START
-    await context.run('phase-3-start', async () => {
-      await getGenerationChannel(sequenceId).emit('generation.phase:start', {
-        phase: 3,
-        phaseName: 'Generating references & prompts\u2026',
-      });
-    });
-
-    // Phase 3: Character sheets, location sheets, and visual prompts in parallel
-    const [charResult, locationResult, visualResult] = await Promise.all([
-      context.invoke('character-sheet-from-bible', {
-        workflow: characterBibleWorkflow,
-        label,
-        body: {
+    const [talentSettled, locationMatchSettled] = await Promise.allSettled([
+      spawnAndAwaitChild<
+        TalentMatchingWorkflowInput,
+        TalentMatchingWorkflowOutput
+      >(step, {
+        binding: talentBinding as Workflow<
+          TalentMatchingWorkflowInput & {
+            _parent: import('@/lib/workflow/await-child').ParentNotifyHint;
+          }
+        >,
+        parentBindingName: PARENT_BINDING_NAME,
+        parentInstanceId,
+        childId: `talent-matching:${sequenceId ?? 'no-seq'}`,
+        childPayload: {
           sequenceId,
           userId: input.userId,
           teamId: input.teamId,
-          characterBible,
-          talentMatches: talentCharacterMatches,
-          imageModel,
-          styleConfig,
-        },
-      }),
-      context.invoke('location-sheet-from-bible', {
-        workflow: locationBibleWorkflow,
-        label,
-        body: {
-          sequenceId,
-          userId: input.userId,
-          teamId: input.teamId,
-          locationBible,
-          libraryLocationMatches,
-          styleConfig,
-        },
-      }),
-      context.invoke('visual-prompts', {
-        workflow: visualPromptWorkflow,
-        label,
-        body: {
-          userId: input.userId,
-          teamId: input.teamId,
-          sequenceId,
-          scenes,
-          aspectRatio,
-          characterBible,
-          locationBible,
-          elementBible,
-          styleConfig,
           analysisModelId,
-          frameMapping,
+          suggestedTalentIds,
+          characterBible,
         },
+        spawnStepName: 'spawn-talent-matching',
+        awaitStepName: 'await-talent-matching',
+      }),
+      spawnAndAwaitChild<
+        LocationMatchingWorkflowInput,
+        LocationMatchingWorkflowOutput
+      >(step, {
+        binding: locationMatchingBinding as Workflow<
+          LocationMatchingWorkflowInput & {
+            _parent: import('@/lib/workflow/await-child').ParentNotifyHint;
+          }
+        >,
+        parentBindingName: PARENT_BINDING_NAME,
+        parentInstanceId,
+        childId: `location-matching:${sequenceId ?? 'no-seq'}`,
+        childPayload: {
+          sequenceId,
+          userId: input.userId,
+          teamId: input.teamId,
+          analysisModelId,
+          suggestedLocationIds,
+          locationBible,
+        },
+        spawnStepName: 'spawn-location-matching',
+        awaitStepName: 'await-location-matching',
       }),
     ]);
 
-    if (charResult.isFailed || charResult.isCanceled)
-      throw new Error('Character sheet generation failed');
-    if (locationResult.isFailed || locationResult.isCanceled)
-      throw new Error('Location sheet generation failed');
-    if (visualResult.isFailed || visualResult.isCanceled)
-      throw new Error('Visual prompt generation failed');
+    if (talentSettled.status === 'rejected') {
+      throw new Error(
+        `Character sheet generation failed: ${String(talentSettled.reason)}`
+      );
+    }
+    if (locationMatchSettled.status === 'rejected') {
+      throw new Error(
+        `Location sheet generation failed: ${String(locationMatchSettled.reason)}`
+      );
+    }
+    const { matches: talentCharacterMatches } = talentSettled.value;
+    const { matches: libraryLocationMatches } = locationMatchSettled.value;
 
-    const charactersWithSheets = charResult.body;
-    const locationsWithSheets = locationResult.body;
-    const scenesWithVisualPrompts = visualResult.body;
-
-    // Phase 4 START
-    await context.run('phase-4-start', async () => {
+    // ----------------------------------------------------------------------
+    // PHASE 3: character bible + location bible + visual prompts in parallel
+    // ----------------------------------------------------------------------
+    await step.do('phase-3-start', async () => {
       await getGenerationChannel(sequenceId).emit('generation.phase:start', {
-        phase: 4,
-        phaseName: 'Generating images\u2026',
+        phase: 3,
+        phaseName: 'Generating references & prompts…',
       });
     });
 
-    // Build per-scene snapshots so frameImagesWorkflow's snapshot middleware
-    // can validate the inlined sheet hashes haven't been swapped without a
-    // matching snapshotInputHash.
+    const characterBibleBinding = this.env.CHARACTER_BIBLE_WORKFLOW;
+    if (!characterBibleBinding) {
+      throw new NonRetryableError(
+        '[AnalyzeScriptWorkflow:cf] CHARACTER_BIBLE_WORKFLOW binding missing on env; check wrangler.jsonc',
+        'WorkflowValidationError'
+      );
+    }
+    const locationBibleBinding = this.env.LOCATION_BIBLE_WORKFLOW;
+    if (!locationBibleBinding) {
+      throw new NonRetryableError(
+        '[AnalyzeScriptWorkflow:cf] LOCATION_BIBLE_WORKFLOW binding missing on env; check wrangler.jsonc',
+        'WorkflowValidationError'
+      );
+    }
+    const visualPromptBinding = this.env.VISUAL_PROMPT_WORKFLOW;
+    if (!visualPromptBinding) {
+      throw new NonRetryableError(
+        '[AnalyzeScriptWorkflow:cf] VISUAL_PROMPT_WORKFLOW binding missing on env; check wrangler.jsonc',
+        'WorkflowValidationError'
+      );
+    }
+
+    const [charSettled, locationSettled, visualSettled] =
+      await Promise.allSettled([
+        spawnAndAwaitChild<CharacterBibleWorkflowInput, CharacterMinimal[]>(
+          step,
+          {
+            binding: characterBibleBinding as Workflow<
+              CharacterBibleWorkflowInput & {
+                _parent: import('@/lib/workflow/await-child').ParentNotifyHint;
+              }
+            >,
+            parentBindingName: PARENT_BINDING_NAME,
+            parentInstanceId,
+            childId: `character-bible:${sequenceId ?? 'no-seq'}`,
+            childPayload: {
+              sequenceId,
+              userId: input.userId,
+              teamId: input.teamId,
+              characterBible,
+              talentMatches: talentCharacterMatches,
+              imageModel,
+              styleConfig,
+            },
+            spawnStepName: 'spawn-character-bible',
+            awaitStepName: 'await-character-bible',
+          }
+        ),
+        spawnAndAwaitChild<
+          LocationBibleWorkflowInput,
+          SequenceLocationMinimal[]
+        >(step, {
+          binding: locationBibleBinding as Workflow<
+            LocationBibleWorkflowInput & {
+              _parent: import('@/lib/workflow/await-child').ParentNotifyHint;
+            }
+          >,
+          parentBindingName: PARENT_BINDING_NAME,
+          parentInstanceId,
+          childId: `location-bible:${sequenceId ?? 'no-seq'}`,
+          childPayload: {
+            sequenceId,
+            userId: input.userId,
+            teamId: input.teamId,
+            locationBible,
+            libraryLocationMatches,
+            styleConfig,
+          },
+          spawnStepName: 'spawn-location-bible',
+          awaitStepName: 'await-location-bible',
+        }),
+        spawnAndAwaitChild<VisualPromptWorkflowInput, Scene[]>(step, {
+          binding: visualPromptBinding as Workflow<
+            VisualPromptWorkflowInput & {
+              _parent: import('@/lib/workflow/await-child').ParentNotifyHint;
+            }
+          >,
+          parentBindingName: PARENT_BINDING_NAME,
+          parentInstanceId,
+          childId: `visual-prompts:${sequenceId ?? 'no-seq'}`,
+          childPayload: {
+            userId: input.userId,
+            teamId: input.teamId,
+            sequenceId,
+            scenes,
+            aspectRatio,
+            characterBible,
+            locationBible,
+            elementBible,
+            styleConfig,
+            analysisModelId,
+            frameMapping,
+          },
+          spawnStepName: 'spawn-visual-prompts',
+          awaitStepName: 'await-visual-prompts',
+        }),
+      ]);
+
+    if (charSettled.status === 'rejected') {
+      throw new Error(
+        `Character sheet generation failed: ${String(charSettled.reason)}`
+      );
+    }
+    if (locationSettled.status === 'rejected') {
+      throw new Error(
+        `Location sheet generation failed: ${String(locationSettled.reason)}`
+      );
+    }
+    if (visualSettled.status === 'rejected') {
+      throw new Error(
+        `Visual prompt generation failed: ${String(visualSettled.reason)}`
+      );
+    }
+
+    const charactersWithSheets = charSettled.value;
+    const locationsWithSheets = locationSettled.value;
+    const scenesWithVisualPrompts = visualSettled.value;
+
+    // ----------------------------------------------------------------------
+    // PHASE 4: frame images + motion/music prompts in parallel
+    // ----------------------------------------------------------------------
+    await step.do('phase-4-start', async () => {
+      await getGenerationChannel(sequenceId).emit('generation.phase:start', {
+        phase: 4,
+        phaseName: 'Generating images…',
+      });
+    });
+
+    // Build per-scene snapshots for frame-images divergence detection.
     const sceneSnapshots: FrameImageSceneSnapshot[] =
       scenesWithVisualPrompts.map((scene) => {
         const characters = matchCharactersToScene(
@@ -322,17 +465,51 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
       sceneSnapshots,
     });
 
-    // Phase 4: Frame images + variants AND motion + music prompts in parallel
-    const [frameImagesResult, motionMusicResult] = await Promise.all([
-      context.invoke('frame-images', {
-        workflow: frameImagesWorkflow,
-        label,
-        body: frameImagesPayload,
-      }),
-      context.invoke('motion-music-prompts', {
-        workflow: motionMusicPromptsWorkflow,
-        label,
-        body: {
+    const frameImagesBinding = this.env.FRAME_IMAGES_WORKFLOW;
+    if (!frameImagesBinding) {
+      throw new NonRetryableError(
+        '[AnalyzeScriptWorkflow:cf] FRAME_IMAGES_WORKFLOW binding missing on env; check wrangler.jsonc',
+        'WorkflowValidationError'
+      );
+    }
+    const motionMusicBinding = this.env.MOTION_MUSIC_PROMPTS_WORKFLOW;
+    if (!motionMusicBinding) {
+      throw new NonRetryableError(
+        '[AnalyzeScriptWorkflow:cf] MOTION_MUSIC_PROMPTS_WORKFLOW binding missing on env; check wrangler.jsonc',
+        'WorkflowValidationError'
+      );
+    }
+
+    const [frameImagesSettled, motionMusicSettled] = await Promise.allSettled([
+      spawnAndAwaitChild<FrameImagesWorkflowInput, FrameImagesWorkflowResult>(
+        step,
+        {
+          binding: frameImagesBinding as Workflow<
+            FrameImagesWorkflowInput & {
+              _parent: import('@/lib/workflow/await-child').ParentNotifyHint;
+            }
+          >,
+          parentBindingName: PARENT_BINDING_NAME,
+          parentInstanceId,
+          childId: `frame-images:${sequenceId ?? 'no-seq'}`,
+          childPayload: frameImagesPayload,
+          spawnStepName: 'spawn-frame-images',
+          awaitStepName: 'await-frame-images',
+        }
+      ),
+      spawnAndAwaitChild<
+        MotionMusicPromptsWorkflowInput,
+        MotionMusicPromptsWorkflowResult
+      >(step, {
+        binding: motionMusicBinding as Workflow<
+          MotionMusicPromptsWorkflowInput & {
+            _parent: import('@/lib/workflow/await-child').ParentNotifyHint;
+          }
+        >,
+        parentBindingName: PARENT_BINDING_NAME,
+        parentInstanceId,
+        childId: `motion-music-prompts:${sequenceId ?? 'no-seq'}`,
+        childPayload: {
           userId: input.userId,
           teamId: input.teamId,
           sequenceId,
@@ -345,12 +522,14 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
           styleConfig,
           analysisModelId,
           videoModel,
-        } satisfies MotionMusicPromptsWorkflowInput,
+        },
+        spawnStepName: 'spawn-motion-music-prompts',
+        awaitStepName: 'await-motion-music-prompts',
       }),
     ]);
 
-    // Record analysis duration before generating motion
-    await context.run('record-analysis-duration', async () => {
+    // Record analysis duration before raising failures (mirrors QStash).
+    await step.do('record-analysis-duration', async () => {
       if (sequenceId) {
         await scopedDb.sequences.updateAnalysisDurationMs(
           sequenceId,
@@ -359,15 +538,23 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
       }
     });
 
-    if (frameImagesResult.isFailed || frameImagesResult.isCanceled)
-      throw new Error('Frame image generation failed');
-    if (motionMusicResult.isFailed || motionMusicResult.isCanceled)
-      throw new Error('Motion/music prompt generation failed');
+    if (frameImagesSettled.status === 'rejected') {
+      throw new Error(
+        `Frame image generation failed: ${String(frameImagesSettled.reason)}`
+      );
+    }
+    if (motionMusicSettled.status === 'rejected') {
+      throw new Error(
+        `Motion/music prompt generation failed: ${String(motionMusicSettled.reason)}`
+      );
+    }
 
-    const imageUrls = frameImagesResult.body.imageUrls;
-    const { completeScenes, musicPrompt, musicTags } = motionMusicResult.body;
+    const imageUrls = frameImagesSettled.value.imageUrls;
+    const { completeScenes, musicPrompt, musicTags } = motionMusicSettled.value;
 
-    // Auto-generate motion + music if enabled
+    // ----------------------------------------------------------------------
+    // PHASE 5: motion (+ optional music + merge) batch — single child
+    // ----------------------------------------------------------------------
     const shouldGenerateMotion =
       autoGenerateMotion && videoModel && imageUrls.length > 0;
     const shouldGenerateMusic = Boolean(
@@ -416,21 +603,32 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
         };
       });
 
-      // Phase 5 START
-      await context.run('phase-5-start', async () => {
+      await step.do('phase-5-start', async () => {
         await getGenerationChannel(sequenceId).emit('generation.phase:start', {
           phase: 5,
           phaseName: shouldGenerateMusic
-            ? 'Generating motion & music\u2026'
-            : 'Generating motion\u2026',
+            ? 'Generating motion & music…'
+            : 'Generating motion…',
         });
       });
 
-      // Phase 5: single orchestrator for motion + optional music
-      const motionBatchResult = await context.invoke('motion-batch', {
-        workflow: motionBatchWorkflow,
-        label,
-        body: {
+      const motionBatchBinding = this.env.MOTION_BATCH_WORKFLOW;
+      if (!motionBatchBinding) {
+        throw new NonRetryableError(
+          '[AnalyzeScriptWorkflow:cf] MOTION_BATCH_WORKFLOW binding missing on env; check wrangler.jsonc',
+          'WorkflowValidationError'
+        );
+      }
+      await spawnAndAwaitChild<BatchMotionMusicWorkflowInput, unknown>(step, {
+        binding: motionBatchBinding as Workflow<
+          BatchMotionMusicWorkflowInput & {
+            _parent: import('@/lib/workflow/await-child').ParentNotifyHint;
+          }
+        >,
+        parentBindingName: 'ANALYZE_SCRIPT_WORKFLOW',
+        parentInstanceId: event.instanceId,
+        childId: `motion-batch:${sequenceId ?? 'no-seq'}`,
+        childPayload: {
           userId: input.userId,
           teamId: input.teamId,
           sequenceId,
@@ -444,15 +642,14 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
                 model: musicModel,
               }
             : undefined,
-        } satisfies BatchMotionMusicWorkflowInput,
+        },
+        spawnStepName: 'spawn-motion-batch',
+        awaitStepName: 'await-motion-batch',
       });
-
-      if (motionBatchResult.isFailed || motionBatchResult.isCanceled)
-        throw new Error('Motion/music batch failed');
     }
 
     if (sequenceId) {
-      await context.run('record-workflow-trace', async () => {
+      await step.do('record-workflow-trace', async () => {
         await recordWorkflowTrace(
           'analyzeScriptWorkflow',
           { script, styleConfig, aspectRatio },
@@ -466,31 +663,38 @@ export const analyzeScriptWorkflow = createScopedWorkflow<
     }
 
     return completeScenes;
-  },
-  {
-    failureFunction: async ({ context, scopedDb, failResponse }) => {
-      const { sequenceId } = context.requestPayload;
-      if (!sequenceId) return;
-
-      const error = sanitizeFailResponse(failResponse);
-      logger.error('Failure:', { err: error });
-
-      let userMessage = error;
-      if (
-        isOpenRouterAuthError(error) &&
-        (await scopedDb.apiKeys.hasKey('openrouter'))
-      ) {
-        await scopedDb.apiKeys.markKeyInvalid('openrouter', error);
-        userMessage =
-          'Your OpenRouter API key is invalid — update it in Settings.';
-      }
-
-      await scopedDb.sequence(sequenceId).updateStatus('failed', userMessage);
-      await getGenerationChannel(sequenceId).emit('generation.failed', {
-        message: userMessage,
-      });
-
-      return `Analysis workflow failed: ${error}`;
-    },
   }
-);
+
+  protected override async onFailure({
+    event,
+    error,
+    scopedDb,
+  }: {
+    event: Readonly<WorkflowEvent<AnalyzeScriptWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): Promise<void> {
+    const { sequenceId } = event.payload;
+    if (!sequenceId) return;
+
+    const sanitized = sanitizeFailResponse(error);
+    logger.error('[AnalyzeScriptWorkflow:cf] Failure:', {
+      sanitized,
+    });
+
+    let userMessage = sanitized;
+    if (
+      isOpenRouterAuthError(sanitized) &&
+      (await scopedDb.apiKeys.hasKey('openrouter'))
+    ) {
+      await scopedDb.apiKeys.markKeyInvalid('openrouter', sanitized);
+      userMessage =
+        'Your OpenRouter API key is invalid — update it in Settings.';
+    }
+
+    await scopedDb.sequence(sequenceId).updateStatus('failed', userMessage);
+    await getGenerationChannel(sequenceId).emit('generation.failed', {
+      message: userMessage,
+    });
+  }
+}

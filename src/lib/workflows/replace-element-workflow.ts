@@ -1,18 +1,25 @@
 /**
- * Replace Element Workflow
+ * Cloudflare Workflows port of `replaceElementWorkflow`.
  *
- * Per-frame edits a sequence element across all affected frames using an
- * image edit endpoint. Unlike character/location recast (which fully
- * regenerates the frame), this swaps just the element while keeping the
- * rest of the frame intact.
+ * Mirrors the QStash version (`src/lib/workflows/replace-element-workflow.ts`)
+ * step for step — same step names, same control flow, same side effects. The
+ * only differences are:
  *
- * Steps:
- * 1. Re-run vision analysis on the new element image so token gets fresh
- *    description + consistencyTag (used by future scene generations).
- * 2. For each affected frame, invoke `image-workflow` with the existing
- *    frame thumbnail as PRIMARY SOURCE and the new element image as
- *    ELEMENT REF — the model edits the frame to swap the element.
- */
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - The vision call inlines into a single `describe-new-element` step
+ *     instead of invoking the `element-vision` child workflow — matches the
+ *     QStash original, which also runs vision in-process here. The
+ *     `ElementVisionWorkflow` child is exercised by *other* trigger paths.
+ *   - Per-frame fan-out uses `spawnAndAwaitChild` (Pattern 3) to invoke
+ *     `ImageWorkflow` for each affected frame, with `Promise.all` to spawn
+ *     in parallel and `Promise.allSettled` to gather results so a single
+ *     timed-out child cannot tank the rest of the batch.
+ *   - Reads the workflow run id from `event.instanceId` instead of
+ *     `context.workflowRunId` (not needed by this workflow, but included
+ *     here for parity with other CF ports). */
 
 import { describeElementImage } from '@/lib/ai/element-vision';
 import {
@@ -23,37 +30,58 @@ import {
   supportsReferenceImages,
 } from '@/lib/ai/models';
 import { aspectRatioToImageSize } from '@/lib/constants/aspect-ratios';
+import type { ScopedDb } from '@/lib/db/scoped';
 import type { ElementVisionStatus, Frame } from '@/lib/db/schema';
 import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
 import { getGenerationChannel } from '@/lib/realtime';
-import { buildWorkflowLabel } from '@/lib/workflow/labels';
-import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
-import { createScopedWorkflow } from '@/lib/workflow/scoped-workflow';
+import { spawnAndAwaitChild } from '@/lib/workflow/await-child';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import type {
   ImageWorkflowInput,
   MotionWorkflowInput,
   ReplaceElementWorkflowInput,
   ReplaceElementWorkflowResult,
 } from '@/lib/workflow/types';
-import { generateImageWorkflow } from './image-workflow';
-import { generateMotionWorkflow } from './motion-workflow';
-
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
+import { NonRetryableError } from 'cloudflare:workflows';
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'replace-element']);
+
+// `REPLACE_ELEMENT_WORKFLOW` is declared on `CloudflareEnv` (see
+// `src/lib/workflow/types.ts`) and wired through `wrangler.jsonc` in the
+// follow-on infra PR. The runtime lookup in `notifyParent` /
+// `notifyParentOfFailure` only fires if this workflow itself is spawned as a
+// child (it's a top-level orchestrator today, so `_parent` is always
+// undefined and the constant is dormant).
+const PARENT_BINDING_NAME =
+  'REPLACE_ELEMENT_WORKFLOW' as const satisfies Parameters<
+    typeof spawnAndAwaitChild
+  >[1]['parentBindingName'];
+
+type ImageChildResult = {
+  imageUrl: string;
+  frameId?: string;
+  sequenceId?: string;
+};
+
+type MotionChildResult = {
+  videoUrl: string;
+  duration: number;
+};
 
 export type FrameResult =
   | { frameId: string; success: true; imageUrl: string }
   | { frameId: string; success: false; error: string };
 
-export type BatchOutcome =
+type BatchOutcome =
   | { kind: 'complete'; successCount: number; failedCount: number }
   | { kind: 'fail'; sampleReason: string; total: number };
 
 /**
  * Pure decision: given per-frame results, should the workflow emit `:complete`
- * or throw to trigger `failureFunction`? Skipped-deleted frames never enter
- * `results` so they don't count against the success floor.
+ * or throw to trigger the base class's `onFailure` hook? Skipped-deleted
+ * frames never enter `results` so they don't count against the success floor.
  */
 export function decideBatchOutcome(results: FrameResult[]): BatchOutcome {
   const successCount = results.filter((r) => r.success).length;
@@ -62,22 +90,20 @@ export function decideBatchOutcome(results: FrameResult[]): BatchOutcome {
     return { kind: 'complete', successCount: 0, failedCount: 0 };
   }
   if (successCount === 0) {
-    const firstFailure = results.find((r) => !r.success);
-    const sampleReason =
-      firstFailure && !firstFailure.success
-        ? firstFailure.error
-        : 'image edit failed';
+    const firstFailure = results.find(
+      (r): r is Extract<FrameResult, { success: false }> => !r.success
+    );
+    const sampleReason = firstFailure?.error ?? 'image edit failed';
     return { kind: 'fail', sampleReason, total: results.length };
   }
   return { kind: 'complete', successCount, failedCount };
 }
 
 /**
- * Pure decision: when the workflow's `failureFunction` fires, should the
- * element's `visionStatus` be downgraded to `'failed'`? Only when vision was
- * still in flight — if vision already succeeded, the failure was in a per-
- * frame edit and downgrading would mislead the element card into showing
- * "vision failed".
+ * Pure decision: when `onFailure` fires, should the element's `visionStatus`
+ * be downgraded to `'failed'`? Only when vision was still in flight — if
+ * vision already succeeded, the failure was in a per-frame edit and
+ * downgrading would mislead the element card into showing "vision failed".
  */
 export function shouldDowngradeVisionOnFailure(
   current: ElementVisionStatus
@@ -87,10 +113,10 @@ export function shouldDowngradeVisionOnFailure(
 
 /**
  * Best-effort string extraction from a `Promise.allSettled` rejection reason.
- * Errors thrown by application code are usually `Error`, but third-party
- * SDKs and async helpers can reject with strings, plain objects, or
- * DOMException-like values; serializing those preserves the production
- * trail instead of collapsing to a literal `'unknown'`.
+ * Errors thrown by application code are usually `Error`, but third-party SDKs
+ * and async helpers can reject with strings, plain objects, or
+ * DOMException-like values; serializing those preserves the production trail
+ * instead of collapsing to a literal `'unknown'`.
  */
 export function rejectionReasonMessage(reason: unknown): string {
   if (reason instanceof Error) return reason.message;
@@ -104,18 +130,22 @@ export function rejectionReasonMessage(reason: unknown): string {
   return `non-error rejection (${typeof reason})`;
 }
 
+/**
+ * Pure conversion of a `Promise.allSettled` entry into a `FrameResult`.
+ * Fulfilled entries pass through; rejected entries become a failure result
+ * tagged with `fallbackFrameId` (the frame whose edit was awaited at this
+ * index) or `'unknown'` when that lookup came back empty.
+ */
 export function settledToResult(
   settled: PromiseSettledResult<FrameResult>,
-  frameId: string | undefined
+  fallbackFrameId: string | undefined
 ): FrameResult {
   if (settled.status === 'fulfilled') return settled.value;
-  const message = rejectionReasonMessage(settled.reason);
-  const id = frameId ?? 'unknown';
-  logger.error('Per-frame promise rejected', {
-    frameId: id,
-    reason: settled.reason,
-  });
-  return { frameId: id, success: false, error: message };
+  return {
+    frameId: fallbackFrameId ?? 'unknown',
+    success: false,
+    error: rejectionReasonMessage(settled.reason),
+  };
 }
 
 export function buildEditPrompt(args: {
@@ -151,27 +181,32 @@ async function safeEmit(
   try {
     await fn();
   } catch (e) {
-    logger.error(`emit ${label} for ${sequenceId} failed:`, { err: e });
+    logger.error(
+      `[ReplaceElementWorkflow:cf] emit ${label} for ${sequenceId} failed:`,
+      {
+        e,
+      }
+    );
   }
 }
 
-export const replaceElementWorkflow = createScopedWorkflow<
-  ReplaceElementWorkflowInput,
-  ReplaceElementWorkflowResult
->(
-  async (context, scopedDb) => {
-    const input = context.requestPayload;
+export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceElementWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<ReplaceElementWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<ReplaceElementWorkflowResult> {
+    const input = event.payload;
     const { sequenceId, elementId, affectedFrameIds, newImageUrl } = input;
     let token = input.token;
-    const label = buildWorkflowLabel(sequenceId);
 
-    logger.info('[ReplaceElementWorkflow]', {
-      data: `Starting replace for element ${token} (${elementId}) — ${affectedFrameIds.length} affected frames`,
-    });
+    logger.info(
+      `[ReplaceElementWorkflow:cf] Starting replace for element ${token} (${elementId}) — ${affectedFrameIds.length} affected frames`
+    );
 
     // Fires before vision so subscribers see the full lifecycle even if
     // vision throws.
-    await context.run('emit-start', () =>
+    await step.do('emit-start', () =>
       safeEmit(sequenceId, 'start', () =>
         getGenerationChannel(sequenceId).emit(
           'generation.replace-element:start',
@@ -180,7 +215,7 @@ export const replaceElementWorkflow = createScopedWorkflow<
       )
     );
 
-    const visionResult = await context.run('describe-new-element', async () => {
+    const visionResult = await step.do('describe-new-element', async () => {
       await scopedDb.sequenceElements.updateVisionStatus(
         elementId,
         'analyzing'
@@ -206,7 +241,7 @@ export const replaceElementWorkflow = createScopedWorkflow<
     // prompts/extracts land on the new token rather than the stale one.
     let renamedTo: string | undefined;
     if (visionResult.suggestedToken !== token) {
-      const newToken = await context.run('auto-rename-token', async () => {
+      const newToken = await step.do('auto-rename-token', async () => {
         const taken = await scopedDb.sequenceElements.isTokenTaken(
           sequenceId,
           visionResult.suggestedToken,
@@ -228,7 +263,7 @@ export const replaceElementWorkflow = createScopedWorkflow<
     }
 
     if (affectedFrameIds.length === 0) {
-      await context.run('emit-complete-empty', () =>
+      await step.do('emit-complete-empty', () =>
         safeEmit(sequenceId, 'complete-empty', () =>
           getGenerationChannel(sequenceId).emit(
             'generation.replace-element:complete',
@@ -243,12 +278,13 @@ export const replaceElementWorkflow = createScopedWorkflow<
       };
     }
 
-    const sequence = await context.run('load-sequence', () =>
+    const sequence = await step.do('load-sequence', () =>
       scopedDb.sequences.getById(sequenceId)
     );
     if (!sequence) {
-      throw new Error(
-        `[ReplaceElementWorkflow] Sequence ${sequenceId} not found`
+      throw new NonRetryableError(
+        `[ReplaceElementWorkflow:cf] Sequence ${sequenceId} not found`,
+        'WorkflowValidationError'
       );
     }
 
@@ -257,7 +293,7 @@ export const replaceElementWorkflow = createScopedWorkflow<
 
     // Frames captured at trigger time may have been deleted mid-flight. Treat
     // missing frames as skipped rather than aborting the whole batch.
-    const liveFrames = await context.run('load-frames', () =>
+    const liveFrames = await step.do('load-frames', () =>
       scopedDb.frames.getByIds(affectedFrameIds)
     );
     const liveFrameIds = new Set(liveFrames.map((f) => f.id));
@@ -272,7 +308,7 @@ export const replaceElementWorkflow = createScopedWorkflow<
     // cover that window. Same upfront flip for videos: any frame with a
     // prior video will be regenerated, so its video tile should already read
     // as in-flight.
-    await context.run('mark-frames-generating', async () => {
+    await step.do('mark-frames-generating', async () => {
       for (const frame of liveFrames) {
         const updates: Record<string, unknown> = {};
         if (frame.thumbnailUrl) {
@@ -304,9 +340,9 @@ export const replaceElementWorkflow = createScopedWorkflow<
       }
     });
     if (skippedDeletedFrameIds.length > 0) {
-      logger.warn('[ReplaceElementWorkflow]', {
-        data: `Skipping ${skippedDeletedFrameIds.length} deleted frame(s): ${skippedDeletedFrameIds.join(', ')}`,
-      });
+      logger.warn(
+        `[ReplaceElementWorkflow:cf] Skipping ${skippedDeletedFrameIds.length} deleted frame(s): ${skippedDeletedFrameIds.join(', ')}`
+      );
     }
 
     const editPrompt = buildEditPrompt({
@@ -315,11 +351,23 @@ export const replaceElementWorkflow = createScopedWorkflow<
       previousDescription: input.previousDescription,
     });
 
-    // Parallel fan-out — per-invoke retries handle backpressure.
-    // `allSettled` so a per-frame throw (e.g. invoke rejection that bypasses
-    // the isFailed/isCanceled return path) doesn't abort sibling frames.
-    const settled = await Promise.allSettled(
-      liveFrames.map(async (frame): Promise<FrameResult> => {
+    // Resolve the image child binding once. Cast to the typed child binding
+    // so `spawnAndAwaitChild`'s generic param infers correctly.
+    const imageChildBinding = this.env.IMAGE_WORKFLOW;
+    if (!imageChildBinding) {
+      throw new NonRetryableError(
+        '[ReplaceElementWorkflow:cf] IMAGE_WORKFLOW binding missing on env; ' +
+          'check wrangler.jsonc and ensure bun cf:typegen has been run'
+      );
+    }
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- the registered binding's runtime payload shape is enforced by the child's typed entrypoint
+    const imageBinding = imageChildBinding as Workflow<ImageWorkflowInput>;
+
+    // Parallel fan-out — per-child retries handle backpressure.
+    // `allSettled` so a per-frame throw (e.g. timed-out child) doesn't abort
+    // sibling frames.
+    const imageSpawnPromises = liveFrames.map(
+      async (frame, index): Promise<FrameResult> => {
         const sourceImageUrl = frame.thumbnailUrl;
         if (!sourceImageUrl) {
           // Replacement is only meaningful when a primary thumbnail exists;
@@ -343,7 +391,7 @@ export const replaceElementWorkflow = createScopedWorkflow<
           ? frameModel
           : imageModel;
 
-        const body: ImageWorkflowInput = {
+        const childPayload: ImageWorkflowInput = {
           userId: input.userId,
           teamId: input.teamId,
           sequenceId,
@@ -366,51 +414,67 @@ export const replaceElementWorkflow = createScopedWorkflow<
           ],
         };
 
-        const {
-          body: invokeResult,
-          isFailed,
-          isCanceled,
-        } = await context.invoke('image', {
-          workflow: generateImageWorkflow,
-          label,
-          body,
-          retries: 3,
-          retryDelay: 'pow(2, retried) * 1000',
-        });
-
-        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
-        if (isFailed || isCanceled || !invokeResult?.imageUrl) {
-          const reason = isCanceled
-            ? 'canceled'
-            : isFailed
-              ? 'failed'
-              : 'no imageUrl';
-          logger.error('[ReplaceElementWorkflow]', {
-            data: `Image edit failed frame=${frame.id} reason=${reason}`,
+        try {
+          const childResult = await spawnAndAwaitChild<
+            ImageWorkflowInput,
+            ImageChildResult
+          >(step, {
+            binding: imageBinding,
+            parentBindingName: PARENT_BINDING_NAME,
+            parentInstanceId: event.instanceId,
+            childId: `image:${sequenceId}:${frame.id}`,
+            childPayload,
+            spawnStepName: `spawn-image-${index}`,
+            awaitStepName: `await-image-${index}`,
+            timeout: '30 minutes',
           });
+
+          if (!childResult.imageUrl) {
+            logger.error(
+              `[ReplaceElementWorkflow:cf] Image edit returned empty url frame=${frame.id}`
+            );
+            return {
+              frameId: frame.id,
+              success: false,
+              error: 'Image edit no imageUrl',
+            };
+          }
+
+          return {
+            frameId: frame.id,
+            success: true,
+            imageUrl: childResult.imageUrl,
+          };
+        } catch (e) {
+          const reason = rejectionReasonMessage(e);
+          logger.error(
+            `[ReplaceElementWorkflow:cf] Image edit failed frame=${frame.id} reason=${reason}`
+          );
           return {
             frameId: frame.id,
             success: false,
-            error: `Image edit ${reason}`,
+            error: `Image edit failed: ${reason}`,
           };
         }
-
-        return {
-          frameId: frame.id,
-          success: true,
-          imageUrl: invokeResult.imageUrl,
-        };
-      })
+      }
     );
 
-    const results: FrameResult[] = settled.map((s, i) =>
-      settledToResult(s, liveFrames[i]?.id)
-    );
+    const settled = await Promise.allSettled(imageSpawnPromises);
+
+    const results: FrameResult[] = settled.map((s, i) => {
+      if (s.status === 'rejected') {
+        logger.error('[ReplaceElementWorkflow:cf] Per-frame promise rejected', {
+          frameId: liveFrames[i]?.id ?? 'unknown',
+          reason: s.reason,
+        });
+      }
+      return settledToResult(s, liveFrames[i]?.id);
+    });
 
     const outcome = decideBatchOutcome(results);
     if (outcome.kind === 'fail') {
       throw new Error(
-        `[ReplaceElementWorkflow] All ${outcome.total} frame edit(s) failed for ${token}: ${outcome.sampleReason}`
+        `[ReplaceElementWorkflow:cf] All ${outcome.total} frame edit(s) failed for ${token}: ${outcome.sampleReason}`
       );
     }
 
@@ -433,11 +497,22 @@ export const replaceElementWorkflow = createScopedWorkflow<
     let videoSuccessCount = 0;
     let videoFailedCount = 0;
     if (framesNeedingVideoRegen.length > 0) {
-      logger.info('[ReplaceElementWorkflow]', {
-        data: `Regenerating video for ${framesNeedingVideoRegen.length} frame(s) tied to element ${token}`,
-      });
-      const videoSettled = await Promise.allSettled(
-        framesNeedingVideoRegen.map(async (frame) => {
+      logger.info(
+        `[ReplaceElementWorkflow:cf] Regenerating video for ${framesNeedingVideoRegen.length} frame(s) tied to element ${token}`
+      );
+
+      const motionChildBinding = this.env.MOTION_WORKFLOW;
+      if (!motionChildBinding) {
+        throw new NonRetryableError(
+          '[ReplaceElementWorkflow:cf] MOTION_WORKFLOW binding missing on env; ' +
+            'check wrangler.jsonc and ensure bun cf:typegen has been run'
+        );
+      }
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- the registered binding's runtime payload shape is enforced by the child's typed entrypoint
+      const motionBinding = motionChildBinding as Workflow<MotionWorkflowInput>;
+
+      const motionSpawnPromises = framesNeedingVideoRegen.map(
+        async (frame, index) => {
           const newThumbnailUrl = successByFrameId.get(frame.id);
           if (!newThumbnailUrl) {
             return { frameId: frame.id, success: false };
@@ -448,7 +523,7 @@ export const replaceElementWorkflow = createScopedWorkflow<
             videoError: null,
           });
 
-          const body: MotionWorkflowInput = {
+          const childPayload: MotionWorkflowInput = {
             userId: input.userId,
             teamId: input.teamId,
             sequenceId,
@@ -460,38 +535,49 @@ export const replaceElementWorkflow = createScopedWorkflow<
             duration: frame.durationMs ? frame.durationMs / 1000 : undefined,
           };
 
-          const { isFailed, isCanceled } = await context.invoke(
-            `motion-${frame.id}`,
-            {
-              workflow: generateMotionWorkflow,
-              label,
-              body,
-              retries: 3,
-              retryDelay: 'pow(2, retried) * 1000',
-            }
-          );
-
-          return {
-            frameId: frame.id,
-            success: !isFailed && !isCanceled,
-          };
-        })
+          try {
+            await spawnAndAwaitChild<MotionWorkflowInput, MotionChildResult>(
+              step,
+              {
+                binding: motionBinding,
+                parentBindingName: PARENT_BINDING_NAME,
+                parentInstanceId: event.instanceId,
+                childId: `motion:${sequenceId}:${frame.id}`,
+                childPayload,
+                spawnStepName: `spawn-motion-${index}`,
+                awaitStepName: `await-motion-${index}`,
+                timeout: '30 minutes',
+              }
+            );
+            return { frameId: frame.id, success: true };
+          } catch (e) {
+            logger.error('[ReplaceElementWorkflow:cf] motion child failed:', {
+              err: rejectionReasonMessage(e),
+            });
+            return { frameId: frame.id, success: false };
+          }
+        }
       );
-      for (const settled of videoSettled) {
-        if (settled.status === 'fulfilled' && settled.value.success) {
+
+      const videoSettled = await Promise.allSettled(motionSpawnPromises);
+      for (const settledMotion of videoSettled) {
+        if (
+          settledMotion.status === 'fulfilled' &&
+          settledMotion.value.success
+        ) {
           videoSuccessCount += 1;
         } else {
           videoFailedCount += 1;
-          if (settled.status === 'rejected') {
-            logger.error('motion regen rejected:', {
-              data: rejectionReasonMessage(settled.reason),
+          if (settledMotion.status === 'rejected') {
+            logger.error('[ReplaceElementWorkflow:cf] motion regen rejected:', {
+              err: rejectionReasonMessage(settledMotion.reason),
             });
           }
         }
       }
     }
 
-    await context.run('emit-complete', () =>
+    await step.do('emit-complete', () =>
       safeEmit(sequenceId, 'complete', () =>
         getGenerationChannel(sequenceId).emit(
           'generation.replace-element:complete',
@@ -507,70 +593,77 @@ export const replaceElementWorkflow = createScopedWorkflow<
       )
     );
 
-    logger.info('[ReplaceElementWorkflow]', {
-      data: `Completed: ${outcome.successCount} edited, ${outcome.failedCount} failed, ${skippedDeletedFrameIds.length} skipped-deleted, videos ${videoSuccessCount}/${videoFailedCount} for element ${token}`,
-    });
+    logger.info(
+      `[ReplaceElementWorkflow:cf] Completed: ${outcome.successCount} edited, ${outcome.failedCount} failed, ${skippedDeletedFrameIds.length} skipped-deleted, videos ${videoSuccessCount}/${videoFailedCount} for element ${token}`
+    );
 
     return {
       elementId,
       successCount: outcome.successCount,
       failedCount: outcome.failedCount,
     };
-  },
-  {
-    failureFunction: async ({ context, scopedDb, failResponse }) => {
-      const input = context.requestPayload;
-      const error = sanitizeFailResponse(failResponse);
+  }
 
-      // The failure could be in vision (status still `analyzing`) or in a
-      // per-frame edit (vision succeeded → status is `completed`). Only
-      // downgrade in the first case; otherwise the element card would
-      // mislead the user about which step failed.
-      //
-      // If reading the row throws (Turso blip), default to writing `failed`
-      // anyway — better to mislabel as vision-failed than leave the row
-      // stuck in `analyzing` forever (the whole point of this recovery).
-      let shouldDowngrade = true;
-      try {
-        const current = await scopedDb.sequenceElements.getById(
-          input.elementId
-        );
-        if (current) {
-          shouldDowngrade = shouldDowngradeVisionOnFailure(
-            current.visionStatus
-          );
+  protected override async onFailure({
+    event,
+    error,
+    scopedDb,
+  }: {
+    event: Readonly<WorkflowEvent<ReplaceElementWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): Promise<void> {
+    const input = event.payload;
+
+    // The failure could be in vision (status still `analyzing`) or in a
+    // per-frame edit (vision succeeded → status is `completed`). Only
+    // downgrade in the first case; otherwise the element card would mislead
+    // the user about which step failed.
+    //
+    // If reading the row throws (Turso blip), default to writing `failed`
+    // anyway — better to mislabel as vision-failed than leave the row stuck
+    // in `analyzing` forever (the whole point of this recovery).
+    let shouldDowngrade = true;
+    try {
+      const current = await scopedDb.sequenceElements.getById(input.elementId);
+      if (current) {
+        shouldDowngrade = shouldDowngradeVisionOnFailure(current.visionStatus);
+      }
+    } catch (e) {
+      logger.error(
+        '[ReplaceElementWorkflow:cf] Failed to read current element status; assuming vision in-flight:',
+        {
+          e,
         }
+      );
+    }
+
+    if (shouldDowngrade) {
+      try {
+        await scopedDb.sequenceElements.updateVisionStatus(
+          input.elementId,
+          'failed',
+          error
+        );
       } catch (e) {
         logger.error(
-          'Failed to read current element status; assuming vision in-flight:',
-          { err: e }
+          '[ReplaceElementWorkflow:cf] Failed to persist vision-failed status:',
+          {
+            e,
+          }
         );
       }
+    }
 
-      if (shouldDowngrade) {
-        try {
-          await scopedDb.sequenceElements.updateVisionStatus(
-            input.elementId,
-            'failed',
-            error
-          );
-        } catch (e) {
-          logger.error('Failed to persist vision-failed status:', { err: e });
-        }
-      }
+    await safeEmit(input.sequenceId, 'failed', () =>
+      getGenerationChannel(input.sequenceId).emit(
+        'generation.replace-element:failed',
+        { elementId: input.elementId, error }
+      )
+    );
 
-      await safeEmit(input.sequenceId, 'failed', () =>
-        getGenerationChannel(input.sequenceId).emit(
-          'generation.replace-element:failed',
-          { elementId: input.elementId, error }
-        )
-      );
-
-      logger.error('[ReplaceElementWorkflow]', {
-        data: `Replace failed for element ${input.token}: ${error}`,
-      });
-
-      return `Replace element failed for ${input.token}`;
-    },
+    logger.error(
+      `[ReplaceElementWorkflow:cf] Replace failed for element ${input.token}: ${error}`
+    );
   }
-);
+}

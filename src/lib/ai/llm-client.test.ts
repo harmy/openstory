@@ -170,6 +170,49 @@ describe('llm-client', () => {
       );
     });
 
+    it('surfaces event.code and event.model in stream errors', () => {
+      mockChat.mockReturnValue(
+        (async function* () {
+          yield {
+            type: 'RUN_ERROR',
+            message: 'Provider returned error',
+            code: 'provider-error',
+            model: 'anthropic/claude-sonnet-4.6',
+          };
+        })()
+      );
+
+      const generator = callLLMStream({
+        model: 'anthropic/claude-sonnet-4.6',
+        messages: [{ role: 'user', content: 'test' }],
+      });
+
+      return expect(drain(generator)).rejects.toThrow(
+        'LLM stream error [provider-error, model=anthropic/claude-sonnet-4.6]: Provider returned error'
+      );
+    });
+
+    it('surfaces event.model even when code is absent', () => {
+      mockChat.mockReturnValue(
+        (async function* () {
+          yield {
+            type: 'RUN_ERROR',
+            message: 'Provider returned error',
+            model: 'anthropic/claude-sonnet-4.6',
+          };
+        })()
+      );
+
+      const generator = callLLMStream({
+        model: 'anthropic/claude-sonnet-4.6',
+        messages: [{ role: 'user', content: 'test' }],
+      });
+
+      return expect(drain(generator)).rejects.toThrow(
+        'LLM stream error [model=anthropic/claude-sonnet-4.6]: Provider returned error'
+      );
+    });
+
     it('stringifies non-string RUN_ERROR.message', () => {
       mockChat.mockReturnValue(
         (async function* () {

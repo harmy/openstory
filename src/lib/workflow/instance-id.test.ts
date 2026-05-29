@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   buildInstanceId,
   getEnvironmentSlug,
-} from '@/lib/workflow/cf/instance-id';
+} from '@/lib/workflow/instance-id';
 
 describe('getEnvironmentSlug', () => {
   test('returns "local" when VITE_APP_URL is unset', () => {

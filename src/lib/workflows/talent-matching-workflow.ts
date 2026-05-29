@@ -1,42 +1,53 @@
-import { talentMatchResponseSchema } from '../ai/response-schemas';
-import { buildMatchingPromptVariables } from '../ai/talent-matching-prompt';
-import { getGenerationChannel } from '../realtime';
-import { sanitizeFailResponse } from '../workflow/sanitize-fail-response';
-import { createScopedWorkflow } from '../workflow/scoped-workflow';
+/**
+ * Cloudflare Workflows port of `talentMatchingWorkflow`.
+ *
+ * Mirrors the QStash version (`src/lib/workflows/talent-matching-workflow.ts`)
+ * step for step — same step names, same control flow, same side effects. The
+ * only differences are:
+ *
+ *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
+ *     `createScopedWorkflow`. Failure parity comes from the base class
+ *     (see `base-workflow.ts`).
+ *   - Uses `step.do` instead of `context.run`.
+ *   - Reads payload from `event.payload` instead of `context.requestPayload`.
+ *
+ * The LLM call goes through `durableLLMCallCf`; see
+ * `src/lib/workflows/llm-call-helper.ts`.
+ */
+
+import { talentMatchResponseSchema } from '@/lib/ai/response-schemas';
+import { buildMatchingPromptVariables } from '@/lib/ai/talent-matching-prompt';
+import type { ScopedDb } from '@/lib/db/scoped';
+import { getGenerationChannel } from '@/lib/realtime';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
+import { durableLLMCallCf } from '@/lib/workflows/llm-call-helper';
 import type {
   TalentCharacterMatch,
   TalentMatchingWorkflowInput,
   TalentMatchingWorkflowOutput,
-} from '../workflow/types';
-import { durableLLMCall } from './llm-call-helper';
-
+} from '@/lib/workflow/types';
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'talent-matching']);
 
-export const talentMatchingWorkflow = createScopedWorkflow<
-  TalentMatchingWorkflowInput,
-  TalentMatchingWorkflowOutput
->(
-  async (context, scopedDb) => {
-    const input = context.requestPayload;
-    const { analysisModelId, suggestedTalentIds } = input;
-    const { sequenceId, userId, teamId } = input;
+export class TalentMatchingWorkflow extends OpenStoryWorkflowEntrypoint<TalentMatchingWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<TalentMatchingWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<TalentMatchingWorkflowOutput> {
+    const input = event.payload;
+    const { suggestedTalentIds, sequenceId, analysisModelId } = input;
 
-    const llmCallContext = {
-      sequenceId,
-      userId,
-      teamId,
-    };
-
-    // Use pre-extracted bible from scene splitting, or fall back to LLM extraction
+    // Use pre-extracted bible from scene splitting (always provided by upstream)
     const characterBible = input.characterBible;
 
     // Talent matching is conditional and does NOT block on talent sheets:
     // it only runs against pre-selected talent IDs. Characters without a
     // pre-cast talent are auto-extracted later in the pipeline and given
     // AI-generated portraits — script generation never waits for sheets.
-    const { talentList, matchingPromptVariables } = await context.run(
+    const { talentList, matchingPromptVariables } = await step.do(
       'get-talent-list',
       async () => {
         if (!suggestedTalentIds?.length || !input.teamId) {
@@ -55,22 +66,25 @@ export const talentMatchingWorkflow = createScopedWorkflow<
 
     const { matches: talentMatches } =
       talentList.length > 0
-        ? await durableLLMCall(
-            context,
+        ? await durableLLMCallCf(
+            step,
             {
               name: 'talent-matching',
-              phase: { number: 2, name: 'Casting characters…' },
-
+              phase: { number: 2, name: 'Matching talent…' },
               promptName: 'phase/talent-matching-chat',
               promptVariables: matchingPromptVariables,
               modelId: analysisModelId,
               responseSchema: talentMatchResponseSchema,
             },
-            llmCallContext
+            {
+              sequenceId,
+              userId: input.userId,
+              scopedDb,
+            }
           )
-        : { matches: [] };
+        : { matches: [] as Array<{ characterId: string; talentId: string }> };
 
-    const talentCharacterMatches: TalentCharacterMatch[] = await context.run(
+    const talentCharacterMatches: TalentCharacterMatch[] = await step.do(
       'build-matches',
       async () => {
         const usedTalentIds = new Set<string>();
@@ -80,13 +94,17 @@ export const talentMatchingWorkflow = createScopedWorkflow<
           // Ensure each talent is only cast once (but characters can have multiple talents
           // when there are more talents than characters)
           if (usedTalentIds.has(match.talentId)) {
-            logger.warn(`Skipping duplicate talent ${match.talentId}`);
+            logger.warn(
+              `[TalentMatchingWorkflow:cf] Skipping duplicate talent ${match.talentId}`
+            );
             continue;
           }
 
           const talent = talentList.find((t) => t.id === match.talentId);
           if (!talent) {
-            logger.warn(`Talent ${match.talentId} not found in list`);
+            logger.warn(
+              `[TalentMatchingWorkflow:cf] Talent ${match.talentId} not found in list`
+            );
             continue;
           }
 
@@ -94,7 +112,9 @@ export const talentMatchingWorkflow = createScopedWorkflow<
             (c) => c.characterId === match.characterId
           );
           if (!character) {
-            logger.warn(`Character ${match.characterId} not found in bible`);
+            logger.warn(
+              `[TalentMatchingWorkflow:cf] Character ${match.characterId} not found in bible`
+            );
             continue;
           }
 
@@ -132,14 +152,7 @@ export const talentMatchingWorkflow = createScopedWorkflow<
     );
 
     return {
-      characterBible,
       matches: talentCharacterMatches,
     };
-  },
-  {
-    failureFunction: async ({ failResponse }) => {
-      const error = sanitizeFailResponse(failResponse);
-      return `Talent matching failed: ${error}`;
-    },
   }
-);
+}

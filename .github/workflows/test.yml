@@ -139,10 +139,6 @@ jobs:
           FAL_KEY=$FAL_KEY
           GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
           GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
-          QSTASH_TOKEN=eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=
-          QSTASH_URL=http://localhost:8080
-          QSTASH_CURRENT_SIGNING_KEY=sig_7kYjw48mhY7kAjqNGcy6cr29RJ6r
-          QSTASH_NEXT_SIGNING_KEY=sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs
           R2_ACCOUNT_ID=$R2_ACCOUNT_ID
           R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID
           R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
@@ -185,11 +181,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           BETTER_AUTH_URL: http://localhost:3001
-          # QStash - local Docker service
-          QSTASH_TOKEN: eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=
-          QSTASH_URL: http://localhost:8080
-          QSTASH_CURRENT_SIGNING_KEY: sig_7kYjw48mhY7kAjqNGcy6cr29RJ6r
-          QSTASH_NEXT_SIGNING_KEY: sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs
           # R2 Storage - preview environment
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -249,30 +240,6 @@ jobs:
       - name: Setup test D1 + seed
         run: bun run test:e2e:setup
 
-      - name: Start QStash
-        run: |
-          # public.ecr.aws rate-limits anonymous pulls per IP; GitHub
-          # runners share egress IPs and hit the cap during busy hours.
-          # Retry the pull separately so transient 429s don't fail the job.
-          for attempt in 1 2 3 4 5; do
-            if docker pull public.ecr.aws/upstash/qstash:latest; then
-              break
-            fi
-            sleep $((attempt * 10))
-          done
-          docker run -d --name qstash \
-            --add-host=host.docker.internal:host-gateway \
-            -p 8080:8080 \
-            public.ecr.aws/upstash/qstash:latest qstash dev
-          # Readiness probe: any HTTP response from QStash means the server is
-          # accepting connections. We don't use -f so 404 still counts as
-          # "up" — qstash dev has no /health endpoint and we just need the
-          # TCP+HTTP layer to be live. Connection refused -> curl exits
-          # non-zero -> loop continues. Make timeout fatal so a slow QStash
-          # start can't silently leak into the test run.
-          timeout 60 sh -c 'until curl -s -o /dev/null http://localhost:8080/ 2>/dev/null; do sleep 1; done' \
-            || (echo "::error::QStash did not become ready within 60s" && docker logs qstash && exit 1)
-
       - name: Download dist artifact
         uses: actions/download-artifact@v4
         with:
@@ -310,10 +277,6 @@ jobs:
           FAL_PROXY_URL=http://localhost:4010/fal
           GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
           GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
-          QSTASH_TOKEN=eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=
-          QSTASH_URL=http://localhost:8080
-          QSTASH_CURRENT_SIGNING_KEY=sig_7kYjw48mhY7kAjqNGcy6cr29RJ6r
-          QSTASH_NEXT_SIGNING_KEY=sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs
           R2_ACCOUNT_ID=$R2_ACCOUNT_ID
           R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID
           R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
@@ -349,11 +312,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           BETTER_AUTH_URL: http://localhost:3001
-          # QStash - local Docker service started above
-          QSTASH_TOKEN: eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=
-          QSTASH_URL: http://localhost:8080
-          QSTASH_CURRENT_SIGNING_KEY: sig_7kYjw48mhY7kAjqNGcy6cr29RJ6r
-          QSTASH_NEXT_SIGNING_KEY: sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs
           # R2 Storage - preview environment
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
