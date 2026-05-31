@@ -16,7 +16,7 @@ import {
   requestSequenceExportUploadUrlFn,
 } from '@/functions/sequence-exports';
 import { useFramesBySequence } from '@/hooks/use-frames';
-import { uploadMergedBlob } from '@/lib/browser-merge';
+import { putToR2 } from '@/lib/utils/upload';
 import {
   exportSequence,
   type ExportProgress,
@@ -92,15 +92,18 @@ export function useSequenceExport(sequence: Sequence): SequenceExportState {
       // `upload` and `commit` run here, after the Mediabunny pipeline. Report
       // them through the same progress channel so a stalled upload/commit
       // doesn't masquerade as a stuck "Finalizing…" (finalize is the last
-      // phase exportSequence emits).
-      setProgress({ phase: 'upload', completed: 0, total: 0 });
-      await uploadMergedBlob({
+      // phase exportSequence emits). Use putToR2 (XHR) — the same upload path
+      // as talent/element media — because fetch() stalls large PUT bodies in
+      // Chrome (the export previously hung here forever).
+      setProgress({ phase: 'upload', completed: 0, total: 100 });
+      await putToR2(
+        reservation.uploadUrl,
         blob,
-        uploadUrl: reservation.uploadUrl,
-        contentType: reservation.contentType,
-        signal,
-        timeoutMs: UPLOAD_TIMEOUT_MS,
-      });
+        reservation.contentType,
+        (percent) =>
+          setProgress({ phase: 'upload', completed: percent, total: 100 }),
+        { signal, timeoutMs: UPLOAD_TIMEOUT_MS }
+      );
 
       setProgress({ phase: 'commit', completed: 0, total: 0 });
       return await commitSequenceExportFn({

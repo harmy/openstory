@@ -8,16 +8,30 @@ export function getFileKey(file: File): string {
 }
 
 /**
- * Upload a file directly to R2 via presigned PUT URL.
- * Uses XHR instead of fetch() for upload progress reporting.
+ * Upload a blob (or File) directly to R2 via the presigned/proxied PUT URL.
+ *
+ * Uses XHR rather than `fetch()` deliberately: fetch with a request body
+ * stalls large uploads in Chrome (the request hangs at "Initial connection"
+ * and never dispatches the body), whereas `xhr.send()` reliably streams it —
+ * which is why every upload in the app goes through here. XHR also reports
+ * real upload progress, which fetch can't. The body is streamed over the wire,
+ * not duplicated, so there's no extra buffering beyond the blob the caller
+ * already holds.
  */
 export function putToR2(
   uploadUrl: string,
-  file: File,
+  file: Blob,
   contentType: string,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  options?: { signal?: AbortSignal; timeoutMs?: number }
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    const { signal, timeoutMs } = options ?? {};
+    if (signal?.aborted) {
+      reject(new DOMException('Upload aborted', 'AbortError'));
+      return;
+    }
+
     const xhr = new XMLHttpRequest();
 
     xhr.upload.onprogress = (event) => {
@@ -36,7 +50,15 @@ export function putToR2(
     };
 
     xhr.onerror = () => reject(new Error('Upload failed'));
-    xhr.ontimeout = () => reject(new Error('Upload timed out'));
+    xhr.ontimeout = () =>
+      reject(new Error(`Upload timed out after ${timeoutMs}ms`));
+
+    if (signal) {
+      xhr.onabort = () =>
+        reject(new DOMException('Upload aborted', 'AbortError'));
+      signal.addEventListener('abort', () => xhr.abort(), { once: true });
+    }
+    if (timeoutMs !== undefined) xhr.timeout = timeoutMs;
 
     xhr.open('PUT', uploadUrl);
     xhr.setRequestHeader('Content-Type', contentType);

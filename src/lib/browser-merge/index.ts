@@ -1,5 +1,4 @@
 export { mergeSequence } from './merge-sequence';
-export { uploadMergedBlob } from './upload-merged';
 export {
   BrowserMergeUnsupportedError,
   probeBrowserMergeCapabilities,
