@@ -57,8 +57,20 @@ export async function resolveUploadTarget(
   const validBucket = bucketByName.get(bucket);
   if (!validBucket) return fail(`Invalid bucket: ${bucket}`, 400);
 
-  if (!path.includes(team.teamId)) {
-    return fail('Path must contain your team ID', 403);
+  // Anchor the team-scope check. A bare substring test (`path.includes(teamId)`)
+  // is bypassable: an attacker could put their own team id in the filename and
+  // still write into another team's prefix (e.g.
+  // `teams/<victim>/…/<myTeamId>.mp4`). Instead require the team id to be the
+  // *leading owner segment* — segment 0, or segment 1 when the path is under a
+  // `teams/` prefix (exports use `teams/<id>/…`; talent/location/element use
+  // `<id>/…`) — and reject traversal / empty segments.
+  if (path.startsWith('/') || path.includes('//') || path.includes('..')) {
+    return fail('Invalid upload path', 400);
+  }
+  const segments = path.split('/');
+  const ownerSegment = segments[0] === 'teams' ? segments[1] : segments[0];
+  if (ownerSegment !== team.teamId) {
+    return fail('Path must be within your team prefix', 403);
   }
 
   return { ok: true, target: { bucket: validBucket, path, contentType } };
