@@ -236,7 +236,11 @@
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "openstory-prd",
+          // The real prod D1 with this id is named `velro-prd` (legacy name
+          // from before the openstory rename) — NOT `openstory-prd`, which
+          // does not exist in the account. wrangler validates name against
+          // id, so a mismatch fails the deploy. `wrangler d1 list` confirms.
+          "database_name": "velro-prd",
           "database_id": "d6a35f64-abb0-4a34-a092-dc20b29f5812",
           "migrations_dir": "drizzle/migrations",
         },
