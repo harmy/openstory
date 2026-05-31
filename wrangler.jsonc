@@ -253,6 +253,156 @@
           "remote": true,
         },
       ],
+      // Workflow bindings are NOT inherited from the top-level block, so
+      // they must be redeclared here. Keep this list in sync with the
+      // top-level workflows[] (the wiring-consistency test enforces parity).
+      "workflows": [
+        {
+          "name": "image-workflow",
+          "binding": "IMAGE_WORKFLOW",
+          "class_name": "ImageWorkflow",
+        },
+        {
+          "name": "element-vision-workflow",
+          "binding": "ELEMENT_VISION_WORKFLOW",
+          "class_name": "ElementVisionWorkflow",
+        },
+        {
+          "name": "music-workflow",
+          "binding": "MUSIC_WORKFLOW",
+          "class_name": "MusicWorkflow",
+        },
+        {
+          "name": "motion-workflow",
+          "binding": "MOTION_WORKFLOW",
+          "class_name": "MotionWorkflow",
+        },
+        {
+          "name": "motion-batch-workflow",
+          "binding": "MOTION_BATCH_WORKFLOW",
+          "class_name": "MotionBatchWorkflow",
+        },
+        {
+          "name": "character-sheet-workflow",
+          "binding": "CHARACTER_SHEET_WORKFLOW",
+          "class_name": "CharacterSheetWorkflow",
+        },
+        {
+          "name": "location-sheet-workflow",
+          "binding": "LOCATION_SHEET_WORKFLOW",
+          "class_name": "LocationSheetWorkflow",
+        },
+        {
+          "name": "library-talent-sheet-workflow",
+          "binding": "LIBRARY_TALENT_SHEET_WORKFLOW",
+          "class_name": "LibraryTalentSheetWorkflow",
+        },
+        {
+          "name": "library-location-sheet-workflow",
+          "binding": "LIBRARY_LOCATION_SHEET_WORKFLOW",
+          "class_name": "LibraryLocationSheetWorkflow",
+        },
+        {
+          "name": "shot-variant-workflow",
+          "binding": "SHOT_VARIANT_WORKFLOW",
+          "class_name": "ShotVariantWorkflow",
+        },
+        {
+          "name": "upscale-shot-variant-workflow",
+          "binding": "UPSCALE_SHOT_VARIANT_WORKFLOW",
+          "class_name": "UpscaleShotVariantWorkflow",
+        },
+        {
+          "name": "visual-prompt-scene-workflow",
+          "binding": "VISUAL_PROMPT_SCENE_WORKFLOW",
+          "class_name": "VisualPromptSceneWorkflow",
+        },
+        {
+          "name": "motion-prompt-scene-workflow",
+          "binding": "MOTION_PROMPT_SCENE_WORKFLOW",
+          "class_name": "MotionPromptSceneWorkflow",
+        },
+        {
+          "name": "music-prompt-workflow",
+          "binding": "MUSIC_PROMPT_WORKFLOW",
+          "class_name": "MusicPromptWorkflow",
+        },
+        {
+          "name": "recast-character-workflow",
+          "binding": "RECAST_CHARACTER_WORKFLOW",
+          "class_name": "RecastCharacterWorkflow",
+        },
+        {
+          "name": "location-matching-workflow",
+          "binding": "LOCATION_MATCHING_WORKFLOW",
+          "class_name": "LocationMatchingWorkflow",
+        },
+        {
+          "name": "frame-images-workflow",
+          "binding": "FRAME_IMAGES_WORKFLOW",
+          "class_name": "FrameImagesWorkflow",
+        },
+        {
+          "name": "talent-matching-workflow",
+          "binding": "TALENT_MATCHING_WORKFLOW",
+          "class_name": "TalentMatchingWorkflow",
+        },
+        {
+          "name": "character-bible-workflow",
+          "binding": "CHARACTER_BIBLE_WORKFLOW",
+          "class_name": "CharacterBibleWorkflow",
+        },
+        {
+          "name": "location-bible-workflow",
+          "binding": "LOCATION_BIBLE_WORKFLOW",
+          "class_name": "LocationBibleWorkflow",
+        },
+        {
+          "name": "visual-prompt-workflow",
+          "binding": "VISUAL_PROMPT_WORKFLOW",
+          "class_name": "VisualPromptWorkflow",
+        },
+        {
+          "name": "motion-prompt-workflow",
+          "binding": "MOTION_PROMPT_WORKFLOW",
+          "class_name": "MotionPromptWorkflow",
+        },
+        {
+          "name": "motion-music-prompts-workflow",
+          "binding": "MOTION_MUSIC_PROMPTS_WORKFLOW",
+          "class_name": "MotionMusicPromptsWorkflow",
+        },
+        {
+          "name": "regenerate-frames-workflow",
+          "binding": "REGENERATE_FRAMES_WORKFLOW",
+          "class_name": "RegenerateFramesWorkflow",
+        },
+        {
+          "name": "recast-location-workflow",
+          "binding": "RECAST_LOCATION_WORKFLOW",
+          "class_name": "RecastLocationWorkflow",
+        },
+        {
+          "name": "replace-element-workflow",
+          "binding": "REPLACE_ELEMENT_WORKFLOW",
+          "class_name": "ReplaceElementWorkflow",
+        },
+        {
+          "name": "scene-split-workflow",
+          "binding": "SCENE_SPLIT_WORKFLOW",
+          "class_name": "SceneSplitWorkflow",
+        },
+        {
+          "name": "storyboard-workflow",
+          "binding": "STORYBOARD_WORKFLOW",
+          "class_name": "StoryboardWorkflow",
+        },
+        {
+          "name": "analyze-script-workflow",
+          "binding": "ANALYZE_SCRIPT_WORKFLOW",
+          "class_name": "AnalyzeScriptWorkflow",
+        },
+      ],
       "triggers": {
         "crons": ["*/5 * * * *"],
       },
@@ -304,6 +454,156 @@
           "binding": "R2_STORAGE_BUCKET",
           "bucket_name": "openstory-dev",
           "remote": true,
+        },
+      ],
+      // Workflow bindings are NOT inherited from the top-level block, so
+      // they must be redeclared here. Keep this list in sync with the
+      // top-level workflows[] (the wiring-consistency test enforces parity).
+      "workflows": [
+        {
+          "name": "image-workflow",
+          "binding": "IMAGE_WORKFLOW",
+          "class_name": "ImageWorkflow",
+        },
+        {
+          "name": "element-vision-workflow",
+          "binding": "ELEMENT_VISION_WORKFLOW",
+          "class_name": "ElementVisionWorkflow",
+        },
+        {
+          "name": "music-workflow",
+          "binding": "MUSIC_WORKFLOW",
+          "class_name": "MusicWorkflow",
+        },
+        {
+          "name": "motion-workflow",
+          "binding": "MOTION_WORKFLOW",
+          "class_name": "MotionWorkflow",
+        },
+        {
+          "name": "motion-batch-workflow",
+          "binding": "MOTION_BATCH_WORKFLOW",
+          "class_name": "MotionBatchWorkflow",
+        },
+        {
+          "name": "character-sheet-workflow",
+          "binding": "CHARACTER_SHEET_WORKFLOW",
+          "class_name": "CharacterSheetWorkflow",
+        },
+        {
+          "name": "location-sheet-workflow",
+          "binding": "LOCATION_SHEET_WORKFLOW",
+          "class_name": "LocationSheetWorkflow",
+        },
+        {
+          "name": "library-talent-sheet-workflow",
+          "binding": "LIBRARY_TALENT_SHEET_WORKFLOW",
+          "class_name": "LibraryTalentSheetWorkflow",
+        },
+        {
+          "name": "library-location-sheet-workflow",
+          "binding": "LIBRARY_LOCATION_SHEET_WORKFLOW",
+          "class_name": "LibraryLocationSheetWorkflow",
+        },
+        {
+          "name": "shot-variant-workflow",
+          "binding": "SHOT_VARIANT_WORKFLOW",
+          "class_name": "ShotVariantWorkflow",
+        },
+        {
+          "name": "upscale-shot-variant-workflow",
+          "binding": "UPSCALE_SHOT_VARIANT_WORKFLOW",
+          "class_name": "UpscaleShotVariantWorkflow",
+        },
+        {
+          "name": "visual-prompt-scene-workflow",
+          "binding": "VISUAL_PROMPT_SCENE_WORKFLOW",
+          "class_name": "VisualPromptSceneWorkflow",
+        },
+        {
+          "name": "motion-prompt-scene-workflow",
+          "binding": "MOTION_PROMPT_SCENE_WORKFLOW",
+          "class_name": "MotionPromptSceneWorkflow",
+        },
+        {
+          "name": "music-prompt-workflow",
+          "binding": "MUSIC_PROMPT_WORKFLOW",
+          "class_name": "MusicPromptWorkflow",
+        },
+        {
+          "name": "recast-character-workflow",
+          "binding": "RECAST_CHARACTER_WORKFLOW",
+          "class_name": "RecastCharacterWorkflow",
+        },
+        {
+          "name": "location-matching-workflow",
+          "binding": "LOCATION_MATCHING_WORKFLOW",
+          "class_name": "LocationMatchingWorkflow",
+        },
+        {
+          "name": "frame-images-workflow",
+          "binding": "FRAME_IMAGES_WORKFLOW",
+          "class_name": "FrameImagesWorkflow",
+        },
+        {
+          "name": "talent-matching-workflow",
+          "binding": "TALENT_MATCHING_WORKFLOW",
+          "class_name": "TalentMatchingWorkflow",
+        },
+        {
+          "name": "character-bible-workflow",
+          "binding": "CHARACTER_BIBLE_WORKFLOW",
+          "class_name": "CharacterBibleWorkflow",
+        },
+        {
+          "name": "location-bible-workflow",
+          "binding": "LOCATION_BIBLE_WORKFLOW",
+          "class_name": "LocationBibleWorkflow",
+        },
+        {
+          "name": "visual-prompt-workflow",
+          "binding": "VISUAL_PROMPT_WORKFLOW",
+          "class_name": "VisualPromptWorkflow",
+        },
+        {
+          "name": "motion-prompt-workflow",
+          "binding": "MOTION_PROMPT_WORKFLOW",
+          "class_name": "MotionPromptWorkflow",
+        },
+        {
+          "name": "motion-music-prompts-workflow",
+          "binding": "MOTION_MUSIC_PROMPTS_WORKFLOW",
+          "class_name": "MotionMusicPromptsWorkflow",
+        },
+        {
+          "name": "regenerate-frames-workflow",
+          "binding": "REGENERATE_FRAMES_WORKFLOW",
+          "class_name": "RegenerateFramesWorkflow",
+        },
+        {
+          "name": "recast-location-workflow",
+          "binding": "RECAST_LOCATION_WORKFLOW",
+          "class_name": "RecastLocationWorkflow",
+        },
+        {
+          "name": "replace-element-workflow",
+          "binding": "REPLACE_ELEMENT_WORKFLOW",
+          "class_name": "ReplaceElementWorkflow",
+        },
+        {
+          "name": "scene-split-workflow",
+          "binding": "SCENE_SPLIT_WORKFLOW",
+          "class_name": "SceneSplitWorkflow",
+        },
+        {
+          "name": "storyboard-workflow",
+          "binding": "STORYBOARD_WORKFLOW",
+          "class_name": "StoryboardWorkflow",
+        },
+        {
+          "name": "analyze-script-workflow",
+          "binding": "ANALYZE_SCRIPT_WORKFLOW",
+          "class_name": "AnalyzeScriptWorkflow",
         },
       ],
       // Explicit empty array opts out of inheritance and silences wrangler's

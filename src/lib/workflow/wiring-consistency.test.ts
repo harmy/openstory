@@ -70,6 +70,29 @@ function parseWranglerWorkflows(): WranglerWorkflowEntry[] {
   return entries;
 }
 
+function parseAllWranglerWorkflowBlocks(): WranglerWorkflowEntry[][] {
+  // There are three `workflows[]` arrays: the top-level (local dev) block plus
+  // one each inside [env.production] and [env.test]. Wrangler does NOT inherit
+  // bindings across env blocks, so all three must be kept in lockstep — a
+  // missing entry in an env block is exactly what broke STORYBOARD_WORKFLOW in
+  // the full-pipeline e2e (which runs under CLOUDFLARE_ENV=test).
+  const text = readFileSync(WRANGLER_PATH, 'utf8');
+  const blocks: WranglerWorkflowEntry[][] = [];
+  const entryRegex =
+    /"name"\s*:\s*"([^"]+)"\s*,\s*"binding"\s*:\s*"([^"]+)"\s*,\s*"class_name"\s*:\s*"([^"]+)"/g;
+  for (const blockMatch of text.matchAll(/"workflows"\s*:\s*\[([\s\S]*?)\]/g)) {
+    const inner = blockMatch[1] ?? '';
+    const entries: WranglerWorkflowEntry[] = [];
+    for (const m of inner.matchAll(entryRegex)) {
+      if (m[1] && m[2] && m[3]) {
+        entries.push({ name: m[1], binding: m[2], class_name: m[3] });
+      }
+    }
+    blocks.push(entries);
+  }
+  return blocks;
+}
+
 function extractBindingNamesFromTypes(): Set<string> {
   const text = readFileSync(TYPES_PATH, 'utf8');
   // Match lines like `  IMAGE_WORKFLOW?: Workflow<unknown>;` inside the
@@ -144,6 +167,23 @@ describe('CF workflow wiring is consistent across all four declaration sites', (
       (cls) => !wranglerClasses.has(cls)
     );
     expect(orphaned).toEqual([]);
+  });
+
+  test('all three wrangler workflow blocks (default, production, test) declare identical bindings', () => {
+    const blocks = parseAllWranglerWorkflowBlocks();
+    // Default + [env.production] + [env.test]. If this ever drops below three,
+    // an env block lost its workflows[] (bindings are non-inheritable).
+    expect(blocks.length).toBe(3);
+    const fingerprint = (entries: WranglerWorkflowEntry[]) =>
+      entries
+        .map((e) => `${e.name}|${e.binding}|${e.class_name}`)
+        .sort()
+        .join('\n');
+    const [defaultBlock, ...envBlocks] = blocks;
+    const expected = fingerprint(defaultBlock ?? []);
+    for (const block of envBlocks) {
+      expect(fingerprint(block)).toBe(expected);
+    }
   });
 });
 
