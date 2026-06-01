@@ -1,0 +1,24 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Handheld camera with natural micro-movement slowly pushes in from eye-level framing toward Scarlett seated at the vanity. She lifts the small white box from the surface, fingers gently tracing the coral seal in a deliberate pause of potential energy. Bright natural window light cuts across white walls creating shifting directional beams and soft moving shadows. Subtle dust motes drift through the sunlight as she holds the pose.\n\nAmbient sounds: quiet studio with faint natural room tone and distant ocean. soft fingers tracing box lid, subtle fabric shift.",
+        "model": "fal-ai/kling-video/v3/pro/image-to-video",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video": {
+            "url": "https://v3b.fal.media/files/b/0a9c7e39/XC_hVAXnfZwQaohrJNCWu_output.mp4",
+            "content_type": "video/mp4",
+            "file_name": "output.mp4",
+            "file_size": 9847392
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

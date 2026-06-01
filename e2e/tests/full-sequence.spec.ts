@@ -336,10 +336,33 @@ SUPER:  CORAL.  OUT NOW.
       //     that the underlying media is healthy.
       //     (src/components/theatre/sequence-player.tsx)
       await page.goto(`/sequences/${sequenceId}/theatre`);
-      await expect(
-        page.getByRole('button', { name: 'Play' }),
-        'theatre: Play button visible (player initialized)'
-      ).toBeVisible({ timeout: t(60_000) });
+
+      // Wait for either the Play button (success) or the player error state.
+      // A hanging prepare() (common with raw AI-generated motion clips during
+      // fresh recording) will still hit the outer timeout, but at least an
+      // actual rejection from SequencePlayerEngine.prepare() will now fail
+      // fast with the real error message instead of a useless "Play button not
+      // found after 10 minutes".
+      await expect
+        .poll(
+          async () => {
+            const errorBox = page.getByTestId('player-error');
+            if ((await errorBox.count()) > 0) {
+              const msg = ((await errorBox.textContent()) || '').trim();
+              throw new Error(
+                `Theatre player failed to initialize: ${msg || '(no message)'}`
+              );
+            }
+            const playBtn = page.getByRole('button', { name: 'Play' });
+            return await playBtn.isVisible();
+          },
+          {
+            timeout: t(60_000),
+            message:
+              'theatre: Play button visible (player initialized) or player errored',
+          }
+        )
+        .toBe(true);
 
       // 14. Thin DB sanity tail: a UI bug that silently hides a player
       //     mustn't make the test pass green. We've already proved every

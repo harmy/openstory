@@ -18,6 +18,7 @@
  * See docs/investigations/cloudflare-workflows.md §4 Gap D.
  */
 
+import { configureFalProxyFromEnv } from '@/lib/ai/fal-config';
 import { createScopedDb, type ScopedDb } from '@/lib/db/scoped';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
@@ -98,6 +99,15 @@ export abstract class OpenStoryWorkflowEntrypoint<
     }
 
     const scopedDb = createScopedDb(event.payload.teamId, event.payload.userId);
+
+    // Install the fal→proxy middleware on the global `fal` singleton before any
+    // step runs a fal adapter. In E2E this routes fal.run / queue.fal.run to the
+    // aimock proxy (FAL_PROXY_URL); in prod it's a no-op (FAL_PROXY_URL unset).
+    // The QStash-era base-workflow did this at the top of run(); the CF Workflows
+    // rewrite (a8011203) dropped it, so workflow fal calls bypassed aimock and
+    // hit real endpoints even in replay. Idempotent (module-flag guarded), so
+    // running it per workflow invocation / retry is safe. See lib/ai/fal-config.
+    configureFalProxyFromEnv();
 
     // Pull the parent notify hint once — used on both success and failure
     // paths so a parent's `spawnAndAwaitChild` always sees a terminal event.

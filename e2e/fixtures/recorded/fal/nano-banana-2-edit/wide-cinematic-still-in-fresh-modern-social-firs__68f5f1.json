@@ -1,0 +1,29 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Wide cinematic still in fresh modern social-first product photography style showing SCARLETT wearing a light summer outfit suitable for beach with sun-kissed blonde hair lifting in the breeze, captured mid-turn as she walks away along the sand while the tide edges closer toward a lipstick resting beside an embossed mark on the beach, expansive golden sand stretching into the distance with gentle waves rolling in under clear ocean horizon, bright natural daylight with golden hour warmth spreading across the sand creating soft reflections and clean directional shadows, dynamic wide composition with shallow depth of field and airy high-key treatment, energetic editorial framing that feels like a screenshot-worthy lifestyle moment.\n\n  <reference-images>\n    - Image 1 [CHARACTER REF]: SCARLETT - Match the real-world appearance of Sienna Blake exactly\n    \n  </reference-images>",
+        "model": "fal-ai/nano-banana-2/edit",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "images": [
+            {
+              "url": "https://v3b.fal.media/files/b/0a9c7e29/L0aepQZZfexv0LbT2BxX4_LywULPPK.png",
+              "content_type": "image/png",
+              "file_name": "L0aepQZZfexv0LbT2BxX4_LywULPPK.png",
+              "file_size": null,
+              "width": null,
+              "height": null
+            }
+          ],
+          "description": ""
+        },
+        "status": 200
+      }
+    }
+  ]
+}

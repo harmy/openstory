@@ -1,0 +1,21 @@
+{
+  "fingerprint": {
+    "bucket": "elements",
+    "normalisedKey": "elements/<ULID>/temp/<ULID>.jpg",
+    "contentType": "image/jpeg"
+  },
+  "entries": [
+    {
+      "request": {
+        "key": "elements/01KT0FWPP6GXPD67KN3WPB37CK/temp/01KT0FXCZFAJN97FN6BN8F33CJ.jpg",
+        "bodyHash": "17801ae0c5bd909d3844c401f2368d3902660247382771c5ce8ab33175523ba8",
+        "bodySize": 122891
+      },
+      "response": {
+        "path": "elements/01KT0FWPP6GXPD67KN3WPB37CK/temp/01KT0FXCZFAJN97FN6BN8F33CJ.jpg",
+        "publicUrl": "https://storage-dev.openstory.so/elements/01KT0FWPP6GXPD67KN3WPB37CK/temp/01KT0FXCZFAJN97FN6BN8F33CJ.jpg",
+        "fullPath": "elements/01KT0FWPP6GXPD67KN3WPB37CK/temp/01KT0FXCZFAJN97FN6BN8F33CJ.jpg"
+      }
+    }
+  ]
+}

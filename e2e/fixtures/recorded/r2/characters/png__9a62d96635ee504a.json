@@ -1,0 +1,21 @@
+{
+  "fingerprint": {
+    "bucket": "characters",
+    "normalisedKey": "characters/<ULID>/<ULID>/<ULID>/<ULID>.png",
+    "contentType": "image/png"
+  },
+  "entries": [
+    {
+      "request": {
+        "key": "characters/01KT0FWPP6GXPD67KN3WPB37CK/01KT0FXQMHGBCMFGXR476XA8R4/01KT0FYPHNNA41TDWE05ZZ6GKJ/01KT0G04HH2C2XGAQMAYJ2NZAR.png",
+        "bodyHash": "0b18435dac88360043c3c8978822ad861be9d9ae2dadb1708a0667e22480b372",
+        "bodySize": 5532197
+      },
+      "response": {
+        "path": "characters/01KT0FWPP6GXPD67KN3WPB37CK/01KT0FXQMHGBCMFGXR476XA8R4/01KT0FYPHNNA41TDWE05ZZ6GKJ/01KT0G04HH2C2XGAQMAYJ2NZAR.png",
+        "publicUrl": "https://storage-dev.openstory.so/characters/01KT0FWPP6GXPD67KN3WPB37CK/01KT0FXQMHGBCMFGXR476XA8R4/01KT0FYPHNNA41TDWE05ZZ6GKJ/01KT0G04HH2C2XGAQMAYJ2NZAR.png",
+        "fullPath": "characters/01KT0FWPP6GXPD67KN3WPB37CK/01KT0FXQMHGBCMFGXR476XA8R4/01KT0FYPHNNA41TDWE05ZZ6GKJ/01KT0G04HH2C2XGAQMAYJ2NZAR.png"
+      }
+    }
+  ]
+}

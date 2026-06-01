@@ -26,6 +26,7 @@ import {
 import {
   recordWithHash,
   tryReplay,
+  tryReplayRecordedThisSession,
   tryReplayWithBodyHash,
   type UploadFingerprint,
 } from '@/lib/storage/r2-recorder';
@@ -82,15 +83,37 @@ async function handle(
 
   if (req.url === '/e2e/r2/lookup') {
     const fp = await readJson<LookupBody>(req);
-    // Try unique-fingerprint hit first (no body hash needed); fall through to
-    // hash-disambiguated lookup when multiple entries share the fingerprint.
+
+    if (E2E_RECORDING) {
+      // Recording mode: only short-circuit on bodies we have *already recorded
+      // in this sidecar process*. We deliberately ignore any fixtures that
+      // existed on disk when the sidecar started. This guarantees that every
+      // distinct body the current test run actually produces will execute the
+      // real R2 put + /record path, so the fixture file at the end of the run
+      // contains exactly the hashes needed for a subsequent clean replay.
+      //
+      // Within-run identical uploads (same bodyHash) still get the fast hit
+      // so we don't waste time re-uploading the exact same bytes to R2 ten
+      // times in one test.
+      const hit = tryReplayRecordedThisSession(
+        { bucket: fp.bucket, key: fp.key, contentType: fp.contentType },
+        fp.bodyHash
+      );
+      return send(
+        res,
+        200,
+        hit ? { hit: true, response: hit } : { hit: false }
+      );
+    }
+
+    // Replay (normal E2E / CI path): use the on-disk fixtures exactly as before.
+    // We always require an exact bodyHash match (tryReplay no longer returns
+    // blind 'hit' for singleton fixtures).
     const initial = tryReplay({
       bucket: fp.bucket,
       key: fp.key,
       contentType: fp.contentType,
     });
-    if (initial.type === 'hit')
-      return send(res, 200, { hit: true, response: initial.response });
     if (initial.type === 'miss') return send(res, 200, { hit: false });
     const disambiguated = tryReplayWithBodyHash(
       { bucket: fp.bucket, key: fp.key, contentType: fp.contentType },

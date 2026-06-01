@@ -1,0 +1,21 @@
+{
+  "fingerprint": {
+    "bucket": "videos",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/coral_shoreline-water-splash_<HASH>_openstory.mp4",
+    "contentType": "video/mp4"
+  },
+  "entries": [
+    {
+      "request": {
+        "key": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY9V10YFZAQNYSNDRPH1R/coral_shoreline-water-splash_52wk0c_openstory.mp4",
+        "bodyHash": "0349ee6891bc09c32be785c04d7fc803983093bec815ce8543dd2a1154dee01d",
+        "bodySize": 19095130
+      },
+      "response": {
+        "path": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY9V10YFZAQNYSNDRPH1R/coral_shoreline-water-splash_52wk0c_openstory.mp4",
+        "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY9V10YFZAQNYSNDRPH1R/coral_shoreline-water-splash_52wk0c_openstory.mp4",
+        "fullPath": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY9V10YFZAQNYSNDRPH1R/coral_shoreline-water-splash_52wk0c_openstory.mp4"
+      }
+    }
+  ]
+}

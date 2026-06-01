@@ -1,0 +1,24 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Eye-level handheld camera tracks forward with natural micro-movement as Scarlett steps into the shallow wave line at Bondi shoreline. A gentle wave breaks and swirls around her ankles. She tilts her head back and laughs freely. Camera follows the motion smoothly without drifting away. Her body sways lightly with the water. Hair lifts in the breeze. Foam edges spread across wet sand and recede. Bright daylight sparkles on the moving water surface.\n\n[SCARLETT, soft reflective]: \"Wear it everywhere.\"\n\nAmbient sounds: gentle ocean waves lapping shoreline with light breeze. soft water splash at ankles, light laugh.",
+        "model": "fal-ai/kling-video/v3/pro/image-to-video",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video": {
+            "url": "https://v3b.fal.media/files/b/0a9c7e39/PxISDU_gCeuA6PIB8DSom_output.mp4",
+            "content_type": "video/mp4",
+            "file_name": "output.mp4",
+            "file_size": 19095130
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

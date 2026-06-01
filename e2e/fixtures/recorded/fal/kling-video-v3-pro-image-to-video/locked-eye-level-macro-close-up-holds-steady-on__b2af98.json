@@ -1,0 +1,24 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Locked eye-level macro close-up holds steady on hands at the vanity. Fingers slowly open the white box lid, lift the coral lipstick and rotate the tube deliberately under the cutting sunlight beam, highlighting its surface with gentle turns.\n\nVoiceover delivered in soft reflective tone accompanies the precise hand movements.\n\nSubtle dust motes drift through the directional light rays, with natural micro shifts across skin texture and packaging.\n\n[SCARLETT, soft reflective]: \"One shade. One summer.\"\n\nAmbient sounds: quiet studio with faint natural light ambiance. soft box lid click, subtle lipstick tube rotation.",
+        "model": "fal-ai/kling-video/v3/pro/image-to-video",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video": {
+            "url": "https://v3b.fal.media/files/b/0a9c7e39/9MShGDCaRUsAkKytd3eNr_output.mp4",
+            "content_type": "video/mp4",
+            "file_name": "output.mp4",
+            "file_size": 7571788
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

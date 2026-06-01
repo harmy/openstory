@@ -1,0 +1,29 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "9-panel cinematic storyboard sheet derived from Image 1. Mix Wide, Medium, and Tight shots of the same scene. No borders between panels.\n\nLayout: 3x3 grid (9 panels) in a 16:9 landscape image.\n\nScene: Cinematic close-up in modern social-first product photography style with tactile editorial energy, SCARLETT wearing light summer outfit suitable for beach, her hands opening the lid of a small white box on a simple vanity, fingers lifting and slowly rotating the coral lipstick tube under the light with potential energy in mid-action, white studio walls bathed in bright natural morning sunlight cutting across the scene with warm directional shadows, shallow depth of field emphasizing skin texture and product surface against soft blurred background, clean bright high-key lighting with true-to-life color and slight warmth in highlights, eye-level macro framing with anamorphic lens flares and crisp detail on materials.\n\nMatch Image 1 exactly: same character(s) (face, hair, skin, clothing), lighting, color grade, and texture. If character reference sheets are provided, use them for likeness — do not render them as separate panels.\n\nNo text, dialogue bubbles, scene numbers, or watermarks.\n\n\n  <reference-images>\n    - Image 1 [PRIMARY SOURCE]: Primary source scene — generate 9 variant shots from this image\n    - Image 2 [CHARACTER REF]: SCARLETT - Match the real-world appearance of Sienna Blake exactly\n    - Image 3 [LOCATION REF]: INT. BONDI STUDIO - MORNING - White walls with sunlight cutting across\n    \n    IMPORTANT: Character, location, and element reference images are for IDENTITY CONSISTENCY ONLY. Do NOT reproduce them as separate panels or subjects. Elements (logos, products) must render faithfully when referenced but should appear naturally within the scene. All output panels must depict the scene from the PRIMARY SOURCE image.\n  </reference-images>",
+        "model": "fal-ai/nano-banana-2/edit",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "images": [
+            {
+              "url": "https://v3b.fal.media/files/b/0a9c7e2d/vzear1yIRAd72ZiKhqma-_MbVIaZ02.png",
+              "content_type": "image/png",
+              "file_name": "vzear1yIRAd72ZiKhqma-_MbVIaZ02.png",
+              "file_size": null,
+              "width": null,
+              "height": null
+            }
+          ],
+          "description": ""
+        },
+        "status": 200
+      }
+    }
+  ]
+}

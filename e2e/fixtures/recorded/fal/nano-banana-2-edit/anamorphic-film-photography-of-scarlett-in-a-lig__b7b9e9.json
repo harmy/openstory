@@ -1,0 +1,29 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Anamorphic film photography of SCARLETT in a light summer outfit suitable for beach stepping into the shallows of Bondi shoreline as a gentle wave breaks at her ankles with potential energy muscles tensed mid-breath laughing head tilted back hair lifting in the breeze natural coastal environment of golden sand meeting turquoise water shallow depth of water line soft foam edges and distant ocean horizon under bright daylight with golden reflections sparkling on the water surface clean directional sunlight casting soft shadows on wet sand airy high-key atmosphere with warm highlights and lifted shadows modern social-first product photography style with tactile editorial energy true-to-life color natural micro-movement framing eye-level angle handheld lens shallow depth of field isolating the shoreline interaction against blurred sea and sky\n\n  <reference-images>\n    - Image 1 [CHARACTER REF]: SCARLETT - Match the real-world appearance of Sienna Blake exactly\n    - Image 2 [LOCATION REF]: EXT. BONDI BEACH - SHORELINE - DAY - Shallow water edge with waves breaking at ankles\n    \n    IMPORTANT: Reference images CARRY the visual identity of their labeled objects. When the prompt names an UPPERCASE element token, render it faithfully from its ELEMENT REF image — do not generate a new version from the prose. When the prompt names a LOCATION REF, use that image for the environment, lighting, and architectural identity. Prose describes how things are framed, lit, and positioned in the shot — it does not redefine what the reference already shows.\n  </reference-images>",
+        "model": "fal-ai/nano-banana-2/edit",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "images": [
+            {
+              "url": "https://v3b.fal.media/files/b/0a9c7e29/fJtMsHW6SVp5G6Sg6suGV_x9VVGvw3.png",
+              "content_type": "image/png",
+              "file_name": "fJtMsHW6SVp5G6Sg6suGV_x9VVGvw3.png",
+              "file_size": null,
+              "width": null,
+              "height": null
+            }
+          ],
+          "description": ""
+        },
+        "status": 200
+      }
+    }
+  ]
+}

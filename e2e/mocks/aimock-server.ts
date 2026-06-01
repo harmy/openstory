@@ -21,6 +21,7 @@ import {
   type ChatCompletionRequest,
   type Fixture,
 } from '@copilotkit/aimock';
+import { createHash } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -317,13 +318,108 @@ function classifyFalModel(filePath: string): string | null {
   return tail.replace(/\//g, '-') || null;
 }
 
+// ── Stable fixture names ───────────────────────────────────────────────────
+// aimock's recorder names files `<provider>-<ISO-timestamp>-<randomUUID8>.json`
+// (recorder.js:55) — both halves are nondeterministic, so identical inputs get
+// a brand-new filename every record run. That makes `git diff` between two
+// recordings useless: every fixture reads as delete+add instead of modify. We
+// rename each fixture here to a stable, content-derived name so an unchanged
+// input keeps its filename across runs (→ no diff) and a changed input shows as
+// an inline modify of one file. R2 fixtures already use stable hash names, so
+// only the aimock (openrouter/fal) fixtures need this.
+
+// Lowercase-slug a free-text fragment for use in a filename. Collapses
+// whitespace/punctuation to single dashes and trims to a sane length.
+function slugify(text: string, maxLen = 48): string {
+  const slug = text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug.slice(0, maxLen).replace(/-+$/g, '') || 'untitled';
+}
+
+// 6-hex content hash of the fixture's *normalized* match input. Normalizing
+// first (same transform replay uses) means runtime ULIDs / R2 URLs / fal CDN
+// paths don't perturb the hash, so a logically-identical request hashes the
+// same across runs.
+function fixtureContentHash(userMessage: string): string {
+  return createHash('sha256')
+    .update(normalizeFalContent(userMessage))
+    .digest('hex')
+    .slice(0, 6);
+}
+
+// Derive a stable base name (no extension) for a fixture file. Per-scene
+// openrouter stages key on the embedded `scene_NNN` id; openrouter singletons
+// collapse to the stage name; fal fixtures (no scene id in the body) use a
+// slug of their prompt lead plus a content hash. The hash both disambiguates
+// distinct fal calls in one run and changes when the fal input changes — fal
+// can't get a hash-free name because nothing in its body is a stable key.
+function stableBaseName(
+  userMessage: string,
+  kind: 'openrouter' | 'fal'
+): string {
+  const sceneId = /\bscene_(\d+)\b/.exec(userMessage)?.[0];
+
+  if (kind === 'openrouter') {
+    // Per-scene stages → scene_003; singletons (no scene id) → handled by the
+    // caller passing the stage name as the fallback base.
+    return sceneId ?? '';
+  }
+
+  // fal: lead with the scene id when present, then a slug of the first line of
+  // the prompt, then a short content hash to disambiguate + track input drift.
+  const firstLine = userMessage.split('\n', 1)[0] ?? '';
+  const lead = slugify(firstLine);
+  const hash = fixtureContentHash(userMessage);
+  return sceneId ? `${sceneId}-${lead}__${hash}` : `${lead}__${hash}`;
+}
+
+// Move `src` to `<destDir>/<base>.json`, guarding against two within-run
+// fixtures resolving to the same name (which would silently overwrite). On
+// collision, suffix with a short hash of the full content so both survive and
+// the clash is visible. Cross-run "collisions" are the whole point — the new
+// file replaces the old same-named one, which is the inline diff we want.
+function moveToStableName(
+  src: string,
+  destDir: string,
+  base: string,
+  userMessage: string
+): void {
+  mkdirSync(destDir, { recursive: true });
+  let dest = resolve(destDir, `${base}.json`);
+  // Only treat it as a real collision if the existing file came from THIS run
+  // (i.e. we already wrote it this pass). We can't easily track that, so fall
+  // back to content equality: if the target exists with different content,
+  // suffix to avoid clobbering a sibling recorded moments earlier.
+  if (existsSync(dest)) {
+    const existing = readFileSync(dest, 'utf8');
+    const incoming = readFileSync(src, 'utf8');
+    if (existing !== incoming) {
+      const suffix = createHash('sha256')
+        .update(userMessage)
+        .digest('hex')
+        .slice(0, 8);
+      dest = resolve(destDir, `${base}__${suffix}.json`);
+    }
+  }
+  renameSync(src, dest);
+}
+
+// Read the (single) fixture's userMessage from a staged file.
+function readUserMessage(filePath: string): string {
+  const data: FixtureFile = JSON.parse(readFileSync(filePath, 'utf8'));
+  const um = data.fixtures[0]?.match.userMessage;
+  return typeof um === 'string' ? um : '';
+}
+
 // Walk `fixtures/recorded/_unsorted/` (sibling of `openrouter/` and `fal/`)
-// and move each freshly-recorded fixture into the right curated subfolder.
-// aimock's recorder names files `<providerKey>-…json` (recorder.js:196), so
-// we route by prefix: `fal-…` into a model-keyed subfolder of
-// `fixtures/recorded/fal/` (e.g. `fal/nano-banana-2/`, `fal/flux-2-turbo/`),
-// and `openai-…` (used for OpenRouter) into a stage subfolder of
-// `fixtures/recorded/openrouter/` keyed by the fixture's userMessage prefix.
+// and move each freshly-recorded fixture into the right curated subfolder,
+// renaming it to a stable content-derived name (see stableBaseName) so diffs
+// between recordings are meaningful. aimock's recorder names files
+// `<providerKey>-…json` (recorder.js:196), so we route by prefix: `fal-…` into
+// a model-keyed subfolder of `fixtures/recorded/fal/` and `openai-…` (OpenRouter)
+// into a stage subfolder of `fixtures/recorded/openrouter/`.
 // Runs on shutdown of any E2E_RECORD=1 run.
 function sortStagingFixtures(): void {
   if (!existsSync(RECORD_STAGING_DIR)) return;
@@ -340,13 +436,14 @@ function sortStagingFixtures(): void {
   let sorted = 0;
   for (const name of files) {
     const src = resolve(RECORD_STAGING_DIR, name);
+    const userMessage = readUserMessage(src);
     if (name.startsWith('fal-')) {
       const modelSlug = classifyFalModel(src);
       const destDir = modelSlug
         ? resolve(FAL_FIXTURE_DIR, modelSlug)
         : FAL_FIXTURE_DIR;
-      mkdirSync(destDir, { recursive: true });
-      renameSync(src, resolve(destDir, name));
+      const base = stableBaseName(userMessage, 'fal');
+      moveToStableName(src, destDir, base, userMessage);
       sorted++;
       continue;
     }
@@ -358,8 +455,10 @@ function sortStagingFixtures(): void {
       continue;
     }
     const stageDir = resolve(FIXTURE_DIR, stage);
-    mkdirSync(stageDir, { recursive: true });
-    renameSync(src, resolve(stageDir, name));
+    // Per-scene stages get a scene_NNN name; singletons (no scene id in the
+    // prompt) collapse to the stage name itself (e.g. script-enhance.json).
+    const base = stableBaseName(userMessage, 'openrouter') || stage;
+    moveToStableName(src, stageDir, base, userMessage);
     sorted++;
   }
   console.log(`[e2e] aimock: sorted ${sorted}/${files.length} fixtures`);

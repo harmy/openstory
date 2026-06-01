@@ -85,6 +85,16 @@ export default defineConfig({
       // `vite dev` and `vite preview` (both go through @cloudflare/vite-plugin
       // which reads the source wrangler.jsonc with its nested env blocks).
       'CLOUDFLARE_ENV=test',
+      // Forward this process's env into the Worker's getEnv()/process.env.
+      // @cloudflare/vite-plugin builds the worker env from wrangler.jsonc `vars`
+      // + `.env*`/`.dev.vars` and, by default, does NOT include the launcher's
+      // process.env (unstable_getVarsForDev → includeProcessEnv defaults false).
+      // Without this, the per-run flags below (E2E_FULL_PIPELINE, E2E_RECORD,
+      // OPENROUTER_BASE_URL, FAL_PROXY_URL) set here never reach the worker — so
+      // workflows were skipped and the record branch never fired. This only
+      // affects text vars, not bindings, so the D1/R2 remote-binding safety net
+      // is unaffected.
+      'CLOUDFLARE_INCLUDE_PROCESS_ENV=true',
       ...(fullPipeline
         ? ['E2E_FULL_PIPELINE=true', 'FAL_PROXY_URL=http://localhost:4010/fal']
         : []),

@@ -1,0 +1,21 @@
+{
+  "fingerprint": {
+    "bucket": "videos",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/coral_beach-promenade-walk_<HASH>_openstory.mp4",
+    "contentType": "video/mp4"
+  },
+  "entries": [
+    {
+      "request": {
+        "key": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY78MSJ89GTB1K9GTC49C/coral_beach-promenade-walk_y0zv5x_openstory.mp4",
+        "bodyHash": "f07b898d71da68439aa6699d98df8a400e0c1d2450ae2874d29eed8e939e0ce0",
+        "bodySize": 19701835
+      },
+      "response": {
+        "path": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY78MSJ89GTB1K9GTC49C/coral_beach-promenade-walk_y0zv5x_openstory.mp4",
+        "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY78MSJ89GTB1K9GTC49C/coral_beach-promenade-walk_y0zv5x_openstory.mp4",
+        "fullPath": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY78MSJ89GTB1K9GTC49C/coral_beach-promenade-walk_y0zv5x_openstory.mp4"
+      }
+    }
+  ]
+}

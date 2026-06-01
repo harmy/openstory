@@ -1,0 +1,21 @@
+{
+  "fingerprint": {
+    "bucket": "videos",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/coral_close-on-lips-detail_<HASH>_openstory.mp4",
+    "contentType": "video/mp4"
+  },
+  "entries": [
+    {
+      "request": {
+        "key": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY8S7Z6GF6WK2NKCQWXNX/coral_close-on-lips-detail_cqjjby_openstory.mp4",
+        "bodyHash": "cf476dd93ea0e6887989bf03c33d8238774b20faed2594144d891845dfc51c37",
+        "bodySize": 4918516
+      },
+      "response": {
+        "path": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY8S7Z6GF6WK2NKCQWXNX/coral_close-on-lips-detail_cqjjby_openstory.mp4",
+        "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY8S7Z6GF6WK2NKCQWXNX/coral_close-on-lips-detail_cqjjby_openstory.mp4",
+        "fullPath": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY8S7Z6GF6WK2NKCQWXNX/coral_close-on-lips-detail_cqjjby_openstory.mp4"
+      }
+    }
+  ]
+}

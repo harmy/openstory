@@ -69,7 +69,6 @@
     "test:e2e:full:built": "PLAYWRIGHT_FULL_PIPELINE=true bun run build:e2e && bun run prepare:e2e-built && E2E_BUILT=true PLAYWRIGHT_FULL_PIPELINE=true bun playwright test full-sequence",
     "test:e2e:record": "E2E_RECORD=1 bun playwright test",
     "test:e2e:full:record": "E2E_RECORD=1 PLAYWRIGHT_FULL_PIPELINE=true bun playwright test full-sequence",
-    "test:e2e:full:record:built": "bun run build:e2e && bun run prepare:e2e-built && E2E_BUILT=true E2E_RECORD=1 PLAYWRIGHT_FULL_PIPELINE=true bun playwright test full-sequence",
     "prepare:e2e-built": "mkdir -p .wrangler/deploy && printf '%s' '{\"configPath\":\"../../dist/server/wrangler.json\",\"auxiliaryWorkers\":[]}' > .wrangler/deploy/config.json",
     "test:e2e:setup": "bun run db:migrate:test && bun scripts/seed.ts --test",
     "auth:generate": "bunx @better-auth/cli generate --config src/lib/auth/cli-config.ts",

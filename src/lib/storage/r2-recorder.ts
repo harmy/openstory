@@ -36,6 +36,14 @@
  * `storage-cloudflare.ts` under Workerd posts `{ bucket, key, bodyHash }` to
  * the aimock endpoint instead of importing this module directly — keeping
  * fs/crypto out of the worker bundle.
+ *
+ * Recording vs replay contract (critical for full-pipeline e2e):
+ * - When E2E_RECORDING: the lookup handler only consults the in-memory
+ *   `recordedThisSession` map (populated by this run's /record calls). Old
+ *   fixtures on disk are ignored. This ensures a re-record actually captures
+ *   whatever bodies the current code + aimock fixtures produce.
+ * - On normal replay: we use the on-disk fixtures with strict bodyHash
+ *   matching (no more blind trust of singleton entries).
  */
 
 import { createHash } from 'node:crypto';
@@ -170,6 +178,22 @@ function readFixture(filePath: string): FixtureFile | null {
 // fixtures from previous runs); subsequent touches append.
 const recordedThisRun = new Set<string>();
 
+/**
+ * Bodies recorded via /record *in this sidecar process* (i.e. during the
+ * current `E2E_RECORD=1` invocation).
+ *
+ * This is the source of truth for lookup hits while recording. We deliberately
+ * do *not* consult on-disk fixtures from previous runs when E2E_RECORDING is
+ * true — otherwise a stale singleton or partial multi-entry fixture would
+ * short-circuit the record path for new/different image bodies produced by
+ * the current test run, leaving the fixture file missing those hashes on the
+ * next replay.
+ *
+ * Populated only by recordWithHash. Read only by the recording-mode path in
+ * r2-mock-server.ts.
+ */
+const recordedThisSession = new Map<string, Map<string, UploadResult>>();
+
 function fingerprintKey(fp: UploadFingerprint): string {
   return [fp.bucket, normaliseKey(fp.key), fp.contentType ?? ''].join('\x00');
 }
@@ -178,11 +202,11 @@ export function tryReplay(fp: UploadFingerprint): ReplayResult {
   const filePath = fixturePath(fp, fingerprintHash(fp));
   const fixture = readFixture(filePath);
   if (!fixture || fixture.entries.length === 0) return { type: 'miss' };
-  if (fixture.entries.length === 1) {
-    const entry = fixture.entries[0];
-    if (!entry) throw new Error('expected single fixture entry');
-    return { type: 'hit', response: entry.response };
-  }
+  // Always fall through to the bodyHash-disambiguated path. We no longer
+  // blindly trust a singleton entry — the bodyHash sent by the worker on
+  // every lookup is authoritative. This eliminates a class of "stale
+  // fixture" surprises when the same normalised key has been used for
+  // different content across recordings.
   return { type: 'need-body' };
 }
 
@@ -205,6 +229,21 @@ export function tryReplayWithBodyHash(
   if (!fixture) return null;
   const match = fixture.entries.find((e) => e.request.bodyHash === bodyHash);
   return match?.response ?? null;
+}
+
+/**
+ * Recording-session lookup. Only returns a hit for bodies that were
+ * successfully passed through `recordWithHash` in *this* sidecar process.
+ * Never reads from disk. This is what the /lookup handler uses when
+ * E2E_RECORDING, guaranteeing that every distinct body the current test
+ * run actually produced will have caused a real R2 put + fixture write.
+ */
+export function tryReplayRecordedThisSession(
+  fp: UploadFingerprint,
+  bodyHash: string
+): UploadResult | null {
+  const byBody = recordedThisSession.get(fingerprintKey(fp));
+  return byBody?.get(bodyHash) ?? null;
 }
 
 export function record(
@@ -257,4 +296,15 @@ export function recordWithHash(
   const parent = dirname(filePath);
   if (!existsSync(parent)) mkdirSync(parent, { recursive: true });
   writeFileSync(filePath, JSON.stringify(fixture, null, 2));
+
+  // Also record in the in-memory session map so that subsequent /lookup
+  // calls in the same recording run (including for other bodies of the
+  // same fp) can short-circuit without suppressing the record path for
+  // bodies we haven't seen yet.
+  let byBody = recordedThisSession.get(fpKey);
+  if (!byBody) {
+    byBody = new Map();
+    recordedThisSession.set(fpKey, byBody);
+  }
+  byBody.set(bodyHash, response);
 }

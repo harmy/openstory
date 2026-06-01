@@ -1,0 +1,24 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Macro lens frames lips in tight center with subtle handheld micro-drift. Coral finish catches shifting window light as lips hold a relaxed near-still expression with faint micro-tension. Natural micro-movement allows the highlight to glide softly across the surface.\n\nAmbient sounds: quiet studio room tone with faint distant waves.",
+        "model": "fal-ai/kling-video/v3/pro/image-to-video",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video": {
+            "url": "https://v3b.fal.media/files/b/0a9c7e36/fyhiSYtWMgkI-5qdEqeu-_output.mp4",
+            "content_type": "video/mp4",
+            "file_name": "output.mp4",
+            "file_size": 4918516
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

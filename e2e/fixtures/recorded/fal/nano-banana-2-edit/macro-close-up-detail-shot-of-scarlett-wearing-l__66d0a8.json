@@ -1,0 +1,29 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Macro close-up detail shot of SCARLETT wearing light summer outfit suitable for beach, extreme focus on lips with coral finish that catches the light soft and precise, muscles relaxed mid-expression in a still frame implying subtle motion, set against softly blurred white walls and simple vanity table in a minimal bright studio interior with morning sunlight streaming across the surface, bright natural window light creating clean directional shadows and crisp highlights on the lip texture, shallow depth of field with creamy bokeh, dynamic handheld composition with natural micro-movement, modern social-first product photography style emphasizing tactile material and finish with true-to-life color and airy high-key mood, slight warmth in highlights and lifted shadows\n\n  <reference-images>\n    - Image 1 [CHARACTER REF]: SCARLETT - Match the real-world appearance of Sienna Blake exactly\n    - Image 2 [LOCATION REF]: INT. BONDI STUDIO - MORNING - White walls with sunlight cutting across\n    \n    IMPORTANT: Reference images CARRY the visual identity of their labeled objects. When the prompt names an UPPERCASE element token, render it faithfully from its ELEMENT REF image — do not generate a new version from the prose. When the prompt names a LOCATION REF, use that image for the environment, lighting, and architectural identity. Prose describes how things are framed, lit, and positioned in the shot — it does not redefine what the reference already shows.\n  </reference-images>",
+        "model": "fal-ai/nano-banana-2/edit",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "images": [
+            {
+              "url": "https://v3b.fal.media/files/b/0a9c7e29/Z7KFnSKHxNjBddPEWyEu5_dxmdezuo.png",
+              "content_type": "image/png",
+              "file_name": "Z7KFnSKHxNjBddPEWyEu5_dxmdezuo.png",
+              "file_size": null,
+              "width": null,
+              "height": null
+            }
+          ],
+          "description": ""
+        },
+        "status": 200
+      }
+    }
+  ]
+}

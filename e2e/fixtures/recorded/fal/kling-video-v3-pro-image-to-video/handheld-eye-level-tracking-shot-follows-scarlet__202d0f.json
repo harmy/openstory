@@ -1,0 +1,24 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Handheld eye-level tracking shot follows Scarlett walking steadily forward along the open coastal promenade path. She strides naturally with forward momentum as ocean breeze lifts her hair. Surfers rise on waves visible behind her in the distance. Camera maintains consistent distance matching her pace.\n\nScarlett delivers her voice-over line with soft reflective tone, head slightly lifted and gaze directed ahead toward the water.\n\nGentle fabric flutter on clothing and fine sand particles drifting in the breeze sell the lively coastal atmosphere.\n\n[SCARLETT, soft reflective]: \"Made for the water.\"\n\nAmbient sounds: ocean waves and light coastal breeze. soft footsteps on promenade path, wind through clothing and hair.",
+        "model": "fal-ai/kling-video/v3/pro/image-to-video",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video": {
+            "url": "https://v3b.fal.media/files/b/0a9c7e3c/ZY24dpK2tokLqA59IEpgu_output.mp4",
+            "content_type": "video/mp4",
+            "file_name": "output.mp4",
+            "file_size": 19701835
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

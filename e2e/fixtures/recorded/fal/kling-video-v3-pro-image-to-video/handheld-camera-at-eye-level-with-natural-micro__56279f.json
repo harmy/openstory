@@ -1,0 +1,24 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Handheld camera at eye level with natural micro-movement holds on Scarlett as she swipes lipstick across her lower lip, blots once with tissue, then smiles at the mirror. The motion stays smooth and deliberate. Soft fabric shifts slightly with arm movement. Natural window light casts gentle shifting shadows across the vanity surface.\n\nAmbient sounds: quiet studio room tone with faint natural air. lipstick gliding on lips, tissue blotting, soft smile exhale.",
+        "model": "fal-ai/kling-video/v3/pro/image-to-video",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video": {
+            "url": "https://v3b.fal.media/files/b/0a9c7e36/9jvnu5bCvpn5PMobgXPbg_output.mp4",
+            "content_type": "video/mp4",
+            "file_name": "output.mp4",
+            "file_size": 6032176
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

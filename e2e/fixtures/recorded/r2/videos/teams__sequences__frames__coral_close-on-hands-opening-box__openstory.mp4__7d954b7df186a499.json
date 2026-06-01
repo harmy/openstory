@@ -1,0 +1,21 @@
+{
+  "fingerprint": {
+    "bucket": "videos",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/coral_close-on-hands-opening-box_<HASH>_openstory.mp4",
+    "contentType": "video/mp4"
+  },
+  "entries": [
+    {
+      "request": {
+        "key": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY6DQCPYSFR5YCZCD63X7/coral_close-on-hands-opening-box_s2ysjr_openstory.mp4",
+        "bodyHash": "7c86aa94670d0a00125f3a0fd073681f9f7054cf126c1f6f2a62f88cf400741d",
+        "bodySize": 7571788
+      },
+      "response": {
+        "path": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY6DQCPYSFR5YCZCD63X7/coral_close-on-hands-opening-box_s2ysjr_openstory.mp4",
+        "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY6DQCPYSFR5YCZCD63X7/coral_close-on-hands-opening-box_s2ysjr_openstory.mp4",
+        "fullPath": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FY6DQCPYSFR5YCZCD63X7/coral_close-on-hands-opening-box_s2ysjr_openstory.mp4"
+      }
+    }
+  ]
+}

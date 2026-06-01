@@ -125,6 +125,7 @@ export const SequencePlayer: React.FC<SequencePlayerProps> = ({
   if (error) {
     return (
       <div
+        data-testid="player-error"
         className={cn(
           'flex flex-col items-center justify-center gap-3 rounded-lg border bg-muted/20 p-8',
           className,
@@ -142,6 +143,8 @@ export const SequencePlayer: React.FC<SequencePlayerProps> = ({
 
   return (
     <div
+      data-testid="sequence-player"
+      data-state={meta ? 'ready' : 'loading'}
       className={cn(
         'relative w-full overflow-hidden rounded-lg bg-black',
         className,
@@ -154,7 +157,10 @@ export const SequencePlayer: React.FC<SequencePlayerProps> = ({
         aria-label="Sequence playback"
       />
       {!meta && (
-        <Skeleton className="absolute inset-0 h-full w-full bg-muted/40" />
+        <Skeleton
+          data-testid="player-loading"
+          className="absolute inset-0 h-full w-full bg-muted/40"
+        />
       )}
       {overlayActions && (
         <div className="absolute top-2 right-2 z-10">{overlayActions}</div>

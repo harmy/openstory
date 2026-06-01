@@ -1,0 +1,21 @@
+{
+  "fingerprint": {
+    "bucket": "videos",
+    "normalisedKey": "videos/teams/<ULID>/sequences/<ULID>/frames/<ULID>/coral_sand-wide-shot-ending_<HASH>_openstory.mp4",
+    "contentType": "video/mp4"
+  },
+  "entries": [
+    {
+      "request": {
+        "key": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FYB2NW14BGZE5KBEKMJNC/coral_sand-wide-shot-ending_k1f5ne_openstory.mp4",
+        "bodyHash": "432cc4cf5c86c57a254f606a55ebe5789d96cb1b2c6f7239143df5977aa575ad",
+        "bodySize": 9733052
+      },
+      "response": {
+        "path": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FYB2NW14BGZE5KBEKMJNC/coral_sand-wide-shot-ending_k1f5ne_openstory.mp4",
+        "publicUrl": "https://storage-dev.openstory.so/videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FYB2NW14BGZE5KBEKMJNC/coral_sand-wide-shot-ending_k1f5ne_openstory.mp4",
+        "fullPath": "videos/teams/01KT0FWPP6GXPD67KN3WPB37CK/sequences/01KT0FXQMHGBCMFGXR476XA8R4/frames/01KT0FYB2NW14BGZE5KBEKMJNC/coral_sand-wide-shot-ending_k1f5ne_openstory.mp4"
+      }
+    }
+  ]
+}

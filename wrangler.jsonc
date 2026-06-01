@@ -444,13 +444,21 @@
         // E2E_TEST gates /api/test/* routes (via testOnlyGuard) and many
         // test-specific branches in storage / workflow client code.
         "E2E_TEST": "true",
-        // The following are "false" by default for normal `bun test:e2e`.
-        // For `bun test:e2e:full` the outer process receives the true value
-        // via envPrefix; full worker injection for these two is handled by
-        // the fact that full-pipeline runs still go through the same [env.test]
-        // (advanced overrides can be done via plugin config if needed).
-        "E2E_FULL_PIPELINE": "false",
-        "E2E_RECORD": "false",
+        // E2E_FULL_PIPELINE and E2E_RECORD are intentionally NOT hardcoded here.
+        // They're per-run flags: Playwright's webServer envPrefix sets them in
+        // the launcher's process.env for `test:e2e:full[:record]`. Under
+        // @cloudflare/vite-plugin the worker's getEnv() is built from these
+        // `vars` + `.env*`/`.dev.vars` files, and only includes process.env when
+        // CLOUDFLARE_INCLUDE_PROCESS_ENV=true (which the envPrefix now sets — see
+        // playwright.config.ts). Hardcoding them "false" here shadowed the
+        // process.env values (this merge layers env-files/process.env over these
+        // vars, but a declared "false" still won for any path that didn't forward
+        // process.env), so the worker saw "false": triggerWorkflow() skipped
+        // every workflow and storage-cloudflare.ts's record branch never fired
+        // (fixture-miss → 500). With them absent, the worker reads them straight
+        // from the forwarded process.env; when unset (plain `bun test:e2e`, or
+        // CI's non-full .dev.vars) they're undefined, which the `!== 'true'` /
+        // `=== '1'` checks treat identically to "false" — hermetic replay intact.
       },
       "d1_databases": [
         {

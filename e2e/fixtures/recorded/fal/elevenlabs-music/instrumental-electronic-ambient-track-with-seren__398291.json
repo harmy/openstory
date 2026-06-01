@@ -1,0 +1,24 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Instrumental electronic ambient track with serene and uplifting mood, featuring light synth pads and subtle flowing percussion that evokes a fresh coastal breeze throughout the sequence.",
+        "model": "fal-ai/elevenlabs/music",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "audio": {
+            "url": "https://v3b.fal.media/files/b/0a9c7e2e/cqLpIIR5FPIkb2RApeYUk_music_generated.mp3",
+            "content_type": "audio/mpeg",
+            "file_name": "music_generated.mp3",
+            "file_size": 704306
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}
