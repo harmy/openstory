@@ -11,6 +11,10 @@
  * Usage:
  *   bun scripts/upload-style-previews-to-r2.ts              # Upload (interactive)
  *   bun scripts/upload-style-previews-to-r2.ts --dry-run    # Preview only, no uploads
+ *   bun scripts/upload-style-previews-to-r2.ts --thumbnail-scene=character --yes
+ *                                                           # Non-interactive: one
+ *                                                           # scene for all styles,
+ *                                                           # no confirm prompt
  */
 
 import * as p from '@clack/prompts';
@@ -28,6 +32,10 @@ const PREVIEW_SIZE = 512;
 const THUMBNAIL_SIZE = 256;
 
 const isDryRun = process.argv.includes('--dry-run');
+const skipConfirm = process.argv.includes('--yes');
+const thumbnailSceneArg = process.argv
+  .find((a) => a.startsWith('--thumbnail-scene='))
+  ?.split('=')[1];
 
 const R2_CONFIG = {
   bucket: process.env.R2_PUBLIC_ASSETS_BUCKET || 'openstory-public-assets',
@@ -236,6 +244,30 @@ async function main() {
     `Found ${images.length} images across ${styleNames.length} styles`
   );
 
+  // Non-interactive: one scene for every style (skips the selection prompt).
+  if (thumbnailSceneArg) {
+    if (!sceneNames.includes(thumbnailSceneArg)) {
+      p.log.error(
+        `--thumbnail-scene="${thumbnailSceneArg}" not found. Available: ${sceneNames.join(', ')}`
+      );
+      process.exit(1);
+    }
+    const thumbnailMap = new Map<string, string>();
+    for (const styleName of styleNames) {
+      thumbnailMap.set(styleName, thumbnailSceneArg);
+    }
+    p.log.info(`Using "${thumbnailSceneArg}" as the thumbnail for all styles.`);
+    if (isDryRun) {
+      p.log.warn('Dry run — no uploads will be made.');
+      p.outro('Dry run complete.');
+      return;
+    }
+    await mkdir(TEMP_DIR, { recursive: true });
+    await uploadImages(images, thumbnailMap);
+    p.outro('Upload complete!');
+    return;
+  }
+
   // 1. Choose thumbnail scene
   const sceneOptions = sceneNames.map((s) => ({
     value: s,
@@ -338,13 +370,15 @@ async function main() {
   }
 
   // 3. Confirm
-  const confirmed = await p.confirm({
-    message: 'Proceed with upload?',
-  });
+  if (!skipConfirm) {
+    const confirmed = await p.confirm({
+      message: 'Proceed with upload?',
+    });
 
-  if (p.isCancel(confirmed) || !confirmed) {
-    p.cancel('Upload cancelled.');
-    process.exit(0);
+    if (p.isCancel(confirmed) || !confirmed) {
+      p.cancel('Upload cancelled.');
+      process.exit(0);
+    }
   }
 
   // 4. Create temp directory and upload

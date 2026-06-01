@@ -1,5 +1,6 @@
 import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
 import { generateImageWithProvider } from '@/lib/image/image-generation';
+import { styleSlug } from '@/lib/style/style-slug';
 import { DEFAULT_STYLE_TEMPLATES } from '@/lib/style/style-templates';
 import { PhotonImage } from '@cf-wasm/photon';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -63,17 +64,12 @@ async function downloadAndConvertToWebP(url: string, outputPath: string) {
 }
 
 /**
- * Sanitize a style name for use as a folder name
- * Converts to lowercase, replaces spaces/special chars with hyphens
+ * Sanitize a style name for use as a folder name.
+ * Shares the canonical slug rule with thumbnail/video URLs (see style-slug.ts)
+ * so the local `preview/{slug}` folder matches the R2 `/styles/{slug}` path.
  */
 function sanitizeFolderName(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters except spaces and hyphens
-    .replace(/\s+/g, '-') // Replace spaces with hyphens
-    .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
-    .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+  return styleSlug(name);
 }
 
 type Task = {
