@@ -60,7 +60,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
       artStyle:
         'Modern social-first product photography with tactile, editorial energy. Products shown in real-life context -- hands opening packaging, fingers pressing textures, products on bathroom shelves, kitchen counters, rumpled linen. Close-up detail shots emphasize material and finish. Flat-lays with curated minimal arrangements. Color-matched backgrounds that complement the product. Every frame feels like something you would screenshot and save',
       lighting:
-        'Bright natural window light with clean directional shadows. Direct on-camera flash for punchy editorial energy on select shots. No heavy diffusion -- let light feel real and immediate. Golden hour warmth for lifestyle moments. High-key and airy overall with pops of contrast',
+        'Bright natural window light with clean directional shadows. Direct on-camera flash for punchy editorial energy on select shots. No heavy diffusion -- let light feel real and immediate. Warm late-afternoon glow for lifestyle moments. High-key and airy overall with pops of contrast',
       colorPalette: ['#FFFFFF', '#F0E6D3', '#D4536D', '#1A1A1A', '#E8F4E8'],
       cameraWork:
         'Dynamic mix of handheld and locked shots with consistent energy. Handheld with natural micro-movement for lifestyle moments -- hands interacting, daily rituals, real context. Quick-cut to locked beauty frames for hero product shots. Macro details on textures and surfaces. Overhead flat-lays directly above. Eye-level and slightly above angles. Shallow depth of field on tactile details. Energetic pacing -- no lingering, every frame earns its time',
@@ -83,7 +83,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
   {
     name: 'Real Estate',
     description:
-      'Prestige property cinematography with golden-hour warmth and aspirational lifestyle framing. Glamorous figures inhabit sun-drenched interiors, adding warmth and scale to luxury spaces. Designed for high-end real estate branding, lifestyle property films, and luxury development showcases.',
+      'Prestige property cinematography with warm low-sun glow and aspirational lifestyle framing. Glamorous figures inhabit sun-drenched interiors, adding warmth and scale to luxury spaces. Designed for high-end real estate branding, lifestyle property films, and luxury development showcases.',
     category: 'realestate',
     tags: [
       'real-estate',
@@ -96,12 +96,12 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     config: {
       mood: 'Luxurious, aspirational, and effortlessly glamorous',
       artStyle:
-        'Prestige property cinematography with editorial lifestyle sensibility. Luxury interiors shot with depth and grandeur -- marble surfaces, floor-to-ceiling windows, curated furnishings. Elegant women in designer loungewear or evening attire occupy the spaces naturally -- reading on a linen sofa, pouring wine at a kitchen island, silhouetted against a sunset terrace. The architecture dominates every frame while human presence adds warmth, scale, and aspiration. Compositions emphasize clean sight lines, spatial depth, and the interplay of golden light with rich materials',
+        'Prestige property cinematography with editorial lifestyle sensibility. Luxury interiors shot with depth and grandeur -- marble surfaces, floor-to-ceiling windows, curated furnishings. Elegant women in designer loungewear or evening attire occupy the spaces naturally -- reading on a linen sofa, pouring wine at a kitchen island, silhouetted against a sunset terrace. The architecture dominates every frame while human presence adds warmth, scale, and aspiration. Compositions emphasize clean sight lines, spatial depth, and the interplay of warm raking light with rich materials',
       lighting:
-        'Late afternoon golden hour streaming through expansive windows, casting long warm beams across polished floors and textured surfaces. Rim light catching hair and shoulders of figures in the space. Balanced ambient fill preserving detail in corners and alcoves. Interior spaces glow with warm artificial accents -- table lamps, pendant fixtures -- blending seamlessly with fading daylight',
+        'Late-afternoon sun streaming through expansive windows, casting long warm beams across polished floors and textured surfaces. Rim light catching hair and shoulders of figures in the space. Balanced ambient fill preserving detail in corners and alcoves. Interior spaces glow with warm artificial accents -- table lamps, pendant fixtures -- blending seamlessly with fading daylight',
       colorPalette: ['#F5EDE3', '#C9A96E', '#6B4C3B', '#E8D5C4', '#2C2420'],
       cameraWork:
-        'Slow, cinematic dolly movements through grand interiors at eye level. Smooth reveals through doorways framing figures in the distance. Wide establishing shots of exteriors at golden hour, intimate medium shots of lifestyle moments. Shallow depth of field isolating textures and details -- a hand on a marble countertop, light catching crystal glassware. Symmetrical compositions for architectural grandeur, rule-of-thirds for lifestyle vignettes',
+        'Slow, cinematic dolly movements through grand interiors at eye level. Smooth reveals through doorways framing figures in the distance. Wide establishing shots of exteriors in warm low-angle sun, intimate medium shots of lifestyle moments. Shallow depth of field isolating textures and details -- a hand on a marble countertop, light catching crystal glassware. Symmetrical compositions for architectural grandeur, rule-of-thirds for lifestyle vignettes',
       referenceFilms: [
         "Sotheby's International Realty Brand Films",
         'Tom Ford A Single Man Interiors',
@@ -414,11 +414,11 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
   {
     name: 'Western Epic',
     description:
-      'Wide vistas with dusty, golden hour lighting and classic Western aesthetics.',
+      'Wide vistas with dusty, low-sun raking light and classic Western aesthetics.',
     category: 'western',
     tags: ['western', 'epic', 'frontier', 'classic', 'americana'],
     config: {
-      artStyle: 'Classic Western with wide landscapes and golden hour lighting',
+      artStyle: 'Classic Western with wide landscapes and raking sunset light',
       colorPalette: ['#D2691E', '#8B4513', '#DEB887', '#CD853F', '#F4A460'],
       lighting: 'Magic hour lighting with long shadows',
       cameraWork: 'Wide shots, slow zooms, and classic Western framing',
@@ -516,7 +516,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
       artStyle:
         'Editorial lifestyle photography with cinematic depth. Model-grade talent in considered wardrobe inhabiting beautiful environments -- linen sofas, sunlit balconies, marble kitchens. The product appears in real ritual moments rather than being presented. Compositions feel composed but unforced',
       lighting:
-        'Wraparound natural light supplemented by soft bounce. Window light dominant, warm practicals at night. Golden hour favored for exteriors. Highlights gently rolled off, never clipped',
+        'Wraparound natural light supplemented by soft bounce. Window light dominant, warm practicals at night. Warm late-day sun favored for exteriors. Highlights gently rolled off, never clipped',
       colorPalette: ['#F4EDE2', '#C9A682', '#3B2F26', '#8AA39B', '#FFFFFF'],
       cameraWork:
         'Slow handheld and tracked moves. Frequent shallow depth, often racking focus from hand to face. Wider clean masters for context, intimate close-ups on touch and texture',
@@ -586,7 +586,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
       artStyle:
         'Cinematic automotive photography on empty roads, salt flats, mountain passes, and reflective urban environments. The car is shot like an architectural subject -- low angles emphasizing stance, high angles revealing line and form. Backgrounds chosen for graphic clarity, never cluttered',
       lighting:
-        'Late golden hour or magic hour. Hard sun raking across painted surfaces, controlled lens flares. Night content lit by city neon, headlights, and discreet rim sources. Sky and reflections are characters of their own',
+        'Low raking sun bleeding into blue hour. Hard light skating across painted surfaces, controlled lens flares. Night content lit by city neon, headlights, and discreet rim sources. Sky and reflections are characters of their own',
       colorPalette: ['#0F1620', '#1F3A5F', '#C0392B', '#E8E8E8', '#F3C969'],
       cameraWork:
         'Tracking vehicle shots from gimbal cars and aerial drones. Long lens compression for highway sequences, wide for landscape integration. Slow rotational beauty passes around static heroes. Pans that follow the car cleanly through frame',
@@ -963,7 +963,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
   {
     name: 'Hospitality Lifestyle',
     description:
-      'Aspirational hotel and resort cinematography with soft golden light, infinity pools, breakfast on linen, and unhurried bodies in beautiful spaces. Built for hospitality brand films.',
+      'Aspirational hotel and resort cinematography with soft warm light, infinity pools, breakfast on linen, and unhurried bodies in beautiful spaces. Built for hospitality brand films.',
     category: 'commercial',
     tags: ['commercial', 'hospitality', 'hotel', 'resort', 'travel'],
     config: {
@@ -971,7 +971,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
       artStyle:
         'Editorial hospitality cinematography. Guests at ease in beautifully designed rooms, infinity pools meeting horizons, breakfasts on linen with a sea view, cocktails at sunset. Architecture, materials, and natural surroundings carry equal weight with people',
       lighting:
-        'Soft natural daylight, warm interior practicals at evening, golden hour for exteriors. Wraparound bounce keeps shadows luminous. Never harsh -- the space always feels welcoming',
+        'Soft natural daylight, warm interior practicals at evening, soft evening sun for exteriors. Wraparound bounce keeps shadows luminous. Never harsh -- the space always feels welcoming',
       colorPalette: ['#F5EAD8', '#A6886F', '#3D2A1F', '#8DB6B8', '#FFFFFF'],
       cameraWork:
         'Slow gimbal and tracked moves through interiors and grounds. Aerial reveals of architecture and landscape. Intimate medium shots for guests, wide masters for environment. Long beats that let the place breathe',
@@ -2734,7 +2734,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
   {
     name: 'Travel Destination',
     description:
-      'Aspirational travel destination cinematography with sweeping landscapes, intimate cultural moments, and golden-hour magic. Built for tourism boards, hotel groups, and travel brand films.',
+      'Aspirational travel destination cinematography with sweeping landscapes, intimate cultural moments, and dawn-to-dusk magic. Built for tourism boards, hotel groups, and travel brand films.',
     category: 'travel',
     tags: ['travel', 'destination', 'tourism', 'landscape', 'culture'],
     config: {
@@ -2742,7 +2742,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
       artStyle:
         'Travel cinematography that alternates between sweeping landscape aerials and intimate cultural moments -- a hand pouring tea, a fisherman at dawn, lanterns lit at dusk. Locations rendered with respect and specificity, never generic',
       lighting:
-        'Golden hour favored. Magic hour for hero exteriors, soft window light for intimate moments, candle and lantern glow at night. Big sky drama embraced',
+        'Warm low sun favored. Magic hour for hero exteriors, soft window light for intimate moments, candle and lantern glow at night. Big sky drama embraced',
       colorPalette: ['#F4D9A8', '#7F3F2C', '#E8C28C', '#3F4F5F', '#FFFFFF'],
       cameraWork:
         'Drone reveal aerials, slow tracking landscape moves, intimate handheld portraits. Long beats let the place breathe. Cuts paced like a magazine essay',
