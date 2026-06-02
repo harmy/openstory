@@ -1,3 +1,4 @@
+import { convertWebSearchToolToAdapterFormat } from '@tanstack/ai-openrouter/tools';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
@@ -231,8 +232,43 @@ describe('llm-client', () => {
       return expect(drain(generator)).rejects.toThrow(/"reason":"aborted"/);
     });
 
+    it('surfaces the provider error detail from rawEvent', () => {
+      mockChat.mockReturnValue(
+        (async function* () {
+          yield {
+            type: 'RUN_ERROR',
+            message: 'Provider returned error',
+            model: 'anthropic/claude-sonnet-4.6',
+            rawEvent: {
+              code: 400,
+              message: 'Provider returned error',
+              provider_name: 'Anthropic',
+              raw: JSON.stringify({
+                type: 'error',
+                error: {
+                  type: 'invalid_request_error',
+                  message: 'output_config.format.schema: Invalid schema',
+                },
+              }),
+            },
+          };
+        })()
+      );
+
+      const generator = callLLMStream({
+        model: 'anthropic/claude-sonnet-4.6',
+        messages: [{ role: 'user', content: 'test' }],
+      });
+
+      return expect(drain(generator)).rejects.toThrow(
+        'LLM stream error [model=anthropic/claude-sonnet-4.6]: Provider returned error — provider=Anthropic output_config.format.schema: Invalid schema'
+      );
+    });
+
     describe('with responseSchema', () => {
       const schema = z.object({ greeting: z.string() });
+      // A non-Anthropic structured-output model → native `outputSchema` path.
+      const nativeModel = 'openai/gpt-5.4';
 
       it('yields parsed object on terminal chunk when structured-output.complete fires', async () => {
         mockChat.mockReturnValue(
@@ -248,7 +284,7 @@ describe('llm-client', () => {
         );
 
         const generator = callLLMStream({
-          model: 'anthropic/claude-sonnet-4.6',
+          model: nativeModel,
           messages: [{ role: 'user', content: 'test' }],
           responseSchema: schema,
         });
@@ -281,7 +317,7 @@ describe('llm-client', () => {
         );
 
         const generator = callLLMStream({
-          model: 'anthropic/claude-sonnet-4.6',
+          model: nativeModel,
           messages: [{ role: 'user', content: 'test' }],
           responseSchema: schema,
         });
@@ -305,7 +341,7 @@ describe('llm-client', () => {
         );
 
         const generator = callLLMStream({
-          model: 'anthropic/claude-sonnet-4.6',
+          model: nativeModel,
           messages: [{ role: 'user', content: 'test' }],
           responseSchema: schema,
         });
@@ -320,6 +356,87 @@ describe('llm-client', () => {
           throw new Error('expected a terminal done:true chunk');
         }
         expect(terminal.parsed).toBeUndefined();
+      });
+
+      it('falls back to json_object + schema-in-prompt for Anthropic models', async () => {
+        mockChat.mockReturnValue(
+          (async function* () {
+            yield { type: 'TEXT_MESSAGE_CONTENT', delta: '{"greeting":' };
+            yield { type: 'TEXT_MESSAGE_CONTENT', delta: '"hi"}' };
+          })()
+        );
+
+        const chunks = [];
+        for await (const chunk of callLLMStream({
+          model: 'anthropic/claude-sonnet-4.6',
+          messages: [{ role: 'user', content: 'test' }],
+          responseSchema: schema,
+        })) {
+          chunks.push(chunk);
+        }
+
+        const callArgs = mockChat.mock.calls[0]?.[0];
+        if (!callArgs) throw new Error('expected mockChat to have been called');
+        // Anthropic can't compile the strict grammar → no outputSchema; uses
+        // json_object with the schema pinned in an extra system prompt.
+        expect(callArgs.outputSchema).toBeUndefined();
+        expect(callArgs.modelOptions.responseFormat).toEqual({
+          type: 'json_object',
+        });
+        expect(
+          callArgs.systemPrompts.some((p: string) => p.includes('JSON Schema'))
+        ).toBe(true);
+        // `parsed` comes from validating the accumulated JSON text.
+        const terminal = chunks.at(-1);
+        if (!terminal || !terminal.done) throw new Error('expected terminal');
+        expect(terminal.parsed).toEqual({ greeting: 'hi' });
+      });
+    });
+
+    describe('web search tool', () => {
+      it('wires the OpenRouter web search server tool when webSearch is enabled', async () => {
+        mockChat.mockReturnValue(
+          (async function* () {
+            yield { type: 'TEXT_MESSAGE_CONTENT', delta: 'ok' };
+          })()
+        );
+
+        await drain(
+          callLLMStream({
+            model: 'anthropic/claude-sonnet-4.6',
+            messages: [{ role: 'user', content: 'test' }],
+            webSearch: true,
+          })
+        );
+
+        expect(mockChat).toHaveBeenCalledTimes(1);
+        const callArgs = mockChat.mock.calls[0]?.[0];
+        if (!callArgs) throw new Error('expected mockChat to have been called');
+        expect(callArgs.tools).toHaveLength(1);
+        // Converting to the adapter wire format proves it's a genuine
+        // webSearchTool() output and resolves to OpenRouter's server tool type.
+        expect(
+          convertWebSearchToolToAdapterFormat(callArgs.tools[0]).type
+        ).toBe('openrouter:web_search');
+      });
+
+      it('omits tools entirely when webSearch is not requested', async () => {
+        mockChat.mockReturnValue(
+          (async function* () {
+            yield { type: 'TEXT_MESSAGE_CONTENT', delta: 'ok' };
+          })()
+        );
+
+        await drain(
+          callLLMStream({
+            model: 'anthropic/claude-sonnet-4.6',
+            messages: [{ role: 'user', content: 'test' }],
+          })
+        );
+
+        const callArgs = mockChat.mock.calls[0]?.[0];
+        if (!callArgs) throw new Error('expected mockChat to have been called');
+        expect(callArgs.tools).toBeUndefined();
       });
     });
   });

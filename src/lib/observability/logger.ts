@@ -106,23 +106,21 @@ function buildServerSinks(dev: boolean): Record<string, Sink> {
   // formatter's dependency stays in the bundle.
   const formatter: TextFormatter = dev
     ? redactByPattern(
-        // wordWrap: false → no hanging-indent continuation. `bun --parallel`
-        // (via concurrently, e.g. `dev:all`) re-prefixes every wrapped line
-        // with `dev | dev:vite | `, which eats ~33 columns and makes the
-        // pretty formatter's default auto-wrap look ragged. Letting the
-        // terminal hard-wrap keeps the runner prefix on only one row per
-        // log record.
-        // timestamp: 'disabled' → drop the per-record clock; concurrently's
-        // own prefix already anchors when a line was emitted relative to its
-        // neighbours, and skipping the column buys ~13 cols of message width.
-        // properties: true → render structured fields (e.g. `{ err }` on
-        // failure logs) on indented continuation lines. Without this the dev
-        // formatter drops them entirely, so logger.error('…', { err }) shows
-        // only the headline and the actual error/stack is invisible.
+        // One clean pretty line per record.
+        // - properties: false → don't print the structured-field block. The
+        //   noisy request/serverFn logs interpolate their values into the
+        //   message via `{placeholder}`, so re-listing them is redundant. The
+        //   prod JSON-lines sink (below) still keeps every field for PostHog.
+        // - wordWrap: false → no hanging-indent continuation. `bun --parallel`
+        //   (concurrently, e.g. `dev:all`) re-prefixes wrapped lines with
+        //   `dev:vite | `, making the default auto-wrap ragged; let the
+        //   terminal hard-wrap instead.
+        // - timestamp: 'disabled' → concurrently's prefix already anchors
+        //   ordering, and dropping the clock buys message width.
         getPrettyFormatter({
           timestamp: 'disabled',
           wordWrap: false,
-          properties: true,
+          properties: false,
         }),
         SECRET_PATTERNS
       )

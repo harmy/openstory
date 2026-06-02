@@ -24,7 +24,11 @@ import {
   type VisualPromptWithContinuity,
   visualPromptWithContinuitySchema,
 } from '@/lib/ai/scene-analysis.schema';
-import { extractRunError, formatRunErrorMessage } from '@/lib/ai/llm-client';
+import {
+  extractRunError,
+  formatRunErrorMessage,
+  structuredOutputConfig,
+} from '@/lib/ai/llm-client';
 import { extractStreamingStringField } from '@/lib/ai/stream-extract';
 import { ZERO_MICROS } from '@/lib/billing/money';
 import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
@@ -34,7 +38,7 @@ import { getFramePromptChannel, getGenerationChannel } from '@/lib/realtime';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import type { VisualPromptSceneWorkflowInput } from '@/lib/workflow/types';
-import { chat, convertSchemaToJsonSchema } from '@tanstack/ai';
+import { chat } from '@tanstack/ai';
 import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { getLogger } from '@/lib/observability/logger';
 
@@ -162,9 +166,10 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
       const abortController = new AbortController();
       const timeout = setTimeout(() => abortController.abort(), 300_000);
 
-      const strictSchema = convertSchemaToJsonSchema(
+      const structured = structuredOutputConfig(
+        analysisModelId,
         visualPromptWithContinuitySchema,
-        { forStructuredOutput: true }
+        systemPrompts
       );
 
       try {
@@ -172,7 +177,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
           const text = await chat({
             adapter,
             messages: chatMessages,
-            systemPrompts,
+            systemPrompts: structured.systemPrompts,
             stream: false,
             maxTokens: Math.floor(getContextWindow(analysisModelId) * 0.5),
             abortController,
@@ -184,16 +189,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
               sessionId: sequenceId,
               userId,
             },
-            modelOptions: {
-              responseFormat: {
-                type: 'json_schema',
-                jsonSchema: {
-                  name: 'structured_output',
-                  schema: strictSchema,
-                  strict: true,
-                },
-              },
-            },
+            modelOptions: { responseFormat: structured.responseFormat },
             debug: false,
           });
           logger.info(
@@ -225,7 +221,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
         for await (const streamEvent of chat({
           adapter,
           messages: chatMessages,
-          systemPrompts,
+          systemPrompts: structured.systemPrompts,
           stream: true,
           maxTokens: Math.floor(getContextWindow(analysisModelId) * 0.5),
           abortController,
@@ -237,16 +233,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
             sessionId: sequenceId,
             userId,
           },
-          modelOptions: {
-            responseFormat: {
-              type: 'json_schema',
-              jsonSchema: {
-                name: 'structured_output',
-                schema: strictSchema,
-                strict: true,
-              },
-            },
-          },
+          modelOptions: { responseFormat: structured.responseFormat },
           debug: false,
         })) {
           if (

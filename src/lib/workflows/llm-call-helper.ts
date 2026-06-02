@@ -10,7 +10,11 @@
 
 import { getEnv } from '#env';
 import { createAdapter } from '@/lib/ai/create-adapter';
-import { extractRunError, formatRunErrorMessage } from '@/lib/ai/llm-client';
+import {
+  extractRunError,
+  formatRunErrorMessage,
+  structuredOutputConfig,
+} from '@/lib/ai/llm-client';
 import type { TextModel } from '@/lib/ai/models';
 import { getContextWindow } from '@/lib/ai/models.config';
 import { extractStreamingStringField } from '@/lib/ai/stream-extract';
@@ -19,7 +23,7 @@ import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { getChatPrompt } from '@/lib/prompts';
 import { getFramePromptChannel } from '@/lib/realtime';
-import { chat, convertSchemaToJsonSchema } from '@tanstack/ai';
+import { chat } from '@tanstack/ai';
 import type { WorkflowStep } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
 import type { z } from 'zod';
@@ -139,15 +143,17 @@ export async function durableLLMCallCf<TSchema extends z.ZodType>(
 
     const abortController = new AbortController();
     const timeout = setTimeout(() => abortController.abort(), 300_000);
-    const strictSchema = convertSchemaToJsonSchema(config.responseSchema, {
-      forStructuredOutput: true,
-    });
+    const structured = structuredOutputConfig(
+      config.modelId,
+      config.responseSchema,
+      systemPrompts
+    );
 
     try {
       const text = await chat({
         adapter,
         messages: chatMessages,
-        systemPrompts,
+        systemPrompts: structured.systemPrompts,
         stream: false,
         maxTokens: Math.floor(getContextWindow(config.modelId) * 0.5),
         abortController,
@@ -159,16 +165,7 @@ export async function durableLLMCallCf<TSchema extends z.ZodType>(
           sessionId: callContext.sequenceId,
           userId: callContext.userId,
         },
-        modelOptions: {
-          responseFormat: {
-            type: 'json_schema',
-            jsonSchema: {
-              name: 'structured_output',
-              schema: strictSchema,
-              strict: true,
-            },
-          },
-        },
+        modelOptions: { responseFormat: structured.responseFormat },
         debug: false,
       });
       logger.info(`[LLM:${logName}:cf] Call succeeded`);
@@ -290,9 +287,11 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
 
       const abortController = new AbortController();
       const timeout = setTimeout(() => abortController.abort(), 300_000);
-      const strictSchema = convertSchemaToJsonSchema(config.responseSchema, {
-        forStructuredOutput: true,
-      });
+      const structured = structuredOutputConfig(
+        config.modelId,
+        config.responseSchema,
+        systemPrompts
+      );
 
       const channel = getFramePromptChannel(frameId);
       let accumulated = '';
@@ -312,7 +311,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
         for await (const event of chat({
           adapter,
           messages: chatMessages,
-          systemPrompts,
+          systemPrompts: structured.systemPrompts,
           stream: true,
           maxTokens: Math.floor(getContextWindow(config.modelId) * 0.5),
           abortController,
@@ -324,16 +323,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
             sessionId: callContext.sequenceId,
             userId: callContext.userId,
           },
-          modelOptions: {
-            responseFormat: {
-              type: 'json_schema',
-              jsonSchema: {
-                name: 'structured_output',
-                schema: strictSchema,
-                strict: true,
-              },
-            },
-          },
+          modelOptions: { responseFormat: structured.responseFormat },
           debug: false,
         })) {
           if (

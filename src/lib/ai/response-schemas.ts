@@ -57,7 +57,6 @@ export const locationMatchResponseSchema = z.object({
 export const sceneSplittingResultSchema = z.object({
   status: z
     .enum(['success', 'error', 'rejected'])
-    .catch('success')
     .meta({ description: 'Processing status: success, error, or rejected' }),
   projectMetadata: projectMetadataSchema.meta({
     description: 'Project-level metadata extracted from script',
@@ -104,7 +103,7 @@ export const characterExtractionResultSchema = sceneAnalysisSchema
  * Phase 2b: Location Extraction
  */
 export const locationExtractionResultSchema = z.object({
-  status: z.enum(['success', 'error', 'rejected']).catch('success'),
+  status: z.enum(['success', 'error', 'rejected']),
   locationBible: z.array(locationBibleEntrySchema).catch([]),
 });
 
@@ -114,7 +113,6 @@ export const locationExtractionResultSchema = z.object({
 export const visualPromptGenerationResultSchema = z.object({
   status: z
     .enum(['success', 'error', 'rejected'])
-    .catch('success')
     .meta({ description: 'Processing status: success, error, or rejected' }),
   scenes: z
     .array(
@@ -144,7 +142,6 @@ export const visualPromptGenerationResultSchema = z.object({
 export const motionPromptGenerationResultSchema = z.object({
   status: z
     .enum(['success', 'error', 'rejected'])
-    .catch('success')
     .meta({ description: 'Processing status: success, error, or rejected' }),
   scenes: z
     .array(
