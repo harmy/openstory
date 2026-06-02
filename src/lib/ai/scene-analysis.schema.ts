@@ -79,7 +79,7 @@ export const locationBibleEntrySchema = z.object({
     description:
       'Location name as written in the script (e.g., "INT. OFFICE - DAY")',
   }),
-  type: z.enum(['interior', 'exterior', 'both']).catch('interior').meta({
+  type: z.enum(['interior', 'exterior', 'both']).meta({
     description: 'Whether the location is interior, exterior, or both',
   }),
   timeOfDay: z.string().catch('').meta({
@@ -461,7 +461,7 @@ export const promptsSchema = z.object({
 // ============================================================================
 
 export const musicDesignSchema = z.object({
-  presence: z.enum(['none', 'minimal', 'moderate', 'full']).catch('none').meta({
+  presence: z.enum(['none', 'minimal', 'moderate', 'full']).meta({
     description:
       'How prominent the music should be: none, minimal, moderate, full',
   }),
@@ -482,7 +482,7 @@ export const musicDesignSchema = z.object({
 // ============================================================================
 
 export const musicSchema = z.object({
-  presence: z.enum(['none', 'minimal', 'moderate', 'full']).catch('none').meta({
+  presence: z.enum(['none', 'minimal', 'moderate', 'full']).meta({
     description:
       'How prominent the music should be: none, minimal, moderate, full',
   }),
@@ -678,7 +678,6 @@ export const sceneSchema = z.object({
 export const sceneAnalysisSchema = z.object({
   status: z
     .enum(['success', 'error', 'rejected'])
-    .catch('success')
     .meta({ description: 'Processing status: success, error, or rejected' }),
   projectMetadata: projectMetadataSchema
     .catch({ title: 'Untitled', aspectRatio: '16:9', generatedAt: '' })
