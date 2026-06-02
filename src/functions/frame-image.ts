@@ -502,3 +502,46 @@ export const setImageFromVariantFn = createServerFn({ method: 'POST' })
 
     return { frameId: frame.id, thumbnailUrl: variant.url };
   });
+
+const setVideoFromVariantInputSchema = z.object({
+  sequenceId: ulidSchema,
+  frameId: ulidSchema,
+  model: z.string().min(1),
+});
+
+/**
+ * Promote a model's video variant to the frame's primary video (#545) — the
+ * motion analog of `setImageFromVariantFn`. Copies the variant's url/path into
+ * `frames.video*` so the player and exports use it, non-destructively (the
+ * variant row is retained, so the viewer can switch back). Unlike the image
+ * version there is nothing downstream to invalidate — video is the terminal
+ * artifact.
+ */
+export const setVideoFromVariantFn = createServerFn({ method: 'POST' })
+  .middleware([frameAccessMiddleware])
+  .inputValidator(zodValidator(setVideoFromVariantInputSchema))
+  .handler(async ({ context, data }) => {
+    const { frame } = context;
+
+    const variant = await context.scopedDb.frameVariants.getByFrameAndModel(
+      frame.id,
+      'video',
+      data.model
+    );
+
+    if (!variant || variant.status !== 'completed' || !variant.url) {
+      throw new Error('No completed video variant found for this model');
+    }
+
+    await context.scopedDb.frames.update(frame.id, {
+      videoUrl: variant.url,
+      videoPath: variant.storagePath,
+      videoStatus: 'completed',
+      videoError: null,
+      videoGeneratedAt: new Date(),
+      durationMs: variant.durationMs,
+      motionModel: data.model,
+    });
+
+    return { frameId: frame.id, videoUrl: variant.url };
+  });

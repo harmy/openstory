@@ -167,6 +167,12 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     null
   );
 
+  // Per-scene video-model preview (#545) — the motion mirror of
+  // imageModelOverride. Transient: resets on frame switch.
+  const [videoModelOverride, setVideoModelOverride] = useState<string | null>(
+    null
+  );
+
   // Poll sequence while a motion batch is in flight so per-frame statuses stay
   // fresh. The refetchInterval fn reads from the query cache each tick to
   // avoid a circular dependency between sequence state and the poll condition.
@@ -363,9 +369,10 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     );
   }, [imageVariants, curSelectedFrameId]);
 
-  // Reset model override when switching frames
+  // Reset model overrides when switching frames
   useEffect(() => {
     setImageModelOverride(null);
+    setVideoModelOverride(null);
   }, [curSelectedFrameId]);
 
   // Derive variant preview state from model override + variants
@@ -378,39 +385,101 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     return selectedFrameVariants.find((v) => v.model === effectiveImageModel);
   }, [selectedFrameVariants, effectiveImageModel]);
 
-  const { previewVariantUrl, playerBadgeMessage } = useMemo(() => {
-    const none = { previewVariantUrl: null, playerBadgeMessage: null };
-    if (selectedTab !== 'image-prompt' || !selectedFrame) return none;
+  // Video equivalent (#545): the selected scene's video variant for the
+  // effective video model (override → frame's own model). Excludes divergent /
+  // discarded alternates so only the primary per-model row is matched.
+  const effectiveVideoModel =
+    videoModelOverride ??
+    safeImageToVideoModel(selectedFrame?.motionModel, DEFAULT_VIDEO_MODEL);
 
-    if (
-      variantForSelectedModel?.status === 'completed' &&
-      variantForSelectedModel.url &&
-      variantForSelectedModel.url !== selectedFrame.thumbnailUrl
-    ) {
-      return {
-        previewVariantUrl: variantForSelectedModel.url,
-        playerBadgeMessage: 'Click Set Image to use',
-      };
-    }
+  const videoVariantForSelectedModel = useMemo(() => {
+    if (!curSelectedFrameId) return undefined;
+    return videoVariantsByFrame
+      .get(curSelectedFrameId)
+      ?.find(
+        (v) =>
+          v.model === effectiveVideoModel &&
+          v.divergedAt === null &&
+          v.discardedAt === null
+      );
+  }, [videoVariantsByFrame, curSelectedFrameId, effectiveVideoModel]);
 
-    const frameImageModel = safeTextToImageModel(
-      selectedFrame.imageModel,
-      DEFAULT_IMAGE_MODEL
-    );
-    if (effectiveImageModel !== frameImageModel && !variantForSelectedModel) {
-      return {
+  const { previewVariantUrl, previewVariantVideoUrl, playerBadgeMessage } =
+    useMemo(() => {
+      const none = {
         previewVariantUrl: null,
-        playerBadgeMessage: 'Click Generate Image to create',
+        previewVariantVideoUrl: null,
+        playerBadgeMessage: null,
       };
-    }
+      if (!selectedFrame) return none;
 
-    return none;
-  }, [
-    selectedTab,
-    selectedFrame,
-    effectiveImageModel,
-    variantForSelectedModel,
-  ]);
+      // Image preview (image-prompt tab)
+      if (selectedTab === 'image-prompt') {
+        if (
+          variantForSelectedModel?.status === 'completed' &&
+          variantForSelectedModel.url &&
+          variantForSelectedModel.url !== selectedFrame.thumbnailUrl
+        ) {
+          return {
+            ...none,
+            previewVariantUrl: variantForSelectedModel.url,
+            playerBadgeMessage: 'Click Set Image to use',
+          };
+        }
+        const frameImageModel = safeTextToImageModel(
+          selectedFrame.imageModel,
+          DEFAULT_IMAGE_MODEL
+        );
+        if (
+          effectiveImageModel !== frameImageModel &&
+          !variantForSelectedModel
+        ) {
+          return {
+            ...none,
+            playerBadgeMessage: 'Click Generate Image to create',
+          };
+        }
+        return none;
+      }
+
+      // Video preview (motion-prompt tab) — mirror of the image flow (#545)
+      if (selectedTab === 'motion-prompt') {
+        if (
+          videoVariantForSelectedModel?.status === 'completed' &&
+          videoVariantForSelectedModel.url &&
+          videoVariantForSelectedModel.url !== selectedFrame.videoUrl
+        ) {
+          return {
+            ...none,
+            previewVariantVideoUrl: videoVariantForSelectedModel.url,
+            playerBadgeMessage: 'Click Set Video to use',
+          };
+        }
+        const frameVideoModel = safeImageToVideoModel(
+          selectedFrame.motionModel,
+          DEFAULT_VIDEO_MODEL
+        );
+        if (
+          effectiveVideoModel !== frameVideoModel &&
+          !videoVariantForSelectedModel
+        ) {
+          return {
+            ...none,
+            playerBadgeMessage: 'Click Generate Motion to create',
+          };
+        }
+        return none;
+      }
+
+      return none;
+    }, [
+      selectedTab,
+      selectedFrame,
+      effectiveImageModel,
+      variantForSelectedModel,
+      effectiveVideoModel,
+      videoVariantForSelectedModel,
+    ]);
 
   // Frames as shown by the player: when a video model is pinned, swap each
   // frame's video for that model's variant (or clear it when the model hasn't
@@ -758,6 +827,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
               onSelectFrame={setSelectedFrameId}
               selectedTab={selectedTab}
               overrideImageUrl={previewVariantUrl}
+              overrideVideoUrl={previewVariantVideoUrl}
               badgeMessage={playerBadgeMessage}
               progressMessage={
                 generationState.phases.find((p) => p.status === 'active')
@@ -779,7 +849,9 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
             onRegenerateStart={handleRegenerateStart}
             aspectRatio={aspectRatio}
             variantForSelectedModel={variantForSelectedModel}
+            videoVariantForSelectedModel={videoVariantForSelectedModel}
             onImageModelChange={setImageModelOverride}
+            onVideoModelChange={setVideoModelOverride}
             styleCategory={styleCategory}
             sequenceMotionModel={sequenceMotionModel}
             styleName={styleName}

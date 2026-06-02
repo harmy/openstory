@@ -24,6 +24,7 @@ import {
   generateFrameVariantsFn,
   selectFrameVariantFn,
   setImageFromVariantFn,
+  setVideoFromVariantFn,
 } from '@/functions/frame-image';
 import type { GenerateVariantInput as SchemaGenerateVariantInput } from '@/lib/schemas/frame.schemas';
 import type { Scene } from '@/lib/ai/scene-analysis.schema';
@@ -697,6 +698,69 @@ export function useSetImageFromVariant() {
       });
       await queryClient.invalidateQueries({
         queryKey: frameKeys.list(sequenceId),
+      });
+    },
+  });
+}
+
+// Hook for setting a frame's video from an existing variant (#545) — the
+// motion analog of useSetImageFromVariant. Promotes a model's video variant to
+// the primary frames.video* columns and refreshes the video-variant cache.
+export function useSetVideoFromVariant() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { frameId: string; videoUrl: string },
+    Error,
+    { sequenceId: string; frameId: string; model: string }
+  >({
+    mutationFn: async (input) => {
+      return setVideoFromVariantFn({ data: input });
+    },
+    onMutate: async ({ sequenceId, frameId }) => {
+      await queryClient.cancelQueries({
+        queryKey: frameKeys.detail(frameId),
+      });
+      await queryClient.cancelQueries({
+        queryKey: frameKeys.list(sequenceId),
+      });
+    },
+    onSuccess: async (data, { sequenceId, frameId, model }) => {
+      queryClient.setQueryData<Frame>(frameKeys.detail(frameId), (oldFrame) => {
+        if (!oldFrame) return oldFrame;
+        return {
+          ...oldFrame,
+          videoUrl: data.videoUrl,
+          videoStatus: 'completed' as const,
+          motionModel: model,
+        };
+      });
+
+      queryClient.setQueryData<Frame[]>(
+        frameKeys.list(sequenceId),
+        (oldFrames) => {
+          if (!oldFrames) return oldFrames;
+          return oldFrames.map((f) =>
+            f.id === frameId
+              ? {
+                  ...f,
+                  videoUrl: data.videoUrl,
+                  videoStatus: 'completed' as const,
+                  motionModel: model,
+                }
+              : f
+          );
+        }
+      );
+
+      await queryClient.invalidateQueries({
+        queryKey: frameKeys.detail(frameId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: frameKeys.list(sequenceId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['sequence-video-variants', sequenceId],
       });
     },
   });

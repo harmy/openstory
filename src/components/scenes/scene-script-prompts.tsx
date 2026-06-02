@@ -28,6 +28,7 @@ import {
   useGenerateVariants,
   useSelectVariant,
   useSetImageFromVariant,
+  useSetVideoFromVariant,
 } from '@/hooks/use-frames';
 import {
   type FrameStaleness,
@@ -111,7 +112,11 @@ type SceneScriptPromptsProps = {
   ) => void;
   aspectRatio?: AspectRatio;
   variantForSelectedModel?: FrameVariant;
+  /** The selected scene's video variant for the effective video model (#545). */
+  videoVariantForSelectedModel?: FrameVariant;
   onImageModelChange?: (model: string) => void;
+  /** Per-scene video-model preview switch (#545), mirror of onImageModelChange. */
+  onVideoModelChange?: (model: string) => void;
   /** Current style category, used to show/hide style-restricted motion models */
   styleCategory?: string;
   /** Current style name, used in recommendation tooltips */
@@ -141,7 +146,9 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   onRegenerateStart,
   aspectRatio,
   variantForSelectedModel,
+  videoVariantForSelectedModel,
   onImageModelChange,
+  onVideoModelChange,
   styleCategory,
   styleName,
   recommendedImageModel,
@@ -200,6 +207,16 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     [onImageModelChange]
   );
 
+  // Picking a motion model both sets the regen target and (mirroring the image
+  // flow) previews that model's existing video variant for this scene (#545).
+  const handleMotionModelChange = useCallback(
+    (model: ImageToVideoModel) => {
+      setSelectedMotionModel(model);
+      onVideoModelChange?.(model);
+    },
+    [onVideoModelChange]
+  );
+
   // Script tab edit state — `undefined` means "no draft" (textarea mirrors the
   // saved value); a string means "user has typed". We reset to `undefined` when
   // the frame changes so switching scenes never shows the previous scene's draft.
@@ -221,6 +238,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   const generateVariants = useGenerateVariants();
   const selectVariant = useSelectVariant();
   const setImageFromVariant = useSetImageFromVariant();
+  const setVideoFromVariant = useSetVideoFromVariant();
   const {
     needsBillingSetup: falNeedsBillingSetup,
     showGate: showFalGate,
@@ -496,6 +514,33 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
       });
     }
   }, [frame, selectedImageModel, setImageFromVariant]);
+
+  // Video equivalents (#545): drive the "Set Video" action from the selected
+  // scene's video variant for the picked model.
+  const videoVariantIsCompleted =
+    videoVariantForSelectedModel?.status === 'completed' &&
+    !!videoVariantForSelectedModel.url;
+  const videoVariantIsGenerating =
+    videoVariantForSelectedModel?.status === 'generating';
+  const videoVariantAlreadySet =
+    videoVariantIsCompleted &&
+    videoVariantForSelectedModel.url === frame?.videoUrl;
+
+  const handleSetVideoFromVariant = useCallback(async () => {
+    if (!frame?.id || !frame.sequenceId || !selectedMotionModel) return;
+
+    try {
+      await setVideoFromVariant.mutateAsync({
+        sequenceId: frame.sequenceId,
+        frameId: frame.id,
+        model: selectedMotionModel,
+      });
+    } catch (error) {
+      toast.error('Failed to set video', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }, [frame, selectedMotionModel, setVideoFromVariant]);
 
   const handleShortenPrompt = useCallback(async () => {
     setShortenStatus({ loading: false, error: null, success: null });
@@ -1157,7 +1202,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
             <span className="text-sm font-medium">Model</span>
             <MotionModelSelector
               selectedModel={effectiveMotionModel}
-              onModelChange={setSelectedMotionModel}
+              onModelChange={handleMotionModelChange}
               disabled={isGenerating || isGeneratingMotion}
               aspectRatio={aspectRatio}
               styleCategory={styleCategory}
@@ -1271,27 +1316,47 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
             </label>
           )}
 
-          {/* Regenerate button */}
-          <Button
-            onClick={() => {
-              if (falNeedsBillingSetup) {
-                showFalGate();
-                return;
+          {/* Motion action button — variant-aware (#545), mirror of the image
+              tab: when the picked model already has a completed video for this
+              scene, offer to Set it; otherwise Generate/Regenerate. */}
+          {videoVariantIsCompleted && !videoVariantAlreadySet ? (
+            <Button
+              onClick={() => void handleSetVideoFromVariant()}
+              disabled={setVideoFromVariant.isPending || !frame}
+              className="w-full"
+            >
+              {setVideoFromVariant.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              {setVideoFromVariant.isPending ? 'Setting…' : 'Set Video'}
+            </Button>
+          ) : (
+            <Button
+              onClick={() => {
+                if (falNeedsBillingSetup) {
+                  showFalGate();
+                  return;
+                }
+                void handleRegenerateMotion();
+              }}
+              disabled={
+                isGenerating ||
+                isGeneratingMotion ||
+                videoVariantIsGenerating ||
+                !frame
               }
-              void handleRegenerateMotion();
-            }}
-            disabled={isGenerating || isGeneratingMotion || !frame}
-            className="w-full"
-          >
-            {isGeneratingMotion && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            )}
-            {isGeneratingMotion
-              ? 'Generating…'
-              : frame?.videoUrl
-                ? 'Regenerate Motion'
-                : 'Generate Motion'}
-          </Button>
+              className="w-full"
+            >
+              {(isGeneratingMotion || videoVariantIsGenerating) && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              {isGeneratingMotion || videoVariantIsGenerating
+                ? 'Generating…'
+                : frame?.videoUrl
+                  ? 'Regenerate Motion'
+                  : 'Generate Motion'}
+            </Button>
+          )}
 
           {/* Copy button for assembled prompt */}
           <Button

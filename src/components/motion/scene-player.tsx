@@ -40,6 +40,12 @@ type ScenePlayerProps = {
   wrapperClassName?: string;
   selectedTab?: TabValue;
   overrideImageUrl?: string | null;
+  /**
+   * Per-scene video-variant preview (#545). When set (motion tab), the player
+   * plays this url for the current frame instead of its primary video — the
+   * motion analog of `overrideImageUrl`.
+   */
+  overrideVideoUrl?: string | null;
   badgeMessage?: string | null;
   progressMessage?: string;
   posterUrl?: string;
@@ -55,6 +61,7 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
   aspectRatio,
   selectedTab,
   overrideImageUrl,
+  overrideVideoUrl,
   badgeMessage,
   progressMessage,
   posterUrl,
@@ -254,6 +261,17 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
   const isVariantPreview =
     !!overrideImageUrl && overrideImageUrl !== currentFrame.thumbnailUrl;
 
+  // Per-scene video-variant preview (#545): on the motion tab, play the
+  // override variant for this frame instead of its primary video.
+  const isVariantVideoPreview =
+    !!overrideVideoUrl &&
+    selectedTab !== 'image-prompt' &&
+    overrideVideoUrl !== currentFrame.videoUrl;
+  const playbackVideoUrl =
+    selectedTab === 'image-prompt'
+      ? ''
+      : (overrideVideoUrl ?? currentFrame.videoUrl ?? '');
+
   return (
     <div className={cn('flex w-full flex-col', wrapperClassName)}>
       {hasFailedVideo ? (
@@ -375,10 +393,8 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
               />
             )}
           <VideoPlayer
-            key={currentFrame.videoUrl} // Force re-render when video changes
-            src={
-              selectedTab === 'image-prompt' ? '' : currentFrame.videoUrl || ''
-            }
+            key={playbackVideoUrl} // Force re-render when video changes
+            src={playbackVideoUrl}
             posterSrc={displayImage}
             aspectRatio={aspectRatio}
             className="w-full"
@@ -390,7 +406,11 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
           {/* Show overlay for image/video generation states */}
           <VideoStateOverlay
             thumbnailUrl={displayImage}
-            videoStatus={currentFrame.videoStatus ?? null}
+            videoStatus={
+              isVariantVideoPreview
+                ? 'completed'
+                : (currentFrame.videoStatus ?? null)
+            }
             progressMessage={progressMessage}
           />
           {badgeMessage && (
