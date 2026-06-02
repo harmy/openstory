@@ -1,0 +1,135 @@
+---
+name: update-model-versions
+description: >
+  Check whether newer versions of the AI models we already use (fal.ai image,
+  video/motion, audio; OpenRouter text) or our @tanstack/ai* packages have
+  shipped, and open a PR bumping any genuine successor. Use when asked to
+  "check for model updates", "are our models current", "bump models", or when
+  run by the daily model-freshness routine. Only bumps EXISTING models to a
+  newer version of the same model — it does not add net-new models.
+---
+
+# Update model versions
+
+Our model registries are the single source of truth:
+
+| Class                   | File                          | Export                   |
+| ----------------------- | ----------------------------- | ------------------------ |
+| Text (OpenRouter)       | `src/lib/ai/models.config.ts` | `SCRIPT_ANALYSIS_MODELS` |
+| Image (fal.ai)          | `src/lib/ai/models.ts`        | `IMAGE_MODELS`           |
+| Video / motion (fal.ai) | `src/lib/ai/models.ts`        | `IMAGE_TO_VIDEO_MODELS`  |
+| Audio (fal.ai)          | `src/lib/ai/models.ts`        | `AUDIO_MODELS`           |
+| AI SDK packages         | `package.json`                | `@tanstack/ai*`          |
+
+The goal each run: detect newer versions → verify each is a real successor →
+open a focused PR that bumps it → leave everything green.
+
+## 1. Detect candidates
+
+```bash
+bun models:check          # human-readable report
+bun models:check --json   # { hasUpdates, models[], packages[] } for scripting
+```
+
+`scripts/check-model-updates.ts` reads the registries and queries public,
+unauthenticated catalogs (fal.ai `/api/models`, OpenRouter `/api/v1/models`, npm
+registry). It is HTTP-only so it runs anywhere — no `FAL_KEY` or MCP needed.
+
+Candidates are **heuristic** (same brand, higher version number, same modality,
+not already adopted). Treat them as leads to verify, not facts. If
+`hasUpdates` is `false`, stop — nothing to do.
+
+## 2. Verify each candidate is a genuine successor
+
+Do not bump on the heuristic alone. For each flagged candidate decide: _is this
+the same model, one version newer — or a different product line / tier?_
+
+**fal models — prefer the fal tooling (richest signal):**
+
+- **genmedia CLI** (what the fal community skills use; works headless):
+  ```bash
+  curl https://genmedia.sh/install -fsS | bash   # once, if missing
+  genmedia setup --non-interactive --api-key "$FAL_KEY"
+  genmedia models --endpoint_id <candidate-id> --json   # confirm it exists
+  genmedia schema  <candidate-id> --json                # compare input params
+  genmedia pricing <candidate-id> --json                # cost delta
+  ```
+- **fal-ai MCP** if available in this session: `search_models`,
+  `get_model_schema`, `get_pricing` give the same data.
+- **Fallback (zero-auth):** the OpenAPI spec — a 200 means the endpoint is real:
+  `curl -s -o /dev/null -w "%{http_code}" "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=<id>"`,
+  and `https://fal.ai/models/<path>/llms.txt` for param specs (see CLAUDE.md).
+
+**text models:** confirm the candidate id resolves on
+`https://openrouter.ai/api/v1/models` and keeps the same tier (don't turn a
+`-mini` into a non-mini, or a `pro` into `flash`).
+
+**Reject a candidate when** it is a different tier/variant (fast/lite/standard
+vs pro, lora/trainer/edit gear), a different modality, a preview/experimental
+build replacing a stable one, or its schema/pricing changed so much it needs
+product judgement. When unsure, skip it and note it in the PR body rather than
+guessing.
+
+## 3. Apply the bump (one PR per upgrade)
+
+Work one upgrade at a time so each PR is reviewable and revertible.
+
+**Idempotency — check first:** `gh pr list --state open --search "in:title model"`.
+If an open PR or branch already covers this exact bump, skip it. Branch name:
+`auto/model-update-<registry-key>-<new-version>` (e.g.
+`auto/model-update-minimax_hailuo_02-2.3`).
+
+**Golden rule: change the `id` (and metadata), never the registry KEY.** Keys
+are persisted in the DB (a team's selected model) and referenced across selectors
+and schemas — renaming one is a breaking migration, out of scope here.
+
+Per class, edit and follow through:
+
+- **Text** (`models.config.ts`): update `id`, `name`, `description`,
+  `contextWindow`. If you bump `DEFAULT_ANALYSIS_MODEL`'s model, the constant
+  references a key, so it's unaffected.
+- **Image** (`models.ts` `IMAGE_MODELS`): update `id`, `name`, `description`,
+  `maxPromptLength`. If the model has an `EDIT_ENDPOINTS` entry, update that
+  endpoint id too. Confirm the new endpoint still supports the edit/reference
+  flow if it had one.
+- **Video / motion** (`models.ts` `IMAGE_TO_VIDEO_MODELS`): update `id` + meta,
+  then regenerate the schemas — **`bun motion:codegen`** (writes
+  `src/lib/motion/generated/**` and `endpoint-map.ts`). Never hand-write motion
+  schemas. Re-check `maxPromptLength` against the new schema.
+- **Audio** (`models.ts` `AUDIO_MODELS`): update `id` + `capabilities`
+  (durations, formats) from the new schema.
+- **fal pricing:** model ids are pricing keys in `src/lib/ai/fal-pricing-data.ts`
+  (auto-generated). After any fal id change run **`bun scripts/update-fal-pricing.ts`**
+  (needs `FAL_KEY`). If it can't run, add the new id's pricing manually via the
+  override path documented in that script and flag it in the PR.
+- **Packages:** bump the `@tanstack/ai*` range in `package.json`, then
+  `bun install`. Skip major bumps (breaking) — open an issue for those instead.
+
+## 4. Quality gates (must pass before opening the PR)
+
+```bash
+bun typecheck
+bun lint
+bun run test src/lib/ai src/lib/motion   # registry + motion suites
+bun run test src/lib/billing             # pricing/cost if fal pricing changed
+```
+
+Fix anything that breaks. If a bump cascades into non-trivial changes (schema
+shape changed, pricing model differs, tests need rework), stop and open an
+**issue** describing it instead of forcing a half-working PR.
+
+## 5. Open the PR
+
+```bash
+git checkout -b auto/model-update-<key>-<version>
+git commit -am "chore(models): bump <name> <old> → <new>"
+gh pr create --title "chore(models): bump <name> <old> → <new>" --body "<body>"
+```
+
+PR body must include, per change: registry key, old id → new id, why it's a
+genuine successor, links (fal model page / OpenRouter / npm), pricing delta, and
+which generated files / pricing were regenerated. End with: "🤖 Opened by the
+daily model-freshness routine (#792). Verify pricing & quality before merge."
+
+Leave PRs as **draft** only if a quality gate is amber (e.g. pricing couldn't be
+auto-fetched); otherwise ready-for-review. Do not merge — a human reviews.

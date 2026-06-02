@@ -95,6 +95,7 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "motion:codegen": "bun scripts/pull-motion-schemas.ts",
+    "models:check": "bun scripts/check-model-updates.ts",
     "doppler:setup": "doppler setup -p openstory -c dev",
     "doppler:pull:dev": "doppler secrets download -p openstory --config=dev --format=env --no-file > .env.local",
     "doppler:pull:dev_test": "doppler secrets download -p openstory --config=dev_test --format=env --no-file > .env.local",
