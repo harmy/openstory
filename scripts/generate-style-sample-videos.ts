@@ -84,9 +84,26 @@ import { z } from 'zod';
 const execFileAsync = promisify(execFile);
 
 const OUTPUT_DIR = path.join(process.cwd(), 'sample-videos');
-const MAX_CONCURRENT = Number(process.env.MAX_CONCURRENT ?? '3'); // videos are heavy
+const MAX_CONCURRENT = Number(process.env.MAX_CONCURRENT ?? '3'); // script-gen (LLM) pool; render uses the submit throttle below
 const POLL_INTERVAL_MS = 5000;
 const POLL_TIMEOUT_MS = 15 * 60 * 1000;
+
+/**
+ * fal has its own queue, so the render path doesn't cap concurrency — it meters
+ * the SUBMISSION rate. Every fal submit (image gen + image-to-video) waits its
+ * turn via throttleSubmit() so no two fire within SUBMIT_INTERVAL_MS of each
+ * other; fal queues everything behind them. Jobs are launched all at once and
+ * poll their own results — the throttle is the only rate limit.
+ */
+const SUBMIT_INTERVAL_MS = Number(process.env.SUBMIT_INTERVAL_MS ?? '1000');
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+let nextSubmitAt = 0;
+async function throttleSubmit(): Promise<void> {
+  const now = Date.now();
+  const wait = Math.max(0, nextSubmitAt - now);
+  nextSubmitAt = Math.max(now, nextSubmitAt) + SUBMIT_INTERVAL_MS;
+  if (wait > 0) await sleep(wait);
+}
 /** Upper bound of the enhancer's 2-3 scene range — used for cost estimates. */
 const CANONICAL_PLANNED_SCENES = 3;
 
@@ -267,6 +284,7 @@ async function generateStillOnce(
   job: RenderJob,
   beat: SampleBeat
 ): Promise<{ url: string; bytes: Uint8Array }> {
+  await throttleSubmit();
   const result = await generateImageWithProvider({
     model: job.imageModel,
     prompt: buildStyledImagePrompt(beat.imagePrompt, job.config),
@@ -339,6 +357,7 @@ async function renderClip(
   imageUrl: string,
   framesDir: string
 ): Promise<string> {
+  await throttleSubmit();
   const submission = await submitMotionJob({
     imageUrl,
     prompt: beat.motionPrompt,
@@ -526,14 +545,16 @@ async function runScriptsOnly(jobs: RenderJob[]) {
   if (failures.length > 0) process.exit(1);
 }
 
-/** Run jobs with a fixed concurrency, collecting failures without aborting. */
+/**
+ * Launch every job at once and let each one submit + poll independently;
+ * throttleSubmit() meters the actual fal submission rate (1 per
+ * SUBMIT_INTERVAL_MS) and fal's queue absorbs the backlog, so there's no fixed
+ * concurrency cap. Failures are collected without aborting the rest.
+ */
 async function runPool(jobs: RenderJob[]) {
-  let index = 0;
   const failures: { slug: string; kind: string; error: string }[] = [];
-  const worker = async () => {
-    while (index < jobs.length) {
-      const job = jobs[index++];
-      if (!job) break;
+  await Promise.all(
+    jobs.map(async (job) => {
       try {
         await renderJob(job);
       } catch (error) {
@@ -541,10 +562,7 @@ async function runPool(jobs: RenderJob[]) {
         console.error(`❌ ${job.slug}/${job.kind}: ${message}`);
         failures.push({ slug: job.slug, kind: job.kind, error: message });
       }
-    }
-  };
-  await Promise.all(
-    Array.from({ length: Math.min(MAX_CONCURRENT, jobs.length) }, worker)
+    })
   );
   return failures;
 }
@@ -569,7 +587,7 @@ async function main() {
   }
 
   console.log(
-    `🎬 Rendering ${jobs.length} videos (${MAX_CONCURRENT} concurrent). Est. spend ≈ $${estimateCost(jobs).toFixed(2)}\n`
+    `🎬 Rendering ${jobs.length} videos (submitting 1 fal job every ${SUBMIT_INTERVAL_MS}ms; fal queues the rest). Est. spend ≈ $${estimateCost(jobs).toFixed(2)}\n`
   );
   await mkdir(OUTPUT_DIR, { recursive: true });
   const failures = await runPool(jobs);
