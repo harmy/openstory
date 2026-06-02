@@ -2,23 +2,28 @@
 /**
  * Score style preview thumbnails with a vision LLM (issue #718).
  *
- * For each image in preview/{slug}/{scene}.webp it asks a vision model — given
- * the style's intended look (its config) and the scene — to grade the preview
- * and flag the failure modes we hit by hand: literal-medium renders (a book, a
- * storyboard sheet), multi-frame/panel grids, malformed anatomy, stray text.
+ * COMPARATIVE scoring: all of a style's candidate scenes (preview/{slug}/*.webp)
+ * are sent in ONE vision call so the model ranks them against each other and
+ * picks the one that best SHOWCASES the style — far more discriminating than
+ * scoring each image in isolation (which over-rewarded generic portraits). It
+ * also flags the failure modes we hit by hand: literal-medium renders (a book,
+ * a storyboard sheet), multi-frame/panel grids, malformed anatomy, stray text.
  *
  * Outputs (report-only — never deletes anything):
- *   preview/_scores.json      full per-scene verdicts
- *   preview/_thumbnails.json   { slug: bestScene } — auto-picked best scene per
- *                              style (feed to upload-style-previews-to-r2.ts
- *                              via --thumbnail-map)
- *   console: styles ranked worst-first + a re-roll list (below --threshold or
- *            a hard flag on the best scene). Exits non-zero if any style fails.
+ *   preview/_scores.json       full per-scene verdicts
+ *   preview/_thumbnails.json    { slug: bestScene } — the model's pick per style
+ *                               (feed to upload-style-previews-to-r2.ts via
+ *                               --thumbnail-map)
+ *   console: styles ranked worst-first + a re-roll list (below --threshold or a
+ *            hard flag on the chosen scene). Exits non-zero if any style fails.
+ *
+ * Note: LLM anatomy detection is imperfect — treat anatomy flags as a strong
+ * hint, not gospel; spot-check the chosen thumbnails.
  *
  * Usage:
  *   bun scripts/score-style-previews.ts                       # score all
  *   bun scripts/score-style-previews.ts --filter "Pop-Up Book"
- *   bun scripts/score-style-previews.ts --scene action     # only the action scene of each style
+ *   bun scripts/score-style-previews.ts --scene action        # only that scene
  *   bun scripts/score-style-previews.ts --model openai/gpt-5.4 --threshold 6.5
  */
 import type { TextModel } from '@/lib/ai/models';
@@ -69,38 +74,45 @@ if (!openRouterKey) {
   process.exit(1);
 }
 
-const verdictSchema = z.object({
+const sceneVerdictSchema = z.object({
+  name: z.string(),
   styleAdherence: z.number().min(0).max(10),
-  subjectMatch: z.number().min(0).max(10),
-  thumbnailQuality: z.number().min(0).max(10),
+  representativeness: z.number().min(0).max(10),
+  quality: z.number().min(0).max(10),
   literalMedium: z.boolean(),
   multiFrame: z.boolean(),
   anatomy: z.boolean(),
   unwantedText: z.boolean(),
-  notes: z.string(),
+  note: z.string(),
 });
-type Verdict = z.infer<typeof verdictSchema>;
+type SceneVerdict = z.infer<typeof sceneVerdictSchema>;
 
-const SYSTEM_PROMPT = `You are a strict art director scoring AI-generated STYLE PREVIEW thumbnails for a video-style picker. You receive ONE image, the scene it was meant to depict, and the STYLE's intended look. Score how well the image works as a preview of that style.
+const styleVerdictSchema = z.object({
+  scenes: z.array(sceneVerdictSchema).min(1),
+  best: z.string(),
+});
+
+const SYSTEM_PROMPT = `You are a strict art director choosing the single best STYLE PREVIEW thumbnail for a video-style picker. You are shown the candidate scenes for ONE style (in the order listed) plus the style's intended look. Compare them against each other.
 
 Return ONLY a JSON object (no markdown, no prose):
-{ "styleAdherence": 0-10, "subjectMatch": 0-10, "thumbnailQuality": 0-10, "literalMedium": true|false, "multiFrame": true|false, "anatomy": true|false, "unwantedText": true|false, "notes": "<=200 chars" }
+{ "scenes": [ { "name": "<scene>", "styleAdherence": 0-10, "representativeness": 0-10, "quality": 0-10, "literalMedium": true|false, "multiFrame": true|false, "anatomy": true|false, "unwantedText": true|false, "note": "<=160 chars" } ], "best": "<scene name>" }
+
+Score EACH scene, then choose "best" — the one image that should represent this style as its thumbnail.
 
 Definitions:
 - styleAdherence: how well the look matches the intended artStyle/mood/lighting/camera/colorGrading.
-- subjectMatch: does it depict the requested scene? (character = a portrait of a person; environment = a wide establishing location; action = a dynamic scene with movement.)
-- thumbnailQuality: clear single subject, well composed, in focus, appealing at small size.
-- literalMedium (hard fail): the image depicts the MEDIUM / FORMAT / ARTIFACT as the object — a physical book, a storyboard sheet, a sheet of panels, a TV/monitor/phone showing the scene — INSTEAD of a scene rendered in that style. IMPORTANT: if the intended look IS a device/medium/setup (a phone in-hand, a product on a white background, a product on a turntable, a UI screen, a stage), then showing it is CORRECT — set literalMedium=false. Only set true when the artifact contradicts a scene-based style.
-- multiFrame (hard fail): a grid, multiple panels, a collage, split-screen, or several separate images in one frame.
-- anatomy (hard fail): look carefully at every person and COUNT the hands and fingers. Flag extra, missing, duplicated, or floating hands; extra or missing fingers; extra/missing limbs; or distorted faces.
+- representativeness: COMPARED TO THE OTHER SCENES SHOWN, how well does this image convey what makes THIS style distinctive and what it's for? A generic close-up portrait should score LOWER than a scene that captures the style's signature look — unless the style is genuinely about faces/people. The most representative scene wins.
+- quality: clear subject, well composed, in focus, appealing at small thumbnail size.
+- literalMedium (hard fail): depicts the MEDIUM/FORMAT/ARTIFACT as the object — a physical book, storyboard sheet, panel sheet, a TV/monitor/phone showing the scene — instead of a scene in that style. If the intended look IS a device/setup (phone in-hand, product on white, turntable, UI, stage), that's CORRECT — set false.
+- multiFrame (hard fail): a grid, multiple panels, collage, split-screen, or several separate images in one frame.
+- anatomy (hard fail): look very carefully and COUNT the hands and fingers of every person. Flag extra/missing/duplicated/floating hands, extra/missing fingers, extra/missing limbs, or distorted faces.
 - unwantedText: any text, caption, watermark, logo, or frame number.
 
-Be strict and consistent.`;
+"best" MUST be one of the scene names, and MUST NOT be a scene you flagged literalMedium/multiFrame/anatomy unless every scene is flagged. Be strict and consistent.`;
 
-function userPrompt(name: string, scene: string, c: StyleConfig): string {
+function introText(name: string, c: StyleConfig, sceneOrder: string[]): string {
   return [
     `STYLE: ${name}`,
-    `SCENE REQUESTED: ${scene}`,
     '',
     'Intended look:',
     `- Art style: ${c.artStyle}`,
@@ -109,7 +121,10 @@ function userPrompt(name: string, scene: string, c: StyleConfig): string {
     `- Camera: ${c.cameraWork}`,
     `- Color grading: ${c.colorGrading}`,
     '',
-    'Score the attached image.',
+    `The ${sceneOrder.length} candidate scene image(s) follow, in this order: ${sceneOrder
+      .map((s, i) => `${i + 1}) ${s}`)
+      .join(', ')}.`,
+    'Score each and pick the best thumbnail.',
   ].join('\n');
 }
 
@@ -136,43 +151,14 @@ function extractJson(text: string): string {
   return candidate.slice(start, end + 1);
 }
 
-async function scoreImage(
-  name: string,
-  scene: string,
-  config: StyleConfig,
-  filePath: string
-): Promise<Verdict> {
-  const base64 = await toJpegBase64(filePath);
-  const content: ChatMessageContentPart[] = [
-    { type: 'text', content: userPrompt(name, scene, config) },
-    {
-      type: 'image',
-      source: { type: 'data', value: base64, mimeType: 'image/jpeg' },
-    },
-  ];
-  const messages: ChatMessage[] = [
-    { role: 'system', content: SYSTEM_PROMPT },
-    { role: 'user', content },
-  ];
-  const reply = await callLLM({
-    model: MODEL,
-    messages,
-    max_tokens: 600,
-    temperature: 0,
-    observationName: 'score-style-preview',
-    apiKey: openRouterKey,
-  });
-  return verdictSchema.parse(JSON.parse(extractJson(reply)));
-}
-
-function flagCount(v: Verdict): number {
+function flagCount(v: SceneVerdict): number {
   return [v.literalMedium, v.multiFrame, v.anatomy].filter(Boolean).length;
 }
-function composite(v: Verdict): number {
-  const mean = (v.styleAdherence + v.subjectMatch + v.thumbnailQuality) / 3;
+function composite(v: SceneVerdict): number {
+  const mean = (v.styleAdherence + v.representativeness + v.quality) / 3;
   return Math.max(0, Math.round((mean - 3 * flagCount(v)) * 10) / 10);
 }
-function flagLabels(v: Verdict): string {
+function flagLabels(v: SceneVerdict): string {
   const f: string[] = [];
   if (v.literalMedium) f.push('LITERAL');
   if (v.multiFrame) f.push('MULTIFRAME');
@@ -181,7 +167,8 @@ function flagLabels(v: Verdict): string {
   return f.join(',');
 }
 
-type SceneResult = { scene: string; verdict: Verdict; composite: number };
+type SceneInput = { scene: string; file: string };
+type SceneResult = { scene: string; verdict: SceneVerdict; composite: number };
 type StyleResult = {
   name: string;
   slug: string;
@@ -190,93 +177,155 @@ type StyleResult = {
   bestComposite: number;
 };
 
+/** Score all of a style's scenes in one comparative call; returns per-scene
+ *  results + the model's chosen best scene (validated, with a safe fallback). */
+async function scoreStyle(
+  name: string,
+  config: StyleConfig,
+  inputs: SceneInput[]
+): Promise<{ scenes: SceneResult[]; bestScene: string }> {
+  const order = inputs.map((i) => i.scene);
+  const imageParts = await Promise.all(
+    inputs.map(async (i): Promise<ChatMessageContentPart> => {
+      const value = await toJpegBase64(i.file);
+      return {
+        type: 'image',
+        source: { type: 'data', value, mimeType: 'image/jpeg' },
+      };
+    })
+  );
+  const content: ChatMessageContentPart[] = [
+    { type: 'text', content: introText(name, config, order) },
+    ...imageParts,
+  ];
+  const messages: ChatMessage[] = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'user', content },
+  ];
+  const reply = await callLLM({
+    model: MODEL,
+    messages,
+    max_tokens: 1200,
+    temperature: 0,
+    observationName: 'score-style-preview',
+    apiKey: openRouterKey,
+  });
+  const parsed = styleVerdictSchema.parse(JSON.parse(extractJson(reply)));
+
+  // Map the model's per-scene verdicts onto the scenes we actually sent.
+  const byName = new Map(
+    parsed.scenes.map((v) => [v.name.toLowerCase().trim(), v])
+  );
+  const scenes: SceneResult[] = inputs.map((i) => {
+    const verdict = byName.get(i.scene.toLowerCase());
+    if (!verdict) throw new Error(`No verdict returned for scene "${i.scene}"`);
+    return { scene: i.scene, verdict, composite: composite(verdict) };
+  });
+
+  // Honor the model's pick if valid and not hard-flagged; else fall back to the
+  // best un-flagged / most-representative / highest-composite scene.
+  const picked = scenes.find(
+    (s) => s.scene.toLowerCase() === parsed.best.toLowerCase()
+  );
+  const bestScene =
+    picked && flagCount(picked.verdict) === 0
+      ? picked.scene
+      : ([...scenes].sort((a, b) => {
+          const fa = flagCount(a.verdict) === 0 ? 1 : 0;
+          const fb = flagCount(b.verdict) === 0 ? 1 : 0;
+          if (fa !== fb) return fb - fa;
+          if (a.verdict.representativeness !== b.verdict.representativeness)
+            return b.verdict.representativeness - a.verdict.representativeness;
+          return b.composite - a.composite;
+        })[0]?.scene ??
+        scenes[0]?.scene ??
+        order[0] ??
+        '');
+  return { scenes, bestScene };
+}
+
 async function main() {
   const bySlug = new Map(
     DEFAULT_STYLE_TEMPLATES.map((s) => [styleSlug(s.name), s])
   );
 
-  // Build the task list from what's actually on disk.
+  // Group preview images on disk by style.
   const dirs = (await readdir(PREVIEW_DIR, { withFileTypes: true })).filter(
     (d) => d.isDirectory()
   );
-  type Task = {
+  type StyleTask = {
     name: string;
     slug: string;
-    scene: string;
-    file: string;
     config: StyleConfig;
+    inputs: SceneInput[];
   };
-  const tasks: Task[] = [];
+  const styleTasks: StyleTask[] = [];
   for (const dir of dirs) {
     const slug = dir.name;
     const style = bySlug.get(slug);
     if (!style) continue; // skip non-style dirs (talent/locations/etc.)
     if (FILTER && FILTER !== style.name && FILTER !== slug) continue;
+    const inputs: SceneInput[] = [];
     for (const file of await readdir(path.join(PREVIEW_DIR, slug))) {
       if (path.extname(file).toLowerCase() !== '.webp') continue;
       const scene = path.basename(file, '.webp');
       if (SCENE && scene !== SCENE) continue;
-      tasks.push({
-        name: style.name,
-        slug,
-        scene,
-        file: path.join(PREVIEW_DIR, slug, file),
-        config: style.config,
-      });
+      inputs.push({ scene, file: path.join(PREVIEW_DIR, slug, file) });
+    }
+    if (inputs.length > 0) {
+      styleTasks.push({ name: style.name, slug, config: style.config, inputs });
     }
   }
 
-  if (tasks.length === 0) {
+  if (styleTasks.length === 0) {
     console.error(
       'No preview images found. Run generate-style-previews.ts first.'
     );
     process.exit(1);
   }
+  const totalImages = styleTasks.reduce((n, t) => n + t.inputs.length, 0);
   console.log(
-    `Scoring ${tasks.length} images with ${MODEL} (concurrency ${CONCURRENCY})…\n`
+    `Scoring ${styleTasks.length} styles (${totalImages} images) with ${MODEL} (concurrency ${CONCURRENCY})…\n`
   );
 
-  // Concurrency-limited scoring.
-  const scored = new Map<string, SceneResult[]>(); // slug -> results
+  // Concurrency-limited scoring, one call per style.
+  const results: StyleResult[] = [];
+  const failures: string[] = [];
   let index = 0;
   let done = 0;
-  const failures: string[] = [];
   const worker = async () => {
-    while (index < tasks.length) {
-      const t = tasks[index++];
+    while (index < styleTasks.length) {
+      const t = styleTasks[index++];
       if (!t) break;
       try {
-        const verdict = await scoreImage(t.name, t.scene, t.config, t.file);
-        const list = scored.get(t.slug) ?? [];
-        list.push({ scene: t.scene, verdict, composite: composite(verdict) });
-        scored.set(t.slug, list);
+        const { scenes, bestScene } = await scoreStyle(
+          t.name,
+          t.config,
+          t.inputs
+        );
+        const best = scenes.find((s) => s.scene === bestScene);
+        results.push({
+          name: t.name,
+          slug: t.slug,
+          scenes,
+          bestScene,
+          bestComposite: best?.composite ?? 0,
+        });
       } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        failures.push(`${t.slug}/${t.scene}: ${msg}`);
+        failures.push(
+          `${t.slug}: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
       done++;
-      if (done % 10 === 0 || done === tasks.length) {
-        process.stderr.write(`  scored ${done}/${tasks.length}\n`);
+      if (done % 5 === 0 || done === styleTasks.length) {
+        process.stderr.write(`  scored ${done}/${styleTasks.length} styles\n`);
       }
     }
   };
   await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, tasks.length) }, worker)
+    Array.from({ length: Math.min(CONCURRENCY, styleTasks.length) }, worker)
   );
 
-  // Aggregate per style (best scene wins for the thumbnail).
-  const results: StyleResult[] = [];
-  for (const [slug, scenes] of scored) {
-    const best = scenes.reduce((a, b) => (b.composite > a.composite ? b : a));
-    const style = bySlug.get(slug);
-    results.push({
-      name: style?.name ?? slug,
-      slug,
-      scenes,
-      bestScene: best.scene,
-      bestComposite: best.composite,
-    });
-  }
   results.sort((a, b) => a.bestComposite - b.bestComposite);
 
   // Write artifacts.
@@ -293,7 +342,7 @@ async function main() {
   );
 
   // Console report — worst first.
-  console.log('\nStyle scores (worst first) — best-scene composite /10:\n');
+  console.log('\nStyle scores (worst first) — chosen-scene composite /10:\n');
   for (const r of results) {
     const best = r.scenes.find((s) => s.scene === r.bestScene)?.verdict;
     const flags = best ? flagLabels(best) : '';
@@ -307,14 +356,14 @@ async function main() {
     return r.bestComposite < THRESHOLD || (best ? flagCount(best) > 0 : true);
   });
   console.log(
-    `\n${results.length} styles scored. ${reroll.length} below threshold ${THRESHOLD} or flagged on best scene:`
+    `\n${results.length} styles scored. ${reroll.length} below threshold ${THRESHOLD} or flagged on chosen scene:`
   );
   for (const r of reroll)
     console.log(`  - ${r.slug} (${r.bestComposite.toFixed(1)})`);
   console.log(`\nWrote preview/_scores.json and preview/_thumbnails.json`);
 
   if (failures.length > 0) {
-    console.error(`\n${failures.length} images failed to score:`);
+    console.error(`\n${failures.length} styles failed to score:`);
     for (const f of failures) console.error(`  - ${f}`);
   }
   if (reroll.length > 0 || failures.length > 0) process.exit(1);
