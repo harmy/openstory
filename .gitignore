@@ -115,6 +115,9 @@ scripts/schemas/
 # previews
 preview*/
 
+# generated style sample videos (issue #718) — rendered locally, pushed to R2
+sample-videos/
+
 # superpowers
 .superpowers/
 docs/superpowers/

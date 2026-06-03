@@ -297,41 +297,39 @@ export async function callLLM(
 export async function callLLM<T>(
   params: LLMRequestParams<T>
 ): Promise<T | string> {
+  // Drain the streaming path instead of calling `chat({ stream: false })`
+  // directly, so non-streaming callers inherit its error handling. Upstream,
+  // `chat({ stream: false })` collects text via `streamToText`, which only
+  // accumulates TEXT_MESSAGE_CONTENT and *ignores RUN_ERROR entirely* — so a
+  // 402 (out of credits), 429, or provider overload silently resolves to '' and
+  // resurfaces downstream as a bogus "empty completion" / JSON-parse failure
+  // (the #718 scene-split mystery). callLLMStream guards every non-content
+  // event with throwIfRunError, so the real provider error propagates. Non-
+  // streaming `chat()` already issues a streaming request under the hood
+  // (runNonStreamingText wraps runStreamingText), so this keeps the wire shape
+  // — and E2E aimock fixtures — identical.
   if (params.responseSchema) {
-    validateStructuredOutputSupport(params.model);
-    const base = baseChatOptions(params);
-    if (isAnthropicModel(params.model)) {
-      const text = await chat({
-        ...base,
-        systemPrompts: [
-          ...base.systemPrompts,
-          jsonSchemaInstruction(params.responseSchema),
-        ],
-        stream: false,
-        metadata: buildChatMetadata(params),
-        modelOptions: {
-          ...base.modelOptions,
-          responseFormat: { type: 'json_object' as const },
-        },
-        outputSchema: undefined,
-      });
-      return params.responseSchema.parse(parseJsonObjectResponse(text));
+    const responseSchema = params.responseSchema;
+    let parsed: T | undefined;
+    for await (const chunk of callLLMStream({ ...params, responseSchema })) {
+      if (chunk.done) parsed = chunk.parsed;
     }
-    const result = await chat({
-      ...base,
-      stream: false,
-      metadata: buildChatMetadata(params),
-      outputSchema: params.responseSchema,
-    });
-    return params.responseSchema.parse(result);
+    if (parsed === undefined) {
+      throw new Error(
+        'Structured LLM call returned no validated object (empty completion)'
+      );
+    }
+    return parsed;
   }
 
-  return chat({
-    ...baseChatOptions(params),
-    stream: false,
-    metadata: buildChatMetadata(params),
-    outputSchema: undefined,
-  });
+  let accumulated = '';
+  for await (const chunk of callLLMStream({
+    ...params,
+    responseSchema: undefined,
+  })) {
+    accumulated = chunk.accumulated;
+  }
+  return accumulated;
 }
 
 /**

@@ -30,7 +30,7 @@ vi.doMock('./create-adapter', () => ({
 // Dynamic import so vi.doMock above is in effect when llm-client (and its
 // `./create-adapter` import) resolves. Static imports are hoisted above
 // vi.doMock and would bypass the mocks.
-const { callLLMStream } = await import('./llm-client');
+const { callLLM, callLLMStream } = await import('./llm-client');
 
 describe('llm-client', () => {
   beforeEach(() => {
@@ -438,6 +438,94 @@ describe('llm-client', () => {
         if (!callArgs) throw new Error('expected mockChat to have been called');
         expect(callArgs.tools).toBeUndefined();
       });
+    });
+  });
+
+  // The non-streaming convenience wrapper drains callLLMStream, so it must share
+  // the streaming path's error handling rather than calling chat({ stream:false
+  // }) directly (whose streamToText collector ignores RUN_ERROR).
+  describe('callLLM', () => {
+    beforeEach(() => {
+      mockChat.mockClear();
+    });
+
+    it('accumulates text deltas into the resolved string', async () => {
+      mockChat.mockReturnValue(
+        (async function* () {
+          yield { type: 'TEXT_MESSAGE_CONTENT', delta: 'Hello ' };
+          yield { type: 'TEXT_MESSAGE_CONTENT', delta: 'world' };
+        })()
+      );
+
+      const result = await callLLM({
+        model: 'anthropic/claude-sonnet-4.6',
+        messages: [{ role: 'user', content: 'test' }],
+      });
+
+      expect(result).toBe('Hello world');
+    });
+
+    // Regression (#718): the old non-streaming path used chat({ stream: false }),
+    // whose streamToText collector ignores RUN_ERROR — so a 402 (out of credits)
+    // / 429 resolved to '' and resurfaced downstream as a bogus "empty
+    // completion" / JSON-parse failure. It must now throw.
+    it('throws on RUN_ERROR instead of resolving to an empty string', () => {
+      mockChat.mockReturnValue(
+        (async function* () {
+          yield {
+            type: 'RUN_ERROR',
+            message:
+              'Insufficient credits. Add more using https://openrouter.ai/settings/credits',
+            code: '402',
+            model: 'anthropic/claude-sonnet-4.6',
+          };
+        })()
+      );
+
+      return expect(
+        callLLM({
+          model: 'anthropic/claude-sonnet-4.6',
+          messages: [{ role: 'user', content: 'test' }],
+        })
+      ).rejects.toThrow(/Insufficient credits/);
+    });
+
+    it('returns the validated object on the responseSchema path', async () => {
+      const schema = z.object({ greeting: z.string() });
+      mockChat.mockReturnValue(
+        (async function* () {
+          yield {
+            type: 'CUSTOM',
+            name: 'structured-output.complete',
+            value: { object: { greeting: 'hi' } },
+          };
+        })()
+      );
+
+      const result = await callLLM({
+        model: 'openai/gpt-5.4',
+        messages: [{ role: 'user', content: 'test' }],
+        responseSchema: schema,
+      });
+
+      expect(result).toEqual({ greeting: 'hi' });
+    });
+
+    it('throws when a structured call ends without a validated object', () => {
+      const schema = z.object({ greeting: z.string() });
+      mockChat.mockReturnValue(
+        (async function* () {
+          yield { type: 'TEXT_MESSAGE_CONTENT', delta: 'no schema event' };
+        })()
+      );
+
+      return expect(
+        callLLM({
+          model: 'openai/gpt-5.4',
+          messages: [{ role: 'user', content: 'test' }],
+          responseSchema: schema,
+        })
+      ).rejects.toThrow(/no validated object/);
     });
   });
 });

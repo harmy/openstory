@@ -1,5 +1,11 @@
-import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
+import {
+  DEFAULT_IMAGE_MODEL,
+  safeTextToImageModel,
+  type TextToImageModel,
+} from '@/lib/ai/models';
 import { generateImageWithProvider } from '@/lib/image/image-generation';
+import { buildStyledImagePrompt } from '@/lib/style/style-image-prompt';
+import { styleSlug } from '@/lib/style/style-slug';
 import { DEFAULT_STYLE_TEMPLATES } from '@/lib/style/style-templates';
 import { PhotonImage } from '@cf-wasm/photon';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -21,8 +27,14 @@ const OUTPUT_DIR = path.join(process.cwd(), 'preview');
 const MAX_CONCURRENT = 8;
 const MAX_RETRIES = 2; // Retry failed tasks up to 2 times
 
-// 3 Variations of scenes to test the style against
-const SCENES = [
+type Scene = { name: string; prompt: string };
+
+// Preview scenes vary by the kind of style. Narrative/people styles get a
+// person/place/action set; object-focused styles (ecommerce, food, automotive,
+// product-led commercial) get a product set — forcing "a character portrait" or
+// "dynamic action" onto a product-on-white style just produces irrelevant or
+// broken previews.
+const PEOPLE_SCENES: Scene[] = [
   {
     name: 'character',
     prompt:
@@ -38,6 +50,41 @@ const SCENES = [
     prompt: 'A dynamic scene with movement and energy, cinematic composition',
   },
 ];
+
+const PRODUCT_SCENES: Scene[] = [
+  {
+    name: 'hero',
+    prompt:
+      'A single hero shot of the product as the sole subject, beautifully lit and centered, the product exactly as it ships',
+  },
+  {
+    name: 'detail',
+    prompt:
+      "An extreme macro close-up of the product's material, texture, and finish",
+  },
+  {
+    name: 'context',
+    prompt:
+      'The product shown in a real-life context — in use or in its natural setting',
+  },
+];
+
+const ALL_SCENE_NAMES = [...PEOPLE_SCENES, ...PRODUCT_SCENES].map(
+  (s) => s.name
+);
+
+const PRODUCT_CATEGORIES = new Set(['ecommerce', 'food', 'automotive']);
+
+/** Object-focused styles get the product scene set; everything else, people. */
+function scenesForStyle(
+  style: (typeof DEFAULT_STYLE_TEMPLATES)[number]
+): Scene[] {
+  const isProduct =
+    PRODUCT_CATEGORIES.has(style.category ?? '') ||
+    (style.category === 'commercial' &&
+      (style.useCases ?? [])[0] === 'product');
+  return isProduct ? PRODUCT_SCENES : PEOPLE_SCENES;
+}
 
 async function downloadAndConvertToWebP(url: string, outputPath: string) {
   try {
@@ -63,17 +110,12 @@ async function downloadAndConvertToWebP(url: string, outputPath: string) {
 }
 
 /**
- * Sanitize a style name for use as a folder name
- * Converts to lowercase, replaces spaces/special chars with hyphens
+ * Sanitize a style name for use as a folder name.
+ * Shares the canonical slug rule with thumbnail/video URLs (see style-slug.ts)
+ * so the local `preview/{slug}` folder matches the R2 `/styles/{slug}` path.
  */
 function sanitizeFolderName(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters except spaces and hyphens
-    .replace(/\s+/g, '-') // Replace spaces with hyphens
-    .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
-    .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+  return styleSlug(name);
 }
 
 type Task = {
@@ -82,6 +124,9 @@ type Task = {
   sceneName: string;
   prompt: string;
   outputDir: string;
+  /** The style's recommended image model (falls back to DEFAULT_IMAGE_MODEL),
+   *  so a thumbnail previews the same model the sample video will use. */
+  imageModel: TextToImageModel;
 };
 
 // Progress tracking for live updates
@@ -281,7 +326,7 @@ async function processTask(
   try {
     const result = await generateImageWithProvider(
       {
-        model: DEFAULT_IMAGE_MODEL,
+        model: task.imageModel,
         prompt: prompt,
         imageSize: 'square_hd',
         numImages: 1,
@@ -443,25 +488,39 @@ async function main() {
   console.log('🎨 Starting Style Preview Generation...');
   console.log(`⚡ Max concurrent jobs: ${MAX_CONCURRENT}`);
 
-  // Parse command line arguments
-  const styleNameArg = process.argv[2];
-  const styleName = styleNameArg ? styleNameArg.trim() : null;
+  // Parse command line arguments. The optional style is the first positional
+  // (matched by exact name OR slug); --scene <name> restricts to one scene.
+  const args = process.argv.slice(2);
+  const styleName = args.find((a) => !a.startsWith('--'))?.trim() ?? null;
+  const sceneArg =
+    args.find((a) => a.startsWith('--scene='))?.split('=')[1] ??
+    (args.includes('--scene') ? args[args.indexOf('--scene') + 1] : undefined);
+
+  if (sceneArg && !ALL_SCENE_NAMES.includes(sceneArg)) {
+    console.error(
+      `❌ Unknown --scene "${sceneArg}". Options: ${ALL_SCENE_NAMES.join(', ')}`
+    );
+    process.exit(1);
+  }
 
   if (styleName) {
     console.log(`🎯 Filtering to style: "${styleName}"`);
   }
+  if (sceneArg) console.log(`🎬 Only scene: "${sceneArg}"`);
 
   // 1. Load style templates
   console.log('Loading style templates...');
 
-  // Filter by name if provided
+  // Filter by name or slug if provided
   let systemStyles = DEFAULT_STYLE_TEMPLATES;
   if (styleName) {
-    systemStyles = systemStyles.filter((style) => style.name === styleName);
+    systemStyles = systemStyles.filter(
+      (style) => style.name === styleName || styleSlug(style.name) === styleName
+    );
   }
 
   if (styleName && systemStyles.length === 0) {
-    console.error(`❌ No style found with name "${styleName}"`);
+    console.error(`❌ No style found with name or slug "${styleName}"`);
     console.error('   Available styles:');
     DEFAULT_STYLE_TEMPLATES.forEach((s) => console.error(`   - ${s.name}`));
     process.exit(1);
@@ -495,25 +554,28 @@ async function main() {
       continue;
     }
 
-    for (const scene of SCENES) {
-      // Construct prompt blending scene + style config
-      const styleConfig = style.config;
+    // Render the thumbnail with the style's recommended image model so it
+    // previews the same model the sample video will use (falls back to the
+    // default when a template leaves it unset).
+    const imageModel = safeTextToImageModel(
+      style.recommendedImageModel,
+      DEFAULT_IMAGE_MODEL
+    );
 
-      const fullPrompt = [
-        scene.prompt,
-        `Style: ${style.name}`,
-        `Art Style: ${styleConfig.artStyle}`,
-        `Mood: ${styleConfig.mood}`,
-        `Lighting: ${styleConfig.lighting}`,
-        `Camera: ${styleConfig.cameraWork}`,
-        `Color Grading: ${styleConfig.colorGrading}`,
-        styleConfig.referenceFilms.length
-          ? `Inspired by: ${styleConfig.referenceFilms.join(', ')}`
-          : '',
-        'No text, no words, no titles, no watermarks, no logos. No celebrities, no famous people, no real identifiable individuals. No grid, no collage, no montage, no multiple images, no split screen, no photo collection. Single image only',
-      ]
-        .filter(Boolean)
-        .join('. ');
+    // Scene set depends on the style kind (people vs product), optionally
+    // narrowed to a single --scene.
+    const styleScenes = scenesForStyle(style);
+    const scenes = sceneArg
+      ? styleScenes.filter((s) => s.name === sceneArg)
+      : styleScenes;
+
+    for (const scene of scenes) {
+      // Build the prompt: the scene is the subject, the style config is the
+      // treatment. We deliberately do NOT inject `style.name` — for
+      // medium-named styles it makes the model render the artifact (a book, a
+      // storyboard sheet) instead of a scene in that style. See
+      // buildStyledImagePrompt.
+      const fullPrompt = buildStyledImagePrompt(scene.prompt, style.config);
 
       allTasks.push({
         styleId: style.name, // Use name as ID since templates don't have database IDs
@@ -521,6 +583,7 @@ async function main() {
         sceneName: scene.name,
         prompt: fullPrompt,
         outputDir: styleDir,
+        imageModel,
       });
     }
   }
