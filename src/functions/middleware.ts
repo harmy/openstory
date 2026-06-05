@@ -3,14 +3,16 @@
  * Reusable middleware for authentication, team access, and resource validation
  */
 
+import { scheduleFlushTracing } from '#flush-scheduler';
 import {
   requireTeamAdminAccess,
   requireTeamMemberAccess,
   requireTeamOwnerAccess,
 } from '@/lib/auth/action-utils';
-import { getAuth } from '@/lib/auth/config';
 import type { Session, User } from '@/lib/auth/config';
+import { getAuth } from '@/lib/auth/config';
 import { isSystemAdmin, requireSystemAdmin } from '@/lib/auth/system-admin';
+import { APIError } from 'better-auth/api';
 import { isStripeEnabled } from '@/lib/billing/constants';
 import { getStripeOrThrow, getStripeWebhookSecret } from '@/lib/billing/stripe';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
@@ -22,7 +24,6 @@ import {
   type ScopedDb,
 } from '@/lib/db/scoped';
 import { NotFoundError } from '@/lib/errors';
-import { scheduleFlushTracing } from '#flush-scheduler';
 import { getLogger, toErrorPayload } from '@/lib/observability/logger';
 import { withTraceContextAsync } from '@/lib/observability/tracer';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
@@ -98,6 +99,20 @@ const SIZE_WARNING_BYTES = 6 * 1024 * 1024; // 6 MB
 const SLOW_THRESHOLD_MS = 500;
 const VERY_SLOW_THRESHOLD_MS = 2000;
 const serverFnLogger = getLogger(['openstory', 'serverFn']);
+const apiAuthLogger = getLogger(['openstory', 'api', 'auth']);
+
+/**
+ * JSON error envelope for request-middleware rejections, matching the
+ * `/api/v1` `{ error: { code, message } }` contract. Programmatic callers parse
+ * this; a plain-text 401/403 would crash their JSON parser.
+ */
+function authErrorResponse(
+  status: number,
+  code: string,
+  message: string
+): Response {
+  return Response.json({ error: { code, message } }, { status });
+}
 
 export const loggerMiddleware = createMiddleware({ type: 'function' }).server(
   async ({ next, serverFnMeta }) => {
@@ -162,17 +177,69 @@ export const loggerMiddleware = createMiddleware({ type: 'function' }).server(
 // ============================================================================
 
 /**
+ * Resolve the session for a request. The apiKey plugin validates a key header
+ * inside `getSession` and *throws* an APIError rather than returning null:
+ *   - a 429 (key over its per-key rate limit) is surfaced as a JSON 429 with a
+ *     `Retry-After` header (programmatic callers need this);
+ *   - a genuine auth rejection (disabled/expired/unknown key → 401/403) is
+ *     treated as unauthenticated → null (the caller turns that into a 401);
+ *   - anything else (D1 down, auth-backend 5xx, programmer error) is logged and
+ *     surfaced as a JSON 500. It must NOT be flattened to a 401 "bad key": that
+ *     tells a caller with a perfectly valid key to rotate/abandon it, and hides
+ *     the real incident.
+ */
+async function resolveRequestSession(request: Request) {
+  const auth = getAuth();
+  try {
+    return await auth.api.getSession({ headers: request.headers });
+  } catch (error) {
+    if (error instanceof APIError && error.statusCode === 429) {
+      const tryAgainInMs = error.body?.details?.tryAgainIn;
+      const retryAfter =
+        typeof tryAgainInMs === 'number' ? Math.ceil(tryAgainInMs / 1000) : 1;
+      throw Response.json(
+        {
+          error: {
+            code: 'RATE_LIMITED',
+            message: 'API key rate limit exceeded. Retry shortly.',
+          },
+        },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+      );
+    }
+    if (
+      error instanceof APIError &&
+      (error.statusCode === 401 || error.statusCode === 403)
+    ) {
+      return null;
+    }
+    apiAuthLogger.error('session resolution failed: {message}', {
+      message: error instanceof Error ? error.message : String(error),
+      err: toErrorPayload(error),
+    });
+    throw authErrorResponse(
+      500,
+      'INTERNAL_ERROR',
+      'Authentication could not be processed. Please retry.'
+    );
+  }
+}
+
+/**
  * Request auth middleware — for use with server routes (server.middleware).
  * Unlike authMiddleware (type: 'function'), this is request-scoped and
  * receives the request object directly from the middleware params.
  */
 export const authRequestMiddleware = createMiddleware().server(
   async ({ next, request }) => {
-    const auth = getAuth();
-    const session = await auth.api.getSession({ headers: request.headers });
+    const session = await resolveRequestSession(request);
 
     if (!session?.user) {
-      throw new Response('Unauthorized', { status: 401 });
+      throw authErrorResponse(
+        401,
+        'UNAUTHORIZED',
+        'Valid authentication required. Provide an API key via "Authorization: Bearer <key>" or "x-api-key".'
+      );
     }
 
     return next({
@@ -187,21 +254,28 @@ export const authRequestMiddleware = createMiddleware().server(
 /**
  * Request auth + team middleware — for use with server routes (server.middleware).
  * Authenticates user, resolves their default team, and creates a scoped DB.
- * Throws 401 if no user, 403 if no team.
+ * Throws 401 if no user, 403 if no team, 429 if a key is over its rate limit.
  */
 export const authWithTeamRequestMiddleware = createMiddleware().server(
   async ({ next, request }) => {
-    const auth = getAuth();
-    const session = await auth.api.getSession({ headers: request.headers });
+    const session = await resolveRequestSession(request);
 
     if (!session?.user) {
-      throw new Response('Unauthorized', { status: 401 });
+      throw authErrorResponse(
+        401,
+        'UNAUTHORIZED',
+        'Valid authentication required. Provide an API key via "Authorization: Bearer <key>" or "x-api-key".'
+      );
     }
 
     const team = await resolveUserTeam(session.user.id);
 
     if (!team) {
-      throw new Response('No team found for user', { status: 403 });
+      throw authErrorResponse(
+        403,
+        'NO_TEAM',
+        'No team is associated with this account.'
+      );
     }
 
     return next({

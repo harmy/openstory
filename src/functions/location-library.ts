@@ -1,4 +1,4 @@
-import { moveFile, getSignedUploadUrl } from '#storage';
+import { getSignedUploadUrl } from '#storage';
 import { requireTeamAdminAccess } from '@/lib/auth/action-utils';
 import { generateId } from '@/lib/db/id';
 import {
@@ -7,7 +7,7 @@ import {
 } from '@/lib/db/scoped';
 import type { LibraryLocation } from '@/lib/db/schema';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
-import { STORAGE_BUCKETS, getPublicUrl } from '@/lib/storage/buckets';
+import { STORAGE_BUCKETS } from '@/lib/storage/buckets';
 import {
   getExtensionFromUrl,
   getMimeTypeFromExtension,
@@ -15,42 +15,14 @@ import {
 import { triggerWorkflow } from '@/lib/workflow/client';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import type { LibraryLocationSheetWorkflowInput } from '@/lib/workflow/types';
+import {
+  createLibraryLocation,
+  promoteLocationReferenceImages,
+} from '@/lib/locations/create-library-location';
 import { createServerFn } from '@tanstack/react-start';
 import { zodValidator } from '@tanstack/zod-adapter';
 import { z } from 'zod';
 import { authWithTeamMiddleware } from './middleware';
-
-import { getLogger } from '@/lib/observability/logger';
-
-const logger = getLogger(['openstory', 'serverFn', 'location-library']);
-
-type ProcessedImage = { url: string; path: string };
-
-/**
- * Move temp-uploaded images to permanent storage, returning only
- * successfully moved images.
- */
-async function processReferenceImages(
-  tempUrls: string[],
-  teamId: string
-): Promise<ProcessedImage[]> {
-  const results: ProcessedImage[] = [];
-
-  for (const tempUrl of tempUrls) {
-    const tempPathMatch = tempUrl.match(/\/locations\/(.+)$/);
-    const tempPath = tempPathMatch?.[1];
-    if (!tempPath) continue;
-
-    const ext = getExtensionFromUrl(tempUrl);
-    const permanentPath = `${teamId}/library/${generateId()}.${ext}`;
-
-    await moveFile(STORAGE_BUCKETS.LOCATIONS, tempPath, permanentPath);
-    const url = getPublicUrl(STORAGE_BUCKETS.LOCATIONS, permanentPath);
-    results.push({ url, path: permanentPath });
-  }
-
-  return results;
-}
 
 /**
  * Verify a location exists and belongs to the given team. Throws if not found.
@@ -124,54 +96,11 @@ export const createLibraryLocationFn = createServerFn({ method: 'POST' })
     )
   )
   .handler(async ({ context, data }) => {
-    const processedImages = await processReferenceImages(
-      data.referenceImageUrls ?? [],
-      context.teamId
-    );
-
-    const mainImage = processedImages[0];
-
-    const newLocation = await context.scopedDb.locations.create({
-      name: data.name,
-      description: data.description,
-      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
-      referenceImageUrl: mainImage?.url,
-      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
-      referenceImagePath: mainImage?.path,
-    });
-
-    if (processedImages.length > 0) {
-      await context.scopedDb.locationSheets.insert(
-        processedImages.map((img, index) => ({
-          locationId: newLocation.id,
-          name: `Reference ${index + 1}`,
-          imageUrl: img.url,
-          imagePath: img.path,
-          isDefault: index === 0,
-          source: 'manual_upload' as const,
-        }))
-      );
-    }
-
-    // Always trigger sheet generation (works with or without reference images)
-    const workflowInput: LibraryLocationSheetWorkflowInput = {
-      locationDbId: newLocation.id,
-      locationName: data.name,
-      locationDescription: data.description,
-      referenceImageUrls: processedImages.map((img) => img.url),
-      userId: context.user.id,
+    const newLocation = await createLibraryLocation(data, {
+      scopedDb: context.scopedDb,
+      user: context.user,
       teamId: context.teamId,
-      sequenceId: 'library',
-    };
-
-    void triggerWorkflow('/library-location-sheet', workflowInput, {
-      label: buildWorkflowLabel(newLocation.id),
-    }).catch((error) => {
-      logger.error('Failed to trigger location sheet workflow:', {
-        err: error,
-      });
     });
-
     return { ...newLocation, sequenceTitle: 'Library' as const };
   });
 
@@ -272,7 +201,7 @@ export const addLocationSheetsFn = createServerFn({ method: 'POST' })
   .handler(async ({ context, data }) => {
     const location = await requireLocation(context.scopedDb, data.locationId);
 
-    const processedImages = await processReferenceImages(
+    const processedImages = await promoteLocationReferenceImages(
       data.imageUrls,
       context.teamId
     );

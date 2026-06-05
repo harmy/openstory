@@ -110,6 +110,52 @@ export const passkey = snakeCase.table(
   ]
 );
 
+/**
+ * API keys for the public HTTP API, owned by Better Auth's `@better-auth/api-key`
+ * plugin. Field names (JS keys) must match the plugin's schema exactly — the
+ * Drizzle adapter resolves columns by property name (the `snakeCase` builder
+ * handles the SQL column casing). The plugin associates a key with its owner via
+ * `referenceId` (the creating user's id), not a FK, so there is no cascade edge
+ * into `user` — this stays a purely additive table.
+ */
+export const apikey = snakeCase.table(
+  'apikey',
+  {
+    id: text().primaryKey(),
+    name: text(),
+    start: text(),
+    prefix: text(),
+    key: text().notNull(),
+    referenceId: text().notNull(),
+    configId: text().default('default').notNull(),
+    refillInterval: integer(),
+    refillAmount: integer(),
+    lastRefillAt: integer({ mode: 'timestamp_ms' }),
+    enabled: integer({ mode: 'boolean' }).default(true).notNull(),
+    rateLimitEnabled: integer({ mode: 'boolean' }).default(true).notNull(),
+    rateLimitTimeWindow: integer(),
+    rateLimitMax: integer(),
+    requestCount: integer().default(0).notNull(),
+    remaining: integer(),
+    lastRequest: integer({ mode: 'timestamp_ms' }),
+    expiresAt: integer({ mode: 'timestamp_ms' }),
+    createdAt: integer({ mode: 'timestamp_ms' })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer({ mode: 'timestamp_ms' })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    permissions: text(),
+    metadata: text(),
+  },
+  (table) => [
+    index('apikey_referenceId_idx').on(table.referenceId),
+    index('apikey_key_idx').on(table.key),
+    index('apikey_configId_idx').on(table.configId),
+  ]
+);
+
 // Type exports
 export type User = InferSelectModel<typeof user>;
 export type NewUser = InferInsertModel<typeof user>;
@@ -125,3 +171,6 @@ export type NewVerification = InferInsertModel<typeof verification>;
 
 export type Passkey = InferSelectModel<typeof passkey>;
 export type NewPasskey = InferInsertModel<typeof passkey>;
+
+export type ApiKey = InferSelectModel<typeof apikey>;
+export type NewApiKey = InferInsertModel<typeof apikey>;

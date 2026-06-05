@@ -1,0 +1,113 @@
+/**
+ * The `GET /api/v1` root document — the API's self-description, modelled on the
+ * `instructions` an MCP server returns at initialize time. An agent that reads
+ * this once should know what the API is for, how to authenticate, the
+ * create→poll workflow, the cross-cutting conventions (`?wait=` long-poll, HAL
+ * affordances, the forward-looking `stepUp`/`idempotencyRequired` hints), and
+ * have a copy-pasteable example body — without reading external docs.
+ *
+ * The root is intentionally unauthenticated: discovery should work *before* a
+ * caller has wired up a key, so the narrative can tell them how to get one.
+ */
+
+import { API_V1_BASE, type HalLink, type HalResource } from './hal';
+import { apiCreateSequenceSchema } from './input-schema';
+import { z } from 'zod';
+
+const INSTRUCTIONS = `OpenStory public API v1 — create AI video sequences from a script in one call.
+
+Workflow:
+  1. POST /api/v1/sequences with a script (and optional style, cast, locations,
+     elements, model choices). Generation is asynchronous: you get back 202 with
+     the created sequence id(s), workflow run id(s), and a statusUrl to poll.
+  2. GET the statusUrl to watch progress: overall status, per-frame image/video
+     status + URLs, music, poster, and ready counts. Status is derived from the
+     database, so it is always correct even if you reconnect later.
+
+Authentication:
+  Every endpoint except this root requires an API key. Create one in the
+  dashboard under Settings → Developer. Send it as either
+  'Authorization: Bearer <key>' or 'x-api-key: <key>'. Keys are team-scoped and
+  rate limited to 10 requests/second.
+
+Conventions (apply to every endpoint):
+  - ?wait=<duration> long-polls: instead of busy-polling, append e.g. ?wait=60s
+    (also 30, 2m, 1500ms; capped at 90s) and the server holds the request open,
+    returning the moment the resource changes or reaches a terminal state. Ideal
+    when you have no sleep tool of your own. On POST, ?wait also embeds the first
+    progress snapshot of each new sequence in the response.
+  - HAL: every response carries a '_links' map of the actions available from
+    that resource. Each link states its 'method', and write links state their
+    'contentType' and 'examples'. Follow links rather than hardcoding paths.
+  - Links may also declare 'stepUp' (needs step-up auth) or 'idempotencyRequired'
+    (needs an Idempotency-Key header) so you know a requirement before you call,
+    not via a 4xx. No v1 endpoint sets these today; they are forward-looking.
+
+Errors are always JSON: { "error": { "code", "message", "details"? } } with the
+matching HTTP status — never an HTML page or redirect.
+
+Machine-readable spec: GET /api/v1/openapi.json returns the full OpenAPI 3.1
+document (generated from the same schema this API validates against).`;
+
+/** A representative `POST /api/v1/sequences` body (schema defaults applied). */
+function exampleCreateBody(): unknown {
+  return apiCreateSequenceSchema.parse({
+    script: 'A lighthouse keeper befriends a stranded whale.',
+    title: 'Sea Tale',
+    style: 'Cinematic Noir',
+    targetSeconds: 30,
+    motion: true,
+    music: true,
+    characters: ['Old Tom the keeper', { name: 'The whale', isHuman: false }],
+    locations: ['Stormy lighthouse'],
+  });
+}
+
+/** The `create-sequence` affordance, advertised in the root document. */
+export function createSequenceLink(): HalLink {
+  return {
+    href: `${API_V1_BASE}/sequences`,
+    method: 'POST',
+    title:
+      'Create a video sequence (one-shot). Responds 202; poll the statusUrl.',
+    contentType: 'application/json',
+    examples: [exampleCreateBody()],
+  };
+}
+
+export type RootDocument = HalResource<{
+  name: string;
+  version: string;
+  instructions: string;
+  /** The JSON Schema for the create request body, inline for tool callers. */
+  requestSchema: unknown;
+}>;
+
+/** Build the `GET /api/v1` self-description document. */
+export function buildRootDocument(): RootDocument {
+  return {
+    name: 'OpenStory API',
+    version: 'v1',
+    instructions: INSTRUCTIONS,
+    requestSchema: z.toJSONSchema(apiCreateSequenceSchema),
+    _links: {
+      self: {
+        href: API_V1_BASE,
+        method: 'GET',
+        title: 'API root / instructions',
+      },
+      'create-sequence': createSequenceLink(),
+      'sequence-status': {
+        href: `${API_V1_BASE}/sequences/{id}{?wait}`,
+        method: 'GET',
+        templated: true,
+        title: 'Get sequence status (supports ?wait long-polling)',
+      },
+      'openapi-spec': {
+        href: `${API_V1_BASE}/openapi.json`,
+        method: 'GET',
+        title: 'OpenAPI 3.1 specification (JSON)',
+      },
+    },
+  };
+}

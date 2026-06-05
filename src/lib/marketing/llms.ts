@@ -53,6 +53,24 @@ export function buildLlmsTxt(): string {
     lines.push('');
   }
 
+  lines.push('## API');
+  lines.push('');
+  lines.push(
+    `${SITE_CONFIG.name} has a public HTTP API for agents and scripts: create an AI video sequence from a script in one call, then poll its status. Both endpoints below are self-describing and need no separate docs.`
+  );
+  lines.push('');
+  lines.push(
+    `- API root (instructions, request schema, and HAL links): ${SITE_CONFIG.url}/api/v1`
+  );
+  lines.push(
+    `- OpenAPI 3.1 spec (JSON): ${SITE_CONFIG.url}/api/v1/openapi.json`
+  );
+  lines.push('');
+  lines.push(
+    'Authenticate with an API key (create one under Settings → Developer) sent as "Authorization: Bearer <key>" or "x-api-key". POST /api/v1/sequences to create; GET the returned status URL (append ?wait=60s to long-poll) to watch progress.'
+  );
+  lines.push('');
+
   lines.push('## Documentation');
   lines.push('');
   lines.push(`- Docs: ${SITE_CONFIG.url}/docs`);

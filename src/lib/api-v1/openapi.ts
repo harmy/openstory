@@ -1,0 +1,462 @@
+/**
+ * OpenAPI 3.1 document for the public `/api/v1`, served at
+ * `GET /api/v1/openapi.json`.
+ *
+ * The request body schema is generated from the SAME `apiCreateSequenceSchema`
+ * the runtime validates against (via `z.toJSONSchema`), so the published
+ * contract can't drift from what the endpoint actually accepts. Response
+ * schemas are hand-authored to mirror the `SequenceState` / one-shot result
+ * documents in `state.ts` / `create.ts`.
+ *
+ * Frame and music generation statuses reuse `FRAME_GENERATION_STATUSES` (their
+ * value sets are identical); the sequence status set is declared locally.
+ */
+
+import { FRAME_GENERATION_STATUSES } from '@/lib/db/schema/frames';
+import { API_V1_BASE } from './hal';
+import { apiCreateSequenceSchema } from './input-schema';
+import { z } from 'zod';
+
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+type JsonObject = { [key: string]: JsonValue };
+
+const GEN_STATUSES: JsonValue[] = [...FRAME_GENERATION_STATUSES];
+const SEQUENCE_STATUSES: JsonValue[] = [
+  'draft',
+  'processing',
+  'completed',
+  'failed',
+  'archived',
+];
+
+/** Recursively repoint Zod's `#/$defs/X` refs at OpenAPI `#/components/schemas/X`. */
+function rewriteRefs(node: JsonValue): JsonValue {
+  if (Array.isArray(node)) return node.map(rewriteRefs);
+  if (node && typeof node === 'object') return rewriteRefsInObject(node);
+  return node;
+}
+
+/** `rewriteRefs` specialised to a JSON object, preserving the JsonObject type. */
+function rewriteRefsInObject(obj: JsonObject): JsonObject {
+  const out: JsonObject = {};
+  for (const [key, value] of Object.entries(obj)) {
+    out[key] =
+      key === '$ref' && typeof value === 'string'
+        ? value.replace('#/$defs/', '#/components/schemas/')
+        : rewriteRefs(value);
+  }
+  return out;
+}
+
+/**
+ * Split the generated create-request schema into an OpenAPI root component plus
+ * its lifted `$defs` (CharacterRef, CreateCharacter, …), all refs repointed at
+ * `#/components/schemas`. Zod emits a self-contained draft-2020-12 schema whose
+ * internal `#/$defs` refs don't resolve once embedded in an OpenAPI document, so
+ * we hoist them to siblings under `components.schemas`.
+ */
+function createRequestSchemas(): { root: JsonObject; defs: JsonObject } {
+  // Round-trip through JSON to get a plain, mutable JSON tree (no Zod classes).
+  const generated: JsonObject = JSON.parse(
+    JSON.stringify(z.toJSONSchema(apiCreateSequenceSchema))
+  );
+  const { $defs, $schema: _schema, ...root } = generated;
+  const defs =
+    $defs && typeof $defs === 'object' && !Array.isArray($defs) ? $defs : {};
+  return {
+    root: rewriteRefsInObject(root),
+    defs: rewriteRefsInObject(defs),
+  };
+}
+
+/** A representative create body, embedded as the request example. */
+const EXAMPLE_CREATE_BODY: JsonObject = {
+  script: 'A lighthouse keeper befriends a stranded whale.',
+  title: 'Sea Tale',
+  style: 'Cinematic Noir',
+  targetSeconds: 30,
+  motion: true,
+  music: true,
+  characters: ['Old Tom the keeper', { name: 'The whale', isHuman: false }],
+  locations: ['Stormy lighthouse'],
+};
+
+const statusEnum = (values: JsonValue[]): JsonObject => ({
+  type: 'string',
+  enum: values,
+});
+const nullableString: JsonObject = { type: ['string', 'null'] };
+const genStatusObject: JsonObject = {
+  type: 'object',
+  required: ['status', 'url'],
+  properties: { status: statusEnum(GEN_STATUSES), url: nullableString },
+};
+
+/** Shared error-envelope reference for 4xx/5xx responses. */
+function errorResponse(description: string): JsonObject {
+  return {
+    description,
+    content: {
+      'application/json': { schema: { $ref: '#/components/schemas/Error' } },
+    },
+  };
+}
+
+/** Build the full OpenAPI 3.1 document for `/api/v1`. */
+export function buildOpenApiDocument(): JsonObject {
+  const { root: createRequest, defs } = createRequestSchemas();
+
+  const waitParam: JsonObject = {
+    name: 'wait',
+    in: 'query',
+    required: false,
+    description:
+      'Long-poll duration: hold the request open until the resource changes or reaches a terminal state. Forms: "60s", "30" (seconds), "2m", "1500ms". Capped at 90s; absent/0/malformed returns immediately.',
+    schema: { type: 'string' },
+    example: '60s',
+  };
+
+  return {
+    openapi: '3.1.0',
+    info: {
+      title: 'OpenStory API',
+      version: 'v1',
+      description:
+        'Create AI video sequences from a script in one call. Generation is asynchronous: POST returns 202 with sequence id(s) and a status URL to poll (optionally with ?wait long-polling). Every response carries a HAL `_links` catalog of next actions.',
+    },
+    servers: [
+      {
+        url: '/',
+        description: 'Relative to the origin serving this document.',
+      },
+    ],
+    security: [{ bearerAuth: [] }, { apiKeyHeader: [] }],
+    tags: [
+      { name: 'discovery', description: 'Unauthenticated self-description.' },
+      { name: 'sequences', description: 'Create and watch video sequences.' },
+    ],
+    paths: {
+      [API_V1_BASE]: {
+        get: {
+          tags: ['discovery'],
+          summary: 'API root / instructions',
+          description:
+            'MCP-style self-description: an instructions narrative, the create request JSON Schema, and a HAL link catalog. Unauthenticated so discovery works before a key is wired up.',
+          security: [],
+          responses: {
+            '200': {
+              description: 'The API root document.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/RootDocument' },
+                },
+              },
+            },
+          },
+        },
+      },
+      [`${API_V1_BASE}/openapi.json`]: {
+        get: {
+          tags: ['discovery'],
+          summary: 'This OpenAPI 3.1 document',
+          security: [],
+          responses: {
+            '200': {
+              description: 'The OpenAPI document.',
+              content: { 'application/json': { schema: { type: 'object' } } },
+            },
+          },
+        },
+      },
+      [`${API_V1_BASE}/sequences`]: {
+        post: {
+          tags: ['sequences'],
+          summary: 'Create a video sequence (one-shot)',
+          description:
+            'Validate input, optionally enhance the script, resolve style/cast/locations/elements, then trigger async generation. Responds 202 with the created sequence id(s), workflow run id(s), a status URL, and a HAL `_links` catalog. With ?wait, blocks until each new sequence shows first progress (or a terminal state) and embeds that snapshot.',
+          parameters: [waitParam],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/CreateSequenceRequest' },
+                example: EXAMPLE_CREATE_BODY,
+              },
+            },
+          },
+          responses: {
+            '202': {
+              description:
+                'Sequence(s) created; generation is async. Without ?wait the entries are summaries; with ?wait each entry embeds a `state` snapshot plus `waitChanged`/`waitDone`.',
+              content: {
+                'application/json': {
+                  schema: {
+                    oneOf: [
+                      { $ref: '#/components/schemas/CreateSequenceResult' },
+                      { $ref: '#/components/schemas/CreateSequenceWaitResult' },
+                    ],
+                  },
+                },
+              },
+            },
+            '400': errorResponse('Invalid JSON or request body.'),
+            '401': errorResponse('Missing or invalid API key.'),
+            '403': errorResponse('No team associated with the key.'),
+            '429': errorResponse('Per-key rate limit exceeded (10 req/s).'),
+          },
+        },
+      },
+      [`${API_V1_BASE}/sequences/{id}`]: {
+        get: {
+          tags: ['sequences'],
+          summary: 'Get sequence status',
+          description:
+            'DB-derived status document: overall status, per-frame image/video status + URLs, music, poster, and ready/failed counts, plus a HAL `_links` catalog. With ?wait, long-polls until the sequence changes or reaches a terminal state.',
+          parameters: [
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              description: 'The sequence id (ULID).',
+              schema: { type: 'string' },
+            },
+            waitParam,
+          ],
+          responses: {
+            '200': {
+              description: 'The sequence status document.',
+              headers: {
+                'X-Wait-Changed': {
+                  description:
+                    'Only present when ?wait was set. "true" if the sequence advanced during the wait, "false" if the wait timed out unchanged.',
+                  schema: { type: 'string', enum: ['true', 'false'] },
+                },
+              },
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/SequenceState' },
+                },
+              },
+            },
+            '401': errorResponse('Missing or invalid API key.'),
+            '403': errorResponse('No team associated with the key.'),
+            '404': errorResponse('No such sequence for this key.'),
+            '429': errorResponse('Per-key rate limit exceeded (10 req/s).'),
+          },
+        },
+      },
+    },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          description: 'Send the API key as "Authorization: Bearer <key>".',
+        },
+        apiKeyHeader: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'x-api-key',
+          description: 'Send the API key as "x-api-key: <key>".',
+        },
+      },
+      schemas: {
+        CreateSequenceRequest: createRequest,
+        ...defs,
+        HalLink: {
+          type: 'object',
+          required: ['href'],
+          description:
+            'One callable affordance. Absent `method` means GET, per HAL convention.',
+          properties: {
+            href: { type: 'string' },
+            method: statusEnum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
+            title: { type: 'string' },
+            templated: { type: 'boolean' },
+            contentType: { type: 'string' },
+            examples: { type: 'array', items: {} },
+            stepUp: { type: 'boolean' },
+            idempotencyRequired: { type: 'boolean' },
+          },
+        },
+        HalLinks: {
+          type: 'object',
+          description: 'A catalog of affordances keyed by relation name.',
+          additionalProperties: { $ref: '#/components/schemas/HalLink' },
+        },
+        Error: {
+          type: 'object',
+          required: ['error'],
+          properties: {
+            error: {
+              type: 'object',
+              required: ['code', 'message'],
+              properties: {
+                code: { type: 'string' },
+                message: { type: 'string' },
+                details: { type: 'object', additionalProperties: true },
+              },
+            },
+          },
+        },
+        SequenceStateFrame: {
+          type: 'object',
+          required: ['id', 'orderIndex', 'title', 'image', 'video'],
+          properties: {
+            id: { type: 'string' },
+            orderIndex: { type: 'integer' },
+            title: nullableString,
+            image: genStatusObject,
+            video: genStatusObject,
+          },
+        },
+        SequenceState: {
+          type: 'object',
+          required: [
+            'id',
+            'title',
+            'status',
+            'statusError',
+            'aspectRatio',
+            'createdAt',
+            'updatedAt',
+            'poster',
+            'music',
+            'frames',
+            'counts',
+            '_links',
+          ],
+          properties: {
+            id: { type: 'string' },
+            title: { type: 'string' },
+            status: statusEnum(SEQUENCE_STATUSES),
+            statusError: nullableString,
+            aspectRatio: { type: 'string' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+            poster: {
+              type: ['object', 'null'],
+              required: ['url'],
+              properties: { url: { type: 'string' } },
+            },
+            music: genStatusObject,
+            frames: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/SequenceStateFrame' },
+            },
+            counts: {
+              type: 'object',
+              required: [
+                'frames',
+                'imagesReady',
+                'videosReady',
+                'videosFailed',
+              ],
+              properties: {
+                frames: { type: 'integer' },
+                imagesReady: { type: 'integer' },
+                videosReady: { type: 'integer' },
+                videosFailed: {
+                  type: 'integer',
+                  description:
+                    'Frames whose video generation failed. Can be > 0 even when `status` is "completed".',
+                },
+              },
+            },
+            _links: { $ref: '#/components/schemas/HalLinks' },
+          },
+        },
+        SequenceSummary: {
+          type: 'object',
+          description: 'A created sequence (non-?wait response entry).',
+          required: ['id', 'status', 'workflowRunId', 'statusUrl', '_links'],
+          properties: {
+            id: { type: 'string' },
+            status: statusEnum(SEQUENCE_STATUSES),
+            workflowRunId: { type: 'string' },
+            statusUrl: { type: 'string' },
+            _links: { $ref: '#/components/schemas/HalLinks' },
+          },
+        },
+        WaitedSequence: {
+          type: 'object',
+          description:
+            'A created sequence with its first progress snapshot embedded (?wait response entry).',
+          required: ['id', 'workflowRunId', 'state', 'waitChanged', 'waitDone'],
+          properties: {
+            id: { type: 'string' },
+            workflowRunId: { type: 'string' },
+            state: {
+              oneOf: [
+                { $ref: '#/components/schemas/SequenceState' },
+                { type: 'null' },
+              ],
+            },
+            waitChanged: {
+              type: 'boolean',
+              description: 'The sequence advanced during the wait.',
+            },
+            waitDone: {
+              type: 'boolean',
+              description: 'The sequence reached a terminal state.',
+            },
+          },
+        },
+        CreateSequenceResult: {
+          type: 'object',
+          required: ['sequences', '_links'],
+          properties: {
+            sequences: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/SequenceSummary' },
+            },
+            enhancedScript: {
+              type: 'string',
+              description: 'Present only when script enhancement ran.',
+            },
+            _links: { $ref: '#/components/schemas/HalLinks' },
+          },
+        },
+        CreateSequenceWaitResult: {
+          type: 'object',
+          required: ['sequences', '_links'],
+          properties: {
+            sequences: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/WaitedSequence' },
+            },
+            enhancedScript: { type: 'string' },
+            _links: { $ref: '#/components/schemas/HalLinks' },
+          },
+        },
+        RootDocument: {
+          type: 'object',
+          required: [
+            'name',
+            'version',
+            'instructions',
+            'requestSchema',
+            '_links',
+          ],
+          properties: {
+            name: { type: 'string' },
+            version: { type: 'string' },
+            instructions: { type: 'string' },
+            requestSchema: {
+              type: 'object',
+              additionalProperties: true,
+              description: 'The create request body as JSON Schema.',
+            },
+            _links: { $ref: '#/components/schemas/HalLinks' },
+          },
+        },
+      },
+    },
+  };
+}

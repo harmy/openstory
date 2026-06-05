@@ -6,7 +6,7 @@
  * (Drizzle Relations v2 — single consolidated definition, no per-table relations() calls).
  */
 
-import { account, passkey, session, user, verification } from './auth';
+import { account, apikey, passkey, session, user, verification } from './auth';
 
 import { teamInvitations, teamMembers, teams } from './teams';
 
@@ -65,9 +65,17 @@ import { teamApiKeys } from './team-api-keys';
 import { giftTokenRedemptions, giftTokens } from './gift-tokens';
 
 // Better Auth tables
-export { account, passkey, session, user, verification };
+export { account, apikey, passkey, session, user, verification };
 
-export type { Account, Passkey, Session, User, Verification } from './auth';
+export type {
+  Account,
+  ApiKey,
+  NewApiKey,
+  Passkey,
+  Session,
+  User,
+  Verification,
+} from './auth';
 
 // Teams
 export { teamInvitations, teamMembers, teams };
@@ -301,6 +309,7 @@ export const schema = {
   account,
   verification,
   passkey,
+  apikey,
 
   // Teams
   teams,

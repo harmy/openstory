@@ -34,10 +34,13 @@ import { Route as AppCreditsRouteImport } from './routes/_app/credits'
 import { Route as ApiTestRouteRouteImport } from './routes/api/test/route'
 import { Route as AppSettingsRouteRouteImport } from './routes/_app/settings/route'
 import { Route as AppAdminRouteRouteImport } from './routes/_app/admin/route'
+import { Route as ApiV1IndexRouteImport } from './routes/api/v1/index'
 import { Route as AppTalentIndexRouteImport } from './routes/_app/talent/index'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSequencesIndexRouteImport } from './routes/_app/sequences/index'
 import { Route as AppLocationsIndexRouteImport } from './routes/_app/locations/index'
+import { Route as ApiV1SequencesRouteImport } from './routes/api/v1/sequences'
+import { Route as ApiV1OpenapiDotjsonRouteImport } from './routes/api/v1/openapi[.]json'
 import { Route as ApiTestVerifyRouteImport } from './routes/api/test/verify'
 import { Route as ApiTestUserRouteImport } from './routes/api/test/user'
 import { Route as ApiTestTalentRouteImport } from './routes/api/test/talent'
@@ -56,11 +59,13 @@ import { Route as ApiBillingWebhookRouteImport } from './routes/api/billing/webh
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AppTalentIdRouteImport } from './routes/_app/talent/$id'
 import { Route as AppSettingsPasskeysRouteImport } from './routes/_app/settings/passkeys'
+import { Route as AppSettingsDeveloperRouteImport } from './routes/_app/settings/developer'
 import { Route as AppSettingsApiKeysRouteImport } from './routes/_app/settings/api-keys'
 import { Route as AppSequencesNewRouteImport } from './routes/_app/sequences/new'
 import { Route as AppLocationsLocationIdRouteImport } from './routes/_app/locations/$locationId'
 import { Route as AppAdminUsageRouteImport } from './routes/_app/admin/usage'
 import { Route as AppSequencesIdRouteRouteImport } from './routes/_app/sequences/$id/route'
+import { Route as ApiV1SequencesIdRouteImport } from './routes/api/v1/sequences.$id'
 import { Route as AppSequencesIdTheatreRouteImport } from './routes/_app/sequences/$id/theatre'
 import { Route as AppSequencesIdScriptRouteImport } from './routes/_app/sequences/$id/script'
 import { Route as AppSequencesIdScenesRouteImport } from './routes/_app/sequences/$id/scenes'
@@ -193,6 +198,11 @@ const AppAdminRouteRoute = AppAdminRouteRouteImport.update({
   path: '/admin',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const ApiV1IndexRoute = ApiV1IndexRouteImport.update({
+  id: '/api/v1/',
+  path: '/api/v1/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppTalentIndexRoute = AppTalentIndexRouteImport.update({
   id: '/talent/',
   path: '/talent/',
@@ -212,6 +222,16 @@ const AppLocationsIndexRoute = AppLocationsIndexRouteImport.update({
   id: '/locations/',
   path: '/locations/',
   getParentRoute: () => AppRouteRoute,
+} as any)
+const ApiV1SequencesRoute = ApiV1SequencesRouteImport.update({
+  id: '/api/v1/sequences',
+  path: '/api/v1/sequences',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1OpenapiDotjsonRoute = ApiV1OpenapiDotjsonRouteImport.update({
+  id: '/api/v1/openapi.json',
+  path: '/api/v1/openapi.json',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiTestVerifyRoute = ApiTestVerifyRouteImport.update({
   id: '/verify',
@@ -303,6 +323,11 @@ const AppSettingsPasskeysRoute = AppSettingsPasskeysRouteImport.update({
   path: '/passkeys',
   getParentRoute: () => AppSettingsRouteRoute,
 } as any)
+const AppSettingsDeveloperRoute = AppSettingsDeveloperRouteImport.update({
+  id: '/developer',
+  path: '/developer',
+  getParentRoute: () => AppSettingsRouteRoute,
+} as any)
 const AppSettingsApiKeysRoute = AppSettingsApiKeysRouteImport.update({
   id: '/api-keys',
   path: '/api-keys',
@@ -327,6 +352,11 @@ const AppSequencesIdRouteRoute = AppSequencesIdRouteRouteImport.update({
   id: '/sequences/$id',
   path: '/sequences/$id',
   getParentRoute: () => AppRouteRoute,
+} as any)
+const ApiV1SequencesIdRoute = ApiV1SequencesIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiV1SequencesRoute,
 } as any)
 const AppSequencesIdTheatreRoute = AppSequencesIdTheatreRouteImport.update({
   id: '/theatre',
@@ -405,6 +435,7 @@ export interface FileRoutesByFullPath {
   '/locations/$locationId': typeof AppLocationsLocationIdRoute
   '/sequences/new': typeof AppSequencesNewRoute
   '/settings/api-keys': typeof AppSettingsApiKeysRoute
+  '/settings/developer': typeof AppSettingsDeveloperRoute
   '/settings/passkeys': typeof AppSettingsPasskeysRoute
   '/talent/$id': typeof AppTalentIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -423,15 +454,19 @@ export interface FileRoutesByFullPath {
   '/api/test/talent': typeof ApiTestTalentRoute
   '/api/test/user': typeof ApiTestUserRoute
   '/api/test/verify': typeof ApiTestVerifyRoute
+  '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
+  '/api/v1/sequences': typeof ApiV1SequencesRouteWithChildren
   '/locations/': typeof AppLocationsIndexRoute
   '/sequences/': typeof AppSequencesIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/talent/': typeof AppTalentIndexRoute
+  '/api/v1/': typeof ApiV1IndexRoute
   '/sequences/$id/elements': typeof AppSequencesIdElementsRoute
   '/sequences/$id/music': typeof AppSequencesIdMusicRoute
   '/sequences/$id/scenes': typeof AppSequencesIdScenesRoute
   '/sequences/$id/script': typeof AppSequencesIdScriptRoute
   '/sequences/$id/theatre': typeof AppSequencesIdTheatreRoute
+  '/api/v1/sequences/$id': typeof ApiV1SequencesIdRoute
   '/sequences/$id/cast/$characterId': typeof AppSequencesIdCastCharacterIdRoute
   '/sequences/$id/locations/$locationId': typeof AppSequencesIdLocationsLocationIdRoute
   '/sequences/$id/cast/': typeof AppSequencesIdCastIndexRoute
@@ -463,6 +498,7 @@ export interface FileRoutesByTo {
   '/locations/$locationId': typeof AppLocationsLocationIdRoute
   '/sequences/new': typeof AppSequencesNewRoute
   '/settings/api-keys': typeof AppSettingsApiKeysRoute
+  '/settings/developer': typeof AppSettingsDeveloperRoute
   '/settings/passkeys': typeof AppSettingsPasskeysRoute
   '/talent/$id': typeof AppTalentIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -481,15 +517,19 @@ export interface FileRoutesByTo {
   '/api/test/talent': typeof ApiTestTalentRoute
   '/api/test/user': typeof ApiTestUserRoute
   '/api/test/verify': typeof ApiTestVerifyRoute
+  '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
+  '/api/v1/sequences': typeof ApiV1SequencesRouteWithChildren
   '/locations': typeof AppLocationsIndexRoute
   '/sequences': typeof AppSequencesIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/talent': typeof AppTalentIndexRoute
+  '/api/v1': typeof ApiV1IndexRoute
   '/sequences/$id/elements': typeof AppSequencesIdElementsRoute
   '/sequences/$id/music': typeof AppSequencesIdMusicRoute
   '/sequences/$id/scenes': typeof AppSequencesIdScenesRoute
   '/sequences/$id/script': typeof AppSequencesIdScriptRoute
   '/sequences/$id/theatre': typeof AppSequencesIdTheatreRoute
+  '/api/v1/sequences/$id': typeof ApiV1SequencesIdRoute
   '/sequences/$id/cast/$characterId': typeof AppSequencesIdCastCharacterIdRoute
   '/sequences/$id/locations/$locationId': typeof AppSequencesIdLocationsLocationIdRoute
   '/sequences/$id/cast': typeof AppSequencesIdCastIndexRoute
@@ -527,6 +567,7 @@ export interface FileRoutesById {
   '/_app/locations/$locationId': typeof AppLocationsLocationIdRoute
   '/_app/sequences/new': typeof AppSequencesNewRoute
   '/_app/settings/api-keys': typeof AppSettingsApiKeysRoute
+  '/_app/settings/developer': typeof AppSettingsDeveloperRoute
   '/_app/settings/passkeys': typeof AppSettingsPasskeysRoute
   '/_app/talent/$id': typeof AppTalentIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -545,15 +586,19 @@ export interface FileRoutesById {
   '/api/test/talent': typeof ApiTestTalentRoute
   '/api/test/user': typeof ApiTestUserRoute
   '/api/test/verify': typeof ApiTestVerifyRoute
+  '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
+  '/api/v1/sequences': typeof ApiV1SequencesRouteWithChildren
   '/_app/locations/': typeof AppLocationsIndexRoute
   '/_app/sequences/': typeof AppSequencesIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/talent/': typeof AppTalentIndexRoute
+  '/api/v1/': typeof ApiV1IndexRoute
   '/_app/sequences/$id/elements': typeof AppSequencesIdElementsRoute
   '/_app/sequences/$id/music': typeof AppSequencesIdMusicRoute
   '/_app/sequences/$id/scenes': typeof AppSequencesIdScenesRoute
   '/_app/sequences/$id/script': typeof AppSequencesIdScriptRoute
   '/_app/sequences/$id/theatre': typeof AppSequencesIdTheatreRoute
+  '/api/v1/sequences/$id': typeof ApiV1SequencesIdRoute
   '/_app/sequences/$id/cast/$characterId': typeof AppSequencesIdCastCharacterIdRoute
   '/_app/sequences/$id/locations/$locationId': typeof AppSequencesIdLocationsLocationIdRoute
   '/_app/sequences/$id/cast/': typeof AppSequencesIdCastIndexRoute
@@ -589,6 +634,7 @@ export interface FileRouteTypes {
     | '/locations/$locationId'
     | '/sequences/new'
     | '/settings/api-keys'
+    | '/settings/developer'
     | '/settings/passkeys'
     | '/talent/$id'
     | '/api/auth/$'
@@ -607,15 +653,19 @@ export interface FileRouteTypes {
     | '/api/test/talent'
     | '/api/test/user'
     | '/api/test/verify'
+    | '/api/v1/openapi.json'
+    | '/api/v1/sequences'
     | '/locations/'
     | '/sequences/'
     | '/settings/'
     | '/talent/'
+    | '/api/v1/'
     | '/sequences/$id/elements'
     | '/sequences/$id/music'
     | '/sequences/$id/scenes'
     | '/sequences/$id/script'
     | '/sequences/$id/theatre'
+    | '/api/v1/sequences/$id'
     | '/sequences/$id/cast/$characterId'
     | '/sequences/$id/locations/$locationId'
     | '/sequences/$id/cast/'
@@ -647,6 +697,7 @@ export interface FileRouteTypes {
     | '/locations/$locationId'
     | '/sequences/new'
     | '/settings/api-keys'
+    | '/settings/developer'
     | '/settings/passkeys'
     | '/talent/$id'
     | '/api/auth/$'
@@ -665,15 +716,19 @@ export interface FileRouteTypes {
     | '/api/test/talent'
     | '/api/test/user'
     | '/api/test/verify'
+    | '/api/v1/openapi.json'
+    | '/api/v1/sequences'
     | '/locations'
     | '/sequences'
     | '/settings'
     | '/talent'
+    | '/api/v1'
     | '/sequences/$id/elements'
     | '/sequences/$id/music'
     | '/sequences/$id/scenes'
     | '/sequences/$id/script'
     | '/sequences/$id/theatre'
+    | '/api/v1/sequences/$id'
     | '/sequences/$id/cast/$characterId'
     | '/sequences/$id/locations/$locationId'
     | '/sequences/$id/cast'
@@ -710,6 +765,7 @@ export interface FileRouteTypes {
     | '/_app/locations/$locationId'
     | '/_app/sequences/new'
     | '/_app/settings/api-keys'
+    | '/_app/settings/developer'
     | '/_app/settings/passkeys'
     | '/_app/talent/$id'
     | '/api/auth/$'
@@ -728,15 +784,19 @@ export interface FileRouteTypes {
     | '/api/test/talent'
     | '/api/test/user'
     | '/api/test/verify'
+    | '/api/v1/openapi.json'
+    | '/api/v1/sequences'
     | '/_app/locations/'
     | '/_app/sequences/'
     | '/_app/settings/'
     | '/_app/talent/'
+    | '/api/v1/'
     | '/_app/sequences/$id/elements'
     | '/_app/sequences/$id/music'
     | '/_app/sequences/$id/scenes'
     | '/_app/sequences/$id/script'
     | '/_app/sequences/$id/theatre'
+    | '/api/v1/sequences/$id'
     | '/_app/sequences/$id/cast/$characterId'
     | '/_app/sequences/$id/locations/$locationId'
     | '/_app/sequences/$id/cast/'
@@ -763,6 +823,9 @@ export interface RootRouteChildren {
   ApiOpenrouterCallbackRoute: typeof ApiOpenrouterCallbackRoute
   ApiStorageMultipartRoute: typeof ApiStorageMultipartRoute
   ApiStorageUploadRoute: typeof ApiStorageUploadRoute
+  ApiV1OpenapiDotjsonRoute: typeof ApiV1OpenapiDotjsonRoute
+  ApiV1SequencesRoute: typeof ApiV1SequencesRouteWithChildren
+  ApiV1IndexRoute: typeof ApiV1IndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -942,6 +1005,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminRouteRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/api/v1/': {
+      id: '/api/v1/'
+      path: '/api/v1'
+      fullPath: '/api/v1/'
+      preLoaderRoute: typeof ApiV1IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app/talent/': {
       id: '/_app/talent/'
       path: '/talent'
@@ -969,6 +1039,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/locations/'
       preLoaderRoute: typeof AppLocationsIndexRouteImport
       parentRoute: typeof AppRouteRoute
+    }
+    '/api/v1/sequences': {
+      id: '/api/v1/sequences'
+      path: '/api/v1/sequences'
+      fullPath: '/api/v1/sequences'
+      preLoaderRoute: typeof ApiV1SequencesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/openapi.json': {
+      id: '/api/v1/openapi.json'
+      path: '/api/v1/openapi.json'
+      fullPath: '/api/v1/openapi.json'
+      preLoaderRoute: typeof ApiV1OpenapiDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/test/verify': {
       id: '/api/test/verify'
@@ -1096,6 +1180,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsPasskeysRouteImport
       parentRoute: typeof AppSettingsRouteRoute
     }
+    '/_app/settings/developer': {
+      id: '/_app/settings/developer'
+      path: '/developer'
+      fullPath: '/settings/developer'
+      preLoaderRoute: typeof AppSettingsDeveloperRouteImport
+      parentRoute: typeof AppSettingsRouteRoute
+    }
     '/_app/settings/api-keys': {
       id: '/_app/settings/api-keys'
       path: '/api-keys'
@@ -1130,6 +1221,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/sequences/$id'
       preLoaderRoute: typeof AppSequencesIdRouteRouteImport
       parentRoute: typeof AppRouteRoute
+    }
+    '/api/v1/sequences/$id': {
+      id: '/api/v1/sequences/$id'
+      path: '/$id'
+      fullPath: '/api/v1/sequences/$id'
+      preLoaderRoute: typeof ApiV1SequencesIdRouteImport
+      parentRoute: typeof ApiV1SequencesRoute
     }
     '/_app/sequences/$id/theatre': {
       id: '/_app/sequences/$id/theatre'
@@ -1211,12 +1309,14 @@ const AppAdminRouteRouteWithChildren = AppAdminRouteRoute._addFileChildren(
 
 interface AppSettingsRouteRouteChildren {
   AppSettingsApiKeysRoute: typeof AppSettingsApiKeysRoute
+  AppSettingsDeveloperRoute: typeof AppSettingsDeveloperRoute
   AppSettingsPasskeysRoute: typeof AppSettingsPasskeysRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
 }
 
 const AppSettingsRouteRouteChildren: AppSettingsRouteRouteChildren = {
   AppSettingsApiKeysRoute: AppSettingsApiKeysRoute,
+  AppSettingsDeveloperRoute: AppSettingsDeveloperRoute,
   AppSettingsPasskeysRoute: AppSettingsPasskeysRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
 }
@@ -1358,6 +1458,18 @@ const ApiTestRouteRouteWithChildren = ApiTestRouteRoute._addFileChildren(
   ApiTestRouteRouteChildren,
 )
 
+interface ApiV1SequencesRouteChildren {
+  ApiV1SequencesIdRoute: typeof ApiV1SequencesIdRoute
+}
+
+const ApiV1SequencesRouteChildren: ApiV1SequencesRouteChildren = {
+  ApiV1SequencesIdRoute: ApiV1SequencesIdRoute,
+}
+
+const ApiV1SequencesRouteWithChildren = ApiV1SequencesRoute._addFileChildren(
+  ApiV1SequencesRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   AppRouteRoute: AppRouteRouteWithChildren,
   AuthRouteRoute: AuthRouteRouteWithChildren,
@@ -1378,6 +1490,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiOpenrouterCallbackRoute: ApiOpenrouterCallbackRoute,
   ApiStorageMultipartRoute: ApiStorageMultipartRoute,
   ApiStorageUploadRoute: ApiStorageUploadRoute,
+  ApiV1OpenapiDotjsonRoute: ApiV1OpenapiDotjsonRoute,
+  ApiV1SequencesRoute: ApiV1SequencesRouteWithChildren,
+  ApiV1IndexRoute: ApiV1IndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

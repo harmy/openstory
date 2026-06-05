@@ -72,8 +72,7 @@ import { usePostHog } from '@posthog/react';
 import { ImagePlus, Loader2, Sparkles, Square, Undo2 } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState, type FC } from 'react';
 import { ScriptEditor } from './script-editor';
-
-const SCRIPT_SHORT_THRESHOLD = 1000;
+import { SCRIPT_SHORT_THRESHOLD } from '@/lib/ai/should-enhance';
 
 const DURATION_PRESETS = [
   { value: '15', label: '15s', seconds: 15 },

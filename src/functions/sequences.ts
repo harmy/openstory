@@ -1,22 +1,12 @@
 import {
   DEFAULT_IMAGE_MODEL,
-  DEFAULT_MUSIC_MODEL,
   DEFAULT_VIDEO_MODEL,
   isValidAudioModel,
   isValidImageToVideoModel,
   isValidTextToImageModel,
-  safeAudioModel,
   safeImageToVideoModel,
   safeTextToImageModel,
 } from '@/lib/ai/models';
-import {
-  DEFAULT_ANALYSIS_MODEL,
-  getAnalysisModelById,
-} from '@/lib/ai/models.config';
-import { resolveAudioModels } from '@/lib/ai/resolve-audio-models';
-import { resolveImageModels } from '@/lib/ai/resolve-image-models';
-import { resolveVideoModels } from '@/lib/ai/resolve-video-models';
-import { requireTeamMemberAccess } from '@/lib/auth/action-utils';
 import {
   estimateAudioCost,
   estimateImageCost,
@@ -51,10 +41,9 @@ import { createServerFn } from '@tanstack/react-start';
 import { zodValidator } from '@tanstack/zod-adapter';
 import { z } from 'zod';
 import { authWithTeamMiddleware, sequenceAccessMiddleware } from './middleware';
-import { copySequenceElements } from '@/lib/sequence-elements/copy-sequence-elements';
-import { promoteTempElements } from '@/lib/sequence-elements/promote-temp-elements';
 import { bumpStylePopularity } from '@/lib/style/bump-style-popularity';
 import { getLogger } from '@/lib/observability/logger';
+import { createSequences } from '@/lib/sequences/create-sequences';
 
 const logger = getLogger(['openstory', 'serverFn', 'sequences']);
 
@@ -90,212 +79,20 @@ export const getSequenceFn = createServerFn({ method: 'GET' })
 /**
  * Create new sequence(s) with different analysis models.
  * Triggers storyboard generation workflow for each.
+ *
+ * The heavy lifting lives in `createSequences` (src/lib/sequences) so the
+ * public API one-shot endpoint shares the exact same credit pre-flight,
+ * fan-out, element promotion, and workflow trigger.
  */
 export const createSequenceFn = createServerFn({ method: 'POST' })
   .middleware([authWithTeamMiddleware])
   .inputValidator(zodValidator(createSequenceSchema))
   .handler(async ({ data, context }) => {
-    const teamId = data.teamId || context.teamId;
-
-    if (data.teamId && data.teamId !== context.teamId) {
-      await requireTeamMemberAccess(context.user.id, data.teamId);
-    }
-
-    const {
-      styleId,
-      aspectRatio,
-      analysisModels,
-      imageModel: imageModelLegacy,
-      imageModels: imageModelsInput,
-      videoModel,
-      videoModels: videoModelsInput,
-      autoGenerateMotion = false,
-      autoGenerateMusic = true,
-      musicModel,
-      audioModels: audioModelsInput,
-      suggestedTalentIds,
-      suggestedLocationIds,
-      elementUploads,
-      sourceSequenceId,
-    } = data;
-
-    // Verify source sequence access (scoped read returns null for other teams)
-    if (sourceSequenceId) {
-      const source = await context.scopedDb.sequences.getById(sourceSequenceId);
-      if (!source) {
-        throw new Error('Source sequence not found');
-      }
-    }
-
-    // Validate and resolve image models
-    const validatedModels = imageModelsInput.map((m) =>
-      safeTextToImageModel(m)
-    );
-    const imageModels = resolveImageModels(
-      validatedModels,
-      imageModelLegacy ? safeTextToImageModel(imageModelLegacy) : undefined
-    );
-    const [primaryImageModel] = imageModels;
-    if (!primaryImageModel) {
-      throw new Error(
-        'Expected resolveImageModels to return at least one model'
-      );
-    }
-
-    // Validate and resolve video models (mirrors the image-model handling).
-    const validatedVideoModels = videoModelsInput.map((m) =>
-      safeImageToVideoModel(m, DEFAULT_VIDEO_MODEL)
-    );
-    const videoModels = resolveVideoModels(
-      validatedVideoModels,
-      videoModel
-        ? safeImageToVideoModel(videoModel, DEFAULT_VIDEO_MODEL)
-        : undefined
-    );
-    const [primaryVideoModel] = videoModels;
-    if (!primaryVideoModel) {
-      throw new Error(
-        'Expected resolveVideoModels to return at least one model'
-      );
-    }
-
-    // Validate and resolve audio models (sequence-level, mirrors the pattern).
-    const validatedAudioModels = audioModelsInput?.map((m) =>
-      safeAudioModel(m, DEFAULT_MUSIC_MODEL)
-    );
-    const audioModels = resolveAudioModels(
-      validatedAudioModels,
-      musicModel && isValidAudioModel(musicModel)
-        ? safeAudioModel(musicModel, DEFAULT_MUSIC_MODEL)
-        : undefined
-    );
-    const [primaryAudioModel] = audioModels;
-    if (!primaryAudioModel) {
-      throw new Error(
-        'Expected resolveAudioModels to return at least one model'
-      );
-    }
-
-    if (!styleId || !aspectRatio) {
-      throw new Error('Style ID and aspect ratio are required');
-    }
-
-    await requireCredits(
-      context.scopedDb,
-      estimateStoryboardCost({
-        imageModel: primaryImageModel,
-        imageModelCount: imageModels.length,
-        aspectRatio,
-        autoGenerateMotion,
-        videoModels,
-        // Music only actually generates when motion is also on (it spawns from
-        // inside motion-batch), so don't charge for music tracks that won't run.
-        autoGenerateMusic: autoGenerateMotion && autoGenerateMusic,
-        audioModels,
-      }),
-      {
-        providers: ['fal', 'openrouter'],
-        errorMessage: 'Insufficient credits to generate storyboard',
-      }
-    );
-
-    const sequences = await Promise.all(
-      analysisModels.map(async (modelId) => {
-        // Only persist video/music model choices when the user actually opts
-        // into auto-generation. Otherwise the sequence ends up with a "ghost"
-        // model preference the user never picked, which surfaces stale values
-        // in the header chip and batch footer. Tracked in #714.
-        const persistedMusicModel = autoGenerateMusic
-          ? primaryAudioModel
-          : undefined;
-
-        const sequence = await context.scopedDb.sequences.create({
-          title: data.title || 'Untitled Sequence',
-          script: data.script,
-          styleId,
-          aspectRatio,
-          analysisModel:
-            getAnalysisModelById(modelId)?.id || DEFAULT_ANALYSIS_MODEL,
-          imageModel: primaryImageModel,
-          videoModel: autoGenerateMotion ? primaryVideoModel : undefined,
-          musicModel: persistedMusicModel,
-          autoGenerateMotion,
-          autoGenerateMusic,
-          suggestedTalentIds: suggestedTalentIds?.length
-            ? suggestedTalentIds
-            : undefined,
-          suggestedLocationIds: suggestedLocationIds?.length
-            ? suggestedLocationIds
-            : undefined,
-        });
-
-        // Promote any draft element uploads to this new sequence (temp → final
-        // path + insert rows + trigger vision). Runs before workflow trigger
-        // so analyze-script-workflow can wait for vision to complete.
-        if (elementUploads && elementUploads.length > 0) {
-          await promoteTempElements({
-            scopedDb: context.scopedDb,
-            teamId,
-            userId: context.user.id,
-            sequenceId: sequence.id,
-            uploads: elementUploads,
-          });
-        }
-
-        // Carry forward elements from the source sequence when regenerating.
-        // The script detail tab always creates a new sequence on Generate, so
-        // without this the user's uploaded references (logos, products) would
-        // silently disappear from the new run.
-        if (sourceSequenceId) {
-          await copySequenceElements({
-            scopedDb: context.scopedDb,
-            teamId,
-            userId: context.user.id,
-            sourceSequenceId,
-            targetSequenceId: sequence.id,
-          });
-        }
-
-        const workflowInput: StoryboardWorkflowInput = {
-          userId: context.user.id,
-          teamId,
-          sequenceId: sequence.id,
-          imageModels,
-          videoModels,
-          options: {
-            framesPerScene: 3,
-            generateThumbnails: true,
-            generateDescriptions: true,
-            aiProvider: 'openrouter',
-            regenerateAll: true,
-          },
-          autoGenerateMotion,
-          autoGenerateMusic,
-          musicModel: autoGenerateMusic ? primaryAudioModel : undefined,
-          audioModels: autoGenerateMusic ? audioModels : undefined,
-          suggestedTalentIds,
-          suggestedLocationIds,
-        };
-
-        await triggerWorkflow('/storyboard', workflowInput, {
-          deduplicationId: `storyboard-${sequence.id}-${Date.now()}`,
-          label: buildWorkflowLabel(sequence.id),
-        });
-
-        return sequence;
-      })
-    );
-
-    // One click = one popularity bump + one analytics event, regardless of how
-    // many analysis models the user picked. Fire-and-forget — never block.
-    bumpStylePopularity({
+    const { sequences } = await createSequences(data, {
       scopedDb: context.scopedDb,
-      styleId,
-      sequenceIds: sequences.map((s) => s.id),
-      teamId,
-      userId: context.user.id,
+      user: context.user,
+      teamId: context.teamId,
     });
-
     return sequences;
   });
 
