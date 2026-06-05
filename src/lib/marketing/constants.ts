@@ -29,20 +29,6 @@ export const SITE_CONFIG = {
   githubHref: 'https://github.com/openstory-so/openstory',
 };
 
-export const HERO_IMAGE = {
-  src: `https://${VITE_R2_PUBLIC_ASSETS_DOMAIN}/images/marketing/13-scifi-chase.webp`,
-  alt: 'Cinematic sci-fi chase scene generated with OpenStory',
-} as const;
-
-export const HERO_FILMSTRIP = [
-  `https://${VITE_R2_PUBLIC_ASSETS_DOMAIN}/images/marketing/08-fashion-editorial.webp`,
-  `https://${VITE_R2_PUBLIC_ASSETS_DOMAIN}/images/marketing/02-product-sneaker.webp`,
-  `https://${VITE_R2_PUBLIC_ASSETS_DOMAIN}/images/marketing/09-music-video.webp`,
-  `https://${VITE_R2_PUBLIC_ASSETS_DOMAIN}/images/marketing/14-fantasy-dragon.webp`,
-  `https://${VITE_R2_PUBLIC_ASSETS_DOMAIN}/images/marketing/12-travel-adventure.webp`,
-  `https://${VITE_R2_PUBLIC_ASSETS_DOMAIN}/images/marketing/01-product-cosmetics.webp`,
-] as const;
-
 export const TOP_TIER_FEATURES = [
   {
     title: 'From Idea to Finished Video',
@@ -189,35 +175,3 @@ export const FILMSTRIP_IMAGES = [
   `https://${VITE_R2_PUBLIC_ASSETS_DOMAIN}/images/marketing/13-scifi-chase.webp`,
   `https://${VITE_R2_PUBLIC_ASSETS_DOMAIN}/images/marketing/14-fantasy-dragon.webp`,
 ] as const;
-
-export const FOOTER_LINKS = {
-  product: {
-    title: 'Product',
-    links: [
-      { label: 'How it Works', href: '#how-it-works' },
-      { label: 'Features', href: '#features' },
-      { label: 'Pricing', href: '/credits' },
-    ],
-  },
-  openSource: {
-    title: 'Open Source',
-    links: [
-      { label: 'GitHub', href: 'https://github.com/openstory-so/openstory' },
-      {
-        label: 'MIT License',
-        href: 'https://github.com/openstory-so/openstory/blob/main/LICENSE',
-      },
-      {
-        label: 'Contributing',
-        href: 'https://github.com/openstory-so/openstory/blob/main/CONTRIBUTING.md',
-      },
-    ],
-  },
-  legal: {
-    title: 'Legal',
-    links: [
-      { label: 'Terms', href: '/terms' },
-      { label: 'Privacy', href: '/privacy' },
-    ],
-  },
-} as const;

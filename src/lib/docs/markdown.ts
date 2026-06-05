@@ -5,9 +5,55 @@ import rehypeStringify from 'rehype-stringify';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
-import { codeToHtml } from 'shiki';
+import {
+  bundledLanguages,
+  createHighlighter,
+  type BundledLanguage,
+  type Highlighter,
+} from 'shiki';
+import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 import { unified } from 'unified';
 import type { Element, Root, RootContent } from 'hast';
+
+// Shiki's default Oniguruma engine compiles WASM at runtime, which Cloudflare
+// Workers forbids ("Wasm code generation disallowed by embedder") — every
+// docs page with a highlighted code fence 500'd in production (#814). The
+// JavaScript regex engine runs the grammars as plain RegExp, no WASM needed.
+// `forgiving` skips the rare grammar rule that can't be translated instead of
+// throwing.
+let highlighterPromise: Promise<Highlighter> | null = null;
+
+function getHighlighter(): Promise<Highlighter> {
+  highlighterPromise ??= createHighlighter({
+    themes: ['github-light', 'github-dark'],
+    langs: [],
+    engine: createJavaScriptRegexEngine({ forgiving: true }),
+  });
+  return highlighterPromise;
+}
+
+function isBundledLanguage(lang: string): lang is BundledLanguage {
+  return lang in bundledLanguages;
+}
+
+async function highlightCode(code: string, lang: string): Promise<string> {
+  const highlighter = await getHighlighter();
+  // Unknown languages fall back to an unhighlighted block.
+  const resolved = isBundledLanguage(lang) ? lang : 'text';
+  if (
+    resolved !== 'text' &&
+    !highlighter.getLoadedLanguages().includes(resolved)
+  ) {
+    await highlighter.loadLanguage(resolved);
+  }
+  return highlighter.codeToHtml(code, {
+    lang: resolved,
+    themes: {
+      light: 'github-light',
+      dark: 'github-dark',
+    },
+  });
+}
 
 export type MarkdownHeading = {
   id: string;
@@ -129,16 +175,7 @@ function rehypeShiki() {
 
     // Process all code blocks in parallel
     const results = await Promise.all(
-      codeBlocks.map(async ({ code, lang }) => {
-        const html = await codeToHtml(code, {
-          lang,
-          themes: {
-            light: 'github-light',
-            dark: 'github-dark',
-          },
-        });
-        return html;
-      })
+      codeBlocks.map(({ code, lang }) => highlightCode(code, lang))
     );
 
     // Replace nodes with raw HTML (rehype-stringify will output it)

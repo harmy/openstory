@@ -1,6 +1,15 @@
 import { Link } from '@tanstack/react-router';
 import type { DOMNode } from 'html-dom-parser';
-import parse, {
+// Import the htmlparser2 server build directly instead of the bare
+// `html-dom-parser` entry (which html-react-parser's `parse()` uses).
+// Workerd's resolve conditions include `browser`, so the bare entry resolves
+// to the DOMParser client build — DOMParser doesn't exist in Workerd, the
+// first SSR `parse()` throws, React aborts the shell to client rendering,
+// and the docs ship an empty <body> (invisible to crawlers, #814). The
+// server build is pure JS, so it runs everywhere and the client parses
+// markup identically to the server (no hydration drift).
+import htmlToDOM from 'html-dom-parser/lib/server/html-to-dom';
+import {
   type HTMLReactParserOptions,
   attributesToProps,
   domToReact,
@@ -68,7 +77,12 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
 }) => {
   return (
     <div className={`prose dark:prose-invert max-w-none ${className ?? ''}`}>
-      {parse(markup, parserOptions)}
+      {domToReact(
+        // Matches html-react-parser's `parse()` defaults — it disables
+        // attribute lowercasing so e.g. SVG viewBox survives.
+        htmlToDOM(markup, { lowerCaseAttributeNames: false }),
+        parserOptions
+      )}
     </div>
   );
 };

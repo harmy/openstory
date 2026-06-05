@@ -11,8 +11,11 @@ import { createFileRoute } from '@tanstack/react-router';
 import { User } from 'lucide-react';
 import { z } from 'zod';
 
+// No `.default()` here: a default makes the router rewrite bare /talent to
+// /talent?filter=all with a 307, which turns the sitemap entry into a
+// redirect (#814). The fallback lives in the component instead.
 const searchParamsSchema = z.object({
-  filter: z.enum(['all', 'favorites']).optional().default('all'),
+  filter: z.enum(['all', 'favorites']).optional(),
 });
 
 export const Route = createFileRoute('/_app/talent/')({
@@ -22,7 +25,7 @@ export const Route = createFileRoute('/_app/talent/')({
 });
 
 function TalentPage() {
-  const { filter } = Route.useSearch();
+  const { filter = 'all' } = Route.useSearch();
   const { isAuthenticated } = useAuthGate();
   const {
     data: talent,

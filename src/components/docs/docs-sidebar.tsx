@@ -10,6 +10,15 @@ import { SECTION_ORDER } from '@/lib/docs/sections';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { allDocs } from 'content-collections';
 
+type NavItem = { slug: string; title: string };
+
+// Pages that live as routes (not content-collections markdown) but belong in
+// the docs nav. The FAQ renders from FAQ_ITEMS so it stays in sync with
+// llms.txt.
+const EXTRA_NAV_ITEMS: Record<string, NavItem[]> = {
+  Support: [{ slug: 'faq', title: 'FAQ' }],
+};
+
 function buildNavTree() {
   const grouped = new Map<string, typeof allDocs>();
 
@@ -26,10 +35,14 @@ function buildNavTree() {
     items.sort((a, b) => a.order - b.order);
   }
 
-  return SECTION_ORDER.reduce<{ section: string; items: typeof allDocs }[]>(
+  return SECTION_ORDER.reduce<{ section: string; items: NavItem[] }[]>(
     (acc, section) => {
-      const items = grouped.get(section);
-      if (items) {
+      const docs = grouped.get(section) ?? [];
+      const items = [
+        ...docs.map(({ slug, title }) => ({ slug, title })),
+        ...(EXTRA_NAV_ITEMS[section] ?? []),
+      ];
+      if (items.length > 0) {
         acc.push({ section, items });
       }
       return acc;

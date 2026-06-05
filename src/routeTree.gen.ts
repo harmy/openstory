@@ -23,6 +23,7 @@ import { Route as MetaOgGithubRouteImport } from './routes/meta/og-github'
 import { Route as MetaOgRouteImport } from './routes/meta/og'
 import { Route as GiftCodeRouteImport } from './routes/gift/$code'
 import { Route as DocsLlmsDotmdRouteImport } from './routes/docs/llms[.]md'
+import { Route as DocsFaqRouteImport } from './routes/docs/faq'
 import { Route as DocsSplatRouteImport } from './routes/docs/$'
 import { Route as ApiRealtimeRouteImport } from './routes/api/realtime'
 import { Route as MarketingTermsRouteImport } from './routes/_marketing/terms'
@@ -135,6 +136,11 @@ const GiftCodeRoute = GiftCodeRouteImport.update({
 const DocsLlmsDotmdRoute = DocsLlmsDotmdRouteImport.update({
   id: '/llms.md',
   path: '/llms.md',
+  getParentRoute: () => DocsRoute,
+} as any)
+const DocsFaqRoute = DocsFaqRouteImport.update({
+  id: '/faq',
+  path: '/faq',
   getParentRoute: () => DocsRoute,
 } as any)
 const DocsSplatRoute = DocsSplatRouteImport.update({
@@ -387,6 +393,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof MarketingTermsRoute
   '/api/realtime': typeof ApiRealtimeRoute
   '/docs/$': typeof DocsSplatRoute
+  '/docs/faq': typeof DocsFaqRoute
   '/docs/llms.md': typeof DocsLlmsDotmdRoute
   '/gift/$code': typeof GiftCodeRoute
   '/meta/og': typeof MetaOgRoute
@@ -444,6 +451,7 @@ export interface FileRoutesByTo {
   '/terms': typeof MarketingTermsRoute
   '/api/realtime': typeof ApiRealtimeRoute
   '/docs/$': typeof DocsSplatRoute
+  '/docs/faq': typeof DocsFaqRoute
   '/docs/llms.md': typeof DocsLlmsDotmdRoute
   '/gift/$code': typeof GiftCodeRoute
   '/meta/og': typeof MetaOgRoute
@@ -506,6 +514,7 @@ export interface FileRoutesById {
   '/_marketing/terms': typeof MarketingTermsRoute
   '/api/realtime': typeof ApiRealtimeRoute
   '/docs/$': typeof DocsSplatRoute
+  '/docs/faq': typeof DocsFaqRoute
   '/docs/llms.md': typeof DocsLlmsDotmdRoute
   '/gift/$code': typeof GiftCodeRoute
   '/meta/og': typeof MetaOgRoute
@@ -568,6 +577,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/api/realtime'
     | '/docs/$'
+    | '/docs/faq'
     | '/docs/llms.md'
     | '/gift/$code'
     | '/meta/og'
@@ -625,6 +635,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/api/realtime'
     | '/docs/$'
+    | '/docs/faq'
     | '/docs/llms.md'
     | '/gift/$code'
     | '/meta/og'
@@ -686,6 +697,7 @@ export interface FileRouteTypes {
     | '/_marketing/terms'
     | '/api/realtime'
     | '/docs/$'
+    | '/docs/faq'
     | '/docs/llms.md'
     | '/gift/$code'
     | '/meta/og'
@@ -851,6 +863,13 @@ declare module '@tanstack/react-router' {
       path: '/llms.md'
       fullPath: '/docs/llms.md'
       preLoaderRoute: typeof DocsLlmsDotmdRouteImport
+      parentRoute: typeof DocsRoute
+    }
+    '/docs/faq': {
+      id: '/docs/faq'
+      path: '/faq'
+      fullPath: '/docs/faq'
+      preLoaderRoute: typeof DocsFaqRouteImport
       parentRoute: typeof DocsRoute
     }
     '/docs/$': {
@@ -1295,12 +1314,14 @@ const MarketingRouteWithChildren = MarketingRoute._addFileChildren(
 
 interface DocsRouteChildren {
   DocsSplatRoute: typeof DocsSplatRoute
+  DocsFaqRoute: typeof DocsFaqRoute
   DocsLlmsDotmdRoute: typeof DocsLlmsDotmdRoute
   DocsIndexRoute: typeof DocsIndexRoute
 }
 
 const DocsRouteChildren: DocsRouteChildren = {
   DocsSplatRoute: DocsSplatRoute,
+  DocsFaqRoute: DocsFaqRoute,
   DocsLlmsDotmdRoute: DocsLlmsDotmdRoute,
   DocsIndexRoute: DocsIndexRoute,
 }
