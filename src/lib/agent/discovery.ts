@@ -16,12 +16,15 @@ import { buildFaqMarkdown, buildLlmsTxt } from '@/lib/marketing/llms';
 
 /**
  * RFC 8288 Link header advertising machine-readable discovery resources.
- * Relation types are IANA-registered: `describedby` (a resource describing
- * this one) and `service-doc` (service documentation, RFC 9727 §3).
+ * Relation types are IANA-registered (RFC 9727 §3): `describedby` (a resource
+ * describing this one), `service-doc` (human-oriented service documentation),
+ * and `service-desc` (a machine-readable service description — our OpenAPI
+ * spec, so an agent landing on any page can find the public API).
  */
 export const DISCOVERY_LINK_HEADER = [
   '</llms.txt>; rel="describedby"; type="text/plain"',
   '</docs/llms.md>; rel="service-doc"; type="text/markdown"',
+  '</api/v1/openapi.json>; rel="service-desc"; type="application/openapi+json"',
 ].join(', ');
 
 /** True for GET/HEAD requests whose Accept header asks for markdown. */

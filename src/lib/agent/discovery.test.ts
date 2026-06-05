@@ -24,6 +24,19 @@ const {
   withHtmlAccept,
 } = await import('./discovery');
 
+describe('DISCOVERY_LINK_HEADER', () => {
+  it('advertises the llms.txt overview, human docs, and OpenAPI spec', () => {
+    expect(DISCOVERY_LINK_HEADER).toContain('</llms.txt>; rel="describedby"');
+    expect(DISCOVERY_LINK_HEADER).toContain(
+      '</docs/llms.md>; rel="service-doc"'
+    );
+    // The machine-readable API description must be discoverable from any page.
+    expect(DISCOVERY_LINK_HEADER).toContain(
+      '</api/v1/openapi.json>; rel="service-desc"'
+    );
+  });
+});
+
 describe('acceptsMarkdown', () => {
   it('matches GET requests asking for text/markdown', () => {
     const request = new Request('https://example.com/', {
