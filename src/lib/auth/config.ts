@@ -142,13 +142,15 @@ function createAuth() {
       apiKey({
         enableSessionForAPIKeys: true,
         defaultKeyLength: 64,
-        // Per-key rate limit: 1 request/second. Enforced on every `/api/v1`
+        // Per-key rate limit: 10 requests/second. Enforced on every `/api/v1`
         // request (via the session-from-key validation), stored per key. This
-        // is the abuse throttle; per-team *cost* is separately bounded by the
-        // credit pre-flight in `createSequences`.
+        // is the abuse throttle, sized to comfortably allow normal create +
+        // status-poll traffic (incl. parallel per-sequence polls); per-team
+        // *cost* is separately bounded by the credit pre-flight in
+        // `createSequences`.
         rateLimit: {
           enabled: true,
-          maxRequests: 1,
+          maxRequests: 10,
           timeWindow: 1000,
         },
         // Accept either `x-api-key: <key>` or the conventional

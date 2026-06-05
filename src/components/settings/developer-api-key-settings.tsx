@@ -179,6 +179,8 @@ function NewKeyReveal({
               <Copy className="h-4 w-4" />
             )}
           </Button>
+        </div>
+        <div className="flex justify-end">
           <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
             Done
           </Button>
