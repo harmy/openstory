@@ -8,6 +8,6 @@ updates:
       interval: weekly
     groups:
       actions:
-        patterns: ["*"]
+        patterns: ['*']
     commit-message:
       prefix: ci
