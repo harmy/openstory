@@ -12,7 +12,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,18 +19,10 @@ import { SequencePlayer } from '@/components/theatre/sequence-player';
 import { useSequenceExport } from '@/components/theatre/use-sequence-export';
 import { useFramesBySequence } from '@/hooks/use-frames';
 import type { ExportProgress } from '@/lib/sequence-player/export';
-import type { SequencePlayerMeta } from '@/lib/sequence-player/playback';
 import type { Sequence } from '@/types/database';
-import {
-  Download,
-  Film,
-  Link,
-  Loader2,
-  Share2,
-  TriangleAlert,
-} from 'lucide-react';
+import { Download, Film, Link, Loader2, Share2 } from 'lucide-react';
 import { usePostHog } from '@posthog/react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 
 type TheatreViewProps = {
@@ -42,7 +33,6 @@ export const TheatreView: React.FC<TheatreViewProps> = ({ sequence }) => {
   const posthog = usePostHog();
   const { data: frames } = useFramesBySequence(sequence.id);
   const sequenceExport = useSequenceExport(sequence);
-  const [playerMeta, setPlayerMeta] = useState<SequencePlayerMeta | null>(null);
 
   const scenes = useMemo(() => {
     if (!frames) return [];
@@ -112,15 +102,6 @@ export const TheatreView: React.FC<TheatreViewProps> = ({ sequence }) => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {playerMeta?.hasMixedResolutions && (
-          <DropdownMenuLabel className="flex items-start gap-2 text-xs font-normal text-muted-foreground">
-            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-            <span>
-              Scenes have different resolutions ({playerMeta.resolutionsLabel}).
-              The export will be normalized (re-encoded), which is slower.
-            </span>
-          </DropdownMenuLabel>
-        )}
         <DropdownMenuItem onClick={() => void handleCopyShareUrl()}>
           <Link className="h-4 w-4" />
           Copy latest export URL
@@ -155,7 +136,6 @@ export const TheatreView: React.FC<TheatreViewProps> = ({ sequence }) => {
       musicLoudnessGainDb={null}
       aspectRatio={sequence.aspectRatio}
       overlayActions={overlay}
-      onMeta={setPlayerMeta}
     />
   );
 };

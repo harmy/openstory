@@ -42,11 +42,6 @@ type SequencePlayerProps = {
   className?: string;
   /** Slot rendered as an overlay (top-right) — e.g. the Share dropdown. */
   overlayActions?: React.ReactNode;
-  /**
-   * Notified once playback metadata is probed (including the mixed-resolution
-   * flag), so consumers like the theatre export menu can warn the user (#791).
-   */
-  onMeta?: (meta: SequencePlayerMeta) => void;
 };
 
 export const SequencePlayer: React.FC<SequencePlayerProps> = ({
@@ -56,7 +51,6 @@ export const SequencePlayer: React.FC<SequencePlayerProps> = ({
   aspectRatio,
   className,
   overlayActions,
-  onMeta,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<SequencePlayerEngine | null>(null);
@@ -99,7 +93,6 @@ export const SequencePlayer: React.FC<SequencePlayerProps> = ({
       .then((m) => {
         if (cancelled) return;
         setMeta(m);
-        onMeta?.(m);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
