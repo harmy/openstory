@@ -90,7 +90,7 @@ const StyleCard: FC<StyleCardProps> = ({
               src={style.previewUrl}
               alt={`${style.name} style preview`}
               layout="fullWidth"
-              className="object-cover"
+              className="h-full w-full object-cover"
               onError={() => setImgError(true)}
             />
           ) : (
@@ -118,7 +118,7 @@ const StyleCard: FC<StyleCardProps> = ({
 const StyleCardSkeleton = () => (
   <Card>
     <CardContent className="p-0">
-      <Skeleton className="aspect-[4/3] rounded-t-lg" />
+      <Skeleton className="aspect-square rounded-t-lg" />
       <div className="p-3">
         <Skeleton className="mx-auto h-3 w-3/4" />
       </div>
