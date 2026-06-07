@@ -12,11 +12,13 @@
 import { describe, expect, test, vi } from 'vitest';
 import {
   buildChildInstanceId,
+  notifyParent,
   notifyParentOfFailure,
   type ParentNotifyHint,
   sanitizeEventType,
   spawnAndAwaitChild,
 } from './await-child';
+import { NonRetryableError } from 'cloudflare:workflows';
 import type { CloudflareEnv } from '@/lib/workflow/types';
 import type { WorkflowStep } from 'cloudflare:workers';
 
@@ -257,5 +259,56 @@ describe('notifyParentOfFailure', () => {
     await expect(
       notifyParentOfFailure(step, env, HINT, 'edit timeout')
     ).rejects.toThrow('transient blip');
+  });
+});
+
+// The exact message CF emitted in prod when a child outlived its parent's
+// waitForEvent timeout (issue #839).
+const IN_FINITE_STATE =
+  '(instance.in_finite_state) Instance reached a finite state, cannot send events to it';
+
+describe('finite-state parent fail-fast (#839)', () => {
+  test('notifyParent re-throws in_finite_state as NonRetryableError (no retry burn)', async () => {
+    const sendEvent = vi.fn().mockRejectedValue(new Error(IN_FINITE_STATE));
+    const { env } = fakeEnv(sendEvent);
+    const { step } = fakeStep();
+
+    const error = await notifyParent(step, env, HINT, { ok: true }).then(
+      () => null,
+      (e: unknown) => e
+    );
+
+    expect(error).toBeInstanceOf(NonRetryableError);
+    // Message preserved so isRecipientInFiniteStateError matches downstream.
+    expect(error).toMatchObject({
+      message: expect.stringContaining('finite state'),
+    });
+  });
+
+  test('notifyParentOfFailure re-throws in_finite_state as NonRetryableError', async () => {
+    const sendEvent = vi.fn().mockRejectedValue(new Error(IN_FINITE_STATE));
+    const { env } = fakeEnv(sendEvent);
+    const { step } = fakeStep();
+
+    const error = await notifyParentOfFailure(step, env, HINT, 'boom').then(
+      () => null,
+      (e: unknown) => e
+    );
+
+    expect(error).toBeInstanceOf(NonRetryableError);
+  });
+
+  test('notifyParent leaves other sendEvent errors retryable', async () => {
+    const sendEvent = vi.fn().mockRejectedValue(new Error('transient blip'));
+    const { env } = fakeEnv(sendEvent);
+    const { step } = fakeStep();
+
+    const error = await notifyParent(step, env, HINT, { ok: true }).then(
+      () => null,
+      (e: unknown) => e
+    );
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(NonRetryableError);
   });
 });

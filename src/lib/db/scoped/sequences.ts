@@ -8,11 +8,11 @@ import {
   DEFAULT_ASPECT_RATIO,
 } from '@/lib/constants/aspect-ratios';
 import type { Database } from '@/lib/db/client';
-import { sequences } from '@/lib/db/schema';
 import type { Frame, NewSequence, Sequence, Style } from '@/lib/db/schema';
+import { sequences } from '@/lib/db/schema';
 import type { MusicStatus, SequenceStatus } from '@/lib/db/schema/sequences';
 import { ValidationError } from '@/lib/errors';
-import { and, desc, eq, not } from 'drizzle-orm';
+import { and, desc, eq, isNull, not } from 'drizzle-orm';
 
 export type MusicFieldsUpdate = {
   musicStatus?: MusicStatus;
@@ -136,12 +136,40 @@ export function createSequencesMethods(
       return data;
     },
 
+    /**
+     * Compare-and-swap `workflowRunId` — the storyboard generation mutex
+     * (#839). Writes `claimId` only if the column still holds `expectedRunId`
+     * (the value the caller just read). D1 is single-writer, so exactly one
+     * of two racing claims sees `true`; the loser must not trigger.
+     */
+    claimWorkflowSlot: async (params: {
+      id: string;
+      expectedRunId: string | null;
+      claimId: string;
+    }): Promise<boolean> => {
+      const claimed = await db
+        .update(sequences)
+        .set({ workflowRunId: params.claimId, updatedAt: new Date() })
+        .where(
+          and(
+            eq(sequences.id, params.id),
+            eq(sequences.teamId, teamId),
+            params.expectedRunId === null
+              ? isNull(sequences.workflowRunId)
+              : eq(sequences.workflowRunId, params.expectedRunId)
+          )
+        )
+        .returning({ id: sequences.id });
+      return claimed.length > 0;
+    },
+
     update: async (params: {
       id: string;
       title?: string;
       script?: string | null;
       styleId?: string;
       status?: SequenceStatus;
+      workflowRunId?: string;
       analysisModel?: string;
       aspectRatio?: AspectRatio;
       imageModel?: string;
@@ -154,10 +182,14 @@ export function createSequencesMethods(
       musicGeneratedAt?: Date;
       posterUrl?: string | null;
     }): Promise<Sequence> => {
+      // Scoped by teamId like every other write here — `workflowRunId` in
+      // particular is the generation-mutex column (#839), so a cross-team id
+      // must never be able to stomp it.
+      const { id, ...values } = params;
       const [data] = await db
         .update(sequences)
-        .set(params)
-        .where(eq(sequences.id, params.id))
+        .set(values)
+        .where(and(eq(sequences.id, id), eq(sequences.teamId, teamId)))
         .returning();
 
       // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: DB query may return undefined

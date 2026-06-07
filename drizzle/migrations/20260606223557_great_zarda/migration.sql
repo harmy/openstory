@@ -1,0 +1,1 @@
+ALTER TABLE `sequences` ADD `workflow_run_id` text(100);

@@ -27,17 +27,20 @@ export const STALE_THRESHOLD_MS = 5 * 60 * 1000;
  *                 cutover — the row is already stale, so fail it for retry),
  *                 or the instance reports `errored` / `terminated`.
  *   - 'completed' when the instance reports `complete`.
- *   - null        when the row should be left alone:
- *                   • instance still in flight (queued/running/paused/waiting)
- *                   • the status lookup threw (transient blip or evicted
- *                     instance — being conservative beats falsely failing a
- *                     healthy row; errors are logged, not propagated)
+ *   - null        when the instance is genuinely still in flight
+ *                 (queued/running/paused/waiting).
+ *   - 'unknown'   when the status lookup itself threw (transient API blip or
+ *                 evicted instance) — we can't say whether a run is live.
+ *                 Errors are logged, not propagated.
  *
- * Callers should treat `null` as "skip and retry next sweep."
+ * Both `null` and `'unknown'` mean "don't write a terminal status", but
+ * callers that surface state to users (the generation mutex) must not claim
+ * a run is in progress on `'unknown'` — there may be no run at all.
+ * Reconciler passes treat both as "skip and retry next sweep."
  */
 export async function resolveRunState(
   runId: string
-): Promise<'failed' | 'completed' | null> {
+): Promise<'failed' | 'completed' | 'unknown' | null> {
   if (runId === '') return 'failed';
 
   // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- getEnv()'s type is platform-dependent; CF runtime guarantees Cloudflare.Env shape with workflow bindings present
@@ -55,6 +58,6 @@ export async function resolveRunState(
     logger.error(`Failed to check workflow ${runId}:`, {
       data: error instanceof Error ? error.message : error,
     });
-    return null;
+    return 'unknown';
   }
 }

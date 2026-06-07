@@ -15,3 +15,42 @@ export class WorkflowValidationError extends Error {
     this.name = 'WorkflowValidationError';
   }
 }
+
+function errorMessage(error: unknown): string {
+  if (typeof error === 'string') return error;
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof error.message === 'string'
+  ) {
+    return error.message;
+  }
+  return '';
+}
+
+/**
+ * True when the Workflows engine is shutting the instance down mid-run —
+ * `Aborting engine: Grace period complete`. CF emits this when the engine
+ * restarts (every Worker deploy produces a burst; platform-side restarts do
+ * too) and then RESUMES the instance from its persisted step cache. It is a
+ * transient interruption, not a workflow failure: the base class must not run
+ * `onFailure` (which would mark user-facing rows failed) or notify the parent
+ * of failure. Matched on message text — the thrown value's class isn't part
+ * of the public API. See issue #839 (2026-06-06 mass-abort cascade).
+ */
+export function isEngineAbortError(error: unknown): boolean {
+  return /aborting engine|grace period/i.test(errorMessage(error));
+}
+
+/**
+ * True when `sendEvent` was rejected because the target instance already
+ * reached a finite state — `(instance.in_finite_state) Instance reached a
+ * finite state, cannot send events to it`. Happens when a child outlives its
+ * parent's `waitForEvent` timeout: the parent is errored, so notifying it is
+ * permanently impossible. The child's own work has already landed in the DB,
+ * so this must not be treated as a child failure. See issue #839.
+ */
+export function isRecipientInFiniteStateError(error: unknown): boolean {
+  return /in_finite_state|finite state/i.test(errorMessage(error));
+}

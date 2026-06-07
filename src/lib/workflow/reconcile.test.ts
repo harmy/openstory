@@ -62,9 +62,12 @@ describe('resolveRunState', () => {
     expect(await resolveRunState('local_image_4')).toBeNull();
   });
 
-  test('swallows status lookup errors and returns null (best-effort)', async () => {
+  test("swallows status lookup errors and returns 'unknown' (distinct from in-flight)", async () => {
+    // 'unknown' ≠ null: reconciler passes skip both, but the generation
+    // mutex must not tell the user a run is in progress when the lookup
+    // itself failed — there may be no run at all.
     statusMock.mockRejectedValueOnce(new Error('network'));
     const { resolveRunState } = await import('./reconcile');
-    expect(await resolveRunState('local_image_5')).toBeNull();
+    expect(await resolveRunState('local_image_5')).toBe('unknown');
   });
 });

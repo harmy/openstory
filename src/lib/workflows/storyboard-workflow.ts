@@ -202,7 +202,12 @@ export class StoryboardWorkflow extends OpenStoryWorkflowEntrypoint<StoryboardWo
       },
       spawnStepName: 'spawn-analyze-script',
       awaitStepName: 'await-analyze-script',
-      timeout: '30 minutes',
+      // analyze-script is the entire pipeline (scene-split → matching →
+      // bibles → frame images → motion). Under concurrent load (issue #839:
+      // ~50 parallel generations contending for fal/LLM concurrency) 30
+      // minutes is routinely exceeded and a timeout here strands the
+      // sequence. 2 hours comfortably bounds the slowest legitimate run.
+      timeout: '2 hours',
     });
 
     await step.do('mark-completed', async () => {
@@ -216,19 +221,37 @@ export class StoryboardWorkflow extends OpenStoryWorkflowEntrypoint<StoryboardWo
     });
   }
 
-  protected override onFailure({
+  protected override async onFailure({
+    event,
     error,
+    scopedDb,
   }: {
     event: Readonly<WorkflowEvent<StoryboardWorkflowInput>>;
     error: string;
     scopedDb: ScopedDb;
-  }): void {
-    // The QStash original has no failureFunction — match that behaviour with
-    // a log-only mirror so failures still surface in CF instance status +
-    // logs without taking on parity surface area that the QStash side never
-    // had.
+  }): Promise<void> {
     logger.error(
       `[StoryboardWorkflow:cf] Storyboard generation failed: ${error}`
     );
+
+    // Mark the sequence failed so the user sees the failure summary + retry
+    // UI instead of an eternal 'processing' spinner. The log-only QStash
+    // mirror left ~20 sequences stranded when await-analyze-script timed out
+    // on 2026-06-06 (issue #839).
+    //
+    // Skip the write when the analyze-script child already marked the
+    // sequence failed — its message ("Your OpenRouter API key is invalid…")
+    // is more specific than the parent's wrapper ("Child workflow
+    // analyze-script… failed: …").
+    const { sequenceId } = event.payload;
+    if (!sequenceId) return;
+
+    const sequence = await scopedDb.sequences.getForUser({ sequenceId });
+    if (sequence.status === 'failed') return;
+
+    await scopedDb.sequence(sequenceId).updateStatus('failed', error);
+    await getGenerationChannel(sequenceId).emit('generation.failed', {
+      message: error,
+    });
   }
 }

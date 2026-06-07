@@ -84,6 +84,7 @@ function makeSequence(overrides: Partial<Sequence> = {}): Sequence {
     musicTags: null,
     musicPromptInputHash: null,
     statusError: null,
+    workflowRunId: null,
     posterUrl: null,
     autoGenerateMotion: false,
     autoGenerateMusic: false,

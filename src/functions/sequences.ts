@@ -31,6 +31,7 @@ import {
 } from '@/lib/schemas/sequence.schemas';
 import { triggerWorkflow } from '@/lib/workflow/client';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
+import { triggerStoryboard } from '@/lib/workflow/launchers';
 import type {
   BatchMotionMusicWorkflowInput,
   MusicSceneSummary,
@@ -222,9 +223,6 @@ export const retryStoryboardFn = createServerFn({ method: 'POST' })
       }
     );
 
-    // Reset status to processing before triggering
-    await context.scopedDb.sequence(sequence.id).updateStatus('processing');
-
     const workflowInput: StoryboardWorkflowInput = {
       userId: user.id,
       teamId,
@@ -240,10 +238,9 @@ export const retryStoryboardFn = createServerFn({ method: 'POST' })
       autoGenerateMusic: sequence.autoGenerateMusic,
     };
 
-    // No deduplication ID — explicit user retry should always run
-    await triggerWorkflow('/storyboard', workflowInput, {
-      label: buildWorkflowLabel(sequence.id),
-    });
+    // Owns the generation mutex, the 'processing' status write, and the
+    // run-id persistence (#839).
+    await triggerStoryboard(context.scopedDb, workflowInput);
 
     return { success: true };
   });

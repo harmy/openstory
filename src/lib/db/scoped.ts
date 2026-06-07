@@ -6,8 +6,8 @@
  */
 
 import { getDb } from '#db-client';
-import { sequences, teamMembers, teams, user } from '@/lib/db/schema';
 import type { Sequence, User } from '@/lib/db/schema';
+import { sequences, teamMembers, teams, user } from '@/lib/db/schema';
 import type { TeamMemberRole } from '@/lib/db/schema/teams';
 import { createAdminMethods } from '@/lib/db/scoped/admin';
 import {
@@ -18,14 +18,10 @@ import {
   createBillingMethods,
   createBillingReadMethods,
 } from '@/lib/db/scoped/billing';
-import { createCharactersMethods } from '@/lib/db/scoped/characters';
 import { createCharacterSheetVariantsMethods } from '@/lib/db/scoped/character-sheet-variants';
+import { createCharactersMethods } from '@/lib/db/scoped/characters';
 import { createFramePromptVariantsMethods } from '@/lib/db/scoped/frame-prompt-variants';
 import { createFrameVariantsMethods } from '@/lib/db/scoped/frame-variants';
-import { createLocationSheetVariantsMethods } from '@/lib/db/scoped/location-sheet-variants';
-import { createSequenceExportsMethods } from '@/lib/db/scoped/sequence-exports';
-import { createSequenceVariantsMethods } from '@/lib/db/scoped/sequence-variants';
-import { createTalentSheetVariantsMethods } from '@/lib/db/scoped/talent-sheet-variants';
 import { createFramesMethods } from '@/lib/db/scoped/frames';
 import { createLibraryMethods } from '@/lib/db/scoped/library';
 import {
@@ -35,9 +31,12 @@ import {
   createLocationsReadMethods,
   createPublicLocationsReadMethods,
 } from '@/lib/db/scoped/location-library';
+import { createLocationSheetVariantsMethods } from '@/lib/db/scoped/location-sheet-variants';
 import { createSequenceElementsMethods } from '@/lib/db/scoped/sequence-elements';
+import { createSequenceExportsMethods } from '@/lib/db/scoped/sequence-exports';
 import { createSequenceLocationsMethods } from '@/lib/db/scoped/sequence-locations';
 import { createSequenceMusicPromptVariantsMethods } from '@/lib/db/scoped/sequence-music-prompt-variants';
+import { createSequenceVariantsMethods } from '@/lib/db/scoped/sequence-variants';
 import {
   createSequenceMethods,
   createSequenceReadMethods,
@@ -54,6 +53,7 @@ import {
   createTalentMethods,
   createTalentReadMethods,
 } from '@/lib/db/scoped/talent';
+import { createTalentSheetVariantsMethods } from '@/lib/db/scoped/talent-sheet-variants';
 import {
   createTeamManagementMethods,
   createTeamManagementReadMethods,

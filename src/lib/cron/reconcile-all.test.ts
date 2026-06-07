@@ -76,10 +76,11 @@ const dbMock = {
 
 vi.doMock('#db-client', () => ({ getDb: () => dbMock }));
 
-// resolveRunState stub: "still in flight" (null) — verified passes are no-ops
-// unless a test overrides the run-state outcome.
+// resolveRunState stub: defaults to "still in flight" (null) — verified
+// passes are no-ops unless a test overrides `runStateResult`.
+let runStateResult: 'failed' | 'completed' | 'unknown' | null = null;
 vi.doMock('@/lib/workflow/reconcile', () => ({
-  resolveRunState: async () => null,
+  resolveRunState: async () => runStateResult,
   STALE_THRESHOLD_MS: 5 * 60 * 1000,
 }));
 
@@ -89,6 +90,7 @@ beforeEach(() => {
   stuckRows = [];
   blindFailReturning = [];
   nextSelectThrows = null;
+  runStateResult = null;
 });
 
 describe('reconcileAllStuckJobs — blind-fail passes', () => {
@@ -151,8 +153,8 @@ describe('reconcileAllStuckJobs — run-id-verified passes', () => {
   test('caps stuck-row selection at MAX_ROWS_PER_PASS (100) per verified pass', async () => {
     const { reconcileAllStuckJobs } = await import('./reconcile-all');
     await reconcileAllStuckJobs();
-    // 6 verified passes: 4 frames + 2 frame_variants.
-    expect(limitArgs.filter((n) => n === 100)).toHaveLength(6);
+    // 7 verified passes: 4 frames + 2 frame_variants + sequences.status.
+    expect(limitArgs.filter((n) => n === 100)).toHaveLength(7);
   });
 
   test('in-flight instance (resolveRunState null) → no per-row update on verified tables', async () => {
@@ -161,10 +163,55 @@ describe('reconcileAllStuckJobs — run-id-verified passes', () => {
 
     await reconcileAllStuckJobs();
 
-    const verifiedTables: SchemaTable[] = [frames, frameVariants];
-    const verifiedUpdates = updateCalls.filter((c) =>
-      verifiedTables.includes(c.table)
+    const verifiedTables: SchemaTable[] = [frames, frameVariants, sequences];
+    const verifiedUpdates = updateCalls.filter(
+      (c) => verifiedTables.includes(c.table) && !('musicStatus' in c.payload) // sequences.music is blind-fail, not verified
     );
     expect(verifiedUpdates).toHaveLength(0);
+  });
+
+  test("status lookup failed (resolveRunState 'unknown') → no per-row update on verified tables", async () => {
+    stuckRows = [{ id: 'frm_1', runId: 'wf_unreachable' }];
+    runStateResult = 'unknown';
+    const { reconcileAllStuckJobs } = await import('./reconcile-all');
+
+    await reconcileAllStuckJobs();
+
+    const verifiedTables: SchemaTable[] = [frames, frameVariants, sequences];
+    const verifiedUpdates = updateCalls.filter(
+      (c) => verifiedTables.includes(c.table) && !('musicStatus' in c.payload) // sequences.music is blind-fail, not verified
+    );
+    expect(verifiedUpdates).toHaveLength(0);
+  });
+});
+
+describe('reconcileAllStuckJobs — sequences.status pass (#839)', () => {
+  test('dead storyboard run → status=failed with a retryable statusError', async () => {
+    stuckRows = [{ id: 'seq_1', runId: 'openstory-so_storyboard_dead' }];
+    runStateResult = 'failed';
+    const { reconcileAllStuckJobs } = await import('./reconcile-all');
+
+    const counts = await reconcileAllStuckJobs();
+
+    const statusUpdate = updateCalls.find(
+      (c) => c.table === sequences && c.payload.status === 'failed'
+    );
+    expect(statusUpdate).toBeDefined();
+    expect(statusUpdate?.payload.statusError).toMatch(/Retry/);
+    expect(counts['sequences.status']).toBeGreaterThan(0);
+  });
+
+  test('completed storyboard run → status=completed', async () => {
+    stuckRows = [{ id: 'seq_1', runId: 'openstory-so_storyboard_done' }];
+    runStateResult = 'completed';
+    const { reconcileAllStuckJobs } = await import('./reconcile-all');
+
+    await reconcileAllStuckJobs();
+
+    const statusUpdate = updateCalls.find(
+      (c) => c.table === sequences && c.payload.status === 'completed'
+    );
+    expect(statusUpdate).toBeDefined();
+    expect('statusError' in (statusUpdate?.payload ?? {})).toBe(false);
   });
 });

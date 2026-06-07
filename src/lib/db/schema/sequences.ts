@@ -53,6 +53,11 @@ export const sequences = snakeCase.table(
     script: text(),
     status: text().$type<SequenceStatus>().default('draft').notNull(),
     statusError: text(),
+    // CF Workflows instance id of the most recent /storyboard run. Lets the
+    // cron reconciler (reconcile-all.ts) verify a stuck 'processing' row
+    // against the instance's real status instead of leaving it spinning
+    // forever when the workflow dies without persisting an outcome (#839).
+    workflowRunId: text({ length: 100 }),
     createdAt: integer({ mode: 'timestamp' })
       .$defaultFn(() => new Date())
       .notNull(),

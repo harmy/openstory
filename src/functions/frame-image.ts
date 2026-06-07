@@ -27,6 +27,7 @@ import {
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import { rescanContinuityFromPrompt } from '@/lib/scenes/rescan-continuity-from-prompt';
 import { triggerWorkflow } from '@/lib/workflow/client';
+import { triggerStoryboard } from '@/lib/workflow/launchers';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import type {
   FrameImageSceneSnapshot,
@@ -107,10 +108,12 @@ export const generateFramesFn = createServerFn({ method: 'POST' })
       },
     };
 
-    const workflowRunId = await triggerWorkflow('/storyboard', workflowInput, {
-      deduplicationId: `storyboard-${sequence.id}-${Date.now()}`,
-      label: buildWorkflowLabel(sequence.id),
-    });
+    // Owns the generation mutex, the 'processing' status write, and the
+    // run-id persistence (#839).
+    const { workflowRunId } = await triggerStoryboard(
+      context.scopedDb,
+      workflowInput
+    );
 
     return { workflowRunId, frames: [] };
   });

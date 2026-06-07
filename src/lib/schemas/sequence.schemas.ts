@@ -173,6 +173,7 @@ export const updateSequenceSchema = createUpdateSchema(sequences, {
   createdBy: true,
   updatedBy: true,
   workflow: true, // Set by workflow, not user
+  workflowRunId: true, // Set at workflow trigger time, not user
   // Music fields - managed by workflow, not user input
   musicUrl: true,
   musicPath: true,

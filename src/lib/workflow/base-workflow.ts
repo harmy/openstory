@@ -20,7 +20,11 @@
 
 import { configureFalProxyFromEnv } from '@/lib/ai/fal-config';
 import { createScopedDb, type ScopedDb } from '@/lib/db/scoped';
-import { WorkflowValidationError } from '@/lib/workflow/errors';
+import {
+  isEngineAbortError,
+  isRecipientInFiniteStateError,
+  WorkflowValidationError,
+} from '@/lib/workflow/errors';
 import { sanitizeFailResponse } from '@/lib/workflow/sanitize-fail-response';
 import type { UserWorkflowContext } from '@/lib/workflow/types';
 import {
@@ -81,8 +85,10 @@ export abstract class OpenStoryWorkflowEntrypoint<
 
   /**
    * Optional failure hook. Runs inside a `step.do('emit-failure')` so the
-   * cleanup write itself is retried by the engine. The original error is
-   * rethrown after this returns — the workflow ends in `errored` state.
+   * cleanup write itself is retried by the engine; if it still throws after
+   * its retry budget the error is logged and swallowed (the cron reconciler
+   * is the backstop). The original error is rethrown after this returns —
+   * the workflow ends in `errored` state.
    */
   protected onFailure?(
     failure: OpenStoryFailureContext<T>
@@ -119,10 +125,35 @@ export abstract class OpenStoryWorkflowEntrypoint<
       // Notify the parent on success (Pattern 3 fan-in). No-op for top-level
       // workflows that weren't spawned via spawnAndAwaitChild.
       if (parentHint) {
-        await notifyParent(step, this.env, parentHint, result);
+        try {
+          await notifyParent(step, this.env, parentHint, result);
+        } catch (notifyError) {
+          if (!isRecipientInFiniteStateError(notifyError)) throw notifyError;
+          // The parent already reached a finite state (typically: its
+          // waitForEvent timed out and it errored). This child's work is done
+          // and persisted — failing the child here would retroactively mark
+          // completed work as failed (issue #839). Log and return normally.
+          logger.warn(
+            `[${this.constructor.name}] parent ${parentHint.parentInstanceId} already in a finite state; work completed, skipping notify`,
+            { err: notifyError }
+          );
+        }
       }
       return result;
     } catch (error) {
+      // Engine shutdown ("Aborting engine: Grace period complete") is a
+      // transient interruption — CF resumes the instance from its step cache
+      // afterwards. Running onFailure here would mark user-facing rows failed
+      // for work that is about to continue, and notifying the parent of
+      // failure would poison its waitForEvent. Rethrow untouched. (#839)
+      if (isEngineAbortError(error)) {
+        logger.warn(
+          `[${this.constructor.name}] engine aborted mid-run (transient — instance resumes): ${sanitizeFailResponse(error)}`,
+          { err: error }
+        );
+        throw error;
+      }
+
       const sanitized = sanitizeFailResponse(error);
       // Sanitized message inline in the headline; `err` carries the full
       // original error (with stack) as a structured property.
@@ -131,23 +162,31 @@ export abstract class OpenStoryWorkflowEntrypoint<
       });
 
       if (this.onFailure) {
-        // Wrap in step.do so cleanup retries on its own merits and doesn't
-        // mask the original throw — if the cleanup fails after its own
-        // retries, both errors surface in the instance status.
-        await step.do('emit-failure', async () => {
-          try {
+        // Wrap in step.do so cleanup retries on its own merits. The catch
+        // sits OUTSIDE the step — catching inside would make the step
+        // succeed on the first attempt and silently skip the engine's
+        // retries. If cleanup still fails after its retry budget, log and
+        // swallow: the original error must stay the instance's terminal
+        // state, and a row stranded by the failed cleanup (e.g. a sequence
+        // left 'processing') is healed by the cron reconciler via its
+        // persisted workflowRunId (see lib/cron/reconcile-all.ts).
+        try {
+          await step.do('emit-failure', async () => {
             await this.onFailure?.({ event, error: sanitized, scopedDb });
-          } catch (cleanupError) {
-            logger.error(
-              `[${this.constructor.name}] onFailure handler itself failed:`,
-              {
-                err: cleanupError,
-              }
-            );
-            // Swallow the cleanup error — the original error is what we
-            // want to surface as the instance's terminal state.
-          }
-        });
+          });
+        } catch (cleanupError) {
+          // An engine abort mid-cleanup is the same transient interruption
+          // as one mid-run: rethrow untouched so CF resumes the instance,
+          // instead of mislabelling it a cleanup failure and notifying the
+          // parent of a failure that is about to continue. (#839)
+          if (isEngineAbortError(cleanupError)) throw cleanupError;
+          logger.error(
+            `[${this.constructor.name}] onFailure handler itself failed:`,
+            {
+              err: cleanupError,
+            }
+          );
+        }
       }
 
       // Notify the parent on failure too — otherwise a parent's
@@ -158,10 +197,20 @@ export abstract class OpenStoryWorkflowEntrypoint<
         try {
           await notifyParentOfFailure(step, this.env, parentHint, sanitized);
         } catch (notifyError) {
-          logger.error(
-            `[${this.constructor.name}] failure notification to parent exhausted retries`,
-            { err: notifyError }
-          );
+          if (isRecipientInFiniteStateError(notifyError)) {
+            // Expected when the parent's waitForEvent already timed out —
+            // nothing left to notify. Warn (not error) to keep the error
+            // stream meaningful. (#839)
+            logger.warn(
+              `[${this.constructor.name}] parent ${parentHint.parentInstanceId} already in a finite state; failure notification skipped`,
+              { err: notifyError }
+            );
+          } else {
+            logger.error(
+              `[${this.constructor.name}] failure notification to parent exhausted retries`,
+              { err: notifyError }
+            );
+          }
         }
       }
 

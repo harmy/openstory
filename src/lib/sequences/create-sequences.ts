@@ -32,8 +32,7 @@ import type { CreateSequenceInput } from '@/lib/schemas/sequence.schemas';
 import { copySequenceElements } from '@/lib/sequence-elements/copy-sequence-elements';
 import { promoteTempElements } from '@/lib/sequence-elements/promote-temp-elements';
 import { bumpStylePopularity } from '@/lib/style/bump-style-popularity';
-import { triggerWorkflow } from '@/lib/workflow/client';
-import { buildWorkflowLabel } from '@/lib/workflow/labels';
+import { triggerStoryboard } from '@/lib/workflow/launchers';
 import type { StoryboardWorkflowInput } from '@/lib/workflow/types';
 import { createServerOnlyFn } from '@tanstack/react-start';
 
@@ -235,13 +234,9 @@ export const createSequences = createServerOnlyFn(
           suggestedLocationIds,
         };
 
-        const workflowRunId = await triggerWorkflow(
-          '/storyboard',
-          workflowInput,
-          {
-            deduplicationId: `storyboard-${sequence.id}-${Date.now()}`,
-            label: buildWorkflowLabel(sequence.id),
-          }
+        const { workflowRunId } = await triggerStoryboard(
+          context.scopedDb,
+          workflowInput
         );
 
         return { sequence, workflowRunId };

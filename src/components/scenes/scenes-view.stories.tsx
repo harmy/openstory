@@ -23,6 +23,7 @@ const mockSequence: Sequence = {
   script: 'Sample script text for the demo sequence.',
   status: 'completed',
   statusError: null,
+  workflowRunId: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   createdBy: 'user-1',
