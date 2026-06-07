@@ -25,6 +25,7 @@ const logger = getLogger(['openstory', 'server']);
 // `workflows[]`. See docs/investigations/cloudflare-workflows-poc.md.
 export { ImageWorkflow } from '@/lib/workflows/image-workflow';
 export { ElementVisionWorkflow } from '@/lib/workflows/element-vision-workflow';
+export { ElementSheetWorkflow } from '@/lib/workflows/element-sheet-workflow';
 export { MusicWorkflow } from '@/lib/workflows/music-workflow';
 export { MotionWorkflow } from '@/lib/workflows/motion-workflow';
 export { MotionBatchWorkflow } from '@/lib/workflows/motion-batch-workflow';

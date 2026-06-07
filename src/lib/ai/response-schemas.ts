@@ -83,7 +83,7 @@ export const sceneSplittingResultSchema = z.object({
   }),
   elementBible: z.array(elementBibleEntrySchema).meta({
     description:
-      'User-uploaded elements referenced in the script by UPPERCASE token',
+      'Elements referenced in the script by UPPERCASE token — user-uploaded reference images plus detected recurring products/objects that need a consistent canonical look',
   }),
 });
 

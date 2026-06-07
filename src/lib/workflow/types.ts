@@ -197,6 +197,27 @@ export type SceneSplitWorkflowResult = {
 };
 
 /**
+ * Element sheet workflow input — generates a canonical reference image for
+ * each element-bible entry that has no user-uploaded reference (recurring
+ * products/objects detected during scene split) and ingests them as
+ * `sequence_elements` rows so frame generation can attach them.
+ */
+export interface ElementSheetWorkflowInput extends UserWorkflowContext {
+  sequenceId: string;
+  /** Element bible entries with no matching uploaded element */
+  entries: ElementBibleEntry[];
+  /** Image model to use (defaults to DEFAULT_IMAGE_MODEL) */
+  imageModel?: TextToImageModel;
+  /** Sequence style config to keep references on-style */
+  styleConfig?: StyleConfig;
+}
+
+export interface ElementSheetWorkflowResult {
+  /** Generated + ingested elements — the run fails if any entry failed */
+  elements: SequenceElementMinimal[];
+}
+
+/**
  * Motion generation workflow input
  */
 export interface MotionWorkflowInput extends SequenceWorkflowContext {
@@ -944,6 +965,7 @@ export interface ReplaceElementWorkflowResult {
 export type CloudflareEnv = Cloudflare.Env & {
   IMAGE_WORKFLOW?: Workflow<unknown>;
   ELEMENT_VISION_WORKFLOW?: Workflow<unknown>;
+  ELEMENT_SHEET_WORKFLOW?: Workflow<unknown>;
   MUSIC_WORKFLOW?: Workflow<unknown>;
   MOTION_WORKFLOW?: Workflow<unknown>;
   MOTION_BATCH_WORKFLOW?: Workflow<unknown>;

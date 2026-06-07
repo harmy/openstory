@@ -17,6 +17,7 @@ import { buildInstanceId } from '@/lib/workflow/instance-id';
 const TRIGGER_TO_BINDING: Record<string, keyof CloudflareEnv> = {
   image: 'IMAGE_WORKFLOW',
   'element-vision': 'ELEMENT_VISION_WORKFLOW',
+  'element-sheet': 'ELEMENT_SHEET_WORKFLOW',
   music: 'MUSIC_WORKFLOW',
   motion: 'MOTION_WORKFLOW',
   'motion-batch': 'MOTION_BATCH_WORKFLOW',

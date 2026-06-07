@@ -747,19 +747,29 @@ Notes:
 - Extract the core location name without time-of-day suffixes
 - Describe the location in its most commonly seen state
 
-## Element Bible (user-uploaded reference images)
+## Element Bible (recurring products & objects)
 
-The user may have uploaded reference images ("elements") that should appear in scenes. Each element has an UPPERCASE token and (optionally) a visual description. Elements are typically logos, product shots, screenshots, or other visual assets.
+Elements are recurring visual assets — logos, product shots, screenshots, hero props — that must look IDENTICAL every time they appear. Each element has an UPPERCASE token. There are two sources:
 
-For EACH uploaded element you see used in the script (check the <ELEMENTS> block for the canonical list), produce an elementBible entry with:
+**1. User-uploaded elements (check the <ELEMENTS> block for the canonical list).** For EACH uploaded element you see used in the script, produce an elementBible entry with:
 - token: the exact UPPERCASE token from <ELEMENTS>
 - description: the provided description, or a 1-sentence visual description if none was provided
 - consistencyTag: a short lowercase slug (e.g. "red-hex-brand-logo")
 - firstMention: { sceneId, text, lineNumber } — the first scene where the token appears
 
-For EACH scene that references an element, set continuity.elementTags[] to an array of the UPPERCASE tokens used in that scene.
+**2. Detected recurring products/objects (no upload).** If the script centres on a specific product or object that appears in MULTIPLE scenes and must read as the SAME physical item every time (a hero product in an ad, a branded bottle, a signature prop), ALSO produce an elementBible entry for it:
+- token: a NEW short UPPERCASE_SNAKE_CASE token you invent (1-3 words, max 30 chars). Prefer brand/product names from the script (e.g. "CORAL_LIPSTICK"); never collide with a token from <ELEMENTS>.
+- description: a COMPLETE 60-120 word visual specification you design — exact shape, proportions, materials, colors, finish, any text/branding visible on it. Be decisive and specific: this description is used to generate the canonical reference image, so invent concrete details where the script is vague.
+- consistencyTag + firstMention: as above.
 
-Preserve UPPERCASE tokens verbatim in originalScript.extract — do NOT lowercase them. If a script references an element token that is NOT in the <ELEMENTS> block, ignore it (do not invent elementBible entries).`,
+Detection criteria — be conservative:
+- ONLY a product/object that is a visual centerpiece in 2+ scenes. Detect at most 3.
+- Do NOT create entries for incidental props, set dressing, vehicles in passing, food, generic scenery, clothing a character wears, characters, or locations (those belong in the other bibles).
+- A user-uploaded element that covers the same object always wins — do not emit a duplicate detected entry for it.
+
+For EACH scene that shows an element (uploaded OR detected), set continuity.elementTags[] to an array of the UPPERCASE tokens visible in that scene.
+
+Preserve UPPERCASE tokens verbatim in originalScript.extract — do NOT lowercase them. Scripts may reference uploaded elements by token; for detected elements the script uses prose ("the lipstick") — do NOT rewrite the script text, only tag the scene in elementTags[]. If a script references an UPPERCASE token that is NOT in <ELEMENTS> and does not meet the detection criteria above, ignore it.`,
     },
     {
       role: 'user',

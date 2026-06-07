@@ -61,7 +61,8 @@ export const characterBibleEntrySchema = z.object({
 });
 
 // ============================================================================
-// Element Bible Schemas (user-uploaded reference images)
+// Element Bible Schemas (user-uploaded reference images + detected recurring
+// products/objects that get an auto-generated reference image)
 // ============================================================================
 
 export const elementBibleEntrySchema = z.object({
@@ -603,7 +604,7 @@ export const sceneAnalysisSchema = z.object({
     .meta({ description: 'Location descriptions for visual consistency' }),
   elementBible: z.array(elementBibleEntrySchema).optional().meta({
     description:
-      'User-uploaded element descriptions (logos, products) with UPPERCASE script tokens',
+      'Element descriptions (logos, products, recurring objects) with UPPERCASE script tokens — user-uploaded or detected recurring products',
   }),
   scenes: z
     .array(sceneSchema)

@@ -104,6 +104,11 @@
       "class_name": "ElementVisionWorkflow",
     },
     {
+      "name": "element-sheet-workflow",
+      "binding": "ELEMENT_SHEET_WORKFLOW",
+      "class_name": "ElementSheetWorkflow",
+    },
+    {
       "name": "music-workflow",
       "binding": "MUSIC_WORKFLOW",
       "class_name": "MusicWorkflow",
@@ -310,6 +315,11 @@
           "name": "element-vision-workflow",
           "binding": "ELEMENT_VISION_WORKFLOW",
           "class_name": "ElementVisionWorkflow",
+        },
+        {
+          "name": "element-sheet-workflow",
+          "binding": "ELEMENT_SHEET_WORKFLOW",
+          "class_name": "ElementSheetWorkflow",
         },
         {
           "name": "music-workflow",
@@ -538,6 +548,11 @@
           "name": "element-vision-workflow",
           "binding": "ELEMENT_VISION_WORKFLOW",
           "class_name": "ElementVisionWorkflow",
+        },
+        {
+          "name": "element-sheet-workflow",
+          "binding": "ELEMENT_SHEET_WORKFLOW",
+          "class_name": "ElementSheetWorkflow",
         },
         {
           "name": "music-workflow",
