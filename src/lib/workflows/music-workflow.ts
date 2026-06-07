@@ -15,7 +15,8 @@ import { computeSequenceMusicInputHash } from '@/lib/ai/input-hash';
 import { DEFAULT_MUSIC_MODEL } from '@/lib/ai/models';
 import { uploadAudioToStorage } from '@/lib/audio/audio-storage';
 import { generateMusic } from '@/lib/audio/music-generation';
-import { ZERO_MICROS, microsToUsd } from '@/lib/billing/money';
+import { ZERO_MICROS } from '@/lib/billing/money';
+import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { getGenerationChannel } from '@/lib/realtime';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
@@ -100,22 +101,19 @@ export class MusicWorkflow extends OpenStoryWorkflowEntrypoint<MusicWorkflowInpu
     const musicCostMicros = audioResult.metadata?.cost ?? ZERO_MICROS;
     if (musicCostMicros > 0 && !audioResult.metadata.usedOwnKey) {
       await step.do('deduct-credits', async () => {
-        const canAfford =
-          await scopedDb.billing.hasEnoughCredits(musicCostMicros);
-        if (!canAfford) {
-          logger.warn(
-            `[MusicWorkflow:cf] Insufficient credits for team ${teamId} (cost: $${microsToUsd(musicCostMicros).toFixed(4)}), skipping deduction`
-          );
-          return;
-        }
-        await scopedDb.billing.deductCredits(musicCostMicros, {
+        await deductWorkflowCredits({
+          scopedDb,
+          costMicros: musicCostMicros,
+          usedOwnKey: audioResult.metadata.usedOwnKey,
           description: `Music generation (${model})`,
+          idempotencyKey: `${event.instanceId}:music`,
           metadata: {
             model,
             sequenceId,
             // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
             duration: audioResult.metadata?.duration,
           },
+          workflowName: 'MusicWorkflow:cf',
         });
       });
     }

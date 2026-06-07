@@ -54,6 +54,12 @@ export const transactions = snakeCase.table(
     metadata: text({ mode: 'json' }).$defaultFn(() => ({})),
     stripeSessionId: text(),
     description: text(),
+    /**
+     * Stable key making a deduction idempotent across workflow step retries
+     * (convention: `${workflowInstanceId}:<charge-name>`). Null for charges
+     * with no retry path (e.g. HTTP single-shot LLM calls).
+     */
+    idempotencyKey: text(),
     createdAt: integer({ mode: 'timestamp' })
       .$defaultFn(() => new Date())
       .notNull(),
@@ -64,6 +70,9 @@ export const transactions = snakeCase.table(
     index('idx_transactions_team_id').on(table.teamId),
     index('idx_transactions_user_id').on(table.userId),
     uniqueIndex('idx_transactions_stripe_session_id').on(table.stripeSessionId),
+    uniqueIndex('idx_transactions_team_idempotency_key')
+      .on(table.teamId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
   ]
 );
 

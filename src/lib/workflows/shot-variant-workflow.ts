@@ -178,6 +178,7 @@ export class ShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<ShotVariant
         costMicros: extractImageCost(imageResult.metadata),
         usedOwnKey: imageResult.metadata.usedOwnKey,
         description: `Variant image generation (${generationParams.model})`,
+        idempotencyKey: `${event.instanceId}:variant-image`,
         metadata: {
           model: generationParams.model,
           frameId: input.frameId,

@@ -12,7 +12,11 @@
  */
 
 import type { CloudflareEnv } from '@/lib/workflow/types';
+import { isInstanceAlreadyExistsError } from '@/lib/workflow/errors';
 import { buildInstanceId } from '@/lib/workflow/instance-id';
+import { getLogger } from '@/lib/observability/logger';
+
+const logger = getLogger(['openstory', 'workflow', 'trigger-bindings']);
 
 const TRIGGER_TO_BINDING: Record<string, keyof CloudflareEnv> = {
   image: 'IMAGE_WORKFLOW',
@@ -106,6 +110,44 @@ export function getCfBindingForRunId(
 }
 
 /**
+ * Instance states an `already_exists` rejection may legitimately stand in
+ * for: the prior instance is still making progress, or already finished its
+ * work, so reusing its id is success. `errored`/`terminated` are excluded —
+ * that instance will never do the work, and pretending it was enqueued turns
+ * a loud failure into a silent no-op. This matters because deduplication ids
+ * are not always run-scoped: `framePromptDedupId`/`musicPromptDedupId` are
+ * stable across user requests, so a failed instance would otherwise pin every
+ * retry to a dead id for CF's 30-day retention window. `unknown` is excluded
+ * too — rethrow rather than trust an id we can't verify.
+ */
+const REUSABLE_INSTANCE_STATUSES: ReadonlySet<InstanceStatus['status']> =
+  new Set([
+    'queued',
+    'running',
+    'paused',
+    'waiting',
+    'waitingForPause',
+    'complete',
+  ]);
+
+/**
+ * Status of an existing instance, or null when the lookup itself fails — the
+ * caller treats null as "not reusable" and rethrows its original error, so a
+ * transient lookup failure stays loud rather than minting a fake success.
+ */
+async function getInstanceStatus<T>(
+  binding: Workflow<T>,
+  id: string
+): Promise<InstanceStatus['status'] | null> {
+  try {
+    const instance = await binding.get(id);
+    return (await instance.status()).status;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Trigger a workflow.
  */
 export async function triggerCfWorkflow<T extends Rpc.Serializable<T>>({
@@ -128,6 +170,31 @@ export async function triggerCfWorkflow<T extends Rpc.Serializable<T>>({
     suffix: deduplicationId ?? `${Date.now()}-${crypto.randomUUID()}`,
   });
 
-  const instance = await binding.create({ id, params: body });
-  return { workflowRunId: instance.id };
+  try {
+    const instance = await binding.create({ id, params: body });
+    return { workflowRunId: instance.id };
+  } catch (error) {
+    // A deterministic id (caller passed `deduplicationId`) hitting
+    // `instance.already_exists` usually means a prior attempt of this same
+    // logical trigger — typically a `step.do` replay — already created the
+    // instance, so the trigger should succeed instead of burning the step's
+    // retry budget on a permanent error. But only when the existing instance
+    // is verifiably alive or complete (see REUSABLE_INSTANCE_STATUSES):
+    // reusing an errored/terminated instance would silently report "enqueued"
+    // for work that will never happen. The random-suffix path can't collide
+    // legitimately, so it always rethrows.
+    if (deduplicationId && isInstanceAlreadyExistsError(error)) {
+      const status = await getInstanceStatus(binding, id);
+      if (status !== null && REUSABLE_INSTANCE_STATUSES.has(status)) {
+        logger.info(
+          `[triggerCfWorkflow] ${id} already exists (${status}); reusing existing instance for '${workflowName}'`
+        );
+        return { workflowRunId: id };
+      }
+      logger.warn(
+        `[triggerCfWorkflow] ${id} already exists but is not reusable (status: ${status ?? 'unavailable'}); rethrowing for '${workflowName}'`
+      );
+    }
+    throw error;
+  }
 }

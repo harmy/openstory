@@ -103,6 +103,7 @@ export class LibraryLocationSheetWorkflow extends OpenStoryWorkflowEntrypoint<Li
         costMicros: extractImageCost(imageResult.metadata),
         usedOwnKey: imageResult.metadata.usedOwnKey,
         description: `Library location sheet (${generationParams.model})`,
+        idempotencyKey: `${event.instanceId}:sheet`,
         metadata: {
           model: generationParams.model,
           locationName: input.locationName,
@@ -197,6 +198,7 @@ export class LibraryLocationSheetWorkflow extends OpenStoryWorkflowEntrypoint<Li
         costMicros: extractImageCost(previewResult.metadata),
         usedOwnKey: previewResult.metadata.usedOwnKey,
         description: `Location preview (${input.imageModel ?? DEFAULT_IMAGE_MODEL})`,
+        idempotencyKey: `${event.instanceId}:preview`,
         metadata: { locationDbId: input.locationDbId, type: 'preview' },
         workflowName: 'LibraryLocationSheetWorkflow',
       });

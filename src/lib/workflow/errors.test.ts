@@ -6,7 +6,11 @@
  */
 
 import { describe, expect, test } from 'vitest';
-import { isEngineAbortError, isRecipientInFiniteStateError } from './errors';
+import {
+  isEngineAbortError,
+  isInstanceAlreadyExistsError,
+  isRecipientInFiniteStateError,
+} from './errors';
 
 describe('isEngineAbortError', () => {
   test('matches the exact prod engine-abort message', () => {
@@ -31,6 +35,18 @@ describe('isEngineAbortError', () => {
     );
   });
 
+  test('does not match unrelated errors that mention a grace period', () => {
+    // A true positive skips onFailure and parent notification, so a bare
+    // "grace period" token from another layer must never classify as an
+    // engine abort.
+    expect(
+      isEngineAbortError(new Error('subscription grace period expired'))
+    ).toBe(false);
+    expect(
+      isEngineAbortError(new Error('grace period: 30 days remaining'))
+    ).toBe(false);
+  });
+
   test('does not match ordinary failures', () => {
     expect(isEngineAbortError(new Error('fal request failed: 500'))).toBe(
       false
@@ -43,6 +59,54 @@ describe('isEngineAbortError', () => {
     expect(isEngineAbortError(null)).toBe(false);
     expect(isEngineAbortError(undefined)).toBe(false);
     expect(isEngineAbortError(42)).toBe(false);
+  });
+});
+
+describe('isInstanceAlreadyExistsError', () => {
+  test('matches the exact prod already_exists message', () => {
+    expect(
+      isInstanceAlreadyExistsError(
+        new Error('(instance.already_exists) Instance already exists')
+      )
+    ).toBe(true);
+  });
+
+  test('matches when wrapped in a child-failure message', () => {
+    expect(
+      isInstanceAlreadyExistsError(
+        new Error(
+          'Child workflow image:01SEQ failed: (instance.already_exists) Instance already exists'
+        )
+      )
+    ).toBe(true);
+  });
+
+  test('matches plain strings', () => {
+    expect(isInstanceAlreadyExistsError('Instance already exists')).toBe(true);
+  });
+
+  test('does not match unrelated "already exists" errors from other layers', () => {
+    // Swallowing one of these as a successful trigger would mask a real
+    // failure — the matcher is anchored on the `instance` token.
+    expect(isInstanceAlreadyExistsError(new Error('user already exists'))).toBe(
+      false
+    );
+    expect(
+      isInstanceAlreadyExistsError(new Error('bucket already exists'))
+    ).toBe(false);
+    expect(
+      isInstanceAlreadyExistsError(new Error('table frames already exists'))
+    ).toBe(false);
+  });
+
+  test('does not match ordinary failures', () => {
+    expect(isInstanceAlreadyExistsError(new Error('network down'))).toBe(false);
+    expect(isInstanceAlreadyExistsError(new Error('instance not found'))).toBe(
+      false
+    );
+    expect(isInstanceAlreadyExistsError(null)).toBe(false);
+    expect(isInstanceAlreadyExistsError(undefined)).toBe(false);
+    expect(isInstanceAlreadyExistsError(42)).toBe(false);
   });
 });
 

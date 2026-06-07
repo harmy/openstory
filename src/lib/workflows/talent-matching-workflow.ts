@@ -104,6 +104,7 @@ export class TalentMatchingWorkflow extends OpenStoryWorkflowEntrypoint<TalentMa
             {
               sequenceId,
               userId: input.userId,
+              workflowRunId: event.instanceId,
               scopedDb,
             }
           )

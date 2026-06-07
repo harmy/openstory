@@ -89,6 +89,7 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
       },
       {
         sequenceId,
+        workflowRunId: event.instanceId,
         scopedDb,
         framePromptStream:
           input.emitStreaming && frameId

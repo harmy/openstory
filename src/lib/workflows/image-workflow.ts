@@ -17,7 +17,8 @@
 import { computeVisualPromptInputHash } from '@/lib/ai/input-hash';
 import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS } from '@/lib/ai/models';
 import { loadNarrowFramePromptContext } from '@/lib/ai/prompt-context';
-import { ZERO_MICROS, microsToUsd } from '@/lib/billing/money';
+import { ZERO_MICROS } from '@/lib/billing/money';
+import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import { DEFAULT_IMAGE_SIZE } from '@/lib/constants/aspect-ratios';
 import type { ScopedDb } from '@/lib/db/scoped';
 import {
@@ -226,19 +227,18 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     const { teamId, frameId, sequenceId } = input;
     if (imageCostMicros > 0 && teamId && !imageResult.metadata.usedOwnKey) {
       await step.do('deduct-credits', async () => {
-        if (!(await scopedDb.billing.hasEnoughCredits(imageCostMicros))) {
-          logger.warn(
-            `[ImageWorkflow:cf] Insufficient credits for team ${teamId} (cost: $${microsToUsd(imageCostMicros).toFixed(4)}), skipping deduction`
-          );
-          return;
-        }
-        await scopedDb.billing.deductCredits(imageCostMicros, {
+        await deductWorkflowCredits({
+          scopedDb,
+          costMicros: imageCostMicros,
+          usedOwnKey: imageResult.metadata.usedOwnKey,
           description: `Image generation (${generationParams.model})`,
+          idempotencyKey: `${event.instanceId}:image`,
           metadata: {
             model: generationParams.model,
             frameId: input.frameId,
             sequenceId: input.sequenceId,
           },
+          workflowName: 'ImageWorkflow:cf',
         });
       });
     }

@@ -40,6 +40,7 @@ import type { ScopedDb } from '@/lib/db/scoped';
 import { getChatPrompt } from '@/lib/prompts';
 import { buildPreviewPrompt } from '@/lib/prompts/poster-prompt';
 import { getGenerationChannel } from '@/lib/realtime';
+import { previewImageDedupId } from '@/lib/workflow/dedup-ids';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import { triggerWorkflow } from '@/lib/workflow/client';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
@@ -306,7 +307,8 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
                   // Fire-and-forget preview-image trigger for the previous
                   // scene. Routed through `triggerWorkflow` so the engine
                   // registry picks whichever engine is configured for
-                  // `/image` at runtime.
+                  // `/image` at runtime. The deduplicationId makes a replay
+                  // of this mega-step idempotent (see dedup-ids.ts).
                   await triggerWorkflow(
                     '/image',
                     {
@@ -322,6 +324,10 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
                     } satisfies ImageWorkflowInput,
                     {
                       label: buildWorkflowLabel(sequenceId),
+                      deduplicationId: previewImageDedupId(
+                        event.instanceId,
+                        prevFrameId
+                      ),
                     }
                   );
                 }
@@ -358,6 +364,10 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
             } satisfies ImageWorkflowInput,
             {
               label: buildWorkflowLabel(sequenceId),
+              deduplicationId: previewImageDedupId(
+                event.instanceId,
+                prevFrameId
+              ),
             }
           );
         }
@@ -523,6 +533,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
         costMicros: ZERO_MICROS,
         usedOwnKey: openRouterKeyInfo.source === 'team',
         description: `LLM analysis (${modelId})`,
+        idempotencyKey: `${event.instanceId}:llm-${STEP_NAME}`,
         metadata: {
           model: modelId,
           phase: PHASE.number,

@@ -153,6 +153,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
         costMicros: upscaleResult.cost,
         usedOwnKey: upscaleResult.usedOwnKey,
         description: 'Variant upscale (nano_banana_2)',
+        idempotencyKey: `${event.instanceId}:upscale`,
         metadata: { frameId: input.frameId, sequenceId: input.sequenceId },
         workflowName: 'UpscaleShotVariantWorkflow',
       });

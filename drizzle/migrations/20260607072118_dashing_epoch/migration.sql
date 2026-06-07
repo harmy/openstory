@@ -1,0 +1,2 @@
+ALTER TABLE `transactions` ADD `idempotency_key` text;--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_transactions_team_idempotency_key` ON `transactions` (`team_id`,`idempotency_key`) WHERE "transactions"."idempotency_key" IS NOT NULL;

@@ -30,7 +30,10 @@
 
 import { simpleHash } from '@/lib/utils/hash';
 import { getLogger } from '@/lib/observability/logger';
-import { isRecipientInFiniteStateError } from '@/lib/workflow/errors';
+import {
+  isInstanceAlreadyExistsError,
+  isRecipientInFiniteStateError,
+} from '@/lib/workflow/errors';
 import type { CloudflareEnv } from '@/lib/workflow/types';
 import type { WorkflowSleepDuration, WorkflowStep } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
@@ -92,22 +95,6 @@ export function buildChildInstanceId(
   const digest = simpleHash(`${parentInstanceId}${semanticChildId}`);
   const head = semantic.slice(0, MAX_INSTANCE_ID_LENGTH - digest.length - 2);
   return `${head}__${digest}`;
-}
-
-/**
- * CF surfaces a reused instance id as `(instance.already_exists) Instance
- * already exists`. Match on the message defensively (the thrown value's class
- * isn't part of the public API) so an in-run durable retry — where `create()`
- * succeeded but the step's result wasn't persisted before a crash — is treated
- * as success instead of a hard failure.
- */
-function isInstanceAlreadyExistsError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-  const message =
-    'message' in error && typeof error.message === 'string'
-      ? error.message
-      : '';
-  return /already.?exists/i.test(message);
 }
 
 /**

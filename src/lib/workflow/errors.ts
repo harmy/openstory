@@ -40,7 +40,10 @@ function errorMessage(error: unknown): string {
  * of the public API. See issue #839 (2026-06-06 mass-abort cascade).
  */
 export function isEngineAbortError(error: unknown): boolean {
-  return /aborting engine|grace period/i.test(errorMessage(error));
+  // Matched on the full phrase, not a bare "grace period" token — a true
+  // positive here skips onFailure AND parent notification, so an app error
+  // that merely mentions a grace period must never be classified as one.
+  return /aborting engine|grace period complete/i.test(errorMessage(error));
 }
 
 /**
@@ -53,4 +56,19 @@ export function isEngineAbortError(error: unknown): boolean {
  */
 export function isRecipientInFiniteStateError(error: unknown): boolean {
   return /in_finite_state|finite state/i.test(errorMessage(error));
+}
+
+/**
+ * CF surfaces a reused instance id as `(instance.already_exists) Instance
+ * already exists`. Match on the message defensively (the thrown value's class
+ * isn't part of the public API) so an in-run durable retry — where `create()`
+ * succeeded but the step's result wasn't persisted before a crash — is treated
+ * as success instead of a hard failure. Anchored on the `instance` token so an
+ * unrelated "already exists" error (user, bucket, table…) from another layer
+ * is never misclassified as a duplicate workflow instance.
+ */
+export function isInstanceAlreadyExistsError(error: unknown): boolean {
+  return /instance\.already_exists|instance already exists/i.test(
+    errorMessage(error)
+  );
 }

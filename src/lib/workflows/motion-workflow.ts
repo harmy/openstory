@@ -20,6 +20,7 @@ import { computeMotionPromptInputHash } from '@/lib/ai/input-hash';
 import { DEFAULT_VIDEO_MODEL, IMAGE_TO_VIDEO_MODELS } from '@/lib/ai/models';
 import { loadNarrowFramePromptContext } from '@/lib/ai/prompt-context';
 import { microsToUsd, type Microdollars } from '@/lib/billing/money';
+import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { ensureImageUnderLimit } from '@/lib/image/image-compress';
 import {
@@ -409,17 +410,25 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
       });
     });
 
-    // Deduct credits (skip if team used own fal key)
+    // Deduct credits (skip if team used own fal key). Routed through
+    // deductWorkflowCredits so insufficient balances warn-and-skip (with an
+    // auto-top-up attempt) like every other workflow, instead of debiting
+    // the balance negative.
     if (cost > 0 && input.teamId && !job.usedOwnKey) {
       await step.do('deduct-credits', async () => {
-        await scopedDb.billing.deductCredits(cost, {
+        await deductWorkflowCredits({
+          scopedDb,
+          costMicros: cost,
+          usedOwnKey: job.usedOwnKey,
           description: `Motion generation (${model})`,
+          idempotencyKey: `${event.instanceId}:motion`,
           metadata: {
             model,
             frameId: input.frameId,
             sequenceId: input.sequenceId,
             duration: duration,
           },
+          workflowName: 'MotionWorkflow:cf',
         });
       });
     }

@@ -272,6 +272,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
         costMicros: ZERO_MICROS,
         usedOwnKey: false,
         description: `LLM analysis (${analysisModelId})`,
+        idempotencyKey: `${event.instanceId}:llm-${STEP_NAME}`,
         metadata: {
           model: analysisModelId,
           phase: PHASE.number,

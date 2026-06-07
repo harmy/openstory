@@ -34,7 +34,7 @@ import type {
   TransactionType,
 } from '@/lib/db/schema/credits';
 import { ValidationError } from '@/lib/errors';
-import { and, count, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, notExists, sql } from 'drizzle-orm';
 import { generateId } from '../id';
 import { giftTokenRedemptions, giftTokens } from '../schema';
 
@@ -274,12 +274,27 @@ export function createBillingMethods(
       });
   }
 
-  /** Applies markup automatically. Triggers auto-top-up if balance drops below threshold. */
+  /**
+   * Applies markup automatically. Triggers auto-top-up if balance drops below
+   * threshold.
+   *
+   * Pass `opts.idempotencyKey` (convention: `${workflowInstanceId}:<charge-name>`)
+   * from any retryable context — a workflow `step.do` that throws partway
+   * re-runs its closure, and without the key every replay double-debits the
+   * team and writes a duplicate ledger row. The balance UPDATE and the
+   * transaction INSERT run in one atomic `db.batch`; the UPDATE is guarded on
+   * "no transaction with this key exists yet" and the INSERT dedupes via the
+   * partial unique index on `(team_id, idempotency_key)`. A replay is a no-op
+   * that returns the original transaction id — note that on a replay the
+   * returned `chargedAmount` is what the ORIGINAL attempt charged; nothing
+   * was debited by this call (don't emit "charged $X" side effects from it).
+   */
   async function deductCredits(
     rawCostMicros: Microdollars,
     opts: {
       description?: string;
       metadata?: Record<string, unknown>;
+      idempotencyKey?: string;
     } = {}
   ): Promise<{
     newBalance: Microdollars;
@@ -294,39 +309,53 @@ export function createBillingMethods(
       };
 
     const chargedAmount = applyMarkup(rawCostMicros);
+    const { idempotencyKey } = opts;
 
-    // TODO: TB Mar 26 2026: I really don't like this. SQLite is a pain for doing credits... this should be a transaction.
     await db
       .insert(credits)
       .values({ teamId, balance: 0 })
       .onConflictDoNothing();
 
-    const [updated] = await db
+    const rawUsd = microsToUsd(rawCostMicros);
+    const chargedUsd = microsToUsd(chargedAmount);
+
+    const updateBalance = db
       .update(credits)
       .set({
         balance: sql`${credits.balance} - ${chargedAmount}`,
         updatedAt: new Date(),
       })
-      .where(eq(credits.teamId, teamId))
-      .returning({ balance: credits.balance });
-
-    if (!updated) {
-      throw new Error(
-        `deductCredits: update returned no row for team ${teamId}`
+      .where(
+        idempotencyKey
+          ? and(
+              eq(credits.teamId, teamId),
+              notExists(
+                db
+                  .select({ id: transactions.id })
+                  .from(transactions)
+                  .where(
+                    and(
+                      eq(transactions.teamId, teamId),
+                      eq(transactions.idempotencyKey, idempotencyKey)
+                    )
+                  )
+              )
+            )
+          : eq(credits.teamId, teamId)
       );
-    }
 
-    const rawUsd = microsToUsd(rawCostMicros);
-    const chargedUsd = microsToUsd(chargedAmount);
-
-    const [tx] = await db
+    // balanceAfter reads the post-UPDATE balance via subquery — the batch
+    // statements run sequentially inside one transaction, so this sees the
+    // decremented value. On a replay the INSERT no-ops, so the (stale) value
+    // is never written.
+    const insertTransaction = db
       .insert(transactions)
       .values({
         teamId,
         userId,
         type: 'credit_usage' as TransactionType,
         amount: negateMicros(chargedAmount),
-        balanceAfter: updated.balance,
+        balanceAfter: sql`(select ${credits.balance} from ${credits} where ${credits.teamId} = ${teamId})`,
         description:
           opts.description ??
           `Usage: $${chargedUsd.toFixed(4)} (raw: $${rawUsd.toFixed(4)})`,
@@ -335,23 +364,71 @@ export function createBillingMethods(
           chargedAmountMicros: chargedAmount,
           ...opts.metadata,
         },
+        idempotencyKey: idempotencyKey ?? null,
       })
+      .onConflictDoNothing()
       .returning({ id: transactions.id });
 
-    if (!tx) {
+    // Third statement: re-read the balance to return to the caller. Distinct
+    // from the `balanceAfter` ledger column above (that one is persisted into
+    // the transaction row; this one is the authoritative read-back, correct
+    // even on a replay where the UPDATE no-ops) — both rely on running after
+    // `updateBalance` inside the same batch transaction, so don't "optimize"
+    // either away in favor of the other.
+    const readBackBalance = db
+      .select({ balance: credits.balance })
+      .from(credits)
+      .where(eq(credits.teamId, teamId));
+
+    const [, insertedRows, balanceRows] = await db.batch([
+      updateBalance,
+      insertTransaction,
+      readBackBalance,
+    ]);
+
+    const balanceRow = balanceRows[0];
+    if (!balanceRow) {
       throw new Error(
-        `deductCredits: transaction insert returned no row for team ${teamId}`
+        `deductCredits: credits row missing for team ${teamId} after batch`
       );
     }
+    const newBalance = micros(balanceRow.balance);
 
-    void maybeAutoTopUp(micros(updated.balance)).catch((err) => {
+    let transactionId = insertedRows[0]?.id;
+    if (!transactionId) {
+      if (!idempotencyKey) {
+        throw new Error(
+          `deductCredits: transaction insert returned no row for team ${teamId}`
+        );
+      }
+      // Replay of an already-applied deduction — recover the original
+      // transaction id. Must not throw: the charge landed on a prior attempt.
+      const [existing] = await db
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.teamId, teamId),
+            eq(transactions.idempotencyKey, idempotencyKey)
+          )
+        )
+        .limit(1);
+      if (!existing) {
+        throw new Error(
+          `deductCredits: no transaction row for team ${teamId} key ${idempotencyKey} after conflict no-op`
+        );
+      }
+      transactionId = existing.id;
+    }
+
+    void maybeAutoTopUp(newBalance).catch((err) => {
       logger.error('Failed:', { err });
     });
 
     return {
-      newBalance: micros(updated.balance),
+      newBalance,
       chargedAmount,
-      transactionId: tx.id,
+      transactionId,
     };
   }
 

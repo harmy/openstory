@@ -3,7 +3,7 @@
  * Location CRUD, reference images, and frame-location matching.
  */
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '@/lib/db/client';
 import type {
   Frame,
@@ -175,6 +175,15 @@ export function createSequenceLocationsMethods(db: Database) {
       return location;
     },
 
+    /**
+     * Bulk insert, upserting on the `(sequenceId, locationId)` unique index
+     * so a workflow-step retry after a partial batch commit converges
+     * instead of failing every replay on a UNIQUE violation (and stranding
+     * locations in `referenceStatus='generating'`). Bible fields are
+     * refreshed from the incoming row; `id`/keys/`createdAt` and the
+     * reference-image columns (owned by the child LocationSheetWorkflow)
+     * are left untouched.
+     */
     createBulk: async (
       data: NewSequenceLocation[]
     ): Promise<SequenceLocation[]> => {
@@ -187,6 +196,29 @@ export function createSequenceLocationsMethods(db: Database) {
         const batchResults = await db
           .insert(sequenceLocations)
           .values(batch)
+          .onConflictDoUpdate({
+            target: [
+              sequenceLocations.sequenceId,
+              sequenceLocations.locationId,
+            ],
+            set: {
+              name: sql.raw(`excluded."name"`),
+              libraryLocationId: sql.raw(`excluded."library_location_id"`),
+              type: sql.raw(`excluded."type"`),
+              timeOfDay: sql.raw(`excluded."time_of_day"`),
+              description: sql.raw(`excluded."description"`),
+              architecturalStyle: sql.raw(`excluded."architectural_style"`),
+              keyFeatures: sql.raw(`excluded."key_features"`),
+              colorPalette: sql.raw(`excluded."color_palette"`),
+              lightingSetup: sql.raw(`excluded."lighting_setup"`),
+              ambiance: sql.raw(`excluded."ambiance"`),
+              consistencyTag: sql.raw(`excluded."consistency_tag"`),
+              firstMentionSceneId: sql.raw(`excluded."first_mention_scene_id"`),
+              firstMentionText: sql.raw(`excluded."first_mention_text"`),
+              firstMentionLine: sql.raw(`excluded."first_mention_line"`),
+              updatedAt: new Date(),
+            },
+          })
           .returning();
         results.push(...batchResults);
       }

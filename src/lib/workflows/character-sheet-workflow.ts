@@ -145,6 +145,7 @@ export class CharacterSheetWorkflow extends OpenStoryWorkflowEntrypoint<Characte
         costMicros: extractImageCost(imageResult.metadata),
         usedOwnKey: imageResult.metadata.usedOwnKey,
         description: `Character sheet (${generationParams.model})`,
+        idempotencyKey: `${event.instanceId}:sheet`,
         metadata: {
           model: generationParams.model,
           characterName: input.characterName,

@@ -22,6 +22,13 @@ type WorkflowDeductionOpts = {
   /** Set to true if the team used their own API key for this generation */
   usedOwnKey: boolean;
   description: string;
+  /**
+   * Stable key making this deduction idempotent across `step.do` retries.
+   * Convention: `${event.instanceId}:<charge-name>` — the workflow instance
+   * id is replay-stable, so a retried step recovers the original transaction
+   * instead of double-charging the team.
+   */
+  idempotencyKey: string;
   metadata?: Record<string, unknown>;
   /** Workflow name for the logger.warn prefix (e.g., "VariantWorkflow") */
   workflowName?: string;
@@ -57,6 +64,7 @@ export async function deductWorkflowCredits(
   await scopedDb.billing.deductCredits(opts.costMicros, {
     description: opts.description,
     metadata: opts.metadata,
+    idempotencyKey: opts.idempotencyKey,
   });
 }
 

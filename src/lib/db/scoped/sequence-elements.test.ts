@@ -1,15 +1,21 @@
 /**
- * In-memory DB tests for getFrameCountsByElement.
+ * In-memory DB tests for the sequence-elements scoped module.
  *
- * Pins the two invariants the elements grid relies on:
+ * getFrameCountsByElement — pins the two invariants the elements grid relies on:
  *   - Elements with zero matching frames appear in the result map with `0`
  *     (otherwise the badge reads `undefined`).
  *   - A frame that references N elements increments every matched element's
  *     count (no first-match short-circuit).
+ *
+ * ensureUniqueToken / cascadeRename — pins the workflow-retry idempotency of
+ * the ElementVisionWorkflow auto-rename (issue #846 RC5): the element's own
+ * row must not count as a collision, and the cascade must be atomic so a
+ * replay yields zero deltas instead of split-brained `TOKEN_2` references.
  */
 
 import { type Client, createClient } from '@libsql/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import type { Database } from '@/lib/db/client';
@@ -189,5 +195,120 @@ describe('getFrameCountsByElement', () => {
     expect(result[logo.id]?.frameCount).toBe(2);
     expect(result[bottle.id]?.frameCount).toBe(1);
     expect(result[orphan.id]?.frameCount).toBe(0);
+  });
+});
+
+async function insertElement(token: string) {
+  const [element] = await db
+    .insert(sequenceElements)
+    .values({
+      sequenceId,
+      uploadedFilename: `${token.toLowerCase()}.png`,
+      token,
+      imageUrl: `https://r2/${token.toLowerCase()}.png`,
+      imagePath: `elements/x/${token.toLowerCase()}.png`,
+    })
+    .returning();
+  if (!element) throw new Error('test setup: element insert returned nothing');
+  return element;
+}
+
+describe('ensureUniqueToken', () => {
+  it('does not count the excluded element’s own row as a collision', async () => {
+    const methods = createSequenceElementsMethods(db);
+    const element = await insertElement('PROP');
+
+    // Without exclusion the element's own row collides → suffix (the
+    // pre-#846 retry bug). With exclusion the token comes back unchanged.
+    await expect(methods.ensureUniqueToken(sequenceId, 'PROP')).resolves.toBe(
+      'PROP_2'
+    );
+    await expect(
+      methods.ensureUniqueToken(sequenceId, 'PROP', element.id)
+    ).resolves.toBe('PROP');
+  });
+
+  it('still suffixes when a different element holds the token', async () => {
+    const methods = createSequenceElementsMethods(db);
+    await insertElement('PROP');
+    const other = await insertElement('OTHER');
+
+    await expect(
+      methods.ensureUniqueToken(sequenceId, 'PROP', other.id)
+    ).resolves.toBe('PROP_2');
+  });
+});
+
+describe('cascadeRename', () => {
+  it('rewrites element + script + frames, and a replay yields zero deltas', async () => {
+    const methods = createSequenceElementsMethods(db);
+    const element = await insertElement('LOGO');
+
+    await db
+      .update(sequences)
+      .set({ script: 'The LOGO appears. Pan across the LOGO.' })
+      .where(eq(sequences.id, sequenceId));
+
+    await db.insert(frames).values({
+      sequenceId,
+      orderIndex: 0,
+      metadata: frameMetadata({
+        sceneId: 's1',
+        elementTags: ['LOGO'],
+        extract: 'The LOGO appears on screen.',
+      }),
+    });
+    await db.insert(frames).values({
+      sequenceId,
+      orderIndex: 1,
+      metadata: frameMetadata({
+        sceneId: 's2',
+        elementTags: [],
+        extract: 'No element here.',
+      }),
+    });
+
+    const first = await methods.cascadeRename({
+      sequenceId,
+      elementId: element.id,
+      oldToken: 'LOGO',
+      newToken: 'BRAND',
+    });
+    expect(first.element.token).toBe('BRAND');
+    expect(first.scriptUpdated).toBe(true);
+    expect(first.framesUpdated).toBe(1);
+
+    const [seq] = await db
+      .select({ script: sequences.script })
+      .from(sequences)
+      .where(eq(sequences.id, sequenceId));
+    expect(seq?.script).toBe('The BRAND appears. Pan across the BRAND.');
+
+    // Workflow-step replay: the cached pre-rename token is the oldToken.
+    // Everything already carries BRAND, so the cascade must be a no-op.
+    const replay = await methods.cascadeRename({
+      sequenceId,
+      elementId: element.id,
+      oldToken: 'LOGO',
+      newToken: 'BRAND',
+    });
+    expect(replay.element.token).toBe('BRAND');
+    expect(replay.scriptUpdated).toBe(false);
+    expect(replay.framesUpdated).toBe(0);
+  });
+
+  it('short-circuits when oldToken === newToken', async () => {
+    const methods = createSequenceElementsMethods(db);
+    const element = await insertElement('LOGO');
+
+    const result = await methods.cascadeRename({
+      sequenceId,
+      elementId: element.id,
+      oldToken: 'LOGO',
+      newToken: 'LOGO',
+    });
+    expect(result.element.token).toBe('LOGO');
+    expect(result.framesUpdated).toBe(0);
+    expect(result.scriptUpdated).toBe(false);
   });
 });

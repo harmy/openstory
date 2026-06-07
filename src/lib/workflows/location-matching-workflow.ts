@@ -110,6 +110,7 @@ export class LocationMatchingWorkflow extends OpenStoryWorkflowEntrypoint<Locati
             {
               sequenceId,
               userId: input.userId,
+              workflowRunId: event.instanceId,
               scopedDb,
             }
           )

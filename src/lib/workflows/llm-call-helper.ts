@@ -40,6 +40,12 @@ export type DurableLLMCallConfig<TSchema extends z.ZodType> = {
 export type DurableLLMCallContext = {
   sequenceId?: string;
   userId?: string;
+  /**
+   * The workflow's `event.instanceId` — replay-stable, used as the
+   * idempotency-key prefix for the credit-deduction step so a step retry
+   * can't double-charge.
+   */
+  workflowRunId: string;
   /** Override OpenRouter API key (e.g. user-provided). Falls back to platform env key. */
   openRouterApiKey?: string;
   /** Scoped DB context for resolving team API keys + deducting credits. */
@@ -176,6 +182,7 @@ export async function durableLLMCallCf<TSchema extends z.ZodType>(
         costMicros: ZERO_MICROS,
         usedOwnKey: !!callContext.openRouterApiKey,
         description: `LLM analysis (${modelId})`,
+        idempotencyKey: `${callContext.workflowRunId}:llm-${name}`,
         metadata: {
           model: modelId,
           phase: phase.number,
@@ -352,6 +359,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
         costMicros: ZERO_MICROS,
         usedOwnKey: !!callContext.openRouterApiKey,
         description: `LLM analysis (${modelId})`,
+        idempotencyKey: `${callContext.workflowRunId}:llm-${name}`,
         metadata: {
           model: modelId,
           phase: phase.number,

@@ -89,24 +89,33 @@ export function createSequenceElementsMethods(db: Database) {
       return rows.length > 0;
     },
 
+    /**
+     * Pass `excludeElementId` when the token is being assigned to an existing
+     * element (e.g. the vision auto-rename) — otherwise the element's own row
+     * counts as a collision and a workflow-step retry after a successful
+     * rename suffixes the token to `TOKEN_2`.
+     */
     ensureUniqueToken: async (
       sequenceId: string,
-      token: string
+      token: string,
+      excludeElementId?: string
     ): Promise<string> => {
       // Escape LIKE wildcards (%, _, \) so `foo_bar` doesn't match `foo1bar`.
       const escaped = token.replace(/[\\%_]/g, (c) => `\\${c}`);
+      const whereClauses = [
+        eq(sequenceElements.sequenceId, sequenceId),
+        or(
+          eq(sequenceElements.token, token),
+          like(sequenceElements.token, sql`${`${escaped}\\_%`} ESCAPE '\\'`)
+        ),
+      ];
+      if (excludeElementId) {
+        whereClauses.push(ne(sequenceElements.id, excludeElementId));
+      }
       const rows = await db
         .select({ token: sequenceElements.token })
         .from(sequenceElements)
-        .where(
-          and(
-            eq(sequenceElements.sequenceId, sequenceId),
-            or(
-              eq(sequenceElements.token, token),
-              like(sequenceElements.token, sql`${`${escaped}\\_%`} ESCAPE '\\'`)
-            )
-          )
-        );
+        .where(and(...whereClauses));
 
       const taken = new Set(rows.map((r) => r.token));
       if (!taken.has(token)) return token;
@@ -197,6 +206,11 @@ export function createSequenceElementsMethods(db: Database) {
      * tags, originalScript extract, prompt strings) and the user-edit
      * `imagePrompt`/`motionPrompt` overrides on `frames`.
      *
+     * All writes (element row, script, frame deltas) run in a single
+     * `db.batch()` — one transaction — so a mid-cascade failure can't leave
+     * mixed token references (and a workflow-step retry then renaming the
+     * remainder to `TOKEN_2`, splitting element/script/frames).
+     *
      * Returns the affected counts so callers can surface a meaningful toast
      * ("Renamed LOGO → BRAND across 5 frames + script"). The caller is
      * expected to have already validated uniqueness of `newToken` within the
@@ -213,17 +227,24 @@ export function createSequenceElementsMethods(db: Database) {
       scriptUpdated: boolean;
     }> => {
       const { sequenceId, elementId, oldToken, newToken } = args;
-      const element = await update(elementId, { token: newToken });
 
       if (oldToken === newToken) {
+        const element = await update(elementId, { token: newToken });
         return { element, framesUpdated: 0, scriptUpdated: false };
       }
 
-      let scriptUpdated = false;
+      const now = new Date();
+      const elementUpdate = db
+        .update(sequenceElements)
+        .set({ token: newToken, updatedAt: now })
+        .where(eq(sequenceElements.id, elementId))
+        .returning();
+
       const [sequenceRow] = await db
         .select({ script: sequences.script })
         .from(sequences)
         .where(eq(sequences.id, sequenceId));
+      let rewrittenScript: string | null = null;
       if (sequenceRow?.script) {
         const rewritten = replaceTokenInText(
           sequenceRow.script,
@@ -231,27 +252,43 @@ export function createSequenceElementsMethods(db: Database) {
           newToken
         );
         if (rewritten !== sequenceRow.script) {
-          await db
-            .update(sequences)
-            .set({ script: rewritten, updatedAt: new Date() })
-            .where(eq(sequences.id, sequenceId));
-          scriptUpdated = true;
+          rewrittenScript = rewritten;
         }
       }
+      const scriptUpdated = rewrittenScript !== null;
+      const scriptStatements =
+        rewrittenScript === null
+          ? []
+          : [
+              db
+                .update(sequences)
+                .set({ script: rewrittenScript, updatedAt: now })
+                .where(eq(sequences.id, sequenceId)),
+            ];
 
       const allFrames = (await db
         .select()
         .from(frames)
         .where(eq(frames.sequenceId, sequenceId))) as Frame[];
       const deltas = buildFrameRenameDeltas(allFrames, oldToken, newToken);
-      for (const delta of deltas) {
-        const set: Record<string, unknown> = { updatedAt: new Date() };
+      const frameStatements = deltas.map((delta) => {
+        const set: Record<string, unknown> = { updatedAt: now };
         if (delta.metadata !== undefined) set.metadata = delta.metadata;
         if (delta.imagePrompt !== undefined)
           set.imagePrompt = delta.imagePrompt;
         if (delta.motionPrompt !== undefined)
           set.motionPrompt = delta.motionPrompt;
-        await db.update(frames).set(set).where(eq(frames.id, delta.frameId));
+        return db.update(frames).set(set).where(eq(frames.id, delta.frameId));
+      });
+
+      const [elementRows] = await db.batch([
+        elementUpdate,
+        ...scriptStatements,
+        ...frameStatements,
+      ]);
+      const element = elementRows[0];
+      if (!element) {
+        throw new Error(`SequenceElement ${elementId} not found`);
       }
 
       return { element, framesUpdated: deltas.length, scriptUpdated };
