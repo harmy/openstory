@@ -6,7 +6,8 @@
  * trailing edge.
  *
  * Exposes an imperative `onKeyDown` handle so the editor can hand off
- * Arrow/Enter/Tab while the user is still inside the textarea.
+ * Arrow/Enter/Tab while focus is still in the editor (the suggestion plugin
+ * intercepts the keystroke before ProseMirror does).
  */
 
 import {

@@ -195,8 +195,12 @@ export function matchElementsToScene<T extends ElementMatchInput>(
   return allElements.filter((el) => {
     const token = el.token.toUpperCase();
     if (tagsUpper.has(token)) return true;
-    // Legacy uppercase whole-token match against the raw script.
-    const upperRe = new RegExp(`(?:^|[^A-Z0-9_])${token}(?:[^A-Z0-9_]|$)`);
+    // Legacy uppercase whole-token match against the raw script. Escape the
+    // token (it's arbitrary user text) so regex metacharacters can't false-match
+    // or throw — matches the kebab branch below.
+    const upperRe = new RegExp(
+      `(?:^|[^A-Z0-9_])${escapeRegex(token)}(?:[^A-Z0-9_]|$)`
+    );
     if (upperRe.test(scriptUpper)) return true;
     // New canonical kebab match. Boundary class excludes hyphen so the
     // multi-part slug `red-hex-logo` matches as a single token.

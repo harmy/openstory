@@ -330,16 +330,35 @@ export async function* streamScriptEnhancement(
 
   const systemMessage = `${compiled}\n\nReturn ONLY the enhanced script text. No JSON, no markdown formatting, no explanations.`;
 
-  // Element images must be made externally fetchable: in local dev they're
-  // `http://localhost/r2/…` URLs, which providers like xAI refuse to fetch
-  // ("Fetching images over plain http:// is not supported"). toVisionImageSource
-  // inlines local URLs as base64 data parts and passes public URLs through —
-  // same shim the element-vision call already uses.
+  // Element images must be made externally fetchable before the LLM call: in
+  // local dev they're `http://localhost/r2/…` URLs that only resolve on this
+  // machine, so providers can't fetch them. toVisionImageSource inlines those as
+  // base64 data parts and passes externally-reachable URLs through (it gates on
+  // local-serve mode, not the URL scheme) — the same shim the element-vision
+  // call already uses. A failed/expired image aborts the whole enhance, so log
+  // which element broke before rethrowing: the raw "Failed to read local storage
+  // object …" is otherwise undiagnosable.
   const imageParts = await Promise.all(
-    elements.map<Promise<ChatMessageContentPart>>(async (el) => ({
-      type: 'image',
-      source: await toVisionImageSource(el.imageUrl),
-    }))
+    elements.map<Promise<ChatMessageContentPart>>(async (el) => {
+      try {
+        return {
+          type: 'image',
+          source: await toVisionImageSource(el.imageUrl),
+        };
+      } catch (cause) {
+        logger.error('Script enhancement: failed to load element image', {
+          token: el.token,
+          imageUrl: el.imageUrl,
+          teamId: ctx.teamId,
+          userId: ctx.userId,
+          error: cause instanceof Error ? cause.message : String(cause),
+        });
+        throw new Error(
+          `Couldn't load element image "${el.token}" for script enhancement`,
+          { cause }
+        );
+      }
+    })
   );
   const userContent: string | ChatMessageContentPart[] =
     elements.length > 0

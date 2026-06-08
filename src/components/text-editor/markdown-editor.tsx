@@ -127,8 +127,9 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       Markdown.configure({
         // `html: true` is required for inline mention spans (produced by
         // `tagifyMarkdown`) to survive the markdown-it parse on `setContent`.
-        // Tiptap's schema enforces that only known nodes (paragraph, hardBreak,
-        // text, mention) survive the parse, so unrelated HTML can't leak in.
+        // Tiptap's schema enforces that only nodes registered by the active
+        // extensions (StarterKit's block/inline set plus `mention`) survive the
+        // parse, so unrelated/raw HTML can't leak in.
         html: hasMentions,
         linkify: true,
         breaks: true,
