@@ -1,3 +1,4 @@
+import type { MentionItem } from '@/components/scenes/prompt-mention/mention-items';
 import { MarkdownEditor } from '@/components/text-editor/markdown-editor';
 import { cn } from '@/lib/utils';
 import type * as React from 'react';
@@ -13,6 +14,13 @@ type ScriptEditorProps = {
   disabled?: boolean;
   showCharacterCount?: boolean;
   loading?: boolean;
+  /**
+   * Sequence cast/elements/locations. When provided, their canonical tags in
+   * the script render as @-mention pills (and `@` autocompletes them) — same
+   * behaviour as the scene prompt editors. Omit on the pre-analysis create
+   * screen where no canonical tags exist yet.
+   */
+  mentionItems?: MentionItem[];
 };
 
 export const ScriptEditor: React.FC<ScriptEditorProps> = ({
@@ -25,6 +33,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   disabled = false,
   showCharacterCount = true,
   loading = false,
+  mentionItems,
 }) => {
   const handleChange = useCallback(
     (markdown: string) => {
@@ -60,6 +69,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
           value={editorValue}
           onValueChange={handleChange}
           onKeyDown={handleKeyDown}
+          mentionItems={mentionItems}
           placeholder={placeholder}
           disabled={disabled}
           aria-invalid={hasError}

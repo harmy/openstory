@@ -1,5 +1,6 @@
 import { useAuthGate } from '@/components/auth/auth-gate-provider';
 import { BillingGateDialog } from '@/components/billing/billing-gate-dialog';
+import { buildMentionItems } from '@/components/scenes/prompt-mention/mention-items';
 import {
   ElementSelector,
   type ElementSelectorHandle,
@@ -35,7 +36,12 @@ import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { useBillingGate } from '@/hooks/use-billing-gate';
 import { useGenerationSettings } from '@/hooks/use-generation-settings';
 import { useSequenceDraft } from '@/hooks/use-sequence-draft';
-import type { DraftElementUpload } from '@/hooks/use-sequence-elements';
+import { useSequenceCharacters } from '@/hooks/use-sequence-characters';
+import {
+  useSequenceElements,
+  type DraftElementUpload,
+} from '@/hooks/use-sequence-elements';
+import { useSequenceLocations } from '@/hooks/use-sequence-locations';
 import { useCreateSequence } from '@/hooks/use-sequences';
 import { useStyles } from '@/hooks/use-styles';
 import {
@@ -248,6 +254,30 @@ export const ScriptView: FC<{
   );
   const styleCategory = selectedStyle?.category ?? undefined;
   const styleName = selectedStyle?.name ?? undefined;
+
+  // Sequence cast/elements/locations drive @-mention pills in the script
+  // editor — same canonical tags the scene prompt editors use. Only an existing
+  // (analysed) sequence has these; on the create screen there are no canonical
+  // tags yet, so we pass `undefined` to keep mentions off there.
+  const mentionSequenceId = sequence?.id;
+  const { data: mentionElements } = useSequenceElements(mentionSequenceId);
+  const { data: mentionCharacters } = useSequenceCharacters(
+    mentionSequenceId ?? ''
+  );
+  const { data: mentionLocations } = useSequenceLocations(
+    mentionSequenceId ?? ''
+  );
+  const mentionItems = useMemo(
+    () =>
+      mentionSequenceId
+        ? buildMentionItems({
+            characters: mentionCharacters ?? [],
+            elements: mentionElements ?? [],
+            locations: mentionLocations ?? [],
+          })
+        : undefined,
+    [mentionSequenceId, mentionCharacters, mentionElements, mentionLocations]
+  );
   const recommendedImageModel = selectedStyle?.recommendedImageModel ?? null;
   const recommendedVideoModel = selectedStyle?.recommendedVideoModel ?? null;
   const recommendedAspectRatio = selectedStyle?.defaultAspectRatio ?? null;
@@ -774,6 +804,7 @@ export const ScriptView: FC<{
               placeholder="A one-liner or website URL is all you need — click Enhance Script to do the rest. Or paste a full screenplay and generate directly."
               disabled={loading}
               showCharacterCount={false}
+              mentionItems={mentionItems}
             />
             <div className="absolute bottom-2 right-2 flex items-center gap-1">
               {canUndoEnhance && !isEnhancing && (
