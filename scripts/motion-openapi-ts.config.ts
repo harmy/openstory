@@ -491,7 +491,6 @@ export default getFalGroupedCategoryFilenames().map(
       output: {
         path: OUTPUT_PATH_OVERRIDES[category] ?? `./libs/types/src/${category}`,
         indexFile: false,
-        postProcess: ['oxfmt'],
       },
       plugins: [
         { name: '@hey-api/typescript' },

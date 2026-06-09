@@ -33,12 +33,21 @@ export type TextModel = AnalysisModelId;
  * Only model-level metadata lives here: identity, audio override, performance.
  */
 export const IMAGE_TO_VIDEO_MODELS = {
+  grok_imagine_video_1_5: {
+    id: 'xai/grok-imagine-video/v1.5/image-to-video',
+    name: 'Grok Imagine Video 1.5',
+    provider: 'Grok',
+    license: 'proprietary' as const,
+    qualityRank: 1,
+    maxPromptLength: 2500,
+    performance: { estimatedGenerationTime: 20, quality: 'best' as const },
+  },
   ltx_2_3_pro: {
     id: 'fal-ai/ltx-2.3/image-to-video',
     name: 'LTX 2.3 Pro',
     provider: 'Lightricks',
     license: 'open-source' as const,
-    qualityRank: 1,
+    qualityRank: 2,
     maxPromptLength: 2500,
     performance: { estimatedGenerationTime: 15, quality: 'best' as const },
   },
@@ -57,15 +66,6 @@ export const IMAGE_TO_VIDEO_MODELS = {
     provider: 'Kling',
     license: 'proprietary' as const,
     qualityRank: 3,
-    maxPromptLength: 2500,
-    performance: { estimatedGenerationTime: 20, quality: 'best' as const },
-  },
-  grok_imagine_video: {
-    id: 'xai/grok-imagine-video/image-to-video',
-    name: 'Grok Imagine Video',
-    provider: 'Grok',
-    license: 'proprietary' as const,
-    qualityRank: 4,
     maxPromptLength: 2500,
     performance: { estimatedGenerationTime: 20, quality: 'best' as const },
   },
@@ -250,12 +250,12 @@ export type ImageToVideoModelConfig =
 // Type for the video model ID
 type ImageToVideoModelId = ImageToVideoModelConfig['id'];
 
-export const DEFAULT_VIDEO_MODEL: ImageToVideoModel = 'kling_v3_pro';
+export const DEFAULT_VIDEO_MODEL: ImageToVideoModel = 'grok_imagine_video_1_5';
 
 // Typed list of image-to-video model keys for Zod enum schemas
 // This is type-safe because we use satisfies to validate the tuple matches the type
 export const IMAGE_TO_VIDEO_MODEL_KEYS = [
-  'grok_imagine_video',
+  'grok_imagine_video_1_5',
   'kling_v3_pro',
   'ltx_2_3_pro',
   'minimax_hailuo_02',

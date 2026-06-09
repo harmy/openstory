@@ -1,0 +1,29 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Handheld camera with natural micro-movement starts eye-level slightly overhead on Scarlett's hand reaching across the white vanity to grasp the coral lipstick tube. Fingers twist the base smoothly to raise the bullet, rotate the glossy tube to catch directional sunlight, then press it to her lower lip in one fluid stroke from corner to corner. She blots twice, parts her lips into a soft smile, closes her fingers around the tube and drops it into the open tote bag on the studio floor, lifting the strap as she stands. Subtle fabric shift in the tote and crisp light reflections on the metallic surface emphasize the tactile sequence.",
+        "model": "xai/grok-imagine-video/v1.5/image-to-video",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video": {
+            "url": "https://v3b.fal.media/files/b/0a9d9026/8zYZOjNArH6ldhRJRpnJa_3tg4Q1j5.mp4",
+            "content_type": "video/mp4",
+            "file_name": "8zYZOjNArH6ldhRJRpnJa_3tg4Q1j5.mp4",
+            "file_size": 6826360,
+            "width": 1280,
+            "height": 704,
+            "fps": 24,
+            "duration": 12.041667,
+            "num_frames": 289
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

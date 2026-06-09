@@ -79,7 +79,7 @@ export const SequenceImageModelSelector = ({
           </Badge>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[220px]">
+      <DropdownMenuContent align="start" className="w-[280px]">
         <DropdownMenuLabel className="text-xs">Image model</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {models.length > 1 && (

@@ -1,4 +1,9 @@
-import { DEFAULT_IMAGE_MODEL, safeTextToImageModel } from '@/lib/ai/models';
+import {
+  DEFAULT_IMAGE_MODEL,
+  IMAGE_MODELS,
+  isValidTextToImageModel,
+  safeTextToImageModel,
+} from '@/lib/ai/models';
 import {
   computeMotionPromptInputHash,
   computeVisualPromptInputHash,
@@ -44,9 +49,17 @@ export const getFrameFn = createServerFn({ method: 'GET' })
 export const getSequenceImageModelsFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
   .handler(async ({ context }) => {
-    return context.scopedDb.frameVariants.listModelsForSequence(
+    const models = await context.scopedDb.frameVariants.listModelsForSequence(
       context.sequence.id,
       'image'
+    );
+    // Preview thumbnails are generated with a hidden internal model
+    // (PREVIEW_IMAGE_MODEL = flux_2_turbo) and stored as image variants. Hide
+    // such hidden models from the user-facing sequence image-model list — they
+    // aren't a real choice and only confuse the header dropdown.
+    return models.filter(
+      (model) =>
+        !(isValidTextToImageModel(model) && 'hidden' in IMAGE_MODELS[model])
     );
   });
 

@@ -201,8 +201,8 @@ describe('assembleMotionPrompt', () => {
   // Non-audio models (Grok, MiniMax)
   // ---------------------------------------------------------------------------
 
-  describe('Grok Imagine Video (no audio)', () => {
-    const model = 'grok_imagine_video';
+  describe('Grok Imagine Video 1.5 (no audio)', () => {
+    const model = 'grok_imagine_video_1_5';
 
     it('returns fullPrompt for non-audio model', () => {
       const result = assembleMotionPrompt({

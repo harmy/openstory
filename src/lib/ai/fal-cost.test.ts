@@ -196,24 +196,24 @@ describe('calculateVideoCost', () => {
     expect(cost).toBe(micros(400_000));
   });
 
-  test('Grok Video 480p ($0.05/s + $0.002)', () => {
+  test('Grok Video 1.5 480p ($0.08/s + $0.01)', () => {
     const cost = calculateVideoCost({
-      endpointId: 'xai/grok-imagine-video/image-to-video',
+      endpointId: 'xai/grok-imagine-video/v1.5/image-to-video',
       durationSeconds: 6,
       resolution: '480p',
     });
-    // 50_000 * 6 + 2_000 = 302_000
-    expect(cost).toBe(micros(302_000));
+    // 80_000 * 6 + 10_000 = 490_000
+    expect(cost).toBe(micros(490_000));
   });
 
-  test('Grok Video 720p ($0.07/s + $0.002)', () => {
+  test('Grok Video 1.5 720p ($0.14/s + $0.01)', () => {
     const cost = calculateVideoCost({
-      endpointId: 'xai/grok-imagine-video/image-to-video',
+      endpointId: 'xai/grok-imagine-video/v1.5/image-to-video',
       durationSeconds: 6,
       resolution: '720p',
     });
-    // 70_000 * 6 + 2_000 = 422_000
-    expect(cost).toBe(micros(422_000));
+    // 140_000 * 6 + 10_000 = 850_000
+    expect(cost).toBe(micros(850_000));
   });
 
   test('Seedance v1.5 Pro 5s ($1.2/s)', () => {

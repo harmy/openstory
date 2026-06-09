@@ -89,7 +89,7 @@ export const SequenceVideoModelSelector = ({
           </Badge>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[200px]">
+      <DropdownMenuContent align="start" className="w-[280px]">
         <DropdownMenuLabel className="text-xs">Video model</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {models.length > 1 && (

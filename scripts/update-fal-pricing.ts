@@ -179,9 +179,9 @@ const VIDEO_OVERRIDES: Record<
   'wan/v2.6/image-to-video/flash': {
     resolutionPricing: { '720p': m(0.05), '1080p': m(0.075) },
   },
-  'xai/grok-imagine-video/image-to-video': {
-    resolutionPricing: { '480p': m(0.05), '720p': m(0.07) },
-    surcharges: { imageInput: m(0.002) },
+  'xai/grok-imagine-video/v1.5/image-to-video': {
+    resolutionPricing: { '480p': m(0.08), '720p': m(0.14) },
+    surcharges: { imageInput: m(0.01) },
   },
   'fal-ai/bytedance/seedance/v1/pro/image-to-video': {
     mode: 'per_token',

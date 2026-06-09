@@ -1,0 +1,24 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Instrumental ambient-acoustic score with soft guitar and pads creating a fresh sensory mood that moves from intimate preparation to a breezy coastal walk.",
+        "model": "fal-ai/elevenlabs/music",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "audio": {
+            "url": "https://v3b.fal.media/files/b/0a9d9025/c-NrIIzpN92x8ChcCmb6O_music_generated.mp3",
+            "content_type": "audio/mpeg",
+            "file_name": "music_generated.mp3",
+            "file_size": 432214
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

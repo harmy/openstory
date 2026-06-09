@@ -168,7 +168,11 @@ async function seed() {
       const existing = existingByName.get(template.name);
 
       if (existing) {
-        // Update all fields on existing template
+        // Update all fields on existing template.
+        // NOTE: sampleVideos is intentionally excluded — it's seeded
+        // separately (scripts/seed-style-sample-videos.ts) and the template
+        // mapper hardcodes it to [], so syncing it here would wipe seeded
+        // sample videos.
         await db
           .update(styles)
           .set({
@@ -180,6 +184,10 @@ async function seed() {
             isTemplate: template.isTemplate,
             previewUrl: template.previewUrl,
             sortOrder: template.sortOrder,
+            recommendedImageModel: template.recommendedImageModel,
+            recommendedVideoModel: template.recommendedVideoModel,
+            defaultAspectRatio: template.defaultAspectRatio,
+            useCases: template.useCases,
             updatedAt: new Date(),
           })
           .where(eq(styles.id, existing.id));
