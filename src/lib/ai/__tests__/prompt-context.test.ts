@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { StyleConfig } from '@/lib/db/schema';
+import { buildCastCharacterBible } from '@/lib/prompts/character-prompt';
+import type { Character, StyleConfig } from '@/lib/db/schema';
+import { charactersToBible } from '../bibles-from-scoped';
 import {
   computeMotionPromptInputHash,
   computeVisualPromptInputHash,
@@ -285,5 +287,158 @@ describe('narrowed hash stability (the user-reported bug)', () => {
       })
     );
     expect(after).toBe(before);
+  });
+});
+
+describe('prompt-driving projection (#867 §4.2)', () => {
+  const baseCtx = {
+    scene: sceneReferencing({
+      characterTags: ['alice'],
+      environmentTag: 'beach',
+    }),
+    styleConfig: style,
+    characterBible: [alice],
+    locationBible: [beach],
+    elementBible: [],
+    aspectRatio: '16:9',
+    analysisModel: 'anthropic/claude-haiku-4.5',
+  };
+
+  it('a consistencyTag change on a referenced character does NOT move the visual hash', async () => {
+    const before = await computeVisualPromptInputHash(
+      narrowFramePromptContext(baseCtx)
+    );
+    const after = await computeVisualPromptInputHash(
+      narrowFramePromptContext({
+        ...baseCtx,
+        characterBible: [{ ...alice, consistencyTag: 'alice_recast_xyz' }],
+      })
+    );
+    expect(after).toBe(before);
+  });
+
+  it('a firstMention change on a referenced location does NOT move the motion hash', async () => {
+    const before = await computeMotionPromptInputHash(
+      narrowFramePromptContext(baseCtx)
+    );
+    const after = await computeMotionPromptInputHash(
+      narrowFramePromptContext({
+        ...baseCtx,
+        locationBible: [
+          {
+            ...beach,
+            firstMention: { sceneId: 's9', text: 'x', lineNumber: 42 },
+          },
+        ],
+      })
+    );
+    expect(after).toBe(before);
+  });
+
+  it('a physicalDescription change on a referenced character DOES move the visual hash', async () => {
+    const before = await computeVisualPromptInputHash(
+      narrowFramePromptContext(baseCtx)
+    );
+    const after = await computeVisualPromptInputHash(
+      narrowFramePromptContext({
+        ...baseCtx,
+        characterBible: [{ ...alice, physicalDescription: 'now bearded' }],
+      })
+    );
+    expect(after).not.toBe(before);
+  });
+});
+
+describe('casting round-trip — stamp matches verify (#867)', () => {
+  const rawSarah: CharacterBibleEntry = {
+    characterId: 'char_001',
+    name: 'Detective Sarah',
+    age: '30s',
+    gender: 'Female',
+    ethnicity: 'Caucasian',
+    physicalDescription: 'Tall, blonde hair, blue eyes',
+    standardClothing: 'Dark trench coat',
+    distinguishingFeatures: 'Scar on left cheek',
+    consistencyTag: 'detective_sarah_blonde_30s',
+  };
+  const talentSheet: CharacterBibleEntry = {
+    characterId: 'talent_1',
+    name: 'Elvis Presley',
+    age: '25',
+    gender: 'Male',
+    ethnicity: 'White',
+    physicalDescription: 'Dark hair, sideburns, athletic build',
+    standardClothing: 'White jumpsuit',
+    distinguishingFeatures: 'Sideburns',
+    consistencyTag: 'elvis_presley',
+  };
+  const match = {
+    characterId: 'char_001',
+    talentName: 'Elvis Presley',
+    sheetMetadata: talentSheet,
+  };
+  // Scene references the character by name slug (matching is name-based, stable
+  // across casting).
+  const scene = sceneReferencing({
+    characterTags: ['detective_sarah'],
+    environmentTag: 'beach',
+  });
+
+  // Simulate the row the character-bible workflow persists, then read it back
+  // the way `getFrameStalenessFn` does at verify time.
+  const makeCharacterRow = (b: CharacterBibleEntry): Character => ({
+    id: `row_${b.characterId}`,
+    sequenceId: 'seq_1',
+    talentId: 'talent_1',
+    characterId: b.characterId,
+    name: b.name,
+    age: b.age,
+    gender: b.gender,
+    ethnicity: b.ethnicity,
+    physicalDescription: b.physicalDescription,
+    standardClothing: b.standardClothing,
+    distinguishingFeatures: b.distinguishingFeatures,
+    consistencyTag: b.consistencyTag,
+    firstMentionSceneId: null,
+    firstMentionText: null,
+    firstMentionLine: null,
+    sheetImageUrl: null,
+    sheetImagePath: null,
+    sheetStatus: 'completed',
+    sheetGeneratedAt: null,
+    sheetError: null,
+    sheetInputHash: null,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+  });
+
+  const ctxWith = (characterBible: CharacterBibleEntry[]) =>
+    narrowFramePromptContext({
+      scene,
+      styleConfig: style,
+      characterBible,
+      locationBible: [beach],
+      elementBible: [],
+      aspectRatio: '16:9',
+      analysisModel: 'anthropic/claude-haiku-4.5',
+    });
+
+  it('stamp (cast bible fed to prompt) equals verify (cast bible read from the DB)', async () => {
+    const [castSarah] = buildCastCharacterBible([rawSarah], [match]);
+    if (!castSarah) throw new Error('expected one cast entry');
+    const verifyBible = charactersToBible([makeCharacterRow(castSarah)]);
+
+    const stampHash = await computeVisualPromptInputHash(ctxWith([castSarah]));
+    const verifyHash = await computeVisualPromptInputHash(ctxWith(verifyBible));
+    expect(stampHash).toBe(verifyHash);
+  });
+
+  it('hashing the raw pre-cast bible (the old behaviour) diverged from the DB', async () => {
+    const cast = buildCastCharacterBible([rawSarah], [match]);
+    const rawHash = await computeVisualPromptInputHash(ctxWith([rawSarah]));
+    const castHash = await computeVisualPromptInputHash(ctxWith(cast));
+    // physicalDescription + age/gender/ethnicity differ between raw and cast, so
+    // the pre-fix stamp could never match the cast DB row — permanent staleness.
+    expect(rawHash).not.toBe(castHash);
   });
 });

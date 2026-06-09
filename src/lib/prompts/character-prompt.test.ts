@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import type { CharacterBibleEntry } from '@/lib/ai/scene-analysis.schema';
 import type { StyleConfig } from '@/lib/db/schema';
 import {
+  buildCastCharacterBible,
   buildCastingAttributes,
   buildCharacterSheetPrompt,
 } from './character-prompt';
@@ -120,6 +121,80 @@ describe('buildCastingAttributes', () => {
     expect(result.gender).toBe('Female'); // falls back to script
     expect(result.ethnicity).toBe('Caucasian'); // falls back to script
     expect(result.physicalDescription).toBe('Muscular build');
+  });
+});
+
+describe('buildCastCharacterBible', () => {
+  const bob: CharacterBibleEntry = {
+    characterId: 'char_002',
+    name: 'Bob',
+    age: '40',
+    gender: 'Male',
+    ethnicity: 'Asian',
+    physicalDescription: 'Short, dark hair',
+    standardClothing: 'Grey suit',
+    distinguishingFeatures: 'Glasses',
+    consistencyTag: 'bob_grey_suit',
+  };
+
+  test('applies casting to a matched character', () => {
+    const [cast] = buildCastCharacterBible(
+      [scriptEntry],
+      [
+        {
+          characterId: 'char_001',
+          talentName: 'Elvis Presley',
+          sheetMetadata: talentMetadata,
+        },
+      ]
+    );
+    if (!cast) throw new Error('expected one cast entry');
+
+    // Matches buildCastingAttributes exactly (the same transform the
+    // character-bible workflow persists) — this is what makes the prompt hash
+    // equal the verify-time recompute.
+    const expected = buildCastingAttributes(scriptEntry, {
+      sheetMetadata: talentMetadata,
+      talentName: 'Elvis Presley',
+    });
+    expect(cast).toEqual({
+      characterId: 'char_001',
+      name: 'Detective Sarah',
+      ...expected,
+    });
+    expect(cast.physicalDescription).toBe(
+      'Dark hair, sideburns, athletic build'
+    );
+    expect(cast.consistencyTag).toBe('char_001_elvis_presley');
+  });
+
+  test('leaves an unmatched character untouched (identity)', () => {
+    const input: CharacterBibleEntry[] = [scriptEntry, bob];
+    const result = buildCastCharacterBible(input, [
+      {
+        characterId: 'char_001',
+        talentName: 'Elvis Presley',
+        sheetMetadata: talentMetadata,
+      },
+    ]);
+    // bob has no match → returned by reference, unchanged.
+    expect(result[1]).toBe(bob);
+  });
+
+  test('no matches → returns every entry unchanged', () => {
+    const input: CharacterBibleEntry[] = [scriptEntry, bob];
+    const result = buildCastCharacterBible(input, []);
+    expect(result).toEqual(input);
+  });
+
+  test('preserves characterId and name when casting', () => {
+    const [cast] = buildCastCharacterBible(
+      [scriptEntry],
+      [{ characterId: 'char_001', talentName: 'Elvis Presley' }]
+    );
+    if (!cast) throw new Error('expected one cast entry');
+    expect(cast.characterId).toBe('char_001');
+    expect(cast.name).toBe('Detective Sarah');
   });
 });
 

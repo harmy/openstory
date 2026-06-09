@@ -59,15 +59,28 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
     // PHASE 3: Motion Prompt Generation (using durableLLMCall helper)
     // ============================================================
 
+    // Narrow the bibles to this scene's entities (via `scene.continuity`, set
+    // by scene-split) before the LLM call, so the model and the staleness hash
+    // see the same minimal, scene-scoped input. See #867.
+    const narrowed = narrowFramePromptContext({
+      scene,
+      styleConfig,
+      characterBible,
+      locationBible,
+      elementBible,
+      aspectRatio,
+      analysisModel: analysisModelId,
+    });
+
     const promptVariables = {
       sceneBefore: sceneBefore
         ? JSON.stringify(sceneBefore, null, 2)
         : '(none)',
       sceneAfter: sceneAfter ? JSON.stringify(sceneAfter, null, 2) : '(none)',
       scene: JSON.stringify(scene, null, 2),
-      characterBible: JSON.stringify(characterBible, null, 2),
-      locationBible: JSON.stringify(locationBible, null, 2),
-      elementBible: JSON.stringify(elementBible, null, 2),
+      characterBible: JSON.stringify(narrowed.characterBible, null, 2),
+      locationBible: JSON.stringify(narrowed.locationBible, null, 2),
+      elementBible: JSON.stringify(narrowed.elementBible, null, 2),
       styleConfig: JSON.stringify(styleConfig, null, 2),
       aspectRatio,
     };
@@ -105,18 +118,8 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
         );
       }
 
-      // Hash inputs are narrowed by the scene's continuity (populated upstream
-      // by the visual-prompt workflow) so unreferenced entities don't poison
-      // the stored hash.
-      const narrowed = narrowFramePromptContext({
-        scene,
-        styleConfig,
-        characterBible,
-        locationBible,
-        elementBible,
-        aspectRatio,
-        analysisModel: analysisModelId,
-      });
+      // Hash the same scene-scoped `narrowed` context the LLM was given above,
+      // so the stored hash equals the verify-time recompute by construction.
       const inputHash = await computeMotionPromptInputHash(narrowed);
 
       const enrichedScene = {

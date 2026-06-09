@@ -71,6 +71,11 @@ export const sceneSplittingResultSchema = z.object({
           metadata: true,
         })
         .required()
+        // Scene membership now lives upstream: scene-split, which already holds
+        // the full script + bibles, emits each scene's `continuity` so the
+        // visual-prompt LLM no longer has to derive it. Downstream prompt
+        // workflows narrow their bible inputs with this. See #867.
+        .extend({ continuity: continuitySchema })
     )
     .meta({ description: 'Array of scenes split from the script' }),
   characterBible: z.array(characterBibleEntrySchema).meta({

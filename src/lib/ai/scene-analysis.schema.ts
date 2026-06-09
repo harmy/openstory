@@ -503,18 +503,16 @@ export const continuitySchema = z.object({
 });
 
 /**
- * Combined schema for visual prompt generation response.
- * Used by visual-prompt-scene-workflow to capture both prompt AND continuity.
+ * Visual prompt generation response. Scene `continuity` (membership) is produced
+ * upstream by scene-split, so the visual-prompt LLM only authors the image
+ * prompt and no longer emits continuity. See #867.
  */
-export const visualPromptWithContinuitySchema = z.object({
+export const visualPromptResultSchema = z.object({
   visual: visualPromptSchema.meta({
     description: 'Image generation prompt data',
   }),
-  continuity: continuitySchema.meta({
-    description:
-      'Continuity tracking - characterTags and environmentTag for matching to bibles',
-  }),
 });
+export type VisualPromptResult = z.infer<typeof visualPromptResultSchema>;
 
 // ============================================================================
 // Original Script Schema
@@ -624,9 +622,6 @@ export type ProjectMetadata = z.infer<typeof projectMetadataSchema>;
 export type VisualPrompt = z.infer<typeof visualPromptSchema>;
 export type VisualPromptComponents = z.infer<
   typeof visualPromptComponentsSchema
->;
-export type VisualPromptWithContinuity = z.infer<
-  typeof visualPromptWithContinuitySchema
 >;
 export type MotionPrompt = z.infer<typeof motionPromptSchema>;
 export type MotionPromptComponents = z.infer<

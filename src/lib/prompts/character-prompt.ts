@@ -239,6 +239,40 @@ export const buildCastingAttributes = (
 };
 
 /**
+ * Apply casting across a whole character bible: every character matched to
+ * library talent gets `buildCastingAttributes` applied (the exact transform the
+ * character-bible workflow persists); unmatched characters pass through
+ * unchanged.
+ *
+ * Used so the visual/motion prompt workflows generate from — and hash — the same
+ * cast bible the DB ends up holding. Without this the prompts hash the raw,
+ * pre-cast bible while staleness verification reads the cast DB row, so every
+ * talent-matched frame reports permanently stale (#867).
+ *
+ * `talentMatches` is typed structurally (not as `TalentCharacterMatch`) to keep
+ * this prompt module free of a workflow-types dependency.
+ */
+export const buildCastCharacterBible = (
+  characterBible: readonly CharacterBibleEntry[],
+  talentMatches: readonly {
+    characterId: string;
+    talentName: string;
+    sheetMetadata?: CharacterBibleEntry;
+  }[]
+): CharacterBibleEntry[] => {
+  const byCharacterId = new Map(talentMatches.map((m) => [m.characterId, m]));
+  return characterBible.map((character) => {
+    const match = byCharacterId.get(character.characterId);
+    if (!match) return character;
+    const cast = buildCastingAttributes(character, {
+      sheetMetadata: match.sheetMetadata,
+      talentName: match.talentName,
+    });
+    return { ...character, ...cast };
+  });
+};
+
+/**
  * Talent appearance data for character sheet generation
  */
 type TalentOverrides = {

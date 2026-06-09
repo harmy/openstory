@@ -47,11 +47,34 @@ const lenientMetadata = z.object({
   storyBeat: z.string().catch(''),
 });
 
+// Scene-split now emits `continuity` per scene (membership moved upstream, #867).
+// It often streams in after `originalScript`/`metadata`, so every field defaults
+// — a scene is still "complete enough" to preview before its continuity lands,
+// and the strict reconcile parse carries the final value onto the frame.
+const lenientContinuity = z
+  .object({
+    characterTags: z.array(z.string()).catch([]),
+    environmentTag: z.string().catch(''),
+    elementTags: z.array(z.string()).nullish().catch(null),
+    colorPalette: z.string().catch(''),
+    lightingSetup: z.string().catch(''),
+    styleTag: z.string().catch(''),
+  })
+  .catch({
+    characterTags: [],
+    environmentTag: '',
+    elementTags: null,
+    colorPalette: '',
+    lightingSetup: '',
+    styleTag: '',
+  });
+
 const sceneSplittingSceneSchema = z.object({
   sceneId: z.string(),
   sceneNumber: z.number(),
   originalScript: lenientOriginalScript,
   metadata: lenientMetadata,
+  continuity: lenientContinuity,
 });
 
 export type SceneSplittingScene = z.infer<typeof sceneSplittingSceneSchema>;

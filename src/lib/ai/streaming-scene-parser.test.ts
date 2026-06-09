@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { sceneSplittingResultSchema } from './response-schemas';
 import {
   createStreamingSceneParser,
   stripCodeFences,
@@ -252,5 +253,48 @@ describe('stripCodeFences', () => {
 
   test('handles partial fenced input (no closing)', () => {
     expect(stripCodeFences('```json\n{"a":1')).toBe('{"a":1');
+  });
+});
+
+describe('scene-split continuity (membership upstream, #867)', () => {
+  const defaultContinuity = {
+    characterTags: [],
+    environmentTag: '',
+    elementTags: null,
+    colorPalette: '',
+    lightingSetup: '',
+    styleTag: '',
+  };
+
+  test('a scene still streams complete before its continuity lands (defaulted)', () => {
+    const parser = createStreamingSceneParser();
+    const oneScene = JSON.stringify({
+      projectMetadata: fullResponse.projectMetadata,
+      scenes: [makeScene(1)], // no continuity yet
+    });
+    const sceneEvent = parser.feed(oneScene).find((e) => e.type === 'scene');
+    expect(sceneEvent).toBeDefined();
+    if (sceneEvent?.type === 'scene') {
+      expect(sceneEvent.scene.continuity).toEqual(defaultContinuity);
+    }
+  });
+
+  test('the strict result schema requires continuity on every scene', () => {
+    const base = {
+      ...fullResponse,
+      characterBible: [],
+      locationBible: [],
+      elementBible: [],
+    };
+    // Without continuity → rejected (membership is now a required scene-split output).
+    expect(sceneSplittingResultSchema.safeParse(base).success).toBe(false);
+    // With continuity → accepted.
+    const withContinuity = {
+      ...base,
+      scenes: base.scenes.map((s) => ({ ...s, continuity: defaultContinuity })),
+    };
+    expect(sceneSplittingResultSchema.safeParse(withContinuity).success).toBe(
+      true
+    );
   });
 });

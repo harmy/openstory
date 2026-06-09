@@ -15,10 +15,7 @@
  *     await pair gets its own retry budget. See await-child.ts.
  *   - Reads payload from `event.payload` instead of `context.requestPayload`. */
 
-import type {
-  Scene,
-  VisualPromptWithContinuity,
-} from '@/lib/ai/scene-analysis.schema';
+import type { Scene, VisualPrompt } from '@/lib/ai/scene-analysis.schema';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { spawnAndAwaitChild } from '@/lib/workflow/await-child';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
@@ -46,7 +43,7 @@ const PARENT_BINDING_NAME = 'VISUAL_PROMPT_WORKFLOW' as unknown as Parameters<
   typeof spawnAndAwaitChild
 >[1]['parentBindingName'];
 
-type VisualPromptSceneResult = { sceneId: string } & VisualPromptWithContinuity;
+type VisualPromptSceneResult = { sceneId: string; visual: VisualPrompt };
 
 export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualPromptWorkflowInput> {
   protected override async runImpl(
@@ -173,13 +170,14 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
               'WorkflowValidationError'
             );
           }
+          // `scene.continuity` already came from scene-split; the child only
+          // adds the visual prompt now.
           return {
             ...scene,
             prompts: {
               ...scene.prompts,
               visual: enrichment.childResult.visual,
             },
-            continuity: enrichment.childResult.continuity,
           };
         });
       }

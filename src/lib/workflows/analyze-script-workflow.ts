@@ -32,6 +32,7 @@ import type { Scene } from '@/lib/ai/scene-analysis.schema';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { assembleMotionPrompt } from '@/lib/motion/assemble-motion-prompt';
 import { recordWorkflowTrace } from '@/lib/observability/langfuse';
+import { buildCastCharacterBible } from '@/lib/prompts/character-prompt';
 import { getGenerationChannel } from '@/lib/realtime';
 import { spawnAndAwaitChild } from '@/lib/workflow/await-child';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
@@ -280,6 +281,19 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
     const { matches: talentCharacterMatches } = talentSettled.value;
     const { matches: libraryLocationMatches } = locationMatchSettled.value;
 
+    // Apply casting to the bible NOW, before prompt generation. Talent matching
+    // (above) has resolved, so casting is known. Feeding the cast bible into the
+    // visual/motion prompt children means those prompts are generated from — and
+    // hashed against — the exact values the character-bible workflow persists, so
+    // staleness verification (which reads the cast DB row) matches by
+    // construction. Unmatched characters pass through unchanged. The character-
+    // bible child still receives the raw bible + matches (its sheet-generation
+    // path is unchanged). See #867.
+    const castCharacterBible = buildCastCharacterBible(
+      characterBible,
+      talentCharacterMatches
+    );
+
     // ----------------------------------------------------------------------
     // PHASE 3: character bible + location bible + visual prompts in parallel
     // ----------------------------------------------------------------------
@@ -389,7 +403,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
             sequenceId,
             scenes,
             aspectRatio,
-            characterBible,
+            characterBible: castCharacterBible,
             locationBible,
             elementBible,
             styleConfig,
@@ -526,7 +540,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
           scenesWithVisualPrompts,
           frameMapping,
           aspectRatio,
-          characterBible,
+          characterBible: castCharacterBible,
           locationBible,
           elementBible,
           styleConfig,
