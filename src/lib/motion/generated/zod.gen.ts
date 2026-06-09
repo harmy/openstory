@@ -255,16 +255,16 @@ export const zKlingVideoV3ProImageToVideoOutput = z.object({
  * KlingV3ComboElementInput
  */
 export const zKlingV3ComboElementInput = z.object({
-    reference_image_urls: z.union([
-        z.array(z.string()),
+    video_url: z.union([
+        z.string(),
         z.unknown()
     ]).optional(),
     voice_id: z.union([
         z.string(),
         z.unknown()
     ]).optional(),
-    video_url: z.union([
-        z.string(),
+    reference_image_urls: z.union([
+        z.array(z.string()),
         z.unknown()
     ]).optional(),
     frontal_image_url: z.union([
@@ -277,6 +277,9 @@ export const zKlingV3ComboElementInput = z.object({
  * KlingV3MultiPromptElement
  */
 export const zKlingV3MultiPromptElement = z.object({
+    prompt: z.string().register(z.globalRegistry, {
+        description: 'The prompt for this shot.'
+    }),
     duration: z.enum([
         '1',
         '2',
@@ -295,16 +298,35 @@ export const zKlingV3MultiPromptElement = z.object({
         '15'
     ]).register(z.globalRegistry, {
         description: 'The duration of this shot in seconds'
-    }).optional().default('5'),
-    prompt: z.string().register(z.globalRegistry, {
-        description: 'The prompt for this shot.'
-    })
+    }).optional().default('5')
 });
 
 /**
  * ImageToVideoV3ProRequest
  */
 export const zKlingVideoV3ProImageToVideoInput = z.object({
+    cfg_scale: z.number().gte(0).lte(1).register(z.globalRegistry, {
+        description: '\n            The CFG (Classifier Free Guidance) scale is a measure of how close you want\n            the model to stick to your prompt.\n        '
+    }).optional().default(0.5),
+    prompt: z.union([
+        z.string().max(2500),
+        z.unknown()
+    ]).optional(),
+    negative_prompt: z.string().max(2500).optional().default('blur, distort, and low quality'),
+    elements: z.union([
+        z.array(zKlingV3ComboElementInput),
+        z.unknown()
+    ]).optional(),
+    shot_type: z.enum(['customize', 'intelligent']).register(z.globalRegistry, {
+        description: 'The type of multi-shot video generation. \'intelligent\' lets the model automatically determine shot structure.'
+    }).optional().default('customize'),
+    start_image_url: z.union([
+        z.string(),
+        z.string()
+    ]),
+    generate_audio: z.boolean().register(z.globalRegistry, {
+        description: 'Whether to generate native audio for the video. Supports Chinese and English voice output. Other languages are automatically translated to English. For English speech, use lowercase letters; for acronyms or proper nouns, use uppercase.'
+    }).optional().default(true),
     duration: z.enum([
         '3',
         '4',
@@ -322,75 +344,14 @@ export const zKlingVideoV3ProImageToVideoInput = z.object({
     ]).register(z.globalRegistry, {
         description: 'The duration of the generated video in seconds'
     }).optional().default('5'),
-    end_image_url: z.union([
-        z.string(),
-        z.unknown()
-    ]).optional(),
-    start_image_url: z.union([
-        z.string(),
-        z.string()
-    ]),
-    negative_prompt: z.string().max(2500).optional().default('blur, distort, and low quality'),
-    generate_audio: z.boolean().register(z.globalRegistry, {
-        description: 'Whether to generate native audio for the video. Supports Chinese and English voice output. Other languages are automatically translated to English. For English speech, use lowercase letters; for acronyms or proper nouns, use uppercase.'
-    }).optional().default(true),
-    elements: z.union([
-        z.array(zKlingV3ComboElementInput),
-        z.unknown()
-    ]).optional(),
-    cfg_scale: z.number().gte(0).lte(1).register(z.globalRegistry, {
-        description: '\n            The CFG (Classifier Free Guidance) scale is a measure of how close you want\n            the model to stick to your prompt.\n        '
-    }).optional().default(0.5),
-    prompt: z.union([
-        z.string().max(2500),
-        z.unknown()
-    ]).optional(),
-    shot_type: z.enum(['customize', 'intelligent']).register(z.globalRegistry, {
-        description: 'The type of multi-shot video generation. \'intelligent\' lets the model automatically determine shot structure.'
-    }).optional().default('customize'),
     multi_prompt: z.union([
         z.array(zKlingV3MultiPromptElement),
         z.unknown()
-    ]).optional()
-});
-
-/**
- * XAIImageToVideoInput
- */
-export const zGrokImagineVideoImageToVideoInput = z.object({
-    aspect_ratio: z.union([
-        z.enum([
-            'auto',
-            '16:9',
-            '4:3',
-            '3:2',
-            '1:1',
-            '2:3',
-            '3:4',
-            '9:16'
-        ]),
-        z.unknown()
     ]).optional(),
-    resolution: z.enum(['480p', '720p']).register(z.globalRegistry, {
-        description: 'Resolution of the output video.'
-    }).optional().default('720p'),
-    prompt: z.string().max(4096).register(z.globalRegistry, {
-        description: 'Text description of desired changes or motion in the video.'
-    }),
-    duration: z.int().gte(1).lte(15).register(z.globalRegistry, {
-        description: 'Video duration in seconds.'
-    }).optional().default(6),
-    image_url: z.union([
+    end_image_url: z.union([
         z.string(),
-        z.string()
-    ])
-});
-
-/**
- * XAIImageToVideoOutput
- */
-export const zGrokImagineVideoImageToVideoOutput = z.object({
-    video: zVideoFile
+        z.unknown()
+    ]).optional()
 });
 
 /**
@@ -769,58 +730,6 @@ export const zGetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdPath = z.obj
  * Result of the request.
  */
 export const zGetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdResponse = zKlingVideoV3ProImageToVideoOutput;
-
-export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdStatusPath = z.object({
-    request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID'
-    })
-});
-
-export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdStatusQuery = z.object({
-    logs: z.number().register(z.globalRegistry, {
-        description: 'Whether to include logs (`1`) in the response or not (`0`).'
-    }).optional()
-});
-
-/**
- * The request status.
- */
-export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdStatusResponse = zQueueStatus;
-
-export const zPutXaiGrokImagineVideoImageToVideoRequestsByRequestIdCancelPath = z.object({
-    request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID'
-    })
-});
-
-/**
- * The request was cancelled.
- */
-export const zPutXaiGrokImagineVideoImageToVideoRequestsByRequestIdCancelResponse = z.object({
-    success: z.boolean().register(z.globalRegistry, {
-        description: 'Whether the request was cancelled successfully.'
-    }).optional()
-}).register(z.globalRegistry, {
-    description: 'The request was cancelled.'
-});
-
-export const zPostXaiGrokImagineVideoImageToVideoBody = zGrokImagineVideoImageToVideoInput;
-
-/**
- * The request status.
- */
-export const zPostXaiGrokImagineVideoImageToVideoResponse = zQueueStatus;
-
-export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdPath = z.object({
-    request_id: z.string().register(z.globalRegistry, {
-        description: 'Request ID'
-    })
-});
-
-/**
- * Result of the request.
- */
-export const zGetXaiGrokImagineVideoImageToVideoRequestsByRequestIdResponse = zGrokImagineVideoImageToVideoOutput;
 
 export const zGetFalAiMinimaxHailuo02ProImageToVideoRequestsByRequestIdStatusPath = z.object({
     request_id: z.string().register(z.globalRegistry, {

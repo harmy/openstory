@@ -626,8 +626,116 @@ export const FileSchema = {
 } as const;
 
 export const KlingVideoV3ProImageToVideoInputSchema = {
+    type: 'object',
     properties: {
+        cfg_scale: {
+            type: 'number',
+            maximum: 1,
+            minimum: 0,
+            title: 'Cfg Scale',
+            default: 0.5,
+            description: '\n            The CFG (Classifier Free Guidance) scale is a measure of how close you want\n            the model to stick to your prompt.\n        '
+        },
+        prompt: {
+            examples: [
+                'The craftsman slowly examines the bowl, turning it gently in his weathered hands. His eyes reflect years of wisdom. Subtle smile forms on his face. Dust particles drift in warm light. Breathing motion, blinking eyes.'
+            ],
+            title: 'Prompt',
+            anyOf: [
+                {
+                    type: 'string',
+                    maxLength: 2500
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            description: 'Text prompt for video generation. Either prompt or multi_prompt must be provided, but not both.'
+        },
+        negative_prompt: {
+            type: 'string',
+            title: 'Negative Prompt',
+            default: 'blur, distort, and low quality',
+            maxLength: 2500
+        },
+        elements: {
+            examples: [
+                [
+                    {
+                        reference_image_urls: [
+                            'https://v3b.fal.media/files/b/0a8cfd62/psPCmzrD1y9vDgdyNfKAL_glasses_back.png'
+                        ],
+                        frontal_image_url: 'https://v3b.fal.media/files/b/0a8cfd5f/-kZL-ha3Iuelku5IHXC-A_glasses.png'
+                    },
+                    {
+                        video_url: 'https://v3b.fal.media/files/b/0a8cfd66/b03SOiQvKLlFx_jqdNZ9z_child_video.mp4'
+                    }
+                ]
+            ],
+            title: 'Elements',
+            anyOf: [
+                {
+                    type: 'array',
+                    items: {
+                        $ref: '#/components/schemas/KlingV3ComboElementInput'
+                    }
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            description: 'Elements (characters/objects) to include in the video. Each example can either be an image set (frontal + reference images) or a video. Reference in prompt as @Element1, @Element2, etc.'
+        },
+        shot_type: {
+            type: 'string',
+            title: 'Shot Type',
+            default: 'customize',
+            description: 'The type of multi-shot video generation. \'intelligent\' lets the model automatically determine shot structure.',
+            enum: [
+                'customize',
+                'intelligent'
+            ]
+        },
+        start_image_url: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'string',
+                    format: 'binary'
+                }
+            ],
+            'x-fal-file-input': true,
+            examples: [
+                'https://storage.googleapis.com/falserverless/example_inputs/kling-v3/pro-i2v/start_image.png'
+            ],
+            'x-fal': {
+                min_height: 300,
+                min_aspect_ratio: 0.4,
+                max_aspect_ratio: 2.5,
+                min_width: 300,
+                timeout: 20,
+                max_file_size: 10485760
+            },
+            title: 'Start Image Url',
+            description: 'URL of the image to be used for the video',
+            limit_description: 'Max file size: 10.0MB, Min width: 300px, Min height: 300px, Min aspect ratio: 0.40, Max aspect ratio: 2.50, Timeout: 20.0s'
+        },
+        generate_audio: {
+            type: 'boolean',
+            default: true,
+            description: 'Whether to generate native audio for the video. Supports Chinese and English voice output. Other languages are automatically translated to English. For English speech, use lowercase letters; for acronyms or proper nouns, use uppercase.',
+            title: 'Generate Audio'
+        },
         duration: {
+            type: 'string',
+            examples: [
+                '12'
+            ],
+            title: 'Duration',
+            default: '5',
+            description: 'The duration of the generated video in seconds',
             enum: [
                 '3',
                 '4',
@@ -642,156 +750,49 @@ export const KlingVideoV3ProImageToVideoInputSchema = {
                 '13',
                 '14',
                 '15'
-            ],
-            title: 'Duration',
+            ]
+        },
+        multi_prompt: {
             examples: [
-                '12'
+                null
             ],
-            type: 'string',
-            default: '5',
-            description: 'The duration of the generated video in seconds'
+            title: 'Multi Prompt',
+            anyOf: [
+                {
+                    type: 'array',
+                    items: {
+                        $ref: '#/components/schemas/KlingV3MultiPromptElement'
+                    }
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            description: 'List of prompts for multi-shot video generation. If provided, divides the video into multiple shots.'
         },
         end_image_url: {
             title: 'End Image Url',
-            description: 'URL of the image to be used for the end of the video',
             anyOf: [
                 {
+                    type: 'string',
+                    'x-fal': {
+                        min_height: 300,
+                        min_aspect_ratio: 0.4,
+                        max_aspect_ratio: 2.5,
+                        min_width: 300,
+                        timeout: 20,
+                        max_file_size: 10485760
+                    },
                     ui: {
                         field: 'image'
                     },
-                    'x-fal': {
-                        max_file_size: 10485760,
-                        min_height: 300,
-                        timeout: 20,
-                        min_aspect_ratio: 0.4,
-                        min_width: 300,
-                        max_aspect_ratio: 2.5
-                    },
-                    type: 'string',
                     limit_description: 'Max file size: 10.0MB, Min width: 300px, Min height: 300px, Min aspect ratio: 0.40, Max aspect ratio: 2.50, Timeout: 20.0s'
                 },
                 {
                     type: 'null'
                 }
-            ]
-        },
-        start_image_url: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'string',
-                    format: 'binary'
-                }
             ],
-            'x-fal-file-input': true,
-            title: 'Start Image Url',
-            'x-fal': {
-                max_file_size: 10485760,
-                min_height: 300,
-                timeout: 20,
-                min_aspect_ratio: 0.4,
-                min_width: 300,
-                max_aspect_ratio: 2.5
-            },
-            examples: [
-                'https://storage.googleapis.com/falserverless/example_inputs/kling-v3/pro-i2v/start_image.png'
-            ],
-            limit_description: 'Max file size: 10.0MB, Min width: 300px, Min height: 300px, Min aspect ratio: 0.40, Max aspect ratio: 2.50, Timeout: 20.0s',
-            description: 'URL of the image to be used for the video'
-        },
-        negative_prompt: {
-            title: 'Negative Prompt',
-            type: 'string',
-            maxLength: 2500,
-            default: 'blur, distort, and low quality'
-        },
-        generate_audio: {
-            title: 'Generate Audio',
-            description: 'Whether to generate native audio for the video. Supports Chinese and English voice output. Other languages are automatically translated to English. For English speech, use lowercase letters; for acronyms or proper nouns, use uppercase.',
-            type: 'boolean',
-            default: true
-        },
-        elements: {
-            title: 'Elements',
-            description: 'Elements (characters/objects) to include in the video. Each example can either be an image set (frontal + reference images) or a video. Reference in prompt as @Element1, @Element2, etc.',
-            examples: [
-                [
-                    {
-                        reference_image_urls: [
-                            'https://v3b.fal.media/files/b/0a8cfd62/psPCmzrD1y9vDgdyNfKAL_glasses_back.png'
-                        ],
-                        frontal_image_url: 'https://v3b.fal.media/files/b/0a8cfd5f/-kZL-ha3Iuelku5IHXC-A_glasses.png'
-                    },
-                    {
-                        video_url: 'https://v3b.fal.media/files/b/0a8cfd66/b03SOiQvKLlFx_jqdNZ9z_child_video.mp4'
-                    }
-                ]
-            ],
-            anyOf: [
-                {
-                    items: {
-                        $ref: '#/components/schemas/KlingV3ComboElementInput'
-                    },
-                    type: 'array'
-                },
-                {
-                    type: 'null'
-                }
-            ]
-        },
-        cfg_scale: {
-            minimum: 0,
-            title: 'Cfg Scale',
-            description: '\n            The CFG (Classifier Free Guidance) scale is a measure of how close you want\n            the model to stick to your prompt.\n        ',
-            type: 'number',
-            default: 0.5,
-            maximum: 1
-        },
-        prompt: {
-            title: 'Prompt',
-            description: 'Text prompt for video generation. Either prompt or multi_prompt must be provided, but not both.',
-            examples: [
-                'The craftsman slowly examines the bowl, turning it gently in his weathered hands. His eyes reflect years of wisdom. Subtle smile forms on his face. Dust particles drift in warm light. Breathing motion, blinking eyes.'
-            ],
-            anyOf: [
-                {
-                    type: 'string',
-                    maxLength: 2500
-                },
-                {
-                    type: 'null'
-                }
-            ]
-        },
-        shot_type: {
-            title: 'Shot Type',
-            enum: [
-                'customize',
-                'intelligent'
-            ],
-            description: 'The type of multi-shot video generation. \'intelligent\' lets the model automatically determine shot structure.',
-            type: 'string',
-            default: 'customize'
-        },
-        multi_prompt: {
-            title: 'Multi Prompt',
-            description: 'List of prompts for multi-shot video generation. If provided, divides the video into multiple shots.',
-            examples: [
-                null
-            ],
-            anyOf: [
-                {
-                    items: {
-                        $ref: '#/components/schemas/KlingV3MultiPromptElement'
-                    },
-                    type: 'array'
-                },
-                {
-                    type: 'null'
-                }
-            ]
+            description: 'URL of the image to be used for the end of the video'
         }
     },
     'x-fal-order-properties': [
@@ -809,23 +810,23 @@ export const KlingVideoV3ProImageToVideoInputSchema = {
     title: 'ImageToVideoV3ProRequest',
     required: [
         'start_image_url'
-    ],
-    type: 'object'
+    ]
 } as const;
 
 export const KlingVideoV3ProImageToVideoOutputSchema = {
+    type: 'object',
     properties: {
         video: {
-            description: 'The generated video',
             examples: [
                 {
-                    content_type: 'video/mp4',
                     url: 'https://storage.googleapis.com/falserverless/example_outputs/kling-v3/pro-i2v/out.mp4',
-                    file_size: 8431922,
-                    file_name: 'out.mp4'
+                    content_type: 'video/mp4',
+                    file_name: 'out.mp4',
+                    file_size: 8431922
                 }
             ],
-            $ref: '#/components/schemas/File'
+            $ref: '#/components/schemas/File',
+            description: 'The generated video'
         }
     },
     'x-fal-order-properties': [
@@ -834,43 +835,42 @@ export const KlingVideoV3ProImageToVideoOutputSchema = {
     title: 'ImageToVideoV3ProOutput',
     required: [
         'video'
-    ],
-    type: 'object'
+    ]
 } as const;
 
 export const KlingV3ComboElementInputSchema = {
+    type: 'object',
     properties: {
-        reference_image_urls: {
-            title: 'Reference Image Urls',
-            description: 'Additional reference images from different angles. 1-3 images supported. At least one image is required.',
+        video_url: {
+            title: 'Video Url',
             anyOf: [
                 {
-                    items: {
-                        ui: {
-                            field: 'image'
-                        },
-                        _fal_ui_field: 'image',
-                        'x-fal': {
-                            max_file_size: 10485760,
-                            min_height: 300,
-                            timeout: 20,
-                            min_aspect_ratio: 0.4,
-                            min_width: 300,
-                            max_aspect_ratio: 2.5
-                        },
-                        type: 'string',
-                        limit_description: 'Max file size: 10.0MB, Min width: 300px, Min height: 300px, Min aspect ratio: 0.40, Max aspect ratio: 2.50, Timeout: 20.0s'
+                    type: 'string',
+                    'x-fal': {
+                        min_height: 720,
+                        min_duration: 3,
+                        timeout: 30,
+                        min_width: 720,
+                        max_height: 2160,
+                        max_width: 2160,
+                        max_duration: 10.05,
+                        max_fps: 60,
+                        min_fps: 24,
+                        max_file_size: 209715200
                     },
-                    type: 'array'
+                    ui: {
+                        field: 'video'
+                    },
+                    limit_description: 'Max file size: 200.0MB, Min width: 720px, Min height: 720px, Max width: 2160px, Max height: 2160px, Min duration: 3.0s, Max duration: 10.05s, Min FPS: 24.0, Max FPS: 60.0, Timeout: 30.0s'
                 },
                 {
                     type: 'null'
                 }
-            ]
+            ],
+            description: 'The video URL of the element. A request can only have one element with a video.'
         },
         voice_id: {
             title: 'Voice Id',
-            description: 'The voice ID for this element. The voice will be binded to the element and references to this element will use the binded voice. Voice binding is only supported for video elements, and cannot be used with image elements. Get voice IDs from the following endpoint: https://fal.ai/models/fal-ai/kling-video/create-voice',
             anyOf: [
                 {
                     type: 'string'
@@ -878,59 +878,60 @@ export const KlingV3ComboElementInputSchema = {
                 {
                     type: 'null'
                 }
-            ]
+            ],
+            description: 'The voice ID for this element. The voice will be binded to the element and references to this element will use the binded voice. Voice binding is only supported for video elements, and cannot be used with image elements. Get voice IDs from the following endpoint: https://fal.ai/models/fal-ai/kling-video/create-voice'
         },
-        video_url: {
-            title: 'Video Url',
-            description: 'The video URL of the element. A request can only have one element with a video.',
+        reference_image_urls: {
+            title: 'Reference Image Urls',
             anyOf: [
                 {
-                    ui: {
-                        field: 'video'
-                    },
-                    'x-fal': {
-                        max_duration: 10.05,
-                        max_width: 2160,
-                        max_file_size: 209715200,
-                        timeout: 30,
-                        max_fps: 60,
-                        min_height: 720,
-                        min_fps: 24,
-                        min_duration: 3,
-                        min_width: 720,
-                        max_height: 2160
-                    },
-                    type: 'string',
-                    limit_description: 'Max file size: 200.0MB, Min width: 720px, Min height: 720px, Max width: 2160px, Max height: 2160px, Min duration: 3.0s, Max duration: 10.05s, Min FPS: 24.0, Max FPS: 60.0, Timeout: 30.0s'
+                    type: 'array',
+                    items: {
+                        type: 'string',
+                        _fal_ui_field: 'image',
+                        'x-fal': {
+                            min_height: 300,
+                            min_aspect_ratio: 0.4,
+                            max_aspect_ratio: 2.5,
+                            min_width: 300,
+                            timeout: 20,
+                            max_file_size: 10485760
+                        },
+                        ui: {
+                            field: 'image'
+                        },
+                        limit_description: 'Max file size: 10.0MB, Min width: 300px, Min height: 300px, Min aspect ratio: 0.40, Max aspect ratio: 2.50, Timeout: 20.0s'
+                    }
                 },
                 {
                     type: 'null'
                 }
-            ]
+            ],
+            description: 'Additional reference images from different angles. 1-3 images supported. At least one image is required.'
         },
         frontal_image_url: {
             title: 'Frontal Image Url',
-            description: 'The frontal image of the element (main view).',
             anyOf: [
                 {
+                    type: 'string',
+                    'x-fal': {
+                        min_height: 300,
+                        min_aspect_ratio: 0.4,
+                        max_aspect_ratio: 2.5,
+                        min_width: 300,
+                        timeout: 20,
+                        max_file_size: 10485760
+                    },
                     ui: {
                         field: 'image'
                     },
-                    'x-fal': {
-                        max_file_size: 10485760,
-                        min_height: 300,
-                        timeout: 20,
-                        min_aspect_ratio: 0.4,
-                        min_width: 300,
-                        max_aspect_ratio: 2.5
-                    },
-                    type: 'string',
                     limit_description: 'Max file size: 10.0MB, Min width: 300px, Min height: 300px, Min aspect ratio: 0.40, Max aspect ratio: 2.50, Timeout: 20.0s'
                 },
                 {
                     type: 'null'
                 }
-            ]
+            ],
+            description: 'The frontal image of the element (main view).'
         }
     },
     'x-fal-order-properties': [
@@ -939,14 +940,22 @@ export const KlingV3ComboElementInputSchema = {
         'video_url',
         'voice_id'
     ],
-    title: 'KlingV3ComboElementInput',
-    type: 'object'
+    title: 'KlingV3ComboElementInput'
 } as const;
 
 export const KlingV3MultiPromptElementSchema = {
+    type: 'object',
     properties: {
+        prompt: {
+            type: 'string',
+            title: 'Prompt',
+            description: 'The prompt for this shot.'
+        },
         duration: {
+            type: 'string',
             title: 'Duration',
+            default: '5',
+            description: 'The duration of this shot in seconds',
             enum: [
                 '1',
                 '2',
@@ -963,15 +972,7 @@ export const KlingV3MultiPromptElementSchema = {
                 '13',
                 '14',
                 '15'
-            ],
-            description: 'The duration of this shot in seconds',
-            type: 'string',
-            default: '5'
-        },
-        prompt: {
-            title: 'Prompt',
-            description: 'The prompt for this shot.',
-            type: 'string'
+            ]
         }
     },
     'x-fal-order-properties': [
@@ -981,121 +982,6 @@ export const KlingV3MultiPromptElementSchema = {
     title: 'KlingV3MultiPromptElement',
     required: [
         'prompt'
-    ],
-    type: 'object'
-} as const;
-
-export const GrokImagineVideoImageToVideoInputSchema = {
-    title: 'XAIImageToVideoInput',
-    type: 'object',
-    properties: {
-        aspect_ratio: {
-            title: 'Aspect Ratio',
-            default: 'auto',
-            anyOf: [
-                {
-                    enum: [
-                        'auto',
-                        '16:9',
-                        '4:3',
-                        '3:2',
-                        '1:1',
-                        '2:3',
-                        '3:4',
-                        '9:16'
-                    ],
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            description: 'Aspect ratio of the generated video.'
-        },
-        resolution: {
-            enum: [
-                '480p',
-                '720p'
-            ],
-            type: 'string',
-            default: '720p',
-            title: 'Resolution',
-            description: 'Resolution of the output video.'
-        },
-        prompt: {
-            title: 'Prompt',
-            maxLength: 4096,
-            type: 'string',
-            examples: [
-                'Medieval knight in ornate armor walking through a mystical forest, bioluminescent plants pulsing with light, ancient stone ruins overgrown with glowing vines, over-the-shoulder camera, dark fantasy aesthetic, volumetric fog and Lumen lighting'
-            ],
-            description: 'Text description of desired changes or motion in the video.'
-        },
-        duration: {
-            minimum: 1,
-            type: 'integer',
-            maximum: 15,
-            description: 'Video duration in seconds.',
-            title: 'Duration',
-            default: 6
-        },
-        image_url: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'string',
-                    format: 'binary'
-                }
-            ],
-            'x-fal-file-input': true,
-            title: 'Image URL',
-            examples: [
-                'https://v3b.fal.media/files/b/0a8b90e0/BFLE9VDlZqsryU-UA3BoD_image_004.png'
-            ],
-            description: 'URL of the input image for video generation.'
-        }
-    },
-    required: [
-        'prompt',
-        'image_url'
-    ],
-    'x-fal-order-properties': [
-        'prompt',
-        'duration',
-        'resolution',
-        'image_url',
-        'aspect_ratio'
-    ]
-} as const;
-
-export const GrokImagineVideoImageToVideoOutputSchema = {
-    title: 'XAIImageToVideoOutput',
-    type: 'object',
-    properties: {
-        video: {
-            $ref: '#/components/schemas/VideoFile',
-            examples: [
-                {
-                    duration: 6.041667,
-                    file_name: '0Ci1dviuSnEyUZzBUq-_5_nu7MrAAa.mp4',
-                    fps: 24,
-                    height: 720,
-                    content_type: 'video/mp4',
-                    url: 'https://v3b.fal.media/files/b/0a8b90e0/0Ci1dviuSnEyUZzBUq-_5_nu7MrAAa.mp4',
-                    width: 1280,
-                    num_frames: 145
-                }
-            ],
-            description: 'The generated video.'
-        }
-    },
-    required: [
-        'video'
-    ],
-    'x-fal-order-properties': [
-        'video'
     ]
 } as const;
 

@@ -231,19 +231,6 @@ export const VIDEO_PRICING: Record<string, VideoPricing> = {
     pricingNotes:
       'For every second of video you generate you will be charged **$0.20** without audio or **$0.40** with audio for 720p or 1080p. At 4k, you will be charged **$0.40** per second without audio, or **$0.60** with. For example, a **5 second video** at **1080p** with **audio on** will cost **$2.00**.\n\nFor more details, see [fal.ai pricing](https://fal.ai/pricing).',
   },
-  'xai/grok-imagine-video/image-to-video': {
-    mode: 'per_second',
-    basePrice: micros(50_000),
-    resolutionPricing: {
-      '480p': micros(50_000),
-      '720p': micros(70_000),
-    },
-    surcharges: {
-      imageInput: micros(2_000),
-    },
-    pricingNotes:
-      'A 6s 480p video will cost **$0.302** (**$0.05** per second of 480p video + **$0.002** for image input). At an output resolution of 480p, every second costs **$0.05**, and at 720p, every second costs **$0.07**.\n\nFor more details, see [fal.ai pricing](https://fal.ai/pricing).',
-  },
   'xai/grok-imagine-video/v1.5/image-to-video': {
     mode: 'per_second',
     basePrice: micros(80_000),

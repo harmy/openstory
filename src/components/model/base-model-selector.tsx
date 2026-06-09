@@ -208,7 +208,7 @@ export const BaseModelSelector: React.FC<BaseModelSelectorProps> = ({
           <ChevronDown className="ml-2 size-4 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-[260px] max-h-[400px] overflow-y-auto">
+      <DropdownMenuContent className="w-[300px] max-h-[400px] overflow-y-auto">
         <div className="flex items-center justify-between px-2 py-1.5">
           <DropdownMenuLabel className="p-0 text-xs">{label}</DropdownMenuLabel>
           {multiSelect && (

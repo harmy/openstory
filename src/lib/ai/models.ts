@@ -69,15 +69,6 @@ export const IMAGE_TO_VIDEO_MODELS = {
     maxPromptLength: 2500,
     performance: { estimatedGenerationTime: 20, quality: 'best' as const },
   },
-  grok_imagine_video: {
-    id: 'xai/grok-imagine-video/image-to-video',
-    name: 'Grok Imagine Video',
-    provider: 'Grok',
-    license: 'proprietary' as const,
-    qualityRank: 4,
-    maxPromptLength: 2500,
-    performance: { estimatedGenerationTime: 20, quality: 'best' as const },
-  },
   minimax_hailuo_02: {
     id: 'fal-ai/minimax/hailuo-02/pro/image-to-video',
     name: 'MiniMax Hailuo 02',
@@ -264,7 +255,6 @@ export const DEFAULT_VIDEO_MODEL: ImageToVideoModel = 'grok_imagine_video_1_5';
 // Typed list of image-to-video model keys for Zod enum schemas
 // This is type-safe because we use satisfies to validate the tuple matches the type
 export const IMAGE_TO_VIDEO_MODEL_KEYS = [
-  'grok_imagine_video',
   'grok_imagine_video_1_5',
   'kling_v3_pro',
   'ltx_2_3_pro',

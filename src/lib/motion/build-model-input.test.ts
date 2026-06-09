@@ -51,13 +51,6 @@ describe('buildModelInput', () => {
     });
   });
 
-  describe('Grok Imagine Video', () => {
-    it('uses image_url', () => {
-      const result = build('grok_imagine_video');
-      expect(result).toHaveProperty('image_url', baseOptions.imageUrl);
-    });
-  });
-
   describe('Grok Imagine Video 1.5 (default)', () => {
     it('uses image_url and strips aspect_ratio (schema has none)', () => {
       // v1.5's fal schema dropped aspect_ratio; the output ratio is driven by
@@ -153,7 +146,6 @@ describe('buildModelInput', () => {
         '14',
         '15',
       ],
-      grok_imagine_video: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
       grok_imagine_video_1_5: [
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
       ],

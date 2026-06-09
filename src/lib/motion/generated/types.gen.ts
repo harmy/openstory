@@ -308,40 +308,6 @@ export type File = {
  */
 export type KlingVideoV3ProImageToVideoInput = {
     /**
-     * Duration
-     *
-     * The duration of the generated video in seconds
-     */
-    duration?: '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '13' | '14' | '15';
-    /**
-     * End Image Url
-     *
-     * URL of the image to be used for the end of the video
-     */
-    end_image_url?: string | unknown;
-    /**
-     * Start Image Url
-     *
-     * URL of the image to be used for the video
-     */
-    start_image_url: string | Blob | File;
-    /**
-     * Negative Prompt
-     */
-    negative_prompt?: string;
-    /**
-     * Generate Audio
-     *
-     * Whether to generate native audio for the video. Supports Chinese and English voice output. Other languages are automatically translated to English. For English speech, use lowercase letters; for acronyms or proper nouns, use uppercase.
-     */
-    generate_audio?: boolean;
-    /**
-     * Elements
-     *
-     * Elements (characters/objects) to include in the video. Each example can either be an image set (frontal + reference images) or a video. Reference in prompt as @Element1, @Element2, etc.
-     */
-    elements?: Array<KlingV3ComboElementInput> | unknown;
-    /**
      * Cfg Scale
      *
      *
@@ -357,17 +323,51 @@ export type KlingVideoV3ProImageToVideoInput = {
      */
     prompt?: string | unknown;
     /**
+     * Negative Prompt
+     */
+    negative_prompt?: string;
+    /**
+     * Elements
+     *
+     * Elements (characters/objects) to include in the video. Each example can either be an image set (frontal + reference images) or a video. Reference in prompt as @Element1, @Element2, etc.
+     */
+    elements?: Array<KlingV3ComboElementInput> | unknown;
+    /**
      * Shot Type
      *
      * The type of multi-shot video generation. 'intelligent' lets the model automatically determine shot structure.
      */
     shot_type?: 'customize' | 'intelligent';
     /**
+     * Start Image Url
+     *
+     * URL of the image to be used for the video
+     */
+    start_image_url: string | Blob | File;
+    /**
+     * Generate Audio
+     *
+     * Whether to generate native audio for the video. Supports Chinese and English voice output. Other languages are automatically translated to English. For English speech, use lowercase letters; for acronyms or proper nouns, use uppercase.
+     */
+    generate_audio?: boolean;
+    /**
+     * Duration
+     *
+     * The duration of the generated video in seconds
+     */
+    duration?: '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '13' | '14' | '15';
+    /**
      * Multi Prompt
      *
      * List of prompts for multi-shot video generation. If provided, divides the video into multiple shots.
      */
     multi_prompt?: Array<KlingV3MultiPromptElement> | unknown;
+    /**
+     * End Image Url
+     *
+     * URL of the image to be used for the end of the video
+     */
+    end_image_url?: string | unknown;
 };
 
 /**
@@ -382,11 +382,11 @@ export type KlingVideoV3ProImageToVideoOutput = {
  */
 export type KlingV3ComboElementInput = {
     /**
-     * Reference Image Urls
+     * Video Url
      *
-     * Additional reference images from different angles. 1-3 images supported. At least one image is required.
+     * The video URL of the element. A request can only have one element with a video.
      */
-    reference_image_urls?: Array<string> | unknown;
+    video_url?: string | unknown;
     /**
      * Voice Id
      *
@@ -394,11 +394,11 @@ export type KlingV3ComboElementInput = {
      */
     voice_id?: string | unknown;
     /**
-     * Video Url
+     * Reference Image Urls
      *
-     * The video URL of the element. A request can only have one element with a video.
+     * Additional reference images from different angles. 1-3 images supported. At least one image is required.
      */
-    video_url?: string | unknown;
+    reference_image_urls?: Array<string> | unknown;
     /**
      * Frontal Image Url
      *
@@ -412,60 +412,17 @@ export type KlingV3ComboElementInput = {
  */
 export type KlingV3MultiPromptElement = {
     /**
-     * Duration
-     *
-     * The duration of this shot in seconds
-     */
-    duration?: '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '13' | '14' | '15';
-    /**
      * Prompt
      *
      * The prompt for this shot.
      */
     prompt: string;
-};
-
-/**
- * XAIImageToVideoInput
- */
-export type GrokImagineVideoImageToVideoInput = {
-    /**
-     * Aspect Ratio
-     *
-     * Aspect ratio of the generated video.
-     */
-    aspect_ratio?: 'auto' | '16:9' | '4:3' | '3:2' | '1:1' | '2:3' | '3:4' | '9:16' | unknown;
-    /**
-     * Resolution
-     *
-     * Resolution of the output video.
-     */
-    resolution?: '480p' | '720p';
-    /**
-     * Prompt
-     *
-     * Text description of desired changes or motion in the video.
-     */
-    prompt: string;
     /**
      * Duration
      *
-     * Video duration in seconds.
+     * The duration of this shot in seconds
      */
-    duration?: number;
-    /**
-     * Image URL
-     *
-     * URL of the input image for video generation.
-     */
-    image_url: string | Blob | File;
-};
-
-/**
- * XAIImageToVideoOutput
- */
-export type GrokImagineVideoImageToVideoOutput = {
-    video: VideoFile;
+    duration?: '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | '11' | '12' | '13' | '14' | '15';
 };
 
 /**
@@ -1008,95 +965,6 @@ export type GetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdResponses = {
 };
 
 export type GetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdResponse = GetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdResponses[keyof GetFalAiKlingVideoV3ProImageToVideoRequestsByRequestIdResponses];
-
-export type GetXaiGrokImagineVideoImageToVideoRequestsByRequestIdStatusData = {
-    body?: never;
-    path: {
-        /**
-         * Request ID
-         */
-        request_id: string;
-    };
-    query?: {
-        /**
-         * Whether to include logs (`1`) in the response or not (`0`).
-         */
-        logs?: number;
-    };
-    url: '/xai/grok-imagine-video/image-to-video/requests/{request_id}/status';
-};
-
-export type GetXaiGrokImagineVideoImageToVideoRequestsByRequestIdStatusResponses = {
-    /**
-     * The request status.
-     */
-    200: QueueStatus;
-};
-
-export type GetXaiGrokImagineVideoImageToVideoRequestsByRequestIdStatusResponse = GetXaiGrokImagineVideoImageToVideoRequestsByRequestIdStatusResponses[keyof GetXaiGrokImagineVideoImageToVideoRequestsByRequestIdStatusResponses];
-
-export type PutXaiGrokImagineVideoImageToVideoRequestsByRequestIdCancelData = {
-    body?: never;
-    path: {
-        /**
-         * Request ID
-         */
-        request_id: string;
-    };
-    query?: never;
-    url: '/xai/grok-imagine-video/image-to-video/requests/{request_id}/cancel';
-};
-
-export type PutXaiGrokImagineVideoImageToVideoRequestsByRequestIdCancelResponses = {
-    /**
-     * The request was cancelled.
-     */
-    200: {
-        /**
-         * Whether the request was cancelled successfully.
-         */
-        success?: boolean;
-    };
-};
-
-export type PutXaiGrokImagineVideoImageToVideoRequestsByRequestIdCancelResponse = PutXaiGrokImagineVideoImageToVideoRequestsByRequestIdCancelResponses[keyof PutXaiGrokImagineVideoImageToVideoRequestsByRequestIdCancelResponses];
-
-export type PostXaiGrokImagineVideoImageToVideoData = {
-    body: GrokImagineVideoImageToVideoInput;
-    path?: never;
-    query?: never;
-    url: '/xai/grok-imagine-video/image-to-video';
-};
-
-export type PostXaiGrokImagineVideoImageToVideoResponses = {
-    /**
-     * The request status.
-     */
-    200: QueueStatus;
-};
-
-export type PostXaiGrokImagineVideoImageToVideoResponse = PostXaiGrokImagineVideoImageToVideoResponses[keyof PostXaiGrokImagineVideoImageToVideoResponses];
-
-export type GetXaiGrokImagineVideoImageToVideoRequestsByRequestIdData = {
-    body?: never;
-    path: {
-        /**
-         * Request ID
-         */
-        request_id: string;
-    };
-    query?: never;
-    url: '/xai/grok-imagine-video/image-to-video/requests/{request_id}';
-};
-
-export type GetXaiGrokImagineVideoImageToVideoRequestsByRequestIdResponses = {
-    /**
-     * Result of the request.
-     */
-    200: GrokImagineVideoImageToVideoOutput;
-};
-
-export type GetXaiGrokImagineVideoImageToVideoRequestsByRequestIdResponse = GetXaiGrokImagineVideoImageToVideoRequestsByRequestIdResponses[keyof GetXaiGrokImagineVideoImageToVideoRequestsByRequestIdResponses];
 
 export type GetFalAiMinimaxHailuo02ProImageToVideoRequestsByRequestIdStatusData = {
     body?: never;
