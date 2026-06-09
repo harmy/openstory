@@ -77,6 +77,20 @@ export type LLMRequestParams<T = unknown> = {
     | { engine?: 'native' | 'exa'; maxResults?: number; searchPrompt?: string };
 
   /**
+   * Enable the model's reasoning/thinking pass (OpenRouter unified reasoning).
+   * `effort` is the simplest knob — higher = more internal deliberation before
+   * the answer. Reasoning tokens stream as separate events from the answer
+   * content, so the accumulated text the caller receives stays clean (no
+   * scratch work to strip). Use for tasks where a forward pass converges on the
+   * obvious/modal answer and genuine divergence needs a planning step.
+   */
+  reasoning?: {
+    effort?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+    enabled?: boolean;
+    maxTokens?: number;
+  };
+
+  /**
    * Debug mode forwarded to `chat()`. `true`/`false`, or a
    * `{ logger, …categories }` config. Pass `{ logger: aiDebugLogger }`
    * (from `@/lib/ai/ai-debug-logger`) to see full payloads in local Workerd
@@ -156,6 +170,7 @@ function convertMessages(messages: ChatMessage[]): {
 function buildModelOptions(params: LLMRequestParams) {
   return {
     ...(params.provider && { provider: params.provider }),
+    ...(params.reasoning && { reasoning: params.reasoning }),
     frequency_penalty: params.frequency_penalty,
     presence_penalty: params.presence_penalty,
   };

@@ -95,8 +95,42 @@ function resolveJudgeModel(): TextModel {
 const JUDGE_MODEL = resolveJudgeModel();
 const RUNS = Math.max(1, Number(parseArg('runs') ?? '1'));
 const TARGET_SECONDS = 30;
+// Iteration helpers: focus on a subset of cases and/or skip the #855 baseline.
+const FILTER = parseArg('filter') ?? null;
+const SKIP_PRIOR = process.argv.includes('--no-prior');
+// Enhancer temperature — defaults to the production value; override to probe
+// whether more divergence buys originality without hurting render/faithfulness.
+const TEMP = Number(parseArg('temp') ?? '0.7');
+// Enable the model's reasoning pass: --reasoning high|medium|low. This is the
+// genuine ideation lever — it lets the model brainstorm and reject the cliché
+// before writing, rather than emitting the modal answer in one pass.
+const REASONING_EFFORTS = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+] as const;
+type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+const REASONING: ReasoningEffort | null = (() => {
+  const r = parseArg('reasoning');
+  if (!r) return null;
+  // .find narrows to ReasoningEffort | undefined — no cast needed.
+  const effort = REASONING_EFFORTS.find((e) => e === r);
+  if (!effort) {
+    console.error(`--reasoning must be one of ${REASONING_EFFORTS.join(', ')}`);
+    process.exit(1);
+  }
+  return effort;
+})();
 
-/** The eval set: the user's makeup-ad example + canonical style briefs. */
+/**
+ * The eval set: the user's makeup-ad example + canonical style briefs spanning
+ * product, narrative, corporate, real-estate, documentary, and fashion — plus a
+ * RICH, fully-specified brief (coral-rich) that must be HONORED, not replaced
+ * (the faithfulness guardrail). Breadth across styles guards against tuning the
+ * prompt to a handful of briefs.
+ */
 const CASES: { label: string; brief: string; styleName: string }[] = [
   { label: 'makeup-ad', brief: 'a new makeup ad', styleName: 'Product Ad' },
   {
@@ -118,6 +152,34 @@ const CASES: { label: string; brief: string; styleName: string }[] = [
     label: 'restaurant-dish',
     brief: 'a signature dish at a new restaurant',
     styleName: 'Food & Beverage Hero',
+  },
+  {
+    label: 'corporate-film',
+    brief: 'a polished company brand film',
+    styleName: 'Corporate',
+  },
+  {
+    label: 'home-tour',
+    brief: 'a luxury home tour',
+    styleName: 'Real Estate',
+  },
+  {
+    label: 'documentary',
+    brief: 'a cinematic short-film scene',
+    styleName: 'Documentary',
+  },
+  {
+    label: 'fashion-film',
+    brief: 'a high-fashion editorial film',
+    styleName: 'Fashion Editorial',
+  },
+  {
+    // A rich, specific brief: the enhancer must KEEP Scarlett, the Coral
+    // lipstick, and Bondi — elevating, not inventing a different story.
+    label: 'coral-rich',
+    brief:
+      'CORAL — A SUMMER LAUNCH. Scarlett, 19, a Bondi Beach influencer, unboxes a new coral lipstick at her sunlit vanity and turns it slowly to camera ("one shade, one summer"). She swipes the colour on, blots, and smiles. She walks the Bondi promenade, hair lifting in the breeze, surfers cresting behind her, and glances back at the lens. At the shoreline she laughs as a wave breaks at her feet, the lipstick resting in the sand. A bright, social-first beauty ad for the Coral lipstick brand.',
+    styleName: 'Product Ad',
   },
 ];
 
@@ -151,8 +213,11 @@ async function enhance(
       { role: 'system', content: systemMessage(systemPrompt) },
       { role: 'user', content: userPrompt },
     ],
-    max_tokens: 4000,
-    temperature: 0.7,
+    // Reasoning tokens count toward the completion budget; with only 4000 the
+    // think pass starves the script (empty/truncated output). Give it headroom.
+    max_tokens: REASONING ? 16000 : 4000,
+    temperature: TEMP,
+    ...(REASONING && { reasoning: { effort: REASONING } }),
     observationName: 'eval-enhance-creativity',
     apiKey: openRouterKey,
   });
@@ -167,6 +232,11 @@ const verdictSchema = z.object({
   // un-renderable text/title-cards, no camera moves that must reveal off-frame
   // geometry. This must NOT regress as creativity rises.
   renderability: z.number().min(0).max(10),
+  // Guardrail: when the brief is specific (named product/characters/beats), did
+  // the script KEEP them, or invent a different story? 10 when the brief is a
+  // thin one-liner with nothing to preserve. Catches "creativity by ignoring
+  // the user's actual request".
+  faithfulness: z.number().min(0).max(10).default(10),
   cliche: z.boolean().default(false),
   note: z.string().default(''),
 });
@@ -177,7 +247,7 @@ const JUDGE_SYSTEM = `You are a strict creative director judging a short-film/ad
 Score the script you are given. Be calibrated and harsh on genericness.
 
 Return ONLY a JSON object (no markdown, no prose):
-{ "conceptOriginality": 0-10, "sensorySpecificity": 0-10, "emotionalArc": 0-10, "distinctVoice": 0-10, "renderability": 0-10, "cliche": true|false, "note": "<=160 chars" }
+{ "conceptOriginality": 0-10, "sensorySpecificity": 0-10, "emotionalArc": 0-10, "distinctVoice": 0-10, "renderability": 0-10, "faithfulness": 0-10, "cliche": true|false, "note": "<=160 chars" }
 
 Definitions:
 - conceptOriginality: is there a specific, surprising angle/hook for THIS brief, or the generic version anyone would write? Stock-ad tropes (slow-mo hair-flip, golden-hour wash, anonymous hand sliding product across marble, skyline-then-logo) = low.
@@ -185,6 +255,7 @@ Definitions:
 - emotionalArc: do the scenes form a shape (setup, turn, payoff) where each changes something, or a flat string of disconnected pretty shots?
 - distinctVoice: a committed tone that colors the choices, vs something that could belong to any brand/film.
 - renderability (guardrail, NOT creativity): a concrete subject established early, a genuine motion beat in every scene, NO un-renderable on-screen text/title-cards/logo-outro/VO/SOUND cues, and no camera move that must reveal rooms/geometry/subjects not already in frame. Penalize violations; reward a script that is both vivid AND cleanly renderable.
+- faithfulness (guardrail, NOT creativity): if the brief is SPECIFIC (names a product, characters, setting, or beats), did the script keep them and elevate that idea — or did it drift into a different story? Replacing the user's stated subject = low. If the brief is a thin/generic one-liner with nothing specific to preserve, return 10.
 - cliche: true if the script leans on stock-ad/film tropes.
 
 Judge only the script's own merits. Do not assume anything about how it was produced.`;
@@ -260,41 +331,83 @@ async function main() {
     `Enhance creativity A/B — judge ${JUDGE_MODEL}, enhancer ${RECOMMENDED_MODELS.creative}, ${RUNS} run(s)/variant, web search OFF\n`
   );
 
+  const GOAL = 9;
   const detail: Record<string, unknown>[] = [];
   const agg: Record<
     Variant,
-    { creativity: number[]; render: number[]; cliche: number }
+    { creativity: number[]; render: number[]; faith: number[]; cliche: number }
   > = {
-    prior: { creativity: [], render: [], cliche: 0 },
-    current: { creativity: [], render: [], cliche: 0 },
+    prior: { creativity: [], render: [], faith: [], cliche: 0 },
+    current: { creativity: [], render: [], faith: [], cliche: 0 },
   };
+  // Goal tracking: a case passes only when EVERY reported score is >= 9.
+  const failures: string[] = [];
 
-  for (const c of CASES) {
+  const cases = FILTER ? CASES.filter((c) => c.label.includes(FILTER)) : CASES;
+  // Per-dimension means across a case's samples — surfaces WHICH axis is low.
+  const dims = [
+    'conceptOriginality',
+    'sensorySpecificity',
+    'emotionalArc',
+    'distinctVoice',
+  ] as const;
+
+  for (const c of cases) {
     const style = styleByName(c.styleName);
     const [prior, current] = await Promise.all([
-      evalVariant('prior', c, style),
+      SKIP_PRIOR
+        ? Promise.resolve([] as Sample[])
+        : evalVariant('prior', c, style),
       evalVariant('current', c, style),
     ]);
 
     const row = (variant: Variant, samples: Sample[]) => {
       const cr = mean(samples.map((s) => creativity(s.verdict)));
       const rn = mean(samples.map((s) => s.verdict.renderability));
+      const fa = mean(samples.map((s) => s.verdict.faithfulness));
       const cl = samples.filter((s) => s.verdict.cliche).length;
       agg[variant].creativity.push(cr);
       agg[variant].render.push(rn);
+      agg[variant].faith.push(fa);
       agg[variant].cliche += cl;
-      return { cr, rn, cl };
+      return { cr, rn, fa, cl };
     };
-    const p = row('prior', prior);
-    const n = row('current', current);
 
     console.log(`▌ ${c.label}  (${c.brief} · ${c.styleName})`);
+    if (!SKIP_PRIOR) {
+      const p = row('prior', prior);
+      console.log(
+        `    prior    creativity ${p.cr.toFixed(1)}  render ${p.rn.toFixed(1)}  faith ${p.fa.toFixed(1)}  cliché ${p.cl}/${RUNS}`
+      );
+    }
+    const n = row('current', current);
+    // A case meets the goal only if creativity, renderability, AND faithfulness
+    // are all >= 9 (the worst single run gates, so noise can't sneak a pass).
+    const worst = (pick: (v: Verdict) => number) =>
+      Math.min(...current.map((s) => pick(s.verdict)));
+    const minCr = Math.min(...current.map((s) => creativity(s.verdict)));
+    const minRn = worst((v) => v.renderability);
+    const minFa = worst((v) => v.faithfulness);
+    const pass = minCr >= GOAL && minRn >= GOAL && minFa >= GOAL;
+    if (!pass) {
+      const why: string[] = [];
+      if (minCr < GOAL) why.push(`creativity ${minCr.toFixed(1)}`);
+      if (minRn < GOAL) why.push(`render ${minRn.toFixed(1)}`);
+      if (minFa < GOAL) why.push(`faith ${minFa.toFixed(1)}`);
+      failures.push(`${c.label}: ${why.join(', ')}`);
+    }
+    const perDim = dims
+      .map(
+        (d) =>
+          `${d.slice(0, 7)}=${mean(current.map((s) => s.verdict[d])).toFixed(1)}`
+      )
+      .join(' ');
     console.log(
-      `    prior    creativity ${p.cr.toFixed(1)}  render ${p.rn.toFixed(1)}  cliché ${p.cl}/${RUNS}`
+      `    current  ${pass ? '✓' : '✗'} creativity ${n.cr.toFixed(1)}  render ${n.rn.toFixed(1)}  faith ${n.fa.toFixed(1)}  cliché ${n.cl}/${RUNS}`
     );
-    console.log(
-      `    current  creativity ${n.cr.toFixed(1)}  render ${n.rn.toFixed(1)}  cliché ${n.cl}/${RUNS}  Δcreativity ${(n.cr - p.cr >= 0 ? '+' : '') + (n.cr - p.cr).toFixed(1)}\n`
-    );
+    console.log(`             ${perDim}`);
+    for (const s of current) console.log(`             · ${s.verdict.note}`);
+    console.log('');
 
     detail.push({
       case: c,
@@ -303,31 +416,37 @@ async function main() {
     });
   }
 
-  const pc = mean(agg.prior.creativity);
   const nc = mean(agg.current.creativity);
-  const pr = mean(agg.prior.render);
   const nr = mean(agg.current.render);
+  const nf = mean(agg.current.faith);
   console.log('── Aggregate (mean across cases) ──');
+  if (!SKIP_PRIOR) {
+    const pc = mean(agg.prior.creativity);
+    const pr = mean(agg.prior.render);
+    console.log(
+      `  prior     creativity ${pc.toFixed(2)}  render ${pr.toFixed(2)}  cliché ${agg.prior.cliche}`
+    );
+  }
   console.log(
-    `  prior     creativity ${pc.toFixed(2)}  render ${pr.toFixed(2)}  cliché ${agg.prior.cliche}`
+    `  current   creativity ${nc.toFixed(2)}  render ${nr.toFixed(2)}  faith ${nf.toFixed(2)}  cliché ${agg.current.cliche}`
   );
+
+  const passed = cases.length - failures.length;
   console.log(
-    `  current   creativity ${nc.toFixed(2)}  render ${nr.toFixed(2)}  cliché ${agg.current.cliche}`
+    `\n── Goal: every score >= ${GOAL} ── ${passed}/${cases.length} cases pass`
   );
-  console.log(
-    `  Δ         creativity ${(nc - pc >= 0 ? '+' : '') + (nc - pc).toFixed(2)}  render ${(nr - pr >= 0 ? '+' : '') + (nr - pr).toFixed(2)}`
-  );
+  if (failures.length > 0) {
+    console.log('  still short:');
+    for (const f of failures) console.log(`  ✗ ${f}`);
+  } else {
+    console.log('  ✓ all cases meet the bar.');
+  }
 
   const out = path.join(tmpdir(), 'eval-enhance-creativity.json');
   await writeFile(
     out,
     JSON.stringify(
-      {
-        judgeModel: JUDGE_MODEL,
-        runs: RUNS,
-        aggregate: { pc, nc, pr, nr },
-        detail,
-      },
+      { judgeModel: JUDGE_MODEL, runs: RUNS, goal: GOAL, failures, detail },
       null,
       2
     )
