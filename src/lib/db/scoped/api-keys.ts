@@ -14,7 +14,7 @@ import {
 } from '@/lib/crypto/api-key-encryption';
 import { type ApiKeyProvider, teamApiKeys } from '@/lib/db/schema';
 
-import { getLogger } from '@/lib/observability/logger';
+import { getLogger, serializeError } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'db', 'api-keys']);
 
@@ -37,7 +37,43 @@ export type ResolvedApiKey =
   | { key: string; source: 'team' }
   | { key: string; source: 'platform'; fallbackReason?: string };
 
+// The cached shape of a `team_api_keys` lookup. Holds the *encrypted* row
+// (ciphertext + invalid flag) only — never the decrypted key. `resolveKey`
+// memoizes this per scope to avoid redundant D1 reads, then decrypts fresh on
+// each call so plaintext is never retained in the cache (issue #864).
+type CachedKeyLookup =
+  | { found: false }
+  | {
+      found: true;
+      encryptedKey: string;
+      keyIv: string;
+      keyTag: string;
+      isInvalid: boolean;
+      invalidReason: string | null;
+    };
+
 export function createApiKeysReadMethods(db: Database, teamId: string) {
+  // Per-scope memoization of the `team_api_keys` row lookup. A ScopedDb is
+  // built fresh per workflow run / request, so this cache lives exactly one
+  // run — there is no cross-run staleness (issue #864). Without it, `resolveKey`
+  // runs a fresh D1 SELECT for every LLM/fal sub-call; under burst (the #801
+  // 90-sequence render) the redundant identical reads exhausted D1 and
+  // hard-failed sequences in phase 3.
+  //
+  // We cache only the *encrypted* row (ciphertext + invalid flag), never the
+  // decrypted key — `resolveKey` decrypts fresh on each call, so the plaintext
+  // key lives only for the duration of one call rather than the whole run. The
+  // cache is in-isolate heap, scoped to one team, and never persisted.
+  const keyLookupCache = new Map<ApiKeyProvider, Promise<CachedKeyLookup>>();
+
+  // Drop a cached lookup so the next resolveKey re-reads from D1. Called by the
+  // write methods after a save/delete/mark so a rotation or invalidation
+  // within the same scope can't keep serving the stale row.
+  function invalidateResolveKeyCache(provider?: ApiKeyProvider): void {
+    if (provider) keyLookupCache.delete(provider);
+    else keyLookupCache.clear();
+  }
+
   async function listKeys(): Promise<ApiKeyInfo[]> {
     const rows = await db
       .select({
@@ -91,17 +127,28 @@ export function createApiKeysReadMethods(db: Database, teamId: string) {
     return !!row;
   }
 
-  async function resolveKey(provider: ApiKeyProvider): Promise<ResolvedApiKey> {
-    const platformFallback = (fallbackReason?: string): ResolvedApiKey => {
-      const env = getEnv();
-      const platformKey =
-        provider === 'openrouter' ? env.OPENROUTER_KEY : env.FAL_KEY;
-      if (!platformKey) {
-        throw new Error(`No API key available for provider: ${provider}`);
-      }
-      return { key: platformKey, source: 'platform', fallbackReason };
-    };
+  // Read the encrypted `team_api_keys` row for `provider`, memoized per scope:
+  // D1 is hit at most once per provider per run, and concurrent in-flight reads
+  // collapse onto the same promise. A rejected read is evicted so a later caller
+  // (or a step retry in a surviving isolate) can re-read rather than inheriting
+  // a cached failure.
+  function readKeyRow(provider: ApiKeyProvider): Promise<CachedKeyLookup> {
+    const cached = keyLookupCache.get(provider);
+    if (cached) return cached;
 
+    const pending = readKeyRowUncached(provider);
+    keyLookupCache.set(provider, pending);
+    void pending.catch(() => {
+      if (keyLookupCache.get(provider) === pending) {
+        keyLookupCache.delete(provider);
+      }
+    });
+    return pending;
+  }
+
+  async function readKeyRowUncached(
+    provider: ApiKeyProvider
+  ): Promise<CachedKeyLookup> {
     const [row] = await db
       .select({
         encryptedKey: teamApiKeys.encryptedKey,
@@ -120,10 +167,46 @@ export function createApiKeysReadMethods(db: Database, teamId: string) {
       )
       .limit(1);
 
-    if (!row) return platformFallback();
+    if (!row) return { found: false };
+    return { found: true, ...row };
+  }
 
-    if (row.isInvalid) {
-      const reason = row.invalidReason ?? 'Team API key marked invalid';
+  // Resolve the usable key for `provider`. The D1 lookup is memoized per scope;
+  // the decrypted key is produced fresh on every call (and is GC-eligible as
+  // soon as the caller is done), so plaintext is never retained in the cache.
+  async function resolveKey(provider: ApiKeyProvider): Promise<ResolvedApiKey> {
+    const platformFallback = (fallbackReason?: string): ResolvedApiKey => {
+      const env = getEnv();
+      const platformKey =
+        provider === 'openrouter' ? env.OPENROUTER_KEY : env.FAL_KEY;
+      if (!platformKey) {
+        throw new Error(`No API key available for provider: ${provider}`);
+      }
+      return { key: platformKey, source: 'platform', fallbackReason };
+    };
+
+    let lookup: CachedKeyLookup;
+    try {
+      lookup = await readKeyRow(provider);
+    } catch (err) {
+      // The D1 read failed. Log the FULL cause chain here, in-isolate, while
+      // the underlying driver error is still on `DrizzleQueryError.cause` —
+      // that link is stripped once the error crosses a Cloudflare Workflows
+      // step boundary, so this is the only place the real D1 reason (overload
+      // vs connection-reset vs rate-limit) is observable. This read sits on
+      // every generation path and is the first to fail under burst (#864).
+      logger.error('team_api_keys read failed', {
+        provider,
+        teamId,
+        err: serializeError(err),
+      });
+      throw err;
+    }
+
+    if (!lookup.found) return platformFallback();
+
+    if (lookup.isInvalid) {
+      const reason = lookup.invalidReason ?? 'Team API key marked invalid';
       logger.warn('Falling back to platform key', {
         provider,
         teamId,
@@ -134,9 +217,9 @@ export function createApiKeysReadMethods(db: Database, teamId: string) {
 
     try {
       const decrypted = await decryptApiKey({
-        encryptedKey: row.encryptedKey,
-        keyIv: row.keyIv,
-        keyTag: row.keyTag,
+        encryptedKey: lookup.encryptedKey,
+        keyIv: lookup.keyIv,
+        keyTag: lookup.keyTag,
       });
       return { key: decrypted, source: 'team' };
     } catch (err) {
@@ -166,6 +249,12 @@ export function createApiKeysReadMethods(db: Database, teamId: string) {
             eq(teamApiKeys.provider, provider)
           )
         );
+      // Flip the cached lookup to invalid so other calls in this scope skip the
+      // doomed decrypt and don't re-issue the mark-invalid UPDATE.
+      keyLookupCache.set(
+        provider,
+        Promise.resolve({ ...lookup, isInvalid: true, invalidReason: reason })
+      );
       return platformFallback(reason);
     }
   }
@@ -210,6 +299,7 @@ export function createApiKeysReadMethods(db: Database, teamId: string) {
     hasInvalidKey,
     resolveKey,
     validateKey,
+    invalidateResolveKeyCache,
   };
 }
 
@@ -235,6 +325,7 @@ export function createApiKeysMethods(
       .where(
         and(eq(teamApiKeys.teamId, teamId), eq(teamApiKeys.provider, provider))
       );
+    readMethods.invalidateResolveKeyCache(provider);
   };
 
   const markKeyValid = async (provider: ApiKeyProvider): Promise<void> => {
@@ -249,6 +340,7 @@ export function createApiKeysMethods(
       .where(
         and(eq(teamApiKeys.teamId, teamId), eq(teamApiKeys.provider, provider))
       );
+    readMethods.invalidateResolveKeyCache(provider);
   };
 
   const revalidateStoredKey = async (
@@ -350,6 +442,8 @@ export function createApiKeysMethods(
         );
       }
 
+      readMethods.invalidateResolveKeyCache(params.provider);
+
       return {
         id: row.id,
         provider: row.provider,
@@ -373,6 +467,7 @@ export function createApiKeysMethods(
             eq(teamApiKeys.provider, provider)
           )
         );
+      readMethods.invalidateResolveKeyCache(provider);
     },
   };
 }

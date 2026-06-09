@@ -39,7 +39,7 @@ import {
   type WorkflowStep,
 } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
-import { getLogger } from '@/lib/observability/logger';
+import { getLogger, serializeError } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'cf', 'base']);
 
@@ -156,9 +156,12 @@ export abstract class OpenStoryWorkflowEntrypoint<
 
       const sanitized = sanitizeFailResponse(error);
       // Sanitized message inline in the headline; `err` carries the full
-      // original error (with stack) as a structured property.
+      // original error (with stack) plus its `.cause` chain as a structured
+      // property — so a wrapped driver error (e.g. D1 under DrizzleQueryError)
+      // is logged rather than dropped. Note the chain is only intact if the
+      // error hasn't already crossed a CF step boundary (#864).
       logger.error(`[${this.constructor.name}] Failure: ${sanitized}`, {
-        err: error,
+        err: serializeError(error),
       });
 
       if (this.onFailure) {

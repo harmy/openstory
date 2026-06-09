@@ -386,25 +386,70 @@ function safeJsonParse(text: string): unknown {
 }
 
 /**
+ * A serialized error plus its full `cause` chain. The structured `{ err }` we
+ * pass to `logger.error` only captures `name`/`message`/`stack` of the top
+ * error — the `.cause` link (e.g. the raw D1 driver error that
+ * `DrizzleQueryError` wraps) is dropped. This walks the chain so the underlying
+ * reason is logged. Crucial because `.cause` is also stripped once an error
+ * crosses a Cloudflare Workflows step boundary, so logging the chain at the
+ * point it's thrown is the only way to observe it (issue #864).
+ */
+export type SerializedError = {
+  name?: string;
+  message: string;
+  stack?: string;
+  cause?: SerializedError | string;
+};
+
+export function serializeError(
+  error: unknown,
+  maxDepth = 4
+): SerializedError | string {
+  if (error instanceof Error) {
+    const out: SerializedError = { name: error.name, message: error.message };
+    if (error.stack) out.stack = error.stack;
+    if (error.cause != null && maxDepth > 0) {
+      out.cause = serializeError(error.cause, maxDepth - 1);
+    }
+    return out;
+  }
+  if (typeof error === 'string') return error;
+  return String(error);
+}
+
+/**
  * Standardised error payload for logger.error('...', { err }).
- * Normalises OpenStoryError vs unknown into a stable shape.
+ * Normalises OpenStoryError vs unknown into a stable shape, including the
+ * `.cause` chain so a wrapped driver error (e.g. D1 under `DrizzleQueryError`)
+ * is never silently dropped.
  */
 export function toErrorPayload(error: unknown): {
   code: string;
   message: string;
   statusCode?: number;
   stack?: string;
+  cause?: SerializedError | string;
 } {
+  const cause =
+    error instanceof Error && error.cause != null
+      ? serializeError(error.cause)
+      : undefined;
   if (error instanceof OpenStoryError) {
     return {
       code: error.code,
       message: error.message,
       statusCode: error.statusCode,
       stack: error.stack,
+      cause,
     };
   }
   if (error instanceof Error) {
-    return { code: 'UNKNOWN', message: error.message, stack: error.stack };
+    return {
+      code: 'UNKNOWN',
+      message: error.message,
+      stack: error.stack,
+      cause,
+    };
   }
   return { code: 'UNKNOWN', message: String(error) };
 }
