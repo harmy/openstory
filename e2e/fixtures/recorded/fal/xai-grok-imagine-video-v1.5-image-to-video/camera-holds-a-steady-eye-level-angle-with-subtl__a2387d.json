@@ -1,0 +1,29 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Camera holds a steady eye-level angle with subtle handheld micro-movement. Scarlett's fingers lift the white box lid, twist the coral lipstick tube open with her thumb, trace the bullet, then glide it across her lower lip in one stroke. She presses her lips together and parts them into a soft smile that catches the light.\nSunlight shifts gentle highlights across the glossy surface and her mouth as secondary light plays across the vanity surface.",
+        "model": "xai/grok-imagine-video/v1.5/image-to-video",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video": {
+            "url": "https://v3b.fal.media/files/b/0a9d930a/MxInnzsc3JMo_axjz9cIR_S0c1XcFf.mp4",
+            "content_type": "video/mp4",
+            "file_name": "MxInnzsc3JMo_axjz9cIR_S0c1XcFf.mp4",
+            "file_size": 4656752,
+            "width": 1280,
+            "height": 704,
+            "fps": 24,
+            "duration": 12.041667,
+            "num_frames": 289
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}

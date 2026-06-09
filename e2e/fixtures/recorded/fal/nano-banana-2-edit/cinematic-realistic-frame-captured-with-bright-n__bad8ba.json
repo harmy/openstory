@@ -1,0 +1,29 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Cinematic realistic frame captured with bright natural window-style daylight on a breezy coastal promenade, SCARLETT walking forward mid-stride along the path with one hand raised mid-motion toward her ear, ocean horizon steady and level in the distance, shallow foam waves visible at the shoreline edge ahead, wet sand textures and soft breeze movement throughout the scene, high-key airy atmosphere with clean directional shadows and warm sand tones contrasting ocean blues, eye-level handheld angle with natural micro-movement and shallow depth of field emphasizing the foreground path while softly blurring the distant waves, modern social-first editorial beauty photography style with true-to-life color grading and crisp whites\n\n  <reference-images>\n    - Image 1 [CHARACTER REF]: Scarlett - Match the real-world appearance of Sienna Blake exactly\n    - Image 2 [LOCATION REF]: EXT. BEACH PROMENADE - DAY - Ocean-side promenade leading to shoreline with wet sand and rolling waves\n    \n    IMPORTANT: Reference images CARRY the visual identity of their labeled objects. When the prompt names an UPPERCASE element token, render it faithfully from its ELEMENT REF image — do not generate a new version from the prose. When the prompt names a LOCATION REF, use that image for the environment, lighting, and architectural identity. Prose describes how things are framed, lit, and positioned in the shot — it does not redefine what the reference already shows.\n  </reference-images>",
+        "model": "fal-ai/nano-banana-2/edit",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "images": [
+            {
+              "url": "https://v3b.fal.media/files/b/0a9d9305/wm84wLFhwfYH_D1MYZjvJ_CKFx5rUz.png",
+              "content_type": "image/png",
+              "file_name": "wm84wLFhwfYH_D1MYZjvJ_CKFx5rUz.png",
+              "file_size": null,
+              "width": null,
+              "height": null
+            }
+          ],
+          "description": ""
+        },
+        "status": 200
+      }
+    }
+  ]
+}

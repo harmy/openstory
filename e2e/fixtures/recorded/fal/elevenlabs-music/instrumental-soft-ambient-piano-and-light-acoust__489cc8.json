@@ -3,7 +3,7 @@
     {
       "match": {
         "endpoint": "fal",
-        "userMessage": "Instrumental ambient-acoustic score with soft guitar and pads creating a fresh sensory mood that moves from intimate preparation to a breezy coastal walk.",
+        "userMessage": "Instrumental soft ambient piano and light acoustic guitar underscore that begins intimate and serene in a quiet interior before gently unfolding into a breezy, uplifting coastal atmosphere.",
         "model": "fal-ai/elevenlabs/music",
         "turnIndex": 0,
         "hasToolResult": false
@@ -11,10 +11,10 @@
       "response": {
         "json": {
           "audio": {
-            "url": "https://v3b.fal.media/files/b/0a9d9025/c-NrIIzpN92x8ChcCmb6O_music_generated.mp3",
+            "url": "https://v3b.fal.media/files/b/0a9d930a/e0CpwyQkyMgjqpuU9T2f9_music_generated.mp3",
             "content_type": "audio/mpeg",
             "file_name": "music_generated.mp3",
-            "file_size": 432214
+            "file_size": 480698
           }
         },
         "status": 200

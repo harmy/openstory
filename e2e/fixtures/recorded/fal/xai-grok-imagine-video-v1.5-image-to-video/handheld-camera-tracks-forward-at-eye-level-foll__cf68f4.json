@@ -1,0 +1,29 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "endpoint": "fal",
+        "userMessage": "Handheld camera tracks forward at eye level, following Scarlett walking steadily along the promenade toward the shoreline. She raises one hand to tuck hair behind her ear, then bends to lower the lipstick tube into the wet sand beside her bare foot and straightens up. A shallow wave rolls in, curls around her ankles and nudges the lipstick before receding. She steps sideways through the foam as another wave gathers.",
+        "model": "xai/grok-imagine-video/v1.5/image-to-video",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "json": {
+          "video": {
+            "url": "https://v3b.fal.media/files/b/0a9d930a/LcxNkfkAv5SMoyuCqHl1E_bjsunUlK.mp4",
+            "content_type": "video/mp4",
+            "file_name": "LcxNkfkAv5SMoyuCqHl1E_bjsunUlK.mp4",
+            "file_size": 10636836,
+            "width": 1280,
+            "height": 704,
+            "fps": 24,
+            "duration": 15.041667,
+            "num_frames": 361
+          }
+        },
+        "status": 200
+      }
+    }
+  ]
+}
