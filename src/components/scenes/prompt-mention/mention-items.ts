@@ -9,7 +9,6 @@ import type {
   SequenceElement,
   SequenceLocation,
 } from '@/lib/db/schema';
-import { elementCanonicalKebab } from '@/lib/workflows/scene-matching';
 
 export type MentionSection = 'elements' | 'cast' | 'locations';
 
@@ -65,12 +64,14 @@ export function buildMentionItems(args: {
   const items: MentionItem[] = [];
 
   for (const el of args.elements) {
-    // New convention: lowercase kebab. Shared helper in scene-matching so the
-    // server-side parser and the editor pill the same thing.
-    const tag = elementCanonicalKebab(el);
-    // Legacy form (e.g. `RED HEX LOGO`) still appears in existing prompts —
-    // alias-match so old text auto-pills to the same item.
-    const aliases = el.token && el.token !== tag ? [el.token] : undefined;
+    // The element's UPPERCASE_SNAKE token IS its identifier — the exact form the
+    // script, prompts, and continuity.elementTags all use. Highlight it in place
+    // (no `@`), exactly like a cast name.
+    const tag = el.token;
+    // Legacy kebab `consistencyTag` prompts (from before elements used the
+    // token) still pill, re-pilling to the token on save.
+    const slug = consistencyTagSlug(el.consistencyTag);
+    const aliases = slug && slug !== tag ? [slug] : undefined;
     items.push({
       id: `element:${el.id}`,
       section: 'elements',
@@ -78,7 +79,7 @@ export function buildMentionItems(args: {
       sublabel: el.description ?? undefined,
       tag,
       ...(aliases ? { aliases } : {}),
-      haystack: [tag, el.token, el.description ?? '', el.consistencyTag ?? '']
+      haystack: [tag, el.description ?? '', el.consistencyTag ?? '']
         .join(' ')
         .toLowerCase(),
       thumbnailUrl: el.imageUrl,

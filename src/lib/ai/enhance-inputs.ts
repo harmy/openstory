@@ -30,12 +30,17 @@ type StyleLike = {
 };
 
 /**
- * An ingested element, narrowed to the fields the enhancer reads. Both the UI's
- * `DraftElementUpload` and the API's `TempElementUpload` satisfy this shape.
+ * An ingested element, narrowed to the fields the enhancer reads. Satisfied by
+ * the create-flow drafts (`DraftElementUpload` / `TempElementUpload`, which
+ * carry `tempPublicUrl`) AND by persisted `SequenceElement` rows when enhancing
+ * an existing sequence (which carry `imageUrl`).
  */
 type ElementLike = {
   token?: string | null;
-  tempPublicUrl: string;
+  /** Create-flow draft upload URL. */
+  tempPublicUrl?: string | null;
+  /** Persisted sequence-element image URL (enhance-on-existing-sequence). */
+  imageUrl?: string | null;
   description?: string | null;
 };
 
@@ -58,18 +63,20 @@ export function toEnhanceInputs(args: {
   elements?: EnhanceElement[];
 } {
   const { style, elements } = args;
-  // Only elements with a token can be referenced in the script; drop the rest.
-  const mapped = (elements ?? []).flatMap((el): EnhanceElement[] =>
-    el.token
-      ? [
-          {
-            token: el.token,
-            imageUrl: el.tempPublicUrl,
-            ...(el.description ? { description: el.description } : {}),
-          },
-        ]
-      : []
-  );
+  // An element can be woven into the script only if it has BOTH a token (the
+  // script reference) and an image URL (draft `tempPublicUrl` or persisted
+  // `imageUrl`). Drop the rest.
+  const mapped = (elements ?? []).flatMap((el): EnhanceElement[] => {
+    const imageUrl = el.tempPublicUrl ?? el.imageUrl;
+    if (!el.token || !imageUrl) return [];
+    return [
+      {
+        token: el.token,
+        imageUrl,
+        ...(el.description ? { description: el.description } : {}),
+      },
+    ];
+  });
 
   return {
     style: style

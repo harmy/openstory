@@ -10,10 +10,11 @@
  * colour. `label` is the display name (Jack, INT. OFFICE) used in the
  * dropdown — never serialised back out (only the slug is).
  *
- * Render prefix: element/location pills show a leading `@` (the `@slug` is a
- * render-only flourish over the bare stored slug). Cast pills do NOT — the tag
- * IS the character's ALL-CAPS name as it already reads in the script/prompt
- * (`SCARLETT`), so it's highlighted in place with no `@`.
+ * Render prefix: cast names (`SCARLETT`) and element tokens (`BONDI_SCREEN`)
+ * are the canonical identifiers as they already read in the script/prompt, so
+ * they're highlighted in place with NO `@`. Locations have no UPPERCASE token —
+ * they use the kebab consistencyTag, shown as `@slug` (a render-only flourish
+ * over the bare stored slug).
  */
 
 import { Mention } from '@tiptap/extension-mention';
@@ -115,7 +116,7 @@ export const PromptMention = Mention.extend({
         ...(attrs.section ? { 'data-section': attrs.section } : {}),
         ...(attrs.label ? { 'data-label': attrs.label } : {}),
       },
-      attrs.section === 'cast' ? (attrs.id ?? '') : `@${attrs.id ?? ''}`,
+      attrs.section === 'locations' ? `@${attrs.id ?? ''}` : (attrs.id ?? ''),
     ];
   },
   renderText: ({ node }) => {

@@ -33,7 +33,7 @@ const noopLocation: MentionLocationInput = {
 };
 
 describe('buildMentionItems', () => {
-  it('produces lowercase-kebab canonical tags for elements, cast, locations', () => {
+  it('produces canonical tags: element token, cast name, location slug', () => {
     const items = buildMentionItems({
       characters: [noopCharacter],
       elements: [noopElement],
@@ -41,8 +41,7 @@ describe('buildMentionItems', () => {
     });
 
     const byId = Object.fromEntries(items.map((i) => [i.id, i]));
-    // Element token `red-hex-logo` becomes kebab `red-hex-logo` (new
-    // canonical, matches the cast/location consistencyTag convention).
+    // Element tag IS the token verbatim (the script/prompt identifier).
     expect(byId['element:e1']?.tag).toBe('red-hex-logo');
     expect(byId['element:e1']?.section).toBe('elements');
     // Cast tag is the ALL-CAPS name; slug + id ride along as aliases.
@@ -56,25 +55,25 @@ describe('buildMentionItems', () => {
     expect(byId['location:l1']?.section).toBe('locations');
   });
 
-  it('kebab-cases legacy uppercase-with-spaces element tokens and keeps original as alias', () => {
+  it('uses the UPPERCASE_SNAKE token verbatim as the element tag', () => {
     const items = buildMentionItems({
       characters: [],
       elements: [
         {
           ...noopElement,
           id: 'e2',
-          token: 'RED HEX LOGO',
+          token: 'RED_HEX_LOGO',
           consistencyTag: null,
         },
       ],
       locations: [],
     });
     const item = items.find((i) => i.id === 'element:e2');
-    expect(item?.tag).toBe('red-hex-logo');
-    expect(item?.aliases).toEqual(['RED HEX LOGO']);
+    expect(item?.tag).toBe('RED_HEX_LOGO');
+    expect(item?.aliases).toBeUndefined();
   });
 
-  it('prefers element consistencyTag slug over deriving from token', () => {
+  it('keeps the descriptive consistencyTag as a legacy alias', () => {
     const items = buildMentionItems({
       characters: [],
       elements: [
@@ -88,9 +87,9 @@ describe('buildMentionItems', () => {
       locations: [],
     });
     const item = items.find((i) => i.id === 'element:e3');
-    expect(item?.tag).toBe('pepsi-cola-brand-logo');
-    // Token differs from canonical → kept as alias so old prompts pill.
-    expect(item?.aliases).toEqual(['PEPSI_LOGO']);
+    // Tag is the token; the old kebab consistencyTag still pills (legacy).
+    expect(item?.tag).toBe('PEPSI_LOGO');
+    expect(item?.aliases).toEqual(['pepsi-cola-brand-logo']);
   });
 
   it('uses the ALL-CAPS name for cast; falls back to locationId for locations', () => {

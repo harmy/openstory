@@ -4,7 +4,6 @@
  */
 
 import { getEnv } from '#env';
-import { toVisionImageSource } from '@/lib/storage/external-url';
 import {
   callLLM,
   callLLMStream,
@@ -31,6 +30,7 @@ import {
   type ChatMessageContentPart,
 } from '@/lib/prompts';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
+import { toVisionImageSource } from '@/lib/storage/external-url';
 import { createServerFn, createServerOnlyFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 import { zodValidator } from '@tanstack/zod-adapter';

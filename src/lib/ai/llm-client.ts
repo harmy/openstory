@@ -5,9 +5,10 @@
 
 import type { TextModel } from '@/lib/ai/models';
 import type { ChatMessage } from '@/lib/prompts';
-import { chat } from '@tanstack/ai';
+import { chat, type DebugOption } from '@tanstack/ai';
 import { webSearchTool } from '@tanstack/ai-openrouter/tools';
 import { z } from 'zod';
+import { aiDebugLogger } from './ai-debug-logger';
 import { createAdapter } from './create-adapter';
 
 import { getLogger } from '@/lib/observability/logger';
@@ -75,8 +76,14 @@ export type LLMRequestParams<T = unknown> = {
     | boolean
     | { engine?: 'native' | 'exa'; maxResults?: number; searchPrompt?: string };
 
-  /** Debug mode for LLM client */
-  debug?: boolean;
+  /**
+   * Debug mode forwarded to `chat()`. `true`/`false`, or a
+   * `{ logger, …categories }` config. Pass `{ logger: aiDebugLogger }`
+   * (from `@/lib/ai/ai-debug-logger`) to see full payloads in local Workerd
+   * dev — `debug: true` uses TanStack's `console.dir`, which Workerd's console
+   * doesn't render.
+   */
+  debug?: DebugOption;
 };
 
 /**
@@ -205,6 +212,44 @@ function baseChatOptions(params: LLMRequestParams) {
     ...(tools && { tools }),
     debug: params.debug ?? false,
   };
+}
+
+/**
+ * Log-safe copy of a message's content: image data parts (base64) are
+ * truncated to a short prefix so the prompt log doesn't dump megabytes.
+ */
+function previewContent(
+  content: ChatMessage['content']
+): ChatMessage['content'] {
+  if (typeof content === 'string') return content;
+  return content.map((part) => {
+    if (part.type !== 'image') return part;
+    const value = part.source.value;
+    const preview =
+      value.length > 64
+        ? `${value.slice(0, 64)}…(${value.length} chars)`
+        : value;
+    return { ...part, source: { ...part.source, value: preview } };
+  });
+}
+
+/**
+ * Log the system prompts + messages we're about to send. TanStack AI's
+ * `request` debug category logs only counts (`messageCount`), never the
+ * content, so when `debug` is on we log the actual prompt ourselves through the
+ * Workerd-friendly logger.
+ */
+function logOutgoingPrompt(
+  systemPrompts: string[],
+  messages: AdapterMessage[]
+): void {
+  aiDebugLogger.debug('📝 [llm-client] outgoing prompt', {
+    systemPrompts,
+    messages: messages.map((m) => ({
+      role: m.role,
+      content: previewContent(m.content),
+    })),
+  });
 }
 
 /**
@@ -425,6 +470,10 @@ export async function* callLLMStream<T>(
     },
     stream: true as const,
   };
+
+  if (params.debug) {
+    logOutgoingPrompt(baseOptions.systemPrompts, baseOptions.messages);
+  }
 
   const responseSchema = params.responseSchema;
   if (responseSchema) {

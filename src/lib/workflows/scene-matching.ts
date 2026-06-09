@@ -140,46 +140,21 @@ export function matchLocationsToScene<T extends LocationMatchInput>(
   });
 }
 
-type ElementMatchInput = Pick<SequenceElementMinimal, 'token'> & {
-  consistencyTag?: string | null;
-};
+type ElementMatchInput = Pick<SequenceElementMinimal, 'token'>;
 
 /**
- * Derive the new canonical lowercase-kebab tag for an element. Prefer the
- * vision-LLM `consistencyTag` if populated; otherwise kebab-ify the legacy
- * token (`RED HEX LOGO` → `red-hex-logo`, `PEPSI_LOGO` → `pepsi-logo`).
+ * Match user-uploaded elements to a scene or prompt by their UPPERCASE_SNAKE
+ * `token` — the single element identifier used everywhere: the script,
+ * `continuity.elementTags[]`, the prompts, reference-image binding, and the
+ * editor pills. (The vision-LLM `consistencyTag` is a descriptive slug used
+ * only to label reference-sheet generation, never as an identifier.)
  *
- * Kept here (not in components) so the server-side parser and the editor
- * stay in sync — both call into the same derivation. The mention-items UI
- * helper imports this.
- */
-export function elementCanonicalKebab(el: ElementMatchInput): string {
-  const fromConsistency = el.consistencyTag?.trim();
-  if (fromConsistency) return fromConsistency;
-  return (
-    el.token
-      .toLowerCase()
-      .replace(/[\s_]+/g, '-')
-      .replace(/[^a-z0-9-]/g, '')
-      .replace(/-+/g, '-')
-      .replace(/^-+|-+$/g, '') || el.token
-  );
-}
-
-/**
- * Match user-uploaded elements to a scene or prompt.
+ * Primary match: `elementTags[]` (emitted by the LLM during scene-split).
+ * Fallback match: the token appears verbatim in the text — catches references
+ * the model forgot to put in `elementTags[]`.
  *
- * Primary match: `elementTags[]` (emitted by the LLM during scene-split,
- * always UPPERCASE tokens).
- *
- * Fallback match: scan the text for either the UPPERCASE token (legacy
- * format the script still uses) OR the new lowercase-kebab tag that the
- * visual/motion-prompt LLM now emits. Catches references the model forgot
- * to put in `elementTags[]`, and is what the editor's `tagify` pill render
- * round-trips through after save.
- *
- * Generic so we can reuse it on `ElementBibleEntry` (same token + tag
- * shape) when narrowing the bible for prompt-input hashing.
+ * Generic so we can reuse it on `ElementBibleEntry` (same token shape) when
+ * narrowing the bible for prompt-input hashing.
  */
 export function matchElementsToScene<T extends ElementMatchInput>(
   allElements: T[],
@@ -190,29 +165,16 @@ export function matchElementsToScene<T extends ElementMatchInput>(
 
   const tagsUpper = new Set(elementTags.map((t) => t.toUpperCase()));
   const scriptUpper = (sceneScript ?? '').toUpperCase();
-  const scriptRaw = sceneScript ?? '';
 
   return allElements.filter((el) => {
     const token = el.token.toUpperCase();
     if (tagsUpper.has(token)) return true;
-    // Legacy uppercase whole-token match against the raw script. Escape the
-    // token (it's arbitrary user text) so regex metacharacters can't false-match
-    // or throw — matches the kebab branch below.
-    const upperRe = new RegExp(
+    // Whole-token match in the script text. Escape the token (arbitrary user
+    // text) so regex metacharacters can't false-match or throw.
+    const re = new RegExp(
       `(?:^|[^A-Z0-9_])${escapeRegex(token)}(?:[^A-Z0-9_]|$)`
     );
-    if (upperRe.test(scriptUpper)) return true;
-    // New canonical kebab match. Boundary class excludes hyphen so the
-    // multi-part slug `red-hex-logo` matches as a single token.
-    const kebab = elementCanonicalKebab(el);
-    if (kebab) {
-      const kebabRe = new RegExp(
-        `(?:^|[^A-Za-z0-9_-])${escapeRegex(kebab)}(?:[^A-Za-z0-9_-]|$)`,
-        'i'
-      );
-      if (kebabRe.test(scriptRaw)) return true;
-    }
-    return false;
+    return re.test(scriptUpper);
   });
 }
 

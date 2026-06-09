@@ -87,6 +87,21 @@ describe('toEnhanceInputs (UI/API parity, issue #855)', () => {
     ]);
   });
 
+  it('uses a persisted element imageUrl when there is no tempPublicUrl', () => {
+    // Enhancing an existing sequence feeds SequenceElement rows, which carry
+    // `imageUrl` (not the draft-only `tempPublicUrl`).
+    const result = toEnhanceInputs({
+      elements: [
+        { token: 'BONDI_SCREEN', imageUrl: 'https://r2/bondi.png' },
+        // Token but no usable image URL → dropped.
+        { token: 'GHOST', imageUrl: null, tempPublicUrl: null },
+      ],
+    });
+    expect(result.elements).toEqual([
+      { token: 'BONDI_SCREEN', imageUrl: 'https://r2/bondi.png' },
+    ]);
+  });
+
   it('returns no keys for a missing style and no elements', () => {
     expect(toEnhanceInputs({})).toEqual({
       style: undefined,

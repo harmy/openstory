@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CharacterMinimal, SequenceElementMinimal } from '@/lib/db/schema';
 import {
-  elementCanonicalKebab,
   matchCharacterToFrameTags,
   matchCharactersToScene,
   matchElementsToScene,
@@ -192,71 +191,12 @@ describe('matchElementsToScene', () => {
     expect(result.map((e) => e.token).sort()).toEqual(['BOTTLE', 'LOGO']);
   });
 
-  it('matches the new lowercase-kebab tag in prompt text (post-#695)', () => {
-    // Visual/motion-prompt LLM now emits `@<consistencyTag>` references. The
-    // matcher must recognise the kebab form alongside the legacy UPPERCASE
-    // token so the editor's pill on save still resolves to the right element.
+  it('matches the UPPERCASE token verbatim in prompt text', () => {
     const result = matchElementsToScene(
-      elements,
+      [{ token: 'BIG_CORP' }],
       [],
-      'A close-up of the @red-hex-logo on his jacket'
-    );
-    expect(result.map((e) => e.token)).toEqual(['LOGO']);
-  });
-
-  it('matches a bare kebab tag without the @ prefix (parser tolerance)', () => {
-    const result = matchElementsToScene(
-      elements,
-      [],
-      'A close-up of the red-hex-logo on his jacket'
-    );
-    expect(result.map((e) => e.token)).toEqual(['LOGO']);
-  });
-
-  it('falls back to a derived kebab when consistencyTag is empty', () => {
-    const noConsistency: SequenceElementMinimal[] = [
-      {
-        id: '3',
-        token: 'BIG_CORP',
-        description: '',
-        imageUrl: '',
-        consistencyTag: null,
-      },
-    ];
-    const result = matchElementsToScene(
-      noConsistency,
-      [],
-      'displaying the @big-corp banner'
+      'displaying the BIG_CORP banner on the wall'
     );
     expect(result.map((e) => e.token)).toEqual(['BIG_CORP']);
-  });
-});
-
-describe('elementCanonicalKebab', () => {
-  it('prefers consistencyTag when present', () => {
-    expect(
-      elementCanonicalKebab({
-        token: 'PEPSI_LOGO',
-        consistencyTag: 'pepsi-cola-brand-logo',
-      })
-    ).toBe('pepsi-cola-brand-logo');
-  });
-
-  it('derives kebab from an UPPERCASE_SNAKE token when no consistencyTag', () => {
-    expect(
-      elementCanonicalKebab({ token: 'PEPSI_LOGO', consistencyTag: null })
-    ).toBe('pepsi-logo');
-  });
-
-  it('derives kebab from a legacy UPPERCASE-WITH-SPACES token', () => {
-    expect(
-      elementCanonicalKebab({ token: 'RED HEX LOGO', consistencyTag: null })
-    ).toBe('red-hex-logo');
-  });
-
-  it('falls back to the raw token if derivation yields empty', () => {
-    expect(elementCanonicalKebab({ token: '!!', consistencyTag: null })).toBe(
-      '!!'
-    );
   });
 });

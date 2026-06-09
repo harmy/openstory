@@ -636,6 +636,13 @@ export const ScriptView: FC<{
 
     try {
       const selectedStyle = styles.find((s) => s.id === styleId);
+      // Create flow holds elements in local draft state; an existing sequence
+      // holds them in the DB (loaded as `mentionElements`). Feed whichever
+      // applies so enhance-on-existing-sequence ("Generate Copy") attaches the
+      // sequence's elements + reference images, not an empty list.
+      const enhanceElements = mentionSequenceId
+        ? (mentionElements ?? [])
+        : draftElements;
       let accumulated = '';
       for await (const chunk of await enhanceScriptStreamFn({
         data: {
@@ -643,7 +650,10 @@ export const ScriptView: FC<{
           targetDuration,
           analysisModel: analysisModels[0],
           aspectRatio,
-          ...toEnhanceInputs({ style: selectedStyle, elements: draftElements }),
+          ...toEnhanceInputs({
+            style: selectedStyle,
+            elements: enhanceElements,
+          }),
         },
       })) {
         if (abortController.signal.aborted) break;

@@ -16,10 +16,10 @@
 import {
   configureSync,
   defaultConsoleFormatter,
-  type ConsoleFormatter,
   getConsoleSink,
   getJsonLinesFormatter,
   getLogger,
+  type ConsoleFormatter,
   type LogLevel,
   type LogRecord,
   type Sink,
@@ -30,10 +30,10 @@ import {
 // once `dev` resolves to `false` at build time (process.env.NODE_ENV is
 // statically replaced). require() doesn't work for this ESM-only package in
 // Workerd, which is what broke pretty output under `bun dev`.
+import { handleApiError, OpenStoryError } from '@/lib/errors';
 import { getPrettyFormatter } from '@logtape/pretty';
 import { redactByPattern, type RedactionPattern } from '@logtape/redaction';
 import { z } from 'zod';
-import { handleApiError, OpenStoryError } from '@/lib/errors';
 
 const REDACT = '[REDACTED]';
 

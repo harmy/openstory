@@ -69,15 +69,23 @@ describe('tagifyMarkdown', () => {
     expect(result.content).toContain('>JACK</span>');
   });
 
-  // --- Elements / locations: `@slug`, case-insensitive --------------------
+  // --- Elements: highlight the UPPERCASE token in place, no `@` -----------
 
-  it('pills an element with a leading @ and canonical data-id', () => {
-    const result = tagifyMarkdown('logo: RED-hex-LOGO appears', items);
+  it('pills an element token in place — all-caps only, no @', () => {
+    const result = tagifyMarkdown('logo: RED-HEX-LOGO appears', items);
     expect(result.matched).toBe(true);
     expect(result.content).toContain('data-id="RED-HEX-LOGO"');
-    expect(result.content).toContain('@RED-HEX-LOGO');
     expect(result.content).toContain('data-section="elements"');
+    expect(result.content).toContain('>RED-HEX-LOGO</span>');
+    expect(result.content).not.toContain('@RED-HEX-LOGO');
   });
+
+  it('does NOT pill a lowercase form of an element token', () => {
+    const result = tagifyMarkdown('logo: red-hex-logo appears', items);
+    expect(result.matched).toBe(false);
+  });
+
+  // --- Locations: kebab slug as `@slug` -----------------------------------
 
   it('respects word boundaries — no false positives on substring matches', () => {
     const result = tagifyMarkdown('officeworks is not a location', items);
@@ -113,16 +121,16 @@ describe('tagifyMarkdown', () => {
     expect(result.content).toContain('data-id="BONDI_SCREEN"');
   });
 
-  it('matches a legacy uppercase-with-spaces alias and pills to the canonical kebab', () => {
+  it('matches a legacy uppercase-with-spaces alias and re-pills to the token', () => {
     const elementItems: MentionItem[] = [
       {
         id: 'element:e6',
         section: 'elements',
-        label: 'red-hex-logo',
+        label: 'RED_HEX_LOGO',
         sublabel: 'A red hex logo',
-        tag: 'red-hex-logo',
+        tag: 'RED_HEX_LOGO',
         aliases: ['RED HEX LOGO'],
-        haystack: 'red-hex-logo red hex logo a red hex logo',
+        haystack: 'red_hex_logo red hex logo a red hex logo',
         thumbnailUrl: null,
       },
     ];
@@ -131,11 +139,10 @@ describe('tagifyMarkdown', () => {
       elementItems
     );
     expect(result.matched).toBe(true);
-    // Canonical tag is emitted as data-id even when the legacy alias matched.
-    expect(result.content).toContain('data-id="red-hex-logo"');
-    // The pill's visible text uses the canonical form too, so saving
-    // re-serializes everything to the new convention.
-    expect(result.content).toContain('@red-hex-logo');
+    // Alias matched; data-id + visible text are the canonical token, bare.
+    expect(result.content).toContain('data-id="RED_HEX_LOGO"');
+    expect(result.content).toContain('>RED_HEX_LOGO</span>');
+    expect(result.content).not.toContain('@RED_HEX_LOGO');
   });
 
   it('matches multiple distinct mentions in one pass', () => {
@@ -152,28 +159,25 @@ describe('tagifyMarkdown', () => {
     expect(result.content).toMatch(/data-id="office-modern-steel"/);
   });
 
-  it('consumes a leading @ on an element tag (no doubled @)', () => {
-    const elementItems: MentionItem[] = [
+  it('consumes a leading @ on a location tag (no doubled @)', () => {
+    const locationItems: MentionItem[] = [
       {
-        id: 'element:e2',
-        section: 'elements',
-        label: 'bondi-screen',
+        id: 'location:l9',
+        section: 'locations',
+        label: 'INT. STUDIO',
         sublabel: '',
-        tag: 'bondi-screen',
-        haystack: 'bondi-screen',
+        tag: 'bondi-studio',
+        haystack: 'bondi-studio',
         thumbnailUrl: null,
       },
     ];
-    // LLM prompts emit `@bondi-screen`; the source @ is the trigger and must be
-    // consumed so it isn't left dangling before the pill (which re-adds its @).
-    const result = tagifyMarkdown(
-      'the screen shows @bondi-screen here',
-      elementItems
-    );
+    // Locations show the kebab slug as `@slug`; a source `@` is the trigger and
+    // is consumed so it isn't left dangling before the pill (which re-adds @).
+    const result = tagifyMarkdown('back at @bondi-studio again', locationItems);
     expect(result.matched).toBe(true);
     expect(result.content).not.toContain('@<span');
     expect(result.content).not.toContain('@@');
-    expect(result.content).toContain('shows <span');
-    expect(result.content).toContain('>@bondi-screen</span>');
+    expect(result.content).toContain('at <span');
+    expect(result.content).toContain('>@bondi-studio</span>');
   });
 });

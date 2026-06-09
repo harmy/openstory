@@ -887,20 +887,20 @@ Respond with exactly {{numTalent}} matches.`,
 2. **THE "STARTING FRAME"**: Describe the exact moment the scene begins. Focus on the *potential energy*—muscles tensed, mid-breath, looking off-camera. This is a still image that implies motion.
 3. **ENVIRONMENT & LIGHTING**: Since the character identity is handled by reference, spend 60% of your tokens on the atmosphere, lighting texture, depth of field, and background details.
 4. **DIRECTOR STYLE**: Apply the <DIRECTOR_STYLE> to the camera lens (e.g., "anamorphic flares"), film stock, and color palette.
-5. **ELEMENTS — reference image does the heavy lifting**: User-uploaded elements (logos, products, screenshots) are identified by lowercase-kebab \`@<consistencyTag>\` mentions in the prompt (e.g. \`@bondi-screen\`, \`@brand-logo\`). The accompanying reference image carries their complete visual identity. Your text must NOT compete with that image.
+5. **ELEMENTS — reference image does the heavy lifting**: User-uploaded elements (logos, products, screenshots) are identified by UPPERCASE tokens (the same form the script uses, e.g. \`BONDI_SCREEN\`, \`BRAND_LOGO\`). The accompanying reference image carries their complete visual identity. Your text must NOT compete with that image.
 
    **First, decide visibility in THIS starting frame:**
    - Include only if physically present on-camera in this moment — held, worn, displayed on a screen in-shot, mounted on a wall, on the desk, in the background, etc.
    - EXCLUDE if merely referenced in dialogue, implied, mentioned as something about to appear, described off-screen, or belongs to a later beat. A character *talking about* the product is not the same as the product being *seen*.
    - If you exclude an element, REMOVE its token from continuity.elementTags[] so downstream reference-image binding stays in sync with the prompt.
 
-   **When you include one — map it explicitly to its reference image:** use phrasing that tells the model to USE the reference, like "displaying the UI from @bondi-screen", "the screen shows @bondi-screen", "wearing the logo from @brand-logo", "holding the product from @hero-product". Place the \`@<consistencyTag>\` mention immediately after the role-noun. Prefer this explicit-map phrasing at the earliest natural mention in the prompt — it disambiguates which reference drives which object. Use the EXACT \`consistencyTag\` from <ELEMENT_BIBLE>, lowercased with hyphens, prefixed with \`@\`. Do NOT use the UPPERCASE token — that's the script form only.
+   **When you include one — map it explicitly to its reference image:** use phrasing that tells the model to USE the reference, like "displaying the UI from (BONDI_SCREEN)", "the screen shows (BONDI_SCREEN)", "wearing the logo from (BRAND_LOGO)", "holding the product from (HERO_PRODUCT)". Place the UPPERCASE token in parentheses immediately after the role-noun. Prefer this explicit-map phrasing at the earliest natural mention in the prompt — it disambiguates which reference drives which object. Use the EXACT UPPERCASE token from <ELEMENT_BIBLE>, verbatim.
 
    **HARD PROHIBITIONS — these are what ruin outputs:**
    - NEVER describe the element's internal visual content. No typography, no color scheme, no layout, no UI components (nav bars, panels, buttons, columns), no readable words or phrases, no product shape, no logo shape. The reference image already contains all of this — descriptive text here triggers "conditioning competition" where the model generates a *new* element based on your words instead of faithfully pasting in the reference.
    - NEVER quote or invent any text ("luminous", "coastal breeze", "Sequences", product names, headlines) that you hope will appear on the element. If the reference has text, the reference has text. Do not instruct the model to render it.
-   - NEVER write the mention as a brand name in prose (e.g. avoid "the @bondi-screen platform" or "a @brand-logo-style interface"). The \`@<tag>\` form is an internal identifier, not part of the sentence's noun phrase.
-   - NEVER describe the mention as on-screen text, signage, a label, or anything readable within the scene — it is an internal identifier, not content the viewer should see.
+   - NEVER write the token as a brand name in prose (e.g. avoid "the BONDI_SCREEN platform" or "a BONDI_SCREEN-style interface"). The UPPERCASE token is an internal identifier, not part of the sentence's noun phrase.
+   - NEVER describe the token as on-screen text, signage, a label, or anything readable within the scene — it is an internal identifier, not content the viewer should see.
 
    **What you CAN describe:** how the element sits in the physical shot — held, placed, mounted, in background, reflected, angled toward camera, partially occluded, blurred in bokeh, sharply in focus. Also its interaction with lighting (glare on the glossy surface, rim light across the bezel). Only reference elements listed in <ELEMENT_BIBLE>.
 
@@ -944,7 +944,7 @@ Set continuity.elementTags[] to the UPPERCASE tokens of elements you actually IN
 </LOCATION_BIBLE>
 
 <ELEMENT_BIBLE>
-(User-uploaded elements. Reference images for these accompany the prompt. Reference an element in the prompt by its lowercase-kebab \`consistencyTag\` prefixed with \`@\` (e.g. \`@bondi-screen\`). The \`token\` field is the script-form identifier only — do not use it in the prompt. Do NOT describe an element's visual identity in prose.)
+(User-uploaded elements. Reference images for these accompany the prompt. Reference an element by its EXACT UPPERCASE \`token\` (e.g. \`BONDI_SCREEN\`) — the same identifier the script uses. Do NOT describe an element's visual identity in prose.)
 {{elementBible}}
 </ELEMENT_BIBLE>
 

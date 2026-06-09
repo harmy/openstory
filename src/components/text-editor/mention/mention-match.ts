@@ -5,12 +5,13 @@
  * e.g. eval views) so both surfaces pill identically.
  *
  * Rules mirror `extract-continuity-from-prompt.ts`:
- *  - Cast names pill ONLY in their ALL-CAPS form (the deliberate `SCARLETT`
- *    references in the script / NAME-IN-CAPS prompts), never lowercase prose.
- *    Aliases (slug/id) are exempt — distinctive enough to match case-insensitively.
- *  - A leading `@` immediately before an element/location tag is the mention
- *    trigger; it's consumed into the pill (whose display re-adds `@`), so LLM
- *    prompt text `@bondi-screen` renders as a single pill, not `@` + a pill.
+ *  - Cast names (`SCARLETT`) and element tokens (`BONDI_SCREEN`) are highlighted
+ *    in place — they pill ONLY in their ALL-CAPS form (never lowercase prose or
+ *    a stale lowercased form), with no `@`. Aliases (a legacy kebab slug) are
+ *    exempt — distinctive enough to match case-insensitively.
+ *  - Locations have no UPPERCASE token, so they use the kebab consistencyTag,
+ *    shown as `@slug`. A leading `@` before a location tag is the mention
+ *    trigger and is consumed into the pill (which re-adds its `@`).
  */
 
 import type { MentionItem } from '@/components/scenes/prompt-mention/mention-items';
@@ -60,9 +61,11 @@ export function splitMentions(
     if (form === undefined) continue;
     const item = byForm.get(form.toLowerCase());
     if (!item) continue;
-    // Cast names: skip anything but the ALL-CAPS form (aliases exempt).
+    // Cast names + element tokens pill ONLY in their ALL-CAPS form (the
+    // deliberate `SCARLETT` / `BONDI_SCREEN` references) — never lowercase
+    // prose or a stale lowercased form. A legacy kebab alias is exempt.
     if (
-      item.section === 'cast' &&
+      item.section !== 'locations' &&
       form.toLowerCase() === item.tag.toLowerCase() &&
       form !== form.toUpperCase()
     ) {
@@ -71,12 +74,14 @@ export function splitMentions(
     const matchStart = m.index;
     const formStart = matchStart + prefixChar.length;
     const formEnd = formStart + form.length;
-    // Keep the boundary char in the output — except a leading `@`, which is the
-    // mention trigger owned by the pill's `@display`.
+    // Keep the boundary char in the output — except a leading `@`, the mention
+    // trigger owned by the pill's display.
     const keepPrefix = prefixChar === '@' ? '' : prefixChar;
     const before = text.slice(lastIdx, matchStart) + keepPrefix;
     if (before) segments.push({ type: 'text', value: before });
-    const display = item.section === 'cast' ? item.tag : `@${item.tag}`;
+    // Cast names + element tokens highlight in place (no `@`); locations show
+    // their kebab slug as `@slug`.
+    const display = item.section === 'locations' ? `@${item.tag}` : item.tag;
     segments.push({ type: 'mention', item, display });
     lastIdx = formEnd;
   }
