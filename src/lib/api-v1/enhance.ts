@@ -19,8 +19,11 @@ import { toEnhanceInputs } from '@/lib/ai/enhance-inputs';
 import { aspectRatioSchema } from '@/lib/constants/aspect-ratios';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { handleApiError } from '@/lib/errors';
+import { getLogger, toErrorPayload } from '@/lib/observability/logger';
 import type { ApiEnhanceScriptInput } from './enhance-input-schema';
 import { resolveStyle } from './resolve';
+
+const logger = getLogger(['openstory', 'api-v1']);
 
 export type EnhanceContext = {
   scopedDb: ScopedDb;
@@ -122,6 +125,20 @@ export function enhanceSseResponse(
         event('done', { enhancedScript: full.trim() });
       } catch (err) {
         const handled = handleApiError(err);
+        // Headers are already committed, so this can't become a JSON 500 — but
+        // it must still be traceable. Mirror runApiV1Handler: log server-class
+        // failures (incl. a post-success `deduct` throw, which lands here) with
+        // the original stack/cause; the client only ever sees code/message.
+        if (handled.statusCode >= 500) {
+          logger.error(
+            'api/v1 enhance stream failed mid-stream: {code} {message}',
+            {
+              code: handled.code,
+              message: handled.message,
+              err: toErrorPayload(err),
+            }
+          );
+        }
         event('error', { code: handled.code, message: handled.message });
       } finally {
         controller.close();
@@ -129,8 +146,16 @@ export function enhanceSseResponse(
     },
     async cancel() {
       // Client disconnected — let the generator unwind (skips the final
-      // billing deduction, matching the dashboard stream's behaviour).
-      await rest.return(undefined);
+      // billing deduction, matching the dashboard stream's behaviour). A
+      // cleanup failure while unwinding would otherwise surface as an unhandled
+      // rejection, so log and swallow it.
+      try {
+        await rest.return(undefined);
+      } catch (err) {
+        logger.warn('api/v1 enhance stream cancel: generator cleanup failed', {
+          err: toErrorPayload(err),
+        });
+      }
     },
   });
 
