@@ -37,6 +37,25 @@ describe('isContentRejectionError', () => {
     ).toBe(true);
   });
 
+  it('classifies the real fal content-flag 422 (openai/gpt-image-2, captured 2026-06-11)', () => {
+    const err = new Error('Unprocessable Entity') as Error & {
+      body?: unknown;
+      status?: number;
+    };
+    err.body = {
+      detail: [
+        {
+          loc: ['body', 'prompt'],
+          msg: 'The content could not be processed because it contained material flagged by a content checker.',
+          type: 'content_policy_violation',
+          url: 'https://docs.fal.ai/errors#content_policy_violation',
+        },
+      ],
+    };
+    err.status = 422;
+    expect(isContentRejectionError(err)).toBe(true);
+  });
+
   it('does not misclassify infrastructure / transient errors', () => {
     const transient = [
       'fetch failed',

@@ -11,8 +11,31 @@ function withBody(body: unknown, status = 422): Error {
   return err;
 }
 
+// Verbatim 422 body returned by openai/gpt-image-2 via fal for a flagged
+// prompt (captured 2026-06-11). Pinned as a regression guard: if fal changes
+// the error shape, extractFalErrorMessage (and the #881 retry classification
+// that keys off it) must be updated. This is the REAL prod shape — fal returns
+// `{ detail: [...] }`, NOT the OpenAI-style `{ error: { message } }` that
+// aimock emits in e2e replay (so the e2e can't reproduce this exact body).
+const REAL_FAL_CONTENT_FLAG_422 = {
+  detail: [
+    {
+      loc: ['body', 'prompt'],
+      msg: 'The content could not be processed because it contained material flagged by a content checker.',
+      type: 'content_policy_violation',
+      url: 'https://docs.fal.ai/errors#content_policy_violation',
+    },
+  ],
+};
+
 describe('extractFalErrorMessage', () => {
-  it('reads the FastAPI/Pydantic string detail (prod fal shape)', () => {
+  it('reads the real fal content-flag 422 detail array (prod shape)', () => {
+    expect(extractFalErrorMessage(withBody(REAL_FAL_CONTENT_FLAG_422))).toBe(
+      'The content could not be processed because it contained material flagged by a content checker.'
+    );
+  });
+
+  it('reads a plain string detail', () => {
     expect(
       extractFalErrorMessage(
         withBody({ detail: 'material flagged by a content checker.' })
