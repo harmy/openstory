@@ -24,6 +24,7 @@ import { estimateLLMCost } from '@/lib/billing/cost-estimation';
 import { aspectRatioSchema } from '@/lib/constants/aspect-ratios';
 import { StyleConfigSchema } from '@/lib/db/schema/libraries';
 import type { ScopedDb } from '@/lib/db/scoped';
+import type { ResolvedLlmKey } from '@/lib/db/scoped/api-keys';
 import { InsufficientCreditsError } from '@/lib/errors';
 import {
   getPrompt,
@@ -76,16 +77,18 @@ function enforceRateLimit(limiter: RateLimiter, key: string): void {
 }
 
 /**
- * Check pre-flight billing and return a deduct function.
- * Returns `undefined` when billing is skipped (disabled or team has own key).
+ * Check pre-flight billing and resolve the key for the LLM call.
+ * `deduct` is undefined when billing is skipped — the team's own key pays,
+ * either their OpenRouter key or their fal key routed through fal's
+ * OpenRouter endpoint (issue #895).
  */
 async function prepareBilling(
   scopedDb: ScopedDb,
   description: string,
   metadata?: Record<string, unknown>
-): Promise<(() => Promise<void>) | undefined> {
-  const teamHasOwnKey = await scopedDb.apiKeys.hasKey('openrouter');
-  if (teamHasOwnKey) return undefined;
+): Promise<{ llmKey: ResolvedLlmKey; deduct?: () => Promise<void> }> {
+  const llmKey = await scopedDb.apiKeys.resolveLlmKey();
+  if (llmKey.source === 'team') return { llmKey };
 
   const cost = estimateLLMCost(1);
   const canAfford = await scopedDb.billing.hasEnoughCredits(cost);
@@ -95,13 +98,16 @@ async function prepareBilling(
     );
   }
 
-  return async () => {
-    if (cost > 0) {
-      await scopedDb.billing.deductCredits(cost, {
-        description,
-        metadata,
-      });
-    }
+  return {
+    llmKey,
+    deduct: async () => {
+      if (cost > 0) {
+        await scopedDb.billing.deductCredits(cost, {
+          description,
+          metadata,
+        });
+      }
+    },
   };
 }
 
@@ -124,7 +130,7 @@ export const shortenPromptFn = createServerFn({ method: 'POST' })
       throw new Error('AI service not configured');
     }
 
-    const deduct = await prepareBilling(
+    const { llmKey, deduct } = await prepareBilling(
       context.scopedDb,
       `Prompt shortening (${RECOMMENDED_MODELS.fast})`,
       { model: RECOMMENDED_MODELS.fast }
@@ -140,6 +146,7 @@ export const shortenPromptFn = createServerFn({ method: 'POST' })
       temperature: 0.3,
       observationName: 'shortenPrompt',
       userId: context.user.id,
+      apiKey: llmKey,
     });
 
     await deduct?.();
@@ -219,7 +226,7 @@ export const estimateSceneDurationFn = createServerFn({ method: 'POST' })
         ? context.sequence.analysisModel
         : null) ?? RECOMMENDED_MODELS.fast;
 
-    const deduct = await prepareBilling(
+    const { llmKey, deduct } = await prepareBilling(
       context.scopedDb,
       `Scene duration estimate (${analysisModel})`,
       { model: analysisModel, frameId: context.frame.id }
@@ -249,6 +256,7 @@ export const estimateSceneDurationFn = createServerFn({ method: 'POST' })
       observationName: 'estimateSceneDuration',
       userId: context.user.id,
       responseSchema: sceneDurationResponseSchema,
+      apiKey: llmKey,
     });
 
     await deduct?.();
@@ -308,7 +316,10 @@ export async function* streamScriptEnhancement(
   data: EnhanceScriptInput,
   ctx: { scopedDb: ScopedDb; userId: string; teamId: string }
 ): AsyncGenerator<{ delta: string }> {
-  const deduct = await prepareBilling(ctx.scopedDb, 'Script enhancement');
+  const { llmKey, deduct } = await prepareBilling(
+    ctx.scopedDb,
+    'Script enhancement'
+  );
 
   if (checkForInjectionAttempts(data.script)) {
     logger.warn('Script enhancement: Potential injection attempt detected');
@@ -397,6 +408,7 @@ export async function* streamScriptEnhancement(
     prompt: promptRef,
     tags: ['script-enhance', model],
     userId: ctx.userId,
+    apiKey: llmKey,
     metadata: {
       teamId: ctx.teamId,
       elementCount: elements.length,

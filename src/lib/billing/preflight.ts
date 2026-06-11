@@ -31,9 +31,15 @@ export async function requireCredits(
 ): Promise<void> {
   const providers = opts.providers ?? ['fal'];
 
-  // Check if team has all required BYOK keys (any missing = need credits)
+  // Check if team has all required BYOK keys (any missing = need credits).
+  // A fal key also satisfies the openrouter requirement: LLM calls route
+  // through fal's OpenRouter endpoint on the team's fal key (issue #895).
   const keyChecks = await Promise.all(
-    providers.map((provider) => scopedDb.apiKeys.hasKey(provider))
+    providers.map(
+      async (provider) =>
+        (await scopedDb.apiKeys.hasKey(provider)) ||
+        (provider === 'openrouter' && (await scopedDb.apiKeys.hasKey('fal')))
+    )
   );
   const hasAllKeys = keyChecks.every(Boolean);
 
