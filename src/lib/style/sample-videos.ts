@@ -121,6 +121,28 @@ export const STYLE_BRIEF_OVERRIDES: Record<string, string> = {
   // content checker; a brighter, full-figure motion study renders cleanly.
   'fashion-editorial':
     'a high-fashion motion study in a bright minimalist studio — a woman model in a structured emerald gown strides across the open space, the fabric lifting and rippling with each step, then turns sharply as studio strobes flare and freeze her mid-movement',
+  // Styles whose shared category brief handed them the wrong content (grok
+  // flagged a subject/action mismatch — e.g. a still-life style got a "sprint
+  // through a warehouse"). Each is matched to the style's intent, with one
+  // genuine motion beat per scene so it still honors the enhancer's motion rule.
+  'luxury-still':
+    'a boutique still-life launch for a single craft object — light sweeps slowly across a hand-thrown ceramic bottle on dark stone, two hands enter and turn it a quarter-rotation into the light, then set it down as a last ribbon of light crosses the rim',
+  'mood-only-frames':
+    'a mood-treatment lookbook in three atmospheric beats — smoke curls up through a hard shaft of light, a sheer curtain breathes inward on a draft, and a neon reflection ripples across wet night pavement',
+  'alcohol-pour':
+    'a slow-motion spirits pour — amber whisky streams from a tilted bottle into a crystal glass over a single clear ice sphere, the splash crowning in slow motion, condensation beading down the glass as the last drops fall',
+  '360-turntable':
+    'a 360 turntable product pass — a pair of premium wireless earbuds in an open charging case rotates a full slow revolution on a seamless white pedestal, light tracking across the metal hinge and matte shell as it turns to face the camera',
+  'returns-friendly-diagnostic':
+    'an honest product diagnostic — a hand sets a leather crossbody bag beside a ruler and a phone for scale, opens the main zip to show the lined interior, then turns it to reveal the adjustable strap and stitched seams in close detail',
+  'automotive-showroom':
+    'a showroom car reveal — a single silver coupe sits on a polished dealership floor as the overhead lights warm up across the hood, the camera tracks slowly down the flank catching the reflection, and a door swings open to show the cabin',
+  'fintech-explainer':
+    'a fintech savings explainer — a young woman checks her phone as a clean savings dashboard animates a balance ticking upward, a soft card flips to reveal a completed goal, and she exhales with a small relieved smile',
+  'saas-product-demo':
+    'a SaaS product demo — a cursor glides across a crisp project dashboard, a new task card snaps into a column and its status toggles to done, then the view zooms to a clean analytics chart filling in as the data lands',
+  'restaurant-menu-hero':
+    'a signature-dish hero — two hands lower a final garnish onto a plated dish, a ladle pours glossy sauce that pools and spreads across the plate, and steam curls up as the plate turns slowly to camera',
   // `documentary` ships a full hand-written script via
   // CANONICAL_SCRIPT_OVERRIDES (enhance: 'off'), so no brief here.
 };
