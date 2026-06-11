@@ -1,4 +1,5 @@
 {
+  "_preserveOnRecord": true,
   "_comment": "INJECTED for #881 — do NOT overwrite on re-record. The first submit of this clip returns a content-rejection 422 (sequenceIndex 0); the motion workflow's submit→poll retry loop re-submits and the success (no sequenceIndex, matches every later call) lands, so the frame still ends videoStatus=completed. Exercises the motion content-flag retry inside the full pipeline; the existing 'every frame has video' assertion proves the rescue. No-index success keeps the full-sequence test retriable in CI (on a Playwright retry the error fixture is already consumed). Re-apply this two-entry shape (error first) if you re-record.",
   "fixtures": [
     {

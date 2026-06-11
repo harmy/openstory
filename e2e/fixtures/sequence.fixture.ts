@@ -26,39 +26,6 @@ export type TestCharacter = {
 };
 
 /**
- * Trigger an ImageWorkflow or MotionWorkflow for a seeded frame with a
- * caller-controlled prompt + model (test-only `/api/test/generate` route).
- * Used by the content-flag retry spec (#881) to exercise the same-model retry
- * path without the full script→frames pipeline. Returns the workflow run id.
- */
-export async function triggerTestGeneration(input: {
-  kind: 'image' | 'motion';
-  userId: string;
-  teamId: string;
-  sequenceId: string;
-  frameId: string;
-  prompt: string;
-  imageModel?: string;
-  videoModel?: string;
-  imageUrl?: string;
-}): Promise<string> {
-  const res = await fetch('http://localhost:3001/api/test/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  if (!res.ok) {
-    throw new Error(
-      `Failed to trigger ${input.kind} generation via API: ${res.status} ${await res.text()}`
-    );
-  }
-  const { workflowRunId } = z
-    .object({ workflowRunId: z.string() })
-    .parse(await res.json());
-  return workflowRunId;
-}
-
-/**
  * Create a test style for the team (required by sequence)
  */
 export async function createTestStyle(teamId: string): Promise<string> {

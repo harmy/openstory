@@ -1,4 +1,5 @@
 {
+  "_preserveOnRecord": true,
   "_comment": "INJECTED for #881 — do NOT overwrite on re-record. The first attempt at this scene's primary image returns a content-checker 422 (sequenceIndex 0); the image workflow's CF default step retry re-runs and the success (no sequenceIndex, so it matches every later call) lands, so the frame still ends thumbnailStatus=completed. This exercises the content-flag retry inside the full pipeline — the existing 'every frame completed' assertion proves the rescue. The no-index success (rather than sequenceIndex 1) keeps the full-sequence test retriable in CI: on a Playwright retry the error fixture is already consumed, so the scene just succeeds. If you re-run `bun test:e2e:full:record`, re-apply this two-entry shape (error first).",
   "fixtures": [
     {

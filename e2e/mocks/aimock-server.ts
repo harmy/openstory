@@ -29,6 +29,7 @@ import {
   readdirSync,
   renameSync,
   rmdirSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { resolve } from 'node:path';
@@ -388,6 +389,21 @@ function stableBaseName(
 // collision, suffix with a short hash of the full content so both survive and
 // the clash is visible. Cross-run "collisions" are the whole point — the new
 // file replaces the old same-named one, which is the inline diff we want.
+// A fixture hand-edited after recording (e.g. the #881 content-flag retry
+// injection — a sequenceIndex-0 error + a no-index success) carries
+// `"_preserveOnRecord": true`. A naive re-record would overwrite it with a
+// fresh single-success fixture and silently drop the injected behaviour.
+function isPreservedFixture(filePath: string): boolean {
+  try {
+    const data: { _preserveOnRecord?: unknown } = JSON.parse(
+      readFileSync(filePath, 'utf8')
+    );
+    return data._preserveOnRecord === true;
+  } catch {
+    return false;
+  }
+}
+
 function moveToStableName(
   src: string,
   destDir: string,
@@ -396,6 +412,26 @@ function moveToStableName(
 ): void {
   mkdirSync(destDir, { recursive: true });
   let dest = resolve(destDir, `${base}.json`);
+  // A hand-injected fixture (`_preserveOnRecord: true`) must NOT be silently
+  // clobbered by a re-record. Discard the freshly-recorded response, keep the
+  // injected file, and warn loudly so whoever re-records knows to re-apply the
+  // injection if the prompt drifted.
+  if (existsSync(dest) && isPreservedFixture(dest)) {
+    console.warn(
+      [
+        '',
+        '⚠️  [e2e] aimock: PRESERVED a hand-injected fixture — re-record overwrite SKIPPED:',
+        `      ${dest}`,
+        '      Marked "_preserveOnRecord": true (e.g. the #881 content-flag retry: a',
+        '      sequenceIndex-0 error + a no-index success). The fresh recording was',
+        '      DISCARDED so the injection survives. If the prompt changed, re-apply the',
+        "      injected error entry by hand (see the file's _comment).",
+        '',
+      ].join('\n')
+    );
+    rmSync(src, { force: true });
+    return;
+  }
   // Only treat it as a real collision if the existing file came from THIS run
   // (i.e. we already wrote it this pass). We can't easily track that, so fall
   // back to content equality: if the target exists with different content,

@@ -67,7 +67,6 @@
     "test:e2e:ui": "bun playwright test --ui",
     "test:e2e:headed": "bun playwright test --headed",
     "test:e2e:full": "PLAYWRIGHT_FULL_PIPELINE=true bun playwright test full-sequence",
-    "test:e2e:content-retry": "PLAYWRIGHT_CONTENT_RETRY=true bun playwright test content-retry",
     "test:e2e:full:built": "PLAYWRIGHT_FULL_PIPELINE=true bun run build:e2e && bun run prepare:e2e-built && E2E_BUILT=true PLAYWRIGHT_FULL_PIPELINE=true bun playwright test full-sequence",
     "test:e2e:record": "E2E_RECORD=1 bun playwright test",
     "test:e2e:full:record": "E2E_RECORD=1 PLAYWRIGHT_FULL_PIPELINE=true bun playwright test full-sequence",
