@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { apiEnhanceScriptSchema } from './enhance-input-schema';
 import { apiCreateSequenceSchema } from './input-schema';
 import { buildOpenApiDocument } from './openapi';
 
@@ -24,11 +25,20 @@ describe('buildOpenApiDocument', () => {
     expect(Array.isArray(doc.servers)).toBe(true);
   });
 
-  it('documents the three operations', () => {
+  it('documents the operations', () => {
     expect(doc.paths['/api/v1'].get).toBeDefined();
     expect(doc.paths['/api/v1/sequences'].post).toBeDefined();
     expect(doc.paths['/api/v1/sequences/{id}'].get).toBeDefined();
     expect(doc.paths['/api/v1/openapi.json'].get).toBeDefined();
+    expect(doc.paths['/api/v1/scripts/enhance'].post).toBeDefined();
+  });
+
+  it('documents the enhance endpoint as an SSE stream with a valid example', () => {
+    const op = doc.paths['/api/v1/scripts/enhance'].post;
+    expect(op.responses['200'].content).toHaveProperty('text/event-stream');
+    expect(doc.components.schemas).toHaveProperty('EnhanceScriptRequest');
+    const example = op.requestBody.content['application/json'].example;
+    expect(() => apiEnhanceScriptSchema.parse(example)).not.toThrow();
   });
 
   it('every $ref resolves to a defined component schema (no dangling refs)', () => {

@@ -56,7 +56,7 @@ export function buildLlmsTxt(): string {
   lines.push('## API');
   lines.push('');
   lines.push(
-    `${SITE_CONFIG.name} has a public HTTP API for agents and scripts: create an AI video sequence from a script in one call, then poll its status. Both endpoints below are self-describing and need no separate docs.`
+    `${SITE_CONFIG.name} has a public HTTP API for agents and scripts: create an AI video sequence from a script in one call then poll its status, or enhance a script on its own (streamed back). The endpoints below are self-describing and need no separate docs.`
   );
   lines.push('');
   lines.push(
@@ -67,7 +67,7 @@ export function buildLlmsTxt(): string {
   );
   lines.push('');
   lines.push(
-    'Authenticate with an API key (create one under Settings → Developer) sent as "Authorization: Bearer <key>" or "x-api-key". POST /api/v1/sequences to create; GET the returned status URL (append ?wait=60s to long-poll) to watch progress.'
+    'Authenticate with an API key (create one under Settings → Developer) sent as "Authorization: Bearer <key>" or "x-api-key". POST /api/v1/sequences to create; GET the returned status URL (append ?wait=60s to long-poll) to watch progress. POST /api/v1/scripts/enhance to enhance a script without creating a sequence — the enhanced script streams back as Server-Sent Events.'
   );
   lines.push('');
 

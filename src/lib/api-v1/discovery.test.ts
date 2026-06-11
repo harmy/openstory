@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildRootDocument, createSequenceLink } from './discovery';
+import {
+  buildRootDocument,
+  createSequenceLink,
+  enhanceScriptLink,
+} from './discovery';
+import { apiEnhanceScriptSchema } from './enhance-input-schema';
 import { apiCreateSequenceSchema } from './input-schema';
 
 describe('buildRootDocument', () => {
@@ -28,6 +33,16 @@ describe('buildRootDocument', () => {
     expect(create?.method).toBe('POST');
     expect(create?.contentType).toBe('application/json');
     expect(create?.examples).toHaveLength(1);
+
+    const enhance = _links['enhance-script'];
+    expect(enhance?.method).toBe('POST');
+    expect(enhance?.href).toBe('/api/v1/scripts/enhance');
+  });
+
+  it('documents the streaming enhance endpoint in the narrative', () => {
+    const { instructions } = buildRootDocument();
+    expect(instructions).toMatch(/POST \/api\/v1\/scripts\/enhance/);
+    expect(instructions).toMatch(/Server-Sent Events/);
   });
 });
 
@@ -36,5 +51,12 @@ describe('createSequenceLink', () => {
     const [example] = createSequenceLink().examples ?? [];
     // The advertised example must actually be a valid request.
     expect(() => apiCreateSequenceSchema.parse(example)).not.toThrow();
+  });
+});
+
+describe('enhanceScriptLink', () => {
+  it('carries an example body that satisfies the enhance schema', () => {
+    const [example] = enhanceScriptLink().examples ?? [];
+    expect(() => apiEnhanceScriptSchema.parse(example)).not.toThrow();
   });
 });

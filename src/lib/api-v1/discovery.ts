@@ -10,6 +10,7 @@
  * caller has wired up a key, so the narrative can tell them how to get one.
  */
 
+import { apiEnhanceScriptSchema } from './enhance-input-schema';
 import { API_V1_BASE, type HalLink, type HalResource } from './hal';
 import { apiCreateSequenceSchema } from './input-schema';
 import { z } from 'zod';
@@ -23,6 +24,16 @@ Workflow:
   2. GET the statusUrl to watch progress: overall status, per-frame image/video
      status + URLs, music, poster, and ready counts. Status is derived from the
      database, so it is always correct even if you reconnect later.
+
+Enhance only (no sequence):
+  POST /api/v1/scripts/enhance to expand/polish a script without generating a
+  video. Takes the enhancement-relevant inputs (style, aspectRatio, targetSeconds,
+  elements) and STREAMS the result back as Server-Sent Events: unnamed 'data:'
+  frames each carry { "delta": "..." }; a final 'event: done' frame carries the
+  full { "enhancedScript": "..." } plus a '_links' catalog whose
+  'create-sequence' affordance embeds a ready-to-POST example body using the
+  enhanced script (with enhance: "off"). Errors after streaming starts arrive
+  as an 'event: error' frame.
 
 Authentication:
   Every endpoint except this root requires an API key. Create one in the
@@ -75,6 +86,27 @@ export function createSequenceLink(): HalLink {
   };
 }
 
+/** A representative `POST /api/v1/scripts/enhance` body. */
+function exampleEnhanceBody(): unknown {
+  return apiEnhanceScriptSchema.parse({
+    script: 'A lighthouse keeper befriends a stranded whale.',
+    style: 'Cinematic Noir',
+    targetSeconds: 30,
+  });
+}
+
+/** The `enhance-script` affordance, advertised in the root document. */
+export function enhanceScriptLink(): HalLink {
+  return {
+    href: `${API_V1_BASE}/scripts/enhance`,
+    method: 'POST',
+    title:
+      'Enhance a script without creating a sequence. Streams the result as Server-Sent Events.',
+    contentType: 'application/json',
+    examples: [exampleEnhanceBody()],
+  };
+}
+
 export type RootDocument = HalResource<{
   name: string;
   version: string;
@@ -97,6 +129,7 @@ export function buildRootDocument(): RootDocument {
         title: 'API root / instructions',
       },
       'create-sequence': createSequenceLink(),
+      'enhance-script': enhanceScriptLink(),
       'sequence-status': {
         href: `${API_V1_BASE}/sequences/{id}{?wait}`,
         method: 'GET',

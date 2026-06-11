@@ -13,9 +13,10 @@
  */
 
 import { FRAME_GENERATION_STATUSES } from '@/lib/db/schema/frames';
+import { apiEnhanceScriptSchema } from './enhance-input-schema';
 import { API_V1_BASE } from './hal';
 import { apiCreateSequenceSchema } from './input-schema';
-import { z } from 'zod';
+import { z, type ZodType } from 'zod';
 
 type JsonValue =
   | string
@@ -55,16 +56,19 @@ function rewriteRefsInObject(obj: JsonObject): JsonObject {
 }
 
 /**
- * Split the generated create-request schema into an OpenAPI root component plus
- * its lifted `$defs` (CharacterRef, CreateCharacter, …), all refs repointed at
+ * Split a generated request schema into an OpenAPI root component plus its lifted
+ * `$defs` (CharacterRef, CreateCharacter, …), all refs repointed at
  * `#/components/schemas`. Zod emits a self-contained draft-2020-12 schema whose
  * internal `#/$defs` refs don't resolve once embedded in an OpenAPI document, so
  * we hoist them to siblings under `components.schemas`.
  */
-function createRequestSchemas(): { root: JsonObject; defs: JsonObject } {
+function requestSchemas(schema: ZodType): {
+  root: JsonObject;
+  defs: JsonObject;
+} {
   // Round-trip through JSON to get a plain, mutable JSON tree (no Zod classes).
   const generated: JsonObject = JSON.parse(
-    JSON.stringify(z.toJSONSchema(apiCreateSequenceSchema))
+    JSON.stringify(z.toJSONSchema(schema))
   );
   const { $defs, $schema: _schema, ...root } = generated;
   const defs =
@@ -85,6 +89,13 @@ const EXAMPLE_CREATE_BODY: JsonObject = {
   music: true,
   characters: ['Old Tom the keeper', { name: 'The whale', isHuman: false }],
   locations: ['Stormy lighthouse'],
+};
+
+/** A representative enhance body, embedded as the request example. */
+const EXAMPLE_ENHANCE_BODY: JsonObject = {
+  script: 'A lighthouse keeper befriends a stranded whale.',
+  style: 'Cinematic Noir',
+  targetSeconds: 30,
 };
 
 const statusEnum = (values: JsonValue[]): JsonObject => ({
@@ -110,7 +121,10 @@ function errorResponse(description: string): JsonObject {
 
 /** Build the full OpenAPI 3.1 document for `/api/v1`. */
 export function buildOpenApiDocument(): JsonObject {
-  const { root: createRequest, defs } = createRequestSchemas();
+  const { root: createRequest, defs } = requestSchemas(apiCreateSequenceSchema);
+  const { root: enhanceRequest, defs: enhanceDefs } = requestSchemas(
+    apiEnhanceScriptSchema
+  );
 
   const waitParam: JsonObject = {
     name: 'wait',
@@ -140,6 +154,7 @@ export function buildOpenApiDocument(): JsonObject {
     tags: [
       { name: 'discovery', description: 'Unauthenticated self-description.' },
       { name: 'sequences', description: 'Create and watch video sequences.' },
+      { name: 'scripts', description: 'Enhance scripts without generating.' },
     ],
     paths: {
       [API_V1_BASE]: {
@@ -212,6 +227,41 @@ export function buildOpenApiDocument(): JsonObject {
           },
         },
       },
+      [`${API_V1_BASE}/scripts/enhance`]: {
+        post: {
+          tags: ['scripts'],
+          summary: 'Enhance a script (streaming)',
+          description:
+            'Enhance/expand a script WITHOUT creating a sequence, using the enhancement-relevant inputs (style, aspect ratio, target duration, elements). Streams the result as Server-Sent Events: unnamed `data:` frames each carry `{ "delta": "..." }`; a terminal `event: done` frame carries the full `{ "enhancedScript": "...", "_links": {...} }` — a HAL catalog whose `create-sequence` affordance embeds a ready-to-POST example body using the enhanced script. A failure after streaming starts arrives as an `event: error` frame `{ code, message }`. Pre-stream failures (invalid body, unresolvable style, billing) return the JSON error envelope instead.',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/EnhanceScriptRequest' },
+                example: EXAMPLE_ENHANCE_BODY,
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description:
+                'An SSE stream of the enhanced script. Delta frames, then a terminal `done` frame with the full text and a HAL `_links` catalog of next actions.',
+              content: {
+                'text/event-stream': {
+                  schema: { type: 'string' },
+                  example:
+                    'data: {"delta":"INT. "}\n\ndata: {"delta":"LIGHTHOUSE"}\n\nevent: done\ndata: {"enhancedScript":"INT. LIGHTHOUSE - NIGHT\\n...","_links":{"create-sequence":{"href":"/api/v1/sequences","method":"POST"}}}\n\n',
+                },
+              },
+            },
+            '400': errorResponse('Invalid JSON or request body.'),
+            '401': errorResponse('Missing or invalid API key.'),
+            '403': errorResponse('No team associated with the key.'),
+            '404': errorResponse('No style found matching the reference.'),
+            '429': errorResponse('Per-key rate limit exceeded (10 req/s).'),
+          },
+        },
+      },
       [`${API_V1_BASE}/sequences/{id}`]: {
         get: {
           tags: ['sequences'],
@@ -269,6 +319,8 @@ export function buildOpenApiDocument(): JsonObject {
       schemas: {
         CreateSequenceRequest: createRequest,
         ...defs,
+        EnhanceScriptRequest: enhanceRequest,
+        ...enhanceDefs,
         HalLink: {
           type: 'object',
           required: ['href'],

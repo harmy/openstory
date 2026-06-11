@@ -67,6 +67,7 @@ import { Route as AppLocationsLocationIdRouteImport } from './routes/_app/locati
 import { Route as AppAdminUsageRouteImport } from './routes/_app/admin/usage'
 import { Route as AppSequencesIdRouteRouteImport } from './routes/_app/sequences/$id/route'
 import { Route as ApiV1SequencesIdRouteImport } from './routes/api/v1/sequences.$id'
+import { Route as ApiV1ScriptsEnhanceRouteImport } from './routes/api/v1/scripts.enhance'
 import { Route as AppSequencesIdTheatreRouteImport } from './routes/_app/sequences/$id/theatre'
 import { Route as AppSequencesIdScriptRouteImport } from './routes/_app/sequences/$id/script'
 import { Route as AppSequencesIdScenesRouteImport } from './routes/_app/sequences/$id/scenes'
@@ -364,6 +365,11 @@ const ApiV1SequencesIdRoute = ApiV1SequencesIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => ApiV1SequencesRoute,
 } as any)
+const ApiV1ScriptsEnhanceRoute = ApiV1ScriptsEnhanceRouteImport.update({
+  id: '/api/v1/scripts/enhance',
+  path: '/api/v1/scripts/enhance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppSequencesIdTheatreRoute = AppSequencesIdTheatreRouteImport.update({
   id: '/theatre',
   path: '/theatre',
@@ -473,6 +479,7 @@ export interface FileRoutesByFullPath {
   '/sequences/$id/scenes': typeof AppSequencesIdScenesRoute
   '/sequences/$id/script': typeof AppSequencesIdScriptRoute
   '/sequences/$id/theatre': typeof AppSequencesIdTheatreRoute
+  '/api/v1/scripts/enhance': typeof ApiV1ScriptsEnhanceRoute
   '/api/v1/sequences/$id': typeof ApiV1SequencesIdRoute
   '/sequences/$id/cast/$characterId': typeof AppSequencesIdCastCharacterIdRoute
   '/sequences/$id/locations/$locationId': typeof AppSequencesIdLocationsLocationIdRoute
@@ -537,6 +544,7 @@ export interface FileRoutesByTo {
   '/sequences/$id/scenes': typeof AppSequencesIdScenesRoute
   '/sequences/$id/script': typeof AppSequencesIdScriptRoute
   '/sequences/$id/theatre': typeof AppSequencesIdTheatreRoute
+  '/api/v1/scripts/enhance': typeof ApiV1ScriptsEnhanceRoute
   '/api/v1/sequences/$id': typeof ApiV1SequencesIdRoute
   '/sequences/$id/cast/$characterId': typeof AppSequencesIdCastCharacterIdRoute
   '/sequences/$id/locations/$locationId': typeof AppSequencesIdLocationsLocationIdRoute
@@ -607,6 +615,7 @@ export interface FileRoutesById {
   '/_app/sequences/$id/scenes': typeof AppSequencesIdScenesRoute
   '/_app/sequences/$id/script': typeof AppSequencesIdScriptRoute
   '/_app/sequences/$id/theatre': typeof AppSequencesIdTheatreRoute
+  '/api/v1/scripts/enhance': typeof ApiV1ScriptsEnhanceRoute
   '/api/v1/sequences/$id': typeof ApiV1SequencesIdRoute
   '/_app/sequences/$id/cast/$characterId': typeof AppSequencesIdCastCharacterIdRoute
   '/_app/sequences/$id/locations/$locationId': typeof AppSequencesIdLocationsLocationIdRoute
@@ -675,6 +684,7 @@ export interface FileRouteTypes {
     | '/sequences/$id/scenes'
     | '/sequences/$id/script'
     | '/sequences/$id/theatre'
+    | '/api/v1/scripts/enhance'
     | '/api/v1/sequences/$id'
     | '/sequences/$id/cast/$characterId'
     | '/sequences/$id/locations/$locationId'
@@ -739,6 +749,7 @@ export interface FileRouteTypes {
     | '/sequences/$id/scenes'
     | '/sequences/$id/script'
     | '/sequences/$id/theatre'
+    | '/api/v1/scripts/enhance'
     | '/api/v1/sequences/$id'
     | '/sequences/$id/cast/$characterId'
     | '/sequences/$id/locations/$locationId'
@@ -808,6 +819,7 @@ export interface FileRouteTypes {
     | '/_app/sequences/$id/scenes'
     | '/_app/sequences/$id/script'
     | '/_app/sequences/$id/theatre'
+    | '/api/v1/scripts/enhance'
     | '/api/v1/sequences/$id'
     | '/_app/sequences/$id/cast/$characterId'
     | '/_app/sequences/$id/locations/$locationId'
@@ -839,6 +851,7 @@ export interface RootRouteChildren {
   ApiV1OpenapiDotjsonRoute: typeof ApiV1OpenapiDotjsonRoute
   ApiV1SequencesRoute: typeof ApiV1SequencesRouteWithChildren
   ApiV1IndexRoute: typeof ApiV1IndexRoute
+  ApiV1ScriptsEnhanceRoute: typeof ApiV1ScriptsEnhanceRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1249,6 +1262,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1SequencesIdRouteImport
       parentRoute: typeof ApiV1SequencesRoute
     }
+    '/api/v1/scripts/enhance': {
+      id: '/api/v1/scripts/enhance'
+      path: '/api/v1/scripts/enhance'
+      fullPath: '/api/v1/scripts/enhance'
+      preLoaderRoute: typeof ApiV1ScriptsEnhanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app/sequences/$id/theatre': {
       id: '/_app/sequences/$id/theatre'
       path: '/theatre'
@@ -1514,6 +1534,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiV1OpenapiDotjsonRoute: ApiV1OpenapiDotjsonRoute,
   ApiV1SequencesRoute: ApiV1SequencesRouteWithChildren,
   ApiV1IndexRoute: ApiV1IndexRoute,
+  ApiV1ScriptsEnhanceRoute: ApiV1ScriptsEnhanceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
