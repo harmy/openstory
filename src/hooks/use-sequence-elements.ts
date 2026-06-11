@@ -3,7 +3,6 @@ import {
   deleteSequenceElementFn,
   finalizeElementUploadFn,
   getFrameCountsByElementFn,
-  getFrameIdsForElementFn,
   listSequenceElementsFn,
   presignDraftElementUploadFn,
   presignElementUploadFn,
@@ -36,7 +35,7 @@ type ReplaceElementEvent =
       data: ReplaceElementFailedPayload;
     };
 
-export const sequenceElementKeys = {
+const sequenceElementKeys = {
   all: ['sequence-elements'] as const,
   bySequence: (sequenceId: string) =>
     ['sequence-elements', sequenceId] as const,
@@ -226,25 +225,6 @@ export function useFrameCountsForAllElements(sequenceId: string | undefined) {
     queryFn: () =>
       getFrameCountsByElementFn({ data: { sequenceId: sequenceId ?? '' } }),
     enabled: Boolean(sequenceId),
-    staleTime: 60 * 1000,
-  });
-}
-
-/** Frame count + IDs for frames that reference this element by token */
-export function useFrameIdsForElement(
-  sequenceId: string | undefined,
-  elementId: string | undefined
-) {
-  return useQuery({
-    queryKey:
-      sequenceId && elementId
-        ? sequenceElementKeys.framesForElement(sequenceId, elementId)
-        : ['sequence-elements', 'frames', 'none'],
-    queryFn: () =>
-      getFrameIdsForElementFn({
-        data: { sequenceId: sequenceId ?? '', elementId: elementId ?? '' },
-      }),
-    enabled: Boolean(sequenceId) && Boolean(elementId),
     staleTime: 60 * 1000,
   });
 }

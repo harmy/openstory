@@ -22,7 +22,6 @@ const sequenceDraftSchema = z.object({
   savedAt: z.number().default(0),
 });
 
-export type DraftElement = z.infer<typeof draftElementSchema>;
 type SequenceDraft = z.infer<typeof sequenceDraftSchema>;
 
 const EMPTY_DRAFT: SequenceDraft = {

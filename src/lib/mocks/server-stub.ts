@@ -38,4 +38,3 @@ const handler: ProxyHandler<typeof target> = {
 };
 
 export const stub: any = new Proxy(target, handler);
-export default stub;

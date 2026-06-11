@@ -3,7 +3,6 @@
  * Team management, members, and invitations
  */
 
-import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import {
   integer,
   snakeCase,
@@ -120,13 +119,3 @@ export const teamInvitations = snakeCase.table(
     index('idx_team_invitations_unique_pending').on(table.teamId, table.email),
   ]
 );
-
-// Type exports
-export type Team = InferSelectModel<typeof teams>;
-export type NewTeam = InferInsertModel<typeof teams>;
-
-export type TeamMember = InferSelectModel<typeof teamMembers>;
-export type NewTeamMember = InferInsertModel<typeof teamMembers>;
-
-export type TeamInvitation = InferSelectModel<typeof teamInvitations>;
-export type NewTeamInvitation = InferInsertModel<typeof teamInvitations>;

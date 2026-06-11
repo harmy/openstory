@@ -150,7 +150,7 @@ export function isValidAnalysisModelId(
 /**
  * Get all model IDs
  */
-export function getAllModelIds(): AnalysisModelId[] {
+function getAllModelIds(): AnalysisModelId[] {
   return SCRIPT_ANALYSIS_MODELS.map((model) => model.id);
 }
 

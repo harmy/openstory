@@ -6,21 +6,21 @@
 import type { Frame } from '@/lib/db/schema/frames';
 import type { Sequence } from '@/lib/db/schema/sequences';
 
-export type FailureCategory =
+type FailureCategory =
   | 'image'
   | 'motion'
   | 'music'
   | 'motion-prompts'
   | 'music-prompt';
 
-export type FrameFailure = {
+type FrameFailure = {
   frameId: string;
   orderIndex: number;
   sceneTitle: string;
   error: string | null;
 };
 
-export type FailureGroup = {
+type FailureGroup = {
   category: FailureCategory;
   label: string;
   frames: FrameFailure[];

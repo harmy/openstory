@@ -14,7 +14,7 @@ import type {
   MotionPromptParameters,
   VisualPromptComponents,
 } from '@/lib/ai/scene-analysis.schema';
-import { type InferInsertModel, type InferSelectModel, sql } from 'drizzle-orm';
+import { type InferSelectModel, sql } from 'drizzle-orm';
 import {
   index,
   integer,
@@ -41,7 +41,7 @@ export type FramePromptVariantComponents =
 export const FRAME_PROMPT_TYPES = ['visual', 'motion'] as const;
 export type FramePromptType = (typeof FRAME_PROMPT_TYPES)[number];
 
-export const PROMPT_VARIANT_SOURCES = [
+const PROMPT_VARIANT_SOURCES = [
   'ai-generated',
   'user-edit',
   'regenerated',
@@ -109,6 +109,3 @@ export const framePromptVariants = snakeCase.table(
 );
 
 export type FramePromptVariant = InferSelectModel<typeof framePromptVariants>;
-export type NewFramePromptVariant = InferInsertModel<
-  typeof framePromptVariants
->;

@@ -29,54 +29,6 @@ export function generateId(): string {
 }
 
 /**
- * Generate a ULID with a specific timestamp
- * Useful for testing or backfilling data
- *
- * @param timestamp - Unix timestamp in milliseconds
- * @returns ULID string with specified timestamp
- *
- * @example
- * ```ts
- * const id = generateIdAt(Date.now());
- * ```
- */
-export function generateIdAt(timestamp: number): string {
-  return ulid(timestamp);
-}
-
-/**
- * Extract timestamp from a ULID
- *
- * @param id - ULID string
- * @returns Unix timestamp in milliseconds
- *
- * @example
- * ```ts
- * const id = generateId();
- * const timestamp = getTimestampFromId(id);
- * logger.info(new Date(timestamp)); // Creation time
- * ```
- */
-export function getTimestampFromId(id: string): number {
-  // ULID spec: first 10 characters encode timestamp
-  const timeComponent = id.substring(0, 10);
-
-  // Decode Crockford's Base32
-  const chars = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-  let value = 0;
-
-  for (let i = 0; i < timeComponent.length; i++) {
-    const char = timeComponent[i];
-    if (char === undefined) {
-      throw new Error(`Invalid ULID: character at index ${i} is undefined`);
-    }
-    value = value * 32 + chars.indexOf(char);
-  }
-
-  return value;
-}
-
-/**
  * Validate if a string is a valid ULID
  *
  * @param id - String to validate

@@ -41,7 +41,7 @@ export const CANONICAL_TARGET_SECONDS = 15;
  * `style-templates.ts` has an explicit entry (enforced by a unit test) — no
  * silent default that would render an off-brief sample.
  */
-export const CATEGORY_BRIEFS: Record<string, string> = {
+const CATEGORY_BRIEFS: Record<string, string> = {
   commercial: 'a premium 15-second brand commercial',
   ecommerce: 'a new product launch',
   influencer: 'an honest product review spoken to camera',

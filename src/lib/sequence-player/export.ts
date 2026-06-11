@@ -46,7 +46,7 @@ const TARGET_SAMPLE_RATE = 48_000;
 const TARGET_CHANNELS = 2;
 const AAC_BITRATE = 192_000;
 
-export type ExportProgressPhase =
+type ExportProgressPhase =
   | 'prepare'
   | 'video'
   | 'music'
@@ -68,7 +68,7 @@ export type ExportProgress = {
   total: number;
 };
 
-export type ExportProgressCallback = (progress: ExportProgress) => void;
+type ExportProgressCallback = (progress: ExportProgress) => void;
 
 export type ExportSequenceInput = {
   scenes: SceneInput[];

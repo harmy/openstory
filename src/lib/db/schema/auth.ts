@@ -1,4 +1,4 @@
-import { type InferInsertModel, type InferSelectModel, sql } from 'drizzle-orm';
+import { type InferSelectModel, sql } from 'drizzle-orm';
 import { index, integer, snakeCase, text } from 'drizzle-orm/sqlite-core';
 
 export const user = snakeCase.table('user', {
@@ -158,19 +158,3 @@ export const apikey = snakeCase.table(
 
 // Type exports
 export type User = InferSelectModel<typeof user>;
-export type NewUser = InferInsertModel<typeof user>;
-
-export type Session = InferSelectModel<typeof session>;
-export type NewSession = InferInsertModel<typeof session>;
-
-export type Account = InferSelectModel<typeof account>;
-export type NewAccount = InferInsertModel<typeof account>;
-
-export type Verification = InferSelectModel<typeof verification>;
-export type NewVerification = InferInsertModel<typeof verification>;
-
-export type Passkey = InferSelectModel<typeof passkey>;
-export type NewPasskey = InferInsertModel<typeof passkey>;
-
-export type ApiKey = InferSelectModel<typeof apikey>;
-export type NewApiKey = InferInsertModel<typeof apikey>;

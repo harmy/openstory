@@ -30,13 +30,13 @@ export function replaceTokenInText(
   });
 }
 
-export function textContainsToken(text: string, token: string): boolean {
+function textContainsToken(text: string, token: string): boolean {
   if (!text) return false;
   return tokenRegex(token).test(text);
 }
 
 /** Pure rewrite of one frame's Scene metadata. Returns null if nothing changed. */
-export function renameTokenInScene(
+function renameTokenInScene(
   scene: Scene,
   oldToken: string,
   newToken: string

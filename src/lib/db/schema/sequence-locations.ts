@@ -109,13 +109,3 @@ export type SequenceLocationMinimal = Pick<
   | 'description'
   | 'consistencyTag'
 >;
-
-// Composite types for API responses
-export type SequenceLocationWithDetails = SequenceLocation & {
-  frameCount?: number;
-  libraryLocation?: {
-    id: string;
-    name: string;
-    referenceImageUrl: string | null;
-  } | null;
-};

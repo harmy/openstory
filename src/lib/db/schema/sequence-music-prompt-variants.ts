@@ -9,7 +9,7 @@
  * § prompt versioning.
  */
 
-import { type InferInsertModel, type InferSelectModel, sql } from 'drizzle-orm';
+import { type InferSelectModel, sql } from 'drizzle-orm';
 import {
   index,
   integer,
@@ -19,16 +19,11 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { generateId } from '../id';
 import { user } from './auth';
-import {
-  PROMPT_VARIANT_SOURCES,
-  type PromptVariantSource,
-} from './frame-prompt-variants';
+import { type PromptVariantSource } from './frame-prompt-variants';
 import { sequences } from './sequences';
 
-export const SEQUENCE_MUSIC_PROMPT_TYPE = 'music' as const;
+const SEQUENCE_MUSIC_PROMPT_TYPE = 'music' as const;
 export type SequenceMusicPromptType = typeof SEQUENCE_MUSIC_PROMPT_TYPE;
-
-export { PROMPT_VARIANT_SOURCES };
 export type { PromptVariantSource };
 
 export const sequenceMusicPromptVariants = snakeCase.table(
@@ -86,8 +81,5 @@ export const sequenceMusicPromptVariants = snakeCase.table(
 );
 
 export type SequenceMusicPromptVariant = InferSelectModel<
-  typeof sequenceMusicPromptVariants
->;
-export type NewSequenceMusicPromptVariant = InferInsertModel<
   typeof sequenceMusicPromptVariants
 >;

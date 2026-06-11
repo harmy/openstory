@@ -6,7 +6,6 @@
  * environment variables, separate from the database.
  */
 
-import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import {
   integer,
   snakeCase,
@@ -81,7 +80,3 @@ export const teamApiKeys = snakeCase.table(
     index('idx_team_api_keys_team_id').on(table.teamId),
   ]
 );
-
-// Type exports
-export type TeamApiKey = InferSelectModel<typeof teamApiKeys>;
-export type NewTeamApiKey = InferInsertModel<typeof teamApiKeys>;

@@ -15,7 +15,7 @@ let stripeChecked = false;
  * Get Stripe instance, or null if not configured.
  * Use `getStripeOrThrow()` when Stripe is required (e.g. checkout).
  */
-export function getStripe(): Stripe | null {
+function getStripe(): Stripe | null {
   if (stripeChecked) return stripeInstance;
 
   const env = getEnv();

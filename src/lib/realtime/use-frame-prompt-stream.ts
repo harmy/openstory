@@ -15,7 +15,7 @@ const historyPayloadSchema = z.object({
   error: z.string().optional(),
 });
 
-export type FramePromptStreamStatus =
+type FramePromptStreamStatus =
   | 'idle'
   | 'pending'
   | 'streaming'
@@ -28,7 +28,7 @@ type PerPromptState = {
   error?: string;
 };
 
-export type FramePromptStreamState = {
+type FramePromptStreamState = {
   visual: PerPromptState;
   motion: PerPromptState;
 };

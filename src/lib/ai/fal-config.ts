@@ -1,11 +1,4 @@
-import {
-  createFalClient as upstreamCreateFalClient,
-  fal,
-  type FalClient,
-  type RequestMiddleware,
-} from '@fal-ai/client';
-
-type FalConfig = NonNullable<Parameters<typeof upstreamCreateFalClient>[0]>;
+import { fal, type RequestMiddleware } from '@fal-ai/client';
 
 const FAL_HOSTS = new Set([
   'fal.run',
@@ -16,7 +9,6 @@ const FAL_HOSTS = new Set([
 ]);
 
 let configured = false;
-let proxyMiddleware: RequestMiddleware | null = null;
 
 function buildProxyMiddleware(proxyUrl: string): RequestMiddleware {
   const proxy = new URL(proxyUrl);
@@ -56,13 +48,12 @@ function composeMiddleware(
  * that rewrites fal hosts to the proxy origin while preserving the original
  * pathname. The proxy receives the original host via `x-fal-target-host`.
  *
- * Two paths reach fal.ai from this app: the `@tanstack/ai-fal` adapters call
- * `fal.config({ credentials })` on the singleton and would otherwise wipe any
- * `requestMiddleware` we set, so we monkey-patch `fal.config` to compose ours
- * back in. The other path is callers that build a per-request client via
- * `createFalClient(...)`; that returns an entirely independent client whose
- * config closure the monkey-patch can't touch, so those callers must use the
- * project-local `createFalClient` wrapper exported from this module.
+ * The `@tanstack/ai-fal` adapters call `fal.config({ credentials })` on the
+ * singleton and would otherwise wipe any `requestMiddleware` we set, so we
+ * monkey-patch `fal.config` to compose ours back in. Note: callers that build
+ * a per-request client via `@fal-ai/client`'s `createFalClient(...)` get an
+ * independent client whose config closure this monkey-patch can't touch —
+ * those bypass the proxy.
  */
 export function configureFalProxyFromEnv(): void {
   if (configured) return;
@@ -71,7 +62,6 @@ export function configureFalProxyFromEnv(): void {
   if (!proxyUrl) return;
 
   const middleware = buildProxyMiddleware(proxyUrl);
-  proxyMiddleware = middleware;
 
   const originalConfig = fal.config.bind(fal);
   fal.config = (config) => {
@@ -84,21 +74,4 @@ export function configureFalProxyFromEnv(): void {
     });
   };
   fal.config({});
-}
-
-/**
- * Project-local wrapper around `@fal-ai/client`'s `createFalClient` that
- * composes the env-configured proxy middleware into per-call clients. Use
- * this instead of importing `createFalClient` directly so loudnorm /
- * compose / any future per-call client respects FAL_PROXY_URL.
- */
-export function createFalClient(config: FalConfig = {}): FalClient {
-  configureFalProxyFromEnv();
-  const middleware = proxyMiddleware;
-  if (!middleware) return upstreamCreateFalClient(config);
-
-  return upstreamCreateFalClient({
-    ...config,
-    requestMiddleware: composeMiddleware(middleware, config.requestMiddleware),
-  });
 }

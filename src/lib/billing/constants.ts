@@ -12,7 +12,7 @@ export function isStripeEnabled(): boolean {
 }
 
 /** Markup percentage applied on top of provider costs (e.g., 0.05 = 5%) */
-export const BILLING_MARKUP_PERCENT = 0.05;
+const BILLING_MARKUP_PERCENT = 0.05;
 
 /** Minimum top-up amount in USD */
 export const MIN_TOPUP_AMOUNT_USD = 10;
@@ -27,32 +27,11 @@ export const PRESET_TOPUP_AMOUNTS_USD = [10, 100, 1000] as const;
 /** Low balance warning threshold in USD (used when auto-top-up is disabled) */
 export const LOW_BALANCE_THRESHOLD_USD = 5;
 
-/** Low balance warning threshold in microdollars */
-export const LOW_BALANCE_THRESHOLD_MICROS: Microdollars = usdToMicros(
-  LOW_BALANCE_THRESHOLD_USD
-);
-
-/** Default auto-top-up threshold in USD (user-configurable) */
-export const DEFAULT_AUTO_TOPUP_THRESHOLD_USD = 5;
-
-/** Default auto-top-up threshold in microdollars */
-export const DEFAULT_AUTO_TOPUP_THRESHOLD_MICROS: Microdollars = usdToMicros(
-  DEFAULT_AUTO_TOPUP_THRESHOLD_USD
-);
-
-/** Default auto-top-up recharge amount in USD (user-configurable) */
-export const DEFAULT_AUTO_TOPUP_AMOUNT_USD = 100;
-
-/** Default auto-top-up recharge amount in microdollars */
-export const DEFAULT_AUTO_TOPUP_AMOUNT_MICROS: Microdollars = usdToMicros(
-  DEFAULT_AUTO_TOPUP_AMOUNT_USD
-);
-
 /** Minimum time between auto-top-up charges in milliseconds (60 seconds) */
 export const AUTO_TOPUP_COOLDOWN_MS = 60_000;
 
 /** Number of months before credit batches expire */
-export const CREDIT_EXPIRY_MONTHS = 12;
+const CREDIT_EXPIRY_MONTHS = 12;
 
 /** Calculate the expiry date for a credit batch */
 export function calculateExpiryDate(from?: Date): Date {

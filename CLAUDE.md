@@ -109,20 +109,19 @@ All API routes use TanStack Start server handlers. Standard shape:
 // src/routes/api/example/$id.ts
 export const Route = createFileRoute('/api/example/$id')({
   server: {
+    middleware: [authWithTeamRequestMiddleware],
     handlers: {
-      POST: async ({ params, request }) => {
+      POST: async ({ params, request, context }) => {
         try {
           const input = schema.parse(await request.json());
-          const user = await requireUser();
+          const { user, teamId } = context;
 
-          const record = await db
-            .insert(table)
-            .values({ ...input, teamId: user.teamId });
+          const record = await db.insert(table).values({ ...input, teamId });
 
           // Trigger a durable workflow (see Workflow Pattern below)
           const workflowRunId = await triggerWorkflow('/image', {
             userId: user.id,
-            teamId: user.teamId,
+            teamId,
             ...input,
           });
 
@@ -140,7 +139,7 @@ export const Route = createFileRoute('/api/example/$id')({
 });
 ```
 
-Steps: 1) validate input · 2) `requireUser()` · 3) DB writes (only here) · 4) trigger workflow · 5) standardized response.
+Steps: 1) validate input · 2) auth via `authWithTeamRequestMiddleware` (user/teamId on `context`) · 3) DB writes (only here) · 4) trigger workflow · 5) standardized response.
 
 ## Workflow Pattern
 
@@ -400,7 +399,7 @@ When re-mocking inside an `it()` block to test a different code path, call `vi.r
 
 ## Platform & Deployment
 
-Production target: **Cloudflare Workers** (the only supported platform). `getDeploymentPlatform()` in `src/lib/utils/environment.ts` distinguishes Cloudflare / local / unknown via `CF_PAGES` and `NODE_ENV`. CI auto-deploys main; PRs get preview deployments with unique D1 databases. See `.env.example` for required vars (or `bun setup` for local defaults).
+Production target: **Cloudflare Workers** (the only supported platform). Deployment-context helpers (preview/local detection) live in `src/lib/utils/environment.ts`. CI auto-deploys main; PRs get preview deployments with unique D1 databases. See `.env.example` for required vars (or `bun setup` for local defaults).
 
 <!-- intent-skills:start -->
 

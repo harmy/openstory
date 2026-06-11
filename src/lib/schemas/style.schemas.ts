@@ -41,6 +41,3 @@ export const updateStyleSchema = createUpdateSchema(styles, {
   useCases: () => useCasesSchema,
   sampleVideos: () => sampleVideosSchema,
 }).omit(SERVER_MANAGED_COLUMNS);
-
-export type CreateStyleInput = z.infer<typeof createStyleSchema>;
-export type UpdateStyleInput = z.infer<typeof updateStyleSchema>;

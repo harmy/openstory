@@ -109,7 +109,7 @@ export function assertSafeImageUrl(rawUrl: string): URL {
  * redirects, enforces an image Content-Type from the response, and caps size.
  * Returns the bytes, the validated content type, and its file extension.
  */
-export async function fetchSafeImage(
+async function fetchSafeImage(
   rawUrl: string
 ): Promise<{ bytes: Uint8Array; contentType: string; extension: string }> {
   const url = assertSafeImageUrl(rawUrl);

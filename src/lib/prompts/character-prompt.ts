@@ -10,20 +10,14 @@
 import type { CharacterBibleEntry } from '@/lib/ai/scene-analysis.schema';
 
 import type { CharacterMinimal, StyleConfig } from '@/lib/db/schema';
-import {
-  type PromptWithReferenceImages,
-  type ReferenceImageDescription,
-  buildReferenceImagePrompt,
-} from './reference-image-prompt';
+import { type ReferenceImageDescription } from './reference-image-prompt';
 /**
  * Build a concise character description from character data
  *
  * @param character - Character with flattened fields
  * @returns Concise description string
  */
-export const buildCharacterDescription = (
-  character: CharacterMinimal
-): string => {
+const buildCharacterDescription = (character: CharacterMinimal): string => {
   const parts: string[] = [];
 
   if (character.physicalDescription) {
@@ -56,36 +50,6 @@ export const buildCharacterReferenceImages = (
       description: buildCharacterDescription(c),
       role: 'character' as const,
     }));
-};
-
-/**
- * Build prompt with multi-character reference mapping
- *
- * Enhances the base prompt with character reference information for models
- * that support multiple reference images via the `image_urls` parameter.
- *
- * @param basePrompt - The original visual prompt
- * @param characters - Array of sequence characters with completed sheets
- * @returns Enhanced prompt and array of reference URLs
- *
- * @example
- * ```ts
- * const { prompt, referenceUrls } = buildPromptWithReferences(
- *   "A tense confrontation in the dimly lit bar...",
- *   [jackCharacter, sarahCharacter]
- * );
- * // prompt now includes character reference mapping
- * // referenceUrls = [jackSheetUrl, sarahSheetUrl]
- * ```
- */
-export const buildPromptWithCharacterReferences = (
-  basePrompt: string,
-  characters: CharacterMinimal[]
-): PromptWithReferenceImages => {
-  return buildReferenceImagePrompt(
-    basePrompt,
-    buildCharacterReferenceImages(characters)
-  );
 };
 
 /**
@@ -122,7 +86,7 @@ const formatStyleForSheet = (
  * @param styleConfig - Optional sequence style to apply instead of default studio look
  * @returns Complete prompt string
  */
-export const buildBaseSheetPrompt = (
+const buildBaseSheetPrompt = (
   identitySection: string,
   /** Optional additional instructions (e.g., reference image handling) */
   additionalInstructions: string = '',

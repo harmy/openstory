@@ -46,7 +46,7 @@ export type OneShotContext = {
 };
 
 /** One created sequence in the (non-`?wait`) create response. */
-export type OneShotSequenceEntry = {
+type OneShotSequenceEntry = {
   id: string;
   status: SequenceStatus;
   workflowRunId: string;
@@ -67,7 +67,7 @@ export type OneShotResult = {
  * status/statusUrl/_links are dropped in favour of the live embedded `state`,
  * plus the long-poll outcome flags.
  */
-export type OneShotWaitSequenceEntry = {
+type OneShotWaitSequenceEntry = {
   id: string;
   workflowRunId: string;
   /** First progress snapshot (with its own `_links`); `null` if unavailable. */

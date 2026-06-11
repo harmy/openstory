@@ -20,7 +20,7 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { generateId } from '../id';
 
-export const LOCATION_SHEET_VARIANT_PARENT_TYPES = [
+const LOCATION_SHEET_VARIANT_PARENT_TYPES = [
   'sequence_location',
   'library_location',
 ] as const;

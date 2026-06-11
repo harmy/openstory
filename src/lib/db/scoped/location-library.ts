@@ -38,7 +38,7 @@ export function createPublicLocationsReadMethods(db: Database) {
   };
 }
 
-export function createLocationsReadMethods(db: Database, teamId: string) {
+function createLocationsReadMethods(db: Database, teamId: string) {
   return {
     list: async (): Promise<LibraryLocation[]> => {
       return await db

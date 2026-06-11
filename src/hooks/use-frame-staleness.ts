@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
  *                     never generated). The UI must not show a regenerate
  *                     prompt — we have no opinion to surface.
  */
-export type ArtifactStaleness = 'stale' | 'fresh' | 'untracked';
+type ArtifactStaleness = 'stale' | 'fresh' | 'untracked';
 
 export type FrameStaleness = {
   thumbnail: ArtifactStaleness;

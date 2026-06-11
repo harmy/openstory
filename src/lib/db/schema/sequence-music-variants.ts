@@ -20,7 +20,7 @@ import { generateId } from '../id';
 import { sequences } from './sequences';
 
 // Music is generated, not merged — no 'merging' status (which is video-only).
-export const SEQUENCE_MUSIC_VARIANT_STATUSES = [
+const SEQUENCE_MUSIC_VARIANT_STATUSES = [
   'pending',
   'completed',
   'failed',

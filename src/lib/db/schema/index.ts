@@ -47,7 +47,6 @@ import { talent, talentMedia, talentSheets } from './talent';
 import {
   audio,
   StyleConfigSchema,
-  StyleSampleVideoKindSchema,
   StyleSampleVideoSchema,
   styles,
   vfx,
@@ -67,34 +66,15 @@ import { giftTokenRedemptions, giftTokens } from './gift-tokens';
 // Better Auth tables
 export { account, apikey, passkey, session, user, verification };
 
-export type {
-  Account,
-  ApiKey,
-  NewApiKey,
-  Passkey,
-  Session,
-  User,
-  Verification,
-} from './auth';
+export type { User } from './auth';
 
 // Teams
 export { teamInvitations, teamMembers, teams };
 
-export type {
-  InvitationStatus,
-  NewTeam,
-  NewTeamInvitation,
-  NewTeamMember,
-  Team,
-  TeamInvitation,
-  TeamMember,
-  TeamMemberRole,
-} from './teams';
-
 // Sequences
 export { sequences };
 
-export type { NewSequence, Sequence, SequenceStatus } from './sequences';
+export type { NewSequence, Sequence } from './sequences';
 
 // Frames
 export { frames };
@@ -104,18 +84,13 @@ export type { Frame, NewFrame } from './frames';
 // Frame Variants
 export { frameVariants };
 
-export type {
-  FrameVariant,
-  NewFrameVariant,
-  VariantType,
-} from './frame-variants';
+export type { FrameVariant, NewFrameVariant } from './frame-variants';
 
 // Sheet Variants (Stage 2: divergent character/location/talent sheet outputs)
 export { characterSheetVariants };
 
 export type {
   CharacterSheetVariant,
-  CharacterSheetVariantStatus,
   NewCharacterSheetVariant,
 } from './character-sheet-variants';
 
@@ -124,43 +99,32 @@ export { locationSheetVariants };
 export type {
   LocationSheetVariant,
   LocationSheetVariantParentType,
-  LocationSheetVariantStatus,
   NewLocationSheetVariant,
 } from './location-sheet-variants';
-
-export { LOCATION_SHEET_VARIANT_PARENT_TYPES } from './location-sheet-variants';
 
 export { talentSheetVariants };
 
 export type {
   NewTalentSheetVariant,
   TalentSheetVariant,
-  TalentSheetVariantStatus,
 } from './talent-sheet-variants';
 
 // Frame Prompt Variants (visual/motion prompt history)
 export { framePromptVariants };
 
-export {
-  FRAME_PROMPT_TYPES,
-  PROMPT_VARIANT_SOURCES,
-} from './frame-prompt-variants';
+export { FRAME_PROMPT_TYPES } from './frame-prompt-variants';
 
 export type {
   FramePromptType,
   FramePromptVariant,
   FramePromptVariantComponents,
-  NewFramePromptVariant,
   PromptVariantSource,
 } from './frame-prompt-variants';
 
 // Sequence Music Prompt Variants (music prompt history)
 export { sequenceMusicPromptVariants };
 
-export type {
-  NewSequenceMusicPromptVariant,
-  SequenceMusicPromptVariant,
-} from './sequence-music-prompt-variants';
+export type { SequenceMusicPromptVariant } from './sequence-music-prompt-variants';
 
 // Sequence-level variants (music)
 export { sequenceMusicVariants };
@@ -168,7 +132,6 @@ export { sequenceMusicVariants };
 export type {
   NewSequenceMusicVariant,
   SequenceMusicVariant,
-  SequenceMusicVariantStatus,
 } from './sequence-music-variants';
 
 // Sequence exports (browser-rendered MP4 snapshots)
@@ -190,11 +153,7 @@ export type {
 // Location Library (team-level templates)
 export { locationLibrary };
 
-export type {
-  LibraryLocation,
-  LibraryLocationMinimal,
-  NewLibraryLocation,
-} from './location-library';
+export type { LibraryLocation, NewLibraryLocation } from './location-library';
 
 // Sequence Locations (extracted from script)
 export { sequenceLocations };
@@ -204,17 +163,12 @@ export type {
   ReferenceStatus,
   SequenceLocation,
   SequenceLocationMinimal,
-  SequenceLocationWithDetails,
 } from './sequence-locations';
 
 // Location Sheets (location-specific variations for library locations)
 export { locationSheets };
 
-export type {
-  LocationSheet,
-  LocationSheetSource,
-  NewLocationSheet,
-} from './location-sheets';
+export type { LocationSheet, NewLocationSheet } from './location-sheets';
 
 // Sequence Elements (per-sequence uploaded reference images)
 export { sequenceElements };
@@ -235,68 +189,25 @@ export type {
   NewTalentSheet,
   Talent,
   TalentMediaRecord,
-  TalentMediaType,
   TalentSheet,
-  TalentSheetSource,
-  TalentWithRelations,
   TalentWithSheets,
 } from './talent';
 
 // Library Resources
-export {
-  audio,
-  StyleConfigSchema,
-  StyleSampleVideoKindSchema,
-  StyleSampleVideoSchema,
-  styles,
-  vfx,
-};
+export { audio, StyleConfigSchema, StyleSampleVideoSchema, styles, vfx };
 
-export type {
-  Audio,
-  NewAudio,
-  NewStyle,
-  NewVfx,
-  Style,
-  StyleConfig,
-  Vfx,
-} from './libraries';
+export type { Audio, NewStyle, Style, StyleConfig, Vfx } from './libraries';
 
 // Credits, Transactions, and Billing
-export { creditBatches, credits, transactions, teamBillingSettings };
-
-export type {
-  Credit,
-  CreditBatch,
-  CreditBatchSource,
-  NewCredit,
-  NewCreditBatch,
-  NewTeamBillingSetting,
-  NewTransaction,
-  TeamBillingSetting,
-  Transaction,
-  TransactionType,
-} from './credits';
+export { credits, transactions };
 
 // Team API Keys
 export { teamApiKeys };
 
-export type {
-  ApiKeyProvider,
-  ApiKeySource,
-  NewTeamApiKey,
-  TeamApiKey,
-} from './team-api-keys';
+export type { ApiKeyProvider } from './team-api-keys';
 
 // Gift Tokens
 export { giftTokens, giftTokenRedemptions };
-
-export type {
-  GiftToken,
-  GiftTokenRedemption,
-  NewGiftToken,
-  NewGiftTokenRedemption,
-} from './gift-tokens';
 
 /**
  * Complete schema object for Drizzle client initialization (tables only).

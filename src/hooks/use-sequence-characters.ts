@@ -11,9 +11,6 @@ import {
 import { addCharacterToLibraryFn } from '@/functions/talent';
 import type { CharacterWithTalent } from '@/lib/db/schema';
 
-// Re-export CharacterWithTalent as SequenceCharacter for backward compatibility
-export type SequenceCharacter = CharacterWithTalent;
-
 export const sequenceCharacterKeys = {
   all: ['sequence-characters'] as const,
   list: (sequenceId: string) =>

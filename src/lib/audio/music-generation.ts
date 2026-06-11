@@ -2,7 +2,6 @@ import { getEnv } from '#env';
 import { calculateAudioCost } from '@/lib/ai/fal-cost';
 import { extractFalErrorMessage } from '@/lib/ai/fal-error';
 import {
-  AUDIO_MODEL_KEYS,
   AUDIO_MODELS,
   DEFAULT_MUSIC_MODEL,
   type AudioModel,
@@ -17,21 +16,10 @@ import {
 } from '@/lib/observability/tracer';
 import { generateAudio } from '@tanstack/ai';
 import { falAudio } from '@tanstack/ai-fal';
-import { z } from 'zod';
 
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'audio', 'music-generation']);
-
-export const generateMusicOptionsSchema = z.object({
-  prompt: z.string().min(1),
-  tags: z.string().optional(),
-  lyrics: z.string().optional(),
-  duration: z.number().min(1).max(240).optional(),
-  instrumental: z.boolean().optional().default(true),
-  model: z.enum(AUDIO_MODEL_KEYS).optional().default(DEFAULT_MUSIC_MODEL),
-  steps: z.number().optional(),
-});
 
 export type GenerateMusicOptions = {
   scopedDb?: ScopedDb;

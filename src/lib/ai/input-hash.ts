@@ -90,7 +90,7 @@ type FrameImageHashFields = {
   elementReferenceHashes: readonly string[];
 };
 
-export type FrameImageHashKind = 'thumbnail' | 'variant-image';
+type FrameImageHashKind = 'thumbnail' | 'variant-image';
 
 export type FrameImageHashInput = FrameImageHashFields & {
   kind: FrameImageHashKind;
@@ -117,7 +117,7 @@ export function computeFrameImageInputHash(
  * artifact-hash chain (so a stale upstream image cascades); a `url` is used
  * when the source is an external asset with no hashable upstream.
  */
-export type FrameVideoSourceImage =
+type FrameVideoSourceImage =
   | { kind: 'variantHash'; hash: string }
   | { kind: 'url'; url: string };
 

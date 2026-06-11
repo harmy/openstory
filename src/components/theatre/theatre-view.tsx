@@ -144,10 +144,6 @@ export const TheatreView: React.FC<TheatreViewProps> = ({ sequence }) => {
   );
 };
 
-export const TheatreViewSkeleton: React.FC = () => (
-  <Skeleton className="aspect-video w-full" />
-);
-
 function formatExportProgress(progress: ExportProgress | null): string {
   if (!progress) return 'Exporting…';
   const phaseLabel: Record<ExportProgress['phase'], string> = {

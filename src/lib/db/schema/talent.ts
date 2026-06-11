@@ -165,8 +165,3 @@ export type TalentWithSheets = Talent & {
   sheetCount: number;
   defaultSheet: TalentSheet | null;
 };
-
-export type TalentWithRelations = Talent & {
-  sheets: TalentSheet[];
-  media: TalentMediaRecord[];
-};

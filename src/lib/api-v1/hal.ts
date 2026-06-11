@@ -21,7 +21,7 @@
 
 export const API_V1_BASE = '/api/v1';
 
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 /** An extended HAL link object — one callable affordance. */
 export type HalLink = {

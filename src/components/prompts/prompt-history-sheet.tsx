@@ -26,7 +26,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { PromptDiffView } from './prompt-diff-view';
 
-export type PromptHistoryMode = 'visual' | 'motion' | 'music';
+type PromptHistoryMode = 'visual' | 'motion' | 'music';
 
 type SharedProps = {
   open: boolean;

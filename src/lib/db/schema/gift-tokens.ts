@@ -1,4 +1,4 @@
-import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
+import { type InferSelectModel } from 'drizzle-orm';
 import {
   integer,
   snakeCase,
@@ -66,8 +66,3 @@ export const giftTokenRedemptions = snakeCase.table(
 );
 
 export type GiftToken = InferSelectModel<typeof giftTokens>;
-export type NewGiftToken = InferInsertModel<typeof giftTokens>;
-export type GiftTokenRedemption = InferSelectModel<typeof giftTokenRedemptions>;
-export type NewGiftTokenRedemption = InferInsertModel<
-  typeof giftTokenRedemptions
->;

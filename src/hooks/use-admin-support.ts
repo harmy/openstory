@@ -9,7 +9,7 @@ import type { Frame, Sequence } from '@/types/database';
 
 const PAGE_SIZE = 50;
 
-export const adminSupportKeys = {
+const adminSupportKeys = {
   all: ['admin-support'] as const,
   sequences: (search?: string) =>
     [...adminSupportKeys.all, 'sequences', search ?? ''] as const,

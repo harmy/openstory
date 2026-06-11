@@ -26,7 +26,7 @@ const processors: SpanProcessor[] = [];
 let initialized = false;
 
 /** Whether Langfuse is enabled — derived from both keys being set. */
-export function isLangfuseEnabled(): boolean {
+function isLangfuseEnabled(): boolean {
   const env = getEnv();
   return !!env.LANGFUSE_PUBLIC_KEY && !!env.LANGFUSE_SECRET_KEY;
 }
@@ -141,14 +141,3 @@ export async function recordWorkflowTrace<TOutput>(
     }
   );
 }
-
-/**
- * Prompt reference for Langfuse trace linking.
- * Compatible with TextPromptClient and ChatPromptClient from @langfuse/client.
- * Must include at minimum: name, version, isFallback (additional properties allowed).
- */
-export type PromptReference = {
-  name: string;
-  version: number;
-  isFallback: boolean;
-};

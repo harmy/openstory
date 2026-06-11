@@ -10,14 +10,8 @@ import type { Sequence, User } from '@/lib/db/schema';
 import { sequences, teamMembers, teams, user } from '@/lib/db/schema';
 import type { TeamMemberRole } from '@/lib/db/schema/teams';
 import { createAdminMethods } from '@/lib/db/scoped/admin';
-import {
-  createApiKeysMethods,
-  createApiKeysReadMethods,
-} from '@/lib/db/scoped/api-keys';
-import {
-  createBillingMethods,
-  createBillingReadMethods,
-} from '@/lib/db/scoped/billing';
+import { createApiKeysMethods } from '@/lib/db/scoped/api-keys';
+import { createBillingMethods } from '@/lib/db/scoped/billing';
 import { createCharacterSheetVariantsMethods } from '@/lib/db/scoped/character-sheet-variants';
 import { createCharactersMethods } from '@/lib/db/scoped/characters';
 import { createFramePromptVariantsMethods } from '@/lib/db/scoped/frame-prompt-variants';
@@ -28,7 +22,6 @@ import {
   createLocationSheetsMethods,
   createLocationSheetsReadMethods,
   createLocationsMethods,
-  createLocationsReadMethods,
   createPublicLocationsReadMethods,
 } from '@/lib/db/scoped/location-library';
 import { createLocationSheetVariantsMethods } from '@/lib/db/scoped/location-sheet-variants';
@@ -39,38 +32,25 @@ import { createSequenceMusicPromptVariantsMethods } from '@/lib/db/scoped/sequen
 import { createSequenceVariantsMethods } from '@/lib/db/scoped/sequence-variants';
 import {
   createSequenceMethods,
-  createSequenceReadMethods,
   createSequencesMethods,
-  createSequencesReadMethods,
 } from '@/lib/db/scoped/sequences';
 import {
   createPublicStylesReadMethods,
   createStylesMethods,
-  createStylesReadMethods,
 } from '@/lib/db/scoped/styles';
 import {
   createPublicTalentReadMethods,
   createTalentMethods,
-  createTalentReadMethods,
 } from '@/lib/db/scoped/talent';
 import { createTalentSheetVariantsMethods } from '@/lib/db/scoped/talent-sheet-variants';
-import {
-  createTeamManagementMethods,
-  createTeamManagementReadMethods,
-} from '@/lib/db/scoped/team-management';
+import { createTeamManagementMethods } from '@/lib/db/scoped/team-management';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'db', 'scoped']);
 
-export type {
-  GiftTokenStatus,
-  GiftTokenWithStatus,
-  UserActivityRow,
-} from '@/lib/db/scoped/admin';
-
-export type { MusicFieldsUpdate } from '@/lib/db/scoped/sequences';
+export type { UserActivityRow } from '@/lib/db/scoped/admin';
 
 /**
  * Resolve a user's default team (highest-role team).
@@ -326,47 +306,6 @@ export function createScopedDb(teamId: string, userId: string) {
 
 export type ScopedDb = ReturnType<typeof createScopedDb>;
 
-/**
- * Read-only scoped DB — for webhooks, public queries, and system operations.
- * No userId required; write methods that need audit fields are not available.
- */
-export function createReadOnlyScopedDb(teamId: string) {
-  const db = getDb();
-
-  return {
-    teamId,
-
-    sequences: createSequencesReadMethods(db, teamId),
-    sequence: (sequenceId: string) => createSequenceReadMethods(db, sequenceId),
-
-    talent: createTalentReadMethods(db, teamId),
-    styles: createStylesReadMethods(db, teamId),
-    locations: createLocationsReadMethods(db, teamId),
-    locationSheets: createLocationSheetsReadMethods(db),
-    library: createLibraryMethods(db, teamId),
-
-    frames: createFramesMethods(db),
-    frameVariants: createFrameVariantsMethods(db),
-    framePromptVariants: createFramePromptVariantsMethods(db),
-    characterSheetVariants: createCharacterSheetVariantsMethods(db),
-    locationSheetVariants: createLocationSheetVariantsMethods(db),
-    talentSheetVariants: createTalentSheetVariantsMethods(db),
-    sequenceMusicPromptVariants: createSequenceMusicPromptVariantsMethods(db),
-    sequenceVariants: createSequenceVariantsMethods(db),
-    sequenceExports: createSequenceExportsMethods(db),
-
-    characters: createCharactersMethods(db),
-    sequenceLocations: createSequenceLocationsMethods(db),
-    sequenceElements: createSequenceElementsMethods(db),
-
-    billing: createBillingReadMethods(db, teamId),
-    apiKeys: createApiKeysReadMethods(db, teamId),
-    teamManagement: createTeamManagementReadMethods(db, teamId),
-  };
-}
-
-export type ReadOnlyScopedDb = ReturnType<typeof createReadOnlyScopedDb>;
-
 export function createSystemAdminScopedDb() {
   const db = getDb();
 
@@ -374,5 +313,3 @@ export function createSystemAdminScopedDb() {
     admin: createAdminMethods(db),
   };
 }
-
-export type SystemAdminScopedDb = ReturnType<typeof createSystemAdminScopedDb>;

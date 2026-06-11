@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-export type SheetAspectRatio = 'square' | 'video' | 'portrait';
+type SheetAspectRatio = 'square' | 'video' | 'portrait';
 
 type SheetEntityType = Exclude<StalenessEntityType, 'frame' | 'sequence'>;
 

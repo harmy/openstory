@@ -54,7 +54,7 @@ function compileTemplate(
  * the adapter without intermediate conversion.
  * Kept optional so existing string-only prompts stay backwards-compatible.
  */
-export type ChatMessageTextPart = { type: 'text'; content: string };
+type ChatMessageTextPart = { type: 'text'; content: string };
 export type ChatMessageImagePart = {
   type: 'image';
   source:

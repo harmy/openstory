@@ -21,21 +21,7 @@ export type { SequenceLocation };
 export type { LibraryLocation };
 
 // Extended type for team library locations (sequence locations with title)
-export type TeamSequenceLocation = SequenceLocation & { sequenceTitle: string };
-
-// Backwards compatibility alias
-export type TeamLibraryLocation = TeamSequenceLocation;
-
-// Extended type for display (used in location library page)
-export type DisplayLocation = {
-  id: string;
-  name: string;
-  description: string | null;
-  type?: string | null;
-  referenceImageUrl: string | null;
-  sequenceTitle?: string;
-  source?: 'library' | 'sequence';
-};
+export type TeamLibraryLocation = SequenceLocation & { sequenceTitle: string };
 
 export const sequenceLocationKeys = {
   all: ['sequence-locations'] as const,
@@ -67,8 +53,8 @@ export function useSequenceLocations(sequenceId: string) {
  * Hook to get all sequence locations with completed references across the team
  * Used for recasting locations
  */
-export function useTeamSequenceLocations() {
-  return useQuery<TeamSequenceLocation[]>({
+export function useTeamLocationsLibrary() {
+  return useQuery<TeamLibraryLocation[]>({
     queryKey: sequenceLocationKeys.teamLibrary,
     queryFn: async () => {
       return getTeamLocationsLibraryFn();
@@ -93,60 +79,6 @@ export function useLibraryLocations() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
-
-/**
- * Combined hook for location library page
- * Returns both library locations and sequence locations merged
- */
-export function useAllLocations() {
-  const libraryQuery = useLibraryLocations();
-  const sequenceQuery = useTeamSequenceLocations();
-
-  const isLoading = libraryQuery.isLoading || sequenceQuery.isLoading;
-  const error = libraryQuery.error || sequenceQuery.error;
-
-  // Merge and normalize both sources into DisplayLocation format
-  const locations: DisplayLocation[] = [];
-
-  // Add library locations
-  if (libraryQuery.data) {
-    for (const loc of libraryQuery.data) {
-      locations.push({
-        id: loc.id,
-        name: loc.name,
-        description: loc.description,
-        type: null, // Library locations don't have type
-        referenceImageUrl: loc.referenceImageUrl,
-        sequenceTitle: 'Library',
-        source: 'library',
-      });
-    }
-  }
-
-  // Add sequence locations
-  if (sequenceQuery.data) {
-    for (const loc of sequenceQuery.data) {
-      locations.push({
-        id: loc.id,
-        name: loc.name,
-        description: loc.description,
-        type: loc.type,
-        referenceImageUrl: loc.referenceImageUrl,
-        sequenceTitle: loc.sequenceTitle,
-        source: 'sequence',
-      });
-    }
-  }
-
-  return {
-    data: locations.length > 0 ? locations : undefined,
-    isLoading,
-    error,
-  };
-}
-
-// Backwards compatibility alias
-export const useTeamLocationsLibrary = useTeamSequenceLocations;
 
 /**
  * Hook to get the count of frames at a location

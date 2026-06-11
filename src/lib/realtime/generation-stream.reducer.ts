@@ -238,7 +238,7 @@ export function createInitialState(
   };
 }
 
-export const initialGenerationStreamState: GenerationStreamState =
+const initialGenerationStreamState: GenerationStreamState =
   createInitialState();
 
 export function generationStreamReducer(

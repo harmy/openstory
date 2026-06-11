@@ -30,10 +30,9 @@ import {
 // once `dev` resolves to `false` at build time (process.env.NODE_ENV is
 // statically replaced). require() doesn't work for this ESM-only package in
 // Workerd, which is what broke pretty output under `bun dev`.
-import { handleApiError, OpenStoryError } from '@/lib/errors';
+import { OpenStoryError } from '@/lib/errors';
 import { getPrettyFormatter } from '@logtape/pretty';
 import { redactByPattern, type RedactionPattern } from '@logtape/redaction';
-import { z } from 'zod';
 
 const REDACT = '[REDACTED]';
 
@@ -235,156 +234,6 @@ function redactProperties(
 
 export { getLogger };
 
-const apiLoggerRoot = getLogger(['openstory', 'api']);
-
-const API_SLOW_THRESHOLD_MS = 500;
-const API_VERY_SLOW_THRESHOLD_MS = 2000;
-
-type ApiHandlerArgs = {
-  request: Request;
-  params: Record<string, string>;
-};
-
-/**
- * Wrap an API route handler with structured request logging. Logs at:
- *   - error: non-2xx responses and thrown handlers (always)
- *   - warn:  successful requests slower than 2s
- *   - info:  successful requests slower than 500ms
- *   - debug: fast successful requests (kept silent at INFO+ to avoid noise)
- *
- * Replaces the legacy `withApiLogging` helper. Headlines include
- * method/path/status/duration so they're readable without expanding fields.
- */
-export function logApiRequest(
-  routeName: string,
-  handler: (args: ApiHandlerArgs) => Promise<Response>
-): (args: ApiHandlerArgs) => Promise<Response> {
-  const logger = apiLoggerRoot.getChild(routeName);
-
-  return async (args) => {
-    const start = performance.now();
-    const { request } = args;
-    const contentLength = request.headers.get('content-length');
-    const method = request.method;
-    const path = new URL(request.url).pathname;
-    const baseCtx = {
-      route: routeName,
-      method,
-      path,
-      contentLength: contentLength ? Number(contentLength) : undefined,
-    };
-
-    try {
-      const response = await handler(args);
-      const durationMs = Math.round(performance.now() - start);
-      const status = response.status;
-
-      if (status >= 400) {
-        const errorDetail = await parseErrorResponse(response);
-        logger.error(
-          'api {method} {path} {status} ({errCode}) {durationMs}ms',
-          {
-            ...baseCtx,
-            durationMs,
-            status,
-            errCode: errorDetail.code,
-            errMessage: errorDetail.message,
-            err: errorDetail,
-          }
-        );
-      } else if (durationMs >= API_VERY_SLOW_THRESHOLD_MS) {
-        logger.warn('api {method} {path} {status} very slow {durationMs}ms', {
-          ...baseCtx,
-          durationMs,
-          status,
-        });
-      } else if (durationMs >= API_SLOW_THRESHOLD_MS) {
-        logger.info('api {method} {path} {status} slow {durationMs}ms', {
-          ...baseCtx,
-          durationMs,
-          status,
-        });
-      } else {
-        logger.debug('api {method} {path} {status} {durationMs}ms', {
-          ...baseCtx,
-          durationMs,
-          status,
-        });
-      }
-
-      return response;
-    } catch (error) {
-      const durationMs = Math.round(performance.now() - start);
-      const handled = handleApiError(error);
-      logger.error('api {method} {path} threw: {errCode} {errMessage}', {
-        ...baseCtx,
-        durationMs,
-        errCode: handled.code,
-        errMessage: handled.message,
-        err: {
-          code: handled.code,
-          message: handled.message,
-          statusCode: handled.statusCode,
-        },
-      });
-      throw error;
-    }
-  };
-}
-
-const errorBodySchema = z.object({
-  error: z
-    .object({
-      code: z.string(),
-      message: z.string(),
-    })
-    .optional(),
-  message: z.string().optional(),
-});
-
-async function parseErrorResponse(
-  response: Response
-): Promise<{ code: string; message: string; statusCode: number }> {
-  try {
-    const cloned = response.clone();
-    const text = await cloned.text();
-    const jsonResult = errorBodySchema.safeParse(safeJsonParse(text));
-    if (jsonResult.success) {
-      const body = jsonResult.data;
-      return {
-        code: body.error?.code ?? `HTTP_${response.status}`,
-        message: body.error?.message ?? body.message ?? response.statusText,
-        statusCode: response.status,
-      };
-    }
-    const message =
-      text.length > 0
-        ? text.length > 200
-          ? `${text.slice(0, 200)}…`
-          : text
-        : response.statusText;
-    return {
-      code: `HTTP_${response.status}`,
-      message,
-      statusCode: response.status,
-    };
-  } catch {
-    return {
-      code: `HTTP_${response.status}`,
-      message: response.statusText,
-      statusCode: response.status,
-    };
-  }
-}
-
-function safeJsonParse(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * A serialized error plus its full `cause` chain. The structured `{ err }` we
  * pass to `logger.error` only captures `name`/`message`/`stack` of the top
@@ -452,23 +301,4 @@ export function toErrorPayload(error: unknown): {
     };
   }
   return { code: 'UNKNOWN', message: String(error) };
-}
-
-type WorkflowContext = {
-  workflowRunId?: string;
-  userId?: string;
-  teamId?: string;
-};
-
-/**
- * Get a child logger scoped to a workflow with run/user/team context bound.
- * Use at the top of each workflow definition:
- *
- *   const logger = getWorkflowLogger('motion-prompt-scene', { workflowRunId: context.workflowRunId });
- */
-export function getWorkflowLogger(
-  workflowName: string,
-  context: WorkflowContext = {}
-) {
-  return getLogger(['openstory', 'workflow', workflowName]).with(context);
 }

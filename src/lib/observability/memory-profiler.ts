@@ -17,33 +17,12 @@ type MemorySample = {
   label: string;
 };
 
-const MAX_SAMPLES = 2000;
 const samples: MemorySample[] = [];
 let enabled = false;
 
 export function initMemoryProfiler(): void {
   if (getEnv().NODE_ENV !== 'development') return;
   enabled = true;
-}
-
-export function recordMemorySample(workflow: string, label: string): void {
-  if (!enabled) return;
-
-  const mem = process.memoryUsage();
-  samples.push({
-    timestamp: Date.now(),
-    rss: mem.rss,
-    heapUsed: mem.heapUsed,
-    heapTotal: mem.heapTotal,
-    external: mem.external,
-    arrayBuffers: mem.arrayBuffers,
-    workflow,
-    label,
-  });
-
-  if (samples.length > MAX_SAMPLES) {
-    samples.splice(0, samples.length - MAX_SAMPLES);
-  }
 }
 
 export function getMemorySamples(): MemorySample[] {

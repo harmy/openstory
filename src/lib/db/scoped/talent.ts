@@ -245,7 +245,7 @@ function createTalentReadMethodsScoped(db: Database, teamId: string | null) {
   };
 }
 
-export function createTalentReadMethods(db: Database, teamId: string) {
+function createTalentReadMethods(db: Database, teamId: string) {
   return createTalentReadMethodsScoped(db, teamId);
 }
 

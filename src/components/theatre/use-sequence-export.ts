@@ -27,7 +27,7 @@ import { usePostHog } from '@posthog/react';
 import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-export const sequenceExportKeys = {
+const sequenceExportKeys = {
   list: (sequenceId: string) => ['sequence-exports', sequenceId] as const,
 };
 

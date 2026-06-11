@@ -14,7 +14,7 @@ function sanitizeName(name: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-export function getLocationPreviewUrl(name: string): string {
+function getLocationPreviewUrl(name: string): string {
   return `https://${getPublicAssetsDomain()}/locations/${sanitizeName(name)}/thumbnail.webp`;
 }
 

@@ -4,12 +4,7 @@
  */
 
 import { STORAGE_BUCKETS } from '@/lib/storage/buckets';
-import {
-  deleteFile,
-  getSignedUrl,
-  getSignedUrlWithDownload,
-  listFiles,
-} from '#storage';
+import { getSignedUrlWithDownload } from '#storage';
 import { uploadResponse } from '@/lib/storage/upload-response';
 import {
   getExtensionFromUrl,
@@ -139,31 +134,6 @@ export async function uploadVideoToStorage(
 }
 
 /**
- * Generate a signed URL for temporary video access
- */
-export async function getSignedVideoUrl(
-  path: string,
-  expiresIn: number = 3600 // 1 hour default
-): Promise<StorageResult> {
-  try {
-    const url = await getSignedUrl(STORAGE_BUCKETS.VIDEOS, path, expiresIn);
-
-    return {
-      success: true,
-      url,
-      path,
-    };
-  } catch (error) {
-    logger.error('Failed to create signed URL:', { err: error });
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : 'Failed to create signed URL',
-    };
-  }
-}
-
-/**
  * Generate a signed download URL with custom filename
  * Uses AWS ResponseContentDisposition to force browser download
  *
@@ -184,97 +154,4 @@ export async function getVideoDownloadUrl(
   );
 
   return url;
-}
-
-/**
- * Delete a video from storage
- */
-export async function deleteVideoFromStorage(
-  path: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    await deleteFile(STORAGE_BUCKETS.VIDEOS, path);
-
-    return { success: true };
-  } catch (error) {
-    logger.error('Failed to delete video:', { err: error });
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to delete video',
-    };
-  }
-}
-
-/**
- * List all videos for a sequence
- */
-export async function listSequenceVideos(
-  teamId: string,
-  sequenceId: string
-): Promise<{
-  success: boolean;
-  videos?: Array<{ name: string; size: number; path: string }>;
-  error?: string;
-}> {
-  try {
-    const folderPath = `teams/${teamId}/sequences/${sequenceId}/frames/`;
-
-    const files = await listFiles(STORAGE_BUCKETS.VIDEOS, folderPath, {
-      limit: 100,
-    });
-
-    const videos = files
-      .filter((file) => file.name.endsWith('.mp4'))
-      .map((file) => ({
-        name: file.name,
-        size: file.metadata.size,
-        path: file.id,
-      }));
-
-    return {
-      success: true,
-      videos,
-    };
-  } catch (error) {
-    logger.error('Failed to list videos:', { err: error });
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to list videos',
-    };
-  }
-}
-
-/**
- * Calculate total storage used by a team
- */
-export async function calculateTeamStorageUsage(teamId: string): Promise<{
-  success: boolean;
-  totalBytes?: number;
-  totalMB?: number;
-  error?: string;
-}> {
-  try {
-    const folderPath = `teams/${teamId}/`;
-
-    const files = await listFiles(STORAGE_BUCKETS.VIDEOS, folderPath, {
-      limit: 1000,
-    });
-
-    const totalBytes = files.reduce((sum, file) => {
-      return sum + file.metadata.size;
-    }, 0);
-
-    return {
-      success: true,
-      totalBytes,
-      totalMB: totalBytes / (1024 * 1024),
-    };
-  } catch (error) {
-    logger.error('Failed to calculate storage:', { err: error });
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : 'Failed to calculate storage',
-    };
-  }
 }

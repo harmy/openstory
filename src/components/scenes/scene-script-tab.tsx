@@ -25,7 +25,7 @@ import { useMutation } from '@tanstack/react-query';
 import { CopyIcon, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
-export type SceneScriptTabSavePayload = {
+type SceneScriptTabSavePayload = {
   nextExtract: string;
   nextDurationSeconds: number | undefined;
 };

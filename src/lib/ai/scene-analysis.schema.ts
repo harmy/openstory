@@ -163,82 +163,10 @@ export const projectMetadataSchema = z.object({
 });
 
 // ============================================================================
-// Variant Schemas (A/B/C Options)
-// ============================================================================
-
-export const cameraAngleVariantSchema = z.object({
-  id: z
-    .enum(['A1', 'A2', 'A3'])
-    .meta({ description: 'Camera angle option identifier (A1, A2, or A3)' }),
-  description: z.string().meta({
-    description:
-      'Description of the camera angle (e.g., "wide establishing shot")',
-  }),
-  effect: z
-    .string()
-    .meta({ description: 'Visual/emotional effect of this angle' }),
-});
-
-export const movementStyleVariantSchema = z.object({
-  id: z
-    .enum(['B1', 'B2', 'B3'])
-    .meta({ description: 'Movement style option identifier (B1, B2, or B3)' }),
-  description: z.string().meta({
-    description: 'Description of camera movement (e.g., "slow dolly forward")',
-  }),
-  energy: z.enum(['low', 'medium', 'high']).meta({
-    description: 'Energy level of the movement: low, medium, or high',
-  }),
-});
-
-export const moodTreatmentVariantSchema = z.object({
-  id: z
-    .enum(['C1', 'C2', 'C3'])
-    .meta({ description: 'Mood treatment option identifier (C1, C2, or C3)' }),
-  description: z
-    .string()
-    .meta({ description: 'Description of the mood/atmosphere treatment' }),
-  tone: z
-    .string()
-    .meta({ description: 'Emotional tone (e.g., "tense", "hopeful")' }),
-});
-
-export const variantsSchema = z.object({
-  cameraAngles: z
-    .array(cameraAngleVariantSchema)
-    .meta({ description: 'Array of camera angle options (A1, A2, A3)' }),
-  movementStyles: z
-    .array(movementStyleVariantSchema)
-    .meta({ description: 'Array of movement style options (B1, B2, B3)' }),
-  moodTreatments: z
-    .array(moodTreatmentVariantSchema)
-    .meta({ description: 'Array of mood treatment options (C1, C2, C3)' }),
-});
-
-// ============================================================================
-// Selected Variant Schema
-// ============================================================================
-
-export const selectedVariantSchema = z.object({
-  cameraAngle: z
-    .enum(['A1', 'A2', 'A3'])
-    .meta({ description: 'Selected camera angle option (A1, A2, or A3)' }),
-  movementStyle: z
-    .enum(['B1', 'B2', 'B3'])
-    .meta({ description: 'Selected movement style option (B1, B2, or B3)' }),
-  moodTreatment: z
-    .enum(['C1', 'C2', 'C3'])
-    .meta({ description: 'Selected mood treatment option (C1, C2, or C3)' }),
-  rationale: z
-    .string()
-    .meta({ description: 'Explanation for why these variants were chosen' }),
-});
-
-// ============================================================================
 // Prompt Schemas
 // ============================================================================
 
-export const visualPromptComponentsSchema = z.object({
+const visualPromptComponentsSchema = z.object({
   sceneDescription: z
     .string()
     .meta({ description: 'Overall scene action and composition description' }),
@@ -278,7 +206,7 @@ export const visualPromptSchema = z.object({
   }),
 });
 
-export const motionPromptComponentsSchema = z.object({
+const motionPromptComponentsSchema = z.object({
   cameraMovement: z.string().meta({
     description: 'Type of camera motion (pan, tilt, dolly, truck, zoom)',
   }),
@@ -303,7 +231,7 @@ export const motionPromptComponentsSchema = z.object({
   }),
 });
 
-export const motionPromptParametersSchema = z.object({
+const motionPromptParametersSchema = z.object({
   durationSeconds: z
     .number()
     .meta({ description: 'Override duration in seconds' }),
@@ -334,7 +262,7 @@ export const dialogueLineSchema = z.object({
   }),
 });
 
-export const dialogueSchema = z.object({
+const dialogueSchema = z.object({
   presence: z
     .boolean()
     .meta({ description: 'Whether dialogue is present in scene' }),
@@ -343,7 +271,7 @@ export const dialogueSchema = z.object({
     .meta({ description: 'Array of dialogue lines in the scene' }),
 });
 
-export const motionAudioSchema = z.object({
+const motionAudioSchema = z.object({
   ambientSound: z.string().meta({
     description:
       'Background ambient sound (e.g., "quiet office hum", "rain against windows", "bustling street")',
@@ -380,7 +308,7 @@ export const motionPromptSchema = z.object({
   }),
 });
 
-export const promptsSchema = z.object({
+const promptsSchema = z.object({
   visual: visualPromptSchema
     .optional()
     .meta({ description: 'Image generation prompt data' }),
@@ -414,7 +342,7 @@ export const musicDesignSchema = z.object({
 // Audio Design Schemas (deprecated — kept for backward compat with old frames)
 // ============================================================================
 
-export const musicSchema = z.object({
+const musicSchema = z.object({
   presence: z.enum(['none', 'minimal', 'moderate', 'full']).meta({
     description:
       'How prominent the music should be: none, minimal, moderate, full',
@@ -431,7 +359,7 @@ export const musicSchema = z.object({
     .meta({ description: 'Explanation for the music choices' }),
 });
 
-export const soundEffectSchema = z.object({
+const soundEffectSchema = z.object({
   sfxId: z
     .string()
     .meta({ description: 'Unique identifier for this sound effect' }),
@@ -452,7 +380,7 @@ export const soundEffectSchema = z.object({
     .meta({ description: 'Audio positioning: left, center, right, surround' }),
 });
 
-export const ambientSchema = z.object({
+const ambientSchema = z.object({
   roomTone: z.string().meta({
     description: 'Background room ambience (e.g., "quiet office hum")',
   }),
@@ -461,7 +389,7 @@ export const ambientSchema = z.object({
   }),
 });
 
-export const audioDesignSchema = z.object({
+const audioDesignSchema = z.object({
   music: musicSchema.meta({ description: 'Background music specifications' }),
   soundEffects: z
     .array(soundEffectSchema)
@@ -518,7 +446,7 @@ export type VisualPromptResult = z.infer<typeof visualPromptResultSchema>;
 // Original Script Schema
 // ============================================================================
 
-export const originalScriptSchema = z.object({
+const originalScriptSchema = z.object({
   extract: z
     .string()
     .meta({ description: 'Original script text for this scene' }),
@@ -531,7 +459,7 @@ export const originalScriptSchema = z.object({
 // Scene Metadata Schema
 // ============================================================================
 
-export const sceneMetadataSchema = z.object({
+const sceneMetadataSchema = z.object({
   title: z.string().meta({ description: 'Short descriptive scene title' }),
   durationSeconds: z.number().meta({
     description: 'Estimated scene duration in seconds (typically 3-15)',
@@ -618,7 +546,6 @@ export type Scene = z.infer<typeof sceneSchema>;
 export type CharacterBibleEntry = z.infer<typeof characterBibleEntrySchema>;
 export type LocationBibleEntry = z.infer<typeof locationBibleEntrySchema>;
 export type ElementBibleEntry = z.infer<typeof elementBibleEntrySchema>;
-export type ProjectMetadata = z.infer<typeof projectMetadataSchema>;
 export type VisualPrompt = z.infer<typeof visualPromptSchema>;
 export type VisualPromptComponents = z.infer<
   typeof visualPromptComponentsSchema
@@ -630,8 +557,5 @@ export type MotionPromptComponents = z.infer<
 export type MotionPromptParameters = z.infer<
   typeof motionPromptParametersSchema
 >;
-export type MotionAudio = z.infer<typeof motionAudioSchema>;
 export type DialogueLine = z.infer<typeof dialogueLineSchema>;
-export type MusicDesign = z.infer<typeof musicDesignSchema>;
-export type AudioDesign = z.infer<typeof audioDesignSchema>;
 export type Continuity = z.infer<typeof continuitySchema>;

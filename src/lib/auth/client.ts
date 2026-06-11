@@ -49,7 +49,3 @@ export const {
 
   // useListSessions,
 } = authClient;
-
-// Type exports for TypeScript support
-export type AuthClient = typeof authClient;
-export type SessionData = typeof authClient.$Infer.Session;

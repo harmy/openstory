@@ -31,7 +31,7 @@ function generateGiftCode(): string {
 
 export type GiftTokenStatus = 'available' | 'fully_redeemed' | 'expired';
 
-export function getGiftTokenStatus(
+function getGiftTokenStatus(
   token: GiftToken,
   redemptionCount: number
 ): GiftTokenStatus {

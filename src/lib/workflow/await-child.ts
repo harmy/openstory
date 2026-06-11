@@ -109,7 +109,7 @@ export type ParentNotifyHint = {
   eventType: string;
 };
 
-export type ChildOutcome<TOutput> =
+type ChildOutcome<TOutput> =
   | { status: 'ok'; output: TOutput }
   | { status: 'failed'; error: string };
 

@@ -129,7 +129,7 @@ export async function saveDivergentCharacterSheet({
  * resolves to `'a'` regardless of new enum members and the drift goes
  * undetected.
  */
-export type LocationSheetParent =
+type LocationSheetParent =
   | {
       type: Extract<LocationSheetVariantParentType, 'sequence_location'>;
       id: string;

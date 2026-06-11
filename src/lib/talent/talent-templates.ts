@@ -14,7 +14,7 @@ function sanitizeName(name: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-export function getTalentPreviewUrl(name: string): string {
+function getTalentPreviewUrl(name: string): string {
   return `https://${getPublicAssetsDomain()}/talent/${sanitizeName(name)}/thumbnail.webp`;
 }
 

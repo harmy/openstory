@@ -28,7 +28,7 @@ type SequenceWithFrames = Sequence & {
   style: Style | null;
 };
 
-export function createSequencesReadMethods(db: Database, teamId: string) {
+function createSequencesReadMethods(db: Database, teamId: string) {
   return {
     list: async (): Promise<Sequence[]> => {
       return await db
@@ -245,7 +245,7 @@ export function createSequencesMethods(
   };
 }
 
-export function createSequenceReadMethods(db: Database, sequenceId: string) {
+function createSequenceReadMethods(db: Database, sequenceId: string) {
   return {
     getMusicStatus: async () => {
       const [row] = await db

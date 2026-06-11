@@ -7,33 +7,9 @@
  * @module lib/auth/action-utils
  */
 
-import type { User } from '@/lib/auth/config';
 import type { TeamRole } from '@/lib/auth/constants';
 import { hasMinimumRole } from '@/lib/auth/constants';
 import { getUserRole } from '@/lib/auth/permissions';
-import { getCurrentUserFn } from '@/lib/auth/server';
-
-/**
- * Get the current authenticated user
- *
- * @throws {Error} If no user session exists
- * @returns {Promise<User>} The authenticated user object
- *
- * @example
- * ```typescript
- * const user = await requireUser();
- * logger.info(user.id, user.email);
- * ```
- */
-export async function requireUser(): Promise<User> {
-  const user = await getCurrentUserFn();
-
-  if (!user) {
-    throw new Error('Authentication required');
-  }
-
-  return user;
-}
 
 /**
  * Verify user has access to a team with at least the specified role

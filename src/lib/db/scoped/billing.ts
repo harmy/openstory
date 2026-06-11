@@ -55,7 +55,7 @@ function mapBatchSource(
 /**
  * Read-only billing methods — balance checks, transaction history, settings.
  */
-export function createBillingReadMethods(db: Database, teamId: string) {
+function createBillingReadMethods(db: Database, teamId: string) {
   async function getBalance(): Promise<Microdollars> {
     const [row] = await db
       .select({ balance: credits.balance })

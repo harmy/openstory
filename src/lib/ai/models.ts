@@ -236,40 +236,10 @@ export function getImageModelById(id: string): ImageModelConfig | undefined {
   return Object.values(IMAGE_MODELS).find((model) => model.id === id);
 }
 
-// Helper to get model display name
-export function getImageModelDisplayName(modelId: string): string {
-  const model = getImageModelById(modelId);
-  return model?.name ?? modelId;
-}
-
 // Image to video model types
 export type ImageToVideoModel = keyof typeof IMAGE_TO_VIDEO_MODELS;
-// Type for the video model configuration object
-export type ImageToVideoModelConfig =
-  (typeof IMAGE_TO_VIDEO_MODELS)[ImageToVideoModel];
-// Type for the video model ID
-type ImageToVideoModelId = ImageToVideoModelConfig['id'];
 
 export const DEFAULT_VIDEO_MODEL: ImageToVideoModel = 'grok_imagine_video_1_5';
-
-// Typed list of image-to-video model keys for Zod enum schemas
-// This is type-safe because we use satisfies to validate the tuple matches the type
-export const IMAGE_TO_VIDEO_MODEL_KEYS = [
-  'grok_imagine_video_1_5',
-  'kling_v3_pro',
-  'ltx_2_3_pro',
-  'minimax_hailuo_02',
-  'seedance_v1_5_pro',
-  'seedance_v2',
-  'veo3_1',
-] as const satisfies readonly ImageToVideoModel[];
-
-// Helper to get model ID from key (for backward compatibility)
-export function getImageToVideoModelId(
-  modelKey: ImageToVideoModel
-): ImageToVideoModelId {
-  return IMAGE_TO_VIDEO_MODELS[modelKey].id;
-}
 
 function schemaOf(modelKey: ImageToVideoModel) {
   return MOTION_INPUT_SCHEMAS[IMAGE_TO_VIDEO_MODELS[modelKey].id];
@@ -480,19 +450,8 @@ export const AUDIO_MODELS = {
 // Audio model types
 export type AudioModel = keyof typeof AUDIO_MODELS;
 export type AudioModelConfig = (typeof AUDIO_MODELS)[AudioModel];
-type AudioModelId = AudioModelConfig['id'];
 
 export const DEFAULT_MUSIC_MODEL: AudioModel = 'elevenlabs_music';
-
-export const AUDIO_MODEL_KEYS = [
-  'ace_step',
-  'ace_step_1_5',
-  'elevenlabs_music',
-] as const satisfies readonly AudioModel[];
-
-export function getAudioModelId(modelKey: AudioModel): AudioModelId {
-  return AUDIO_MODELS[modelKey].id;
-}
 
 export function isValidAudioModel(value: unknown): value is AudioModel {
   return typeof value === 'string' && Object.keys(AUDIO_MODELS).includes(value);

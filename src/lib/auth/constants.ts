@@ -32,19 +32,6 @@ export function hasMinimumRole(
 }
 
 /**
- * Get the highest role from a list of roles
- */
-export function getHighestRole(roles: TeamRole[]): TeamRole | null {
-  if (roles.length === 0) return null;
-
-  return roles.reduce((highest, current) => {
-    return ROLE_HIERARCHY[current] > ROLE_HIERARCHY[highest]
-      ? current
-      : highest;
-  });
-}
-
-/**
  * Invitation token configuration
  */
 export const INVITATION_CONFIG = {

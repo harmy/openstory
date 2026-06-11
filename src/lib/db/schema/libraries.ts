@@ -22,12 +22,7 @@ export const StyleConfigSchema = z.object({
 
 export type StyleConfig = z.infer<typeof StyleConfigSchema>;
 
-export const StyleSampleVideoKindSchema = z.enum([
-  'canonical',
-  'category',
-  'bespoke',
-]);
-export type StyleSampleVideoKind = z.infer<typeof StyleSampleVideoKindSchema>;
+const StyleSampleVideoKindSchema = z.enum(['canonical', 'category', 'bespoke']);
 
 export const StyleSampleVideoSchema = z.object({
   url: z.string().url(),
@@ -160,7 +155,5 @@ export type Style = InferSelectModel<typeof styles>;
 export type NewStyle = InferInsertModel<typeof styles>;
 
 export type Vfx = InferSelectModel<typeof vfx>;
-export type NewVfx = InferInsertModel<typeof vfx>;
 
 export type Audio = InferSelectModel<typeof audio>;
-export type NewAudio = InferInsertModel<typeof audio>;

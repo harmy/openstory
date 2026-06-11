@@ -36,6 +36,9 @@ jobs:
       - name: Check formatting
         run: bun format:check
 
+      - name: Check dead code (knip)
+        run: bun dead-code
+
       - name: Run tests
         run: bun run test
 

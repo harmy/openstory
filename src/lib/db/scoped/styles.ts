@@ -12,11 +12,11 @@ import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'db', 'styles']);
 
-export type StylesListOptions = {
+type StylesListOptions = {
   orderBy?: 'popular' | 'sortOrder';
 };
 
-export function createStylesReadMethods(db: Database, teamId: string) {
+function createStylesReadMethods(db: Database, teamId: string) {
   return {
     list: async (options: StylesListOptions = {}): Promise<Style[]> => {
       const orderBy = options.orderBy ?? 'sortOrder';

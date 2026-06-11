@@ -15,7 +15,7 @@ const bucketByName = new Map<string, StorageBucket>(
   Object.values(STORAGE_BUCKETS).map((b) => [b, b])
 );
 
-export type UploadTarget = {
+type UploadTarget = {
   bucket: StorageBucket;
   path: string;
   contentType: string;

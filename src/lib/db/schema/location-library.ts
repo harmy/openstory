@@ -51,9 +51,3 @@ export const locationLibrary = snakeCase.table(
 // Type exports
 export type LibraryLocation = InferSelectModel<typeof locationLibrary>;
 export type NewLibraryLocation = InferInsertModel<typeof locationLibrary>;
-
-// Minimal type for API responses
-export type LibraryLocationMinimal = Pick<
-  LibraryLocation,
-  'id' | 'name' | 'description' | 'referenceImageUrl'
->;

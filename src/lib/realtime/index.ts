@@ -521,8 +521,3 @@ export function getFramePromptChannel(frameId?: string): RealtimeChannelApi {
     ? realtimeChannel(`frame-prompt:${frameId}`)
     : noopChannel('frame-prompt');
 }
-
-/** Build the channel id for a frame's prompt-regen events. */
-export function framePromptChannelId(frameId: string): string {
-  return `frame-prompt:${frameId}`;
-}

@@ -29,12 +29,6 @@ export type StreamChunk<T = never> =
       parsed: T | undefined;
     };
 
-export type ProgressCallback = (progress: {
-  type: 'chunk' | 'complete';
-  text: string;
-  parsed?: unknown;
-}) => void;
-
 type ProviderPreference = {
   order?: string[];
   only?: string[];
@@ -120,7 +114,7 @@ const STRUCTURED_OUTPUT_MODELS = new Set([
   'openai/gpt-5.4-nano',
 ]);
 
-export function modelSupportsStructuredOutputs(model: string): boolean {
+function modelSupportsStructuredOutputs(model: string): boolean {
   return STRUCTURED_OUTPUT_MODELS.has(model);
 }
 
@@ -408,9 +402,7 @@ export function extractRunError(event: unknown): RunErrorDetail | null {
  * Returns a compact `provider=… <message>` string, or `undefined` when there's
  * no usable detail. Read defensively: `rawEvent` is an arbitrary provider frame.
  */
-export function extractProviderErrorDetail(
-  rawEvent: unknown
-): string | undefined {
+function extractProviderErrorDetail(rawEvent: unknown): string | undefined {
   if (!rawEvent || typeof rawEvent !== 'object') return undefined;
   const meta =
     'metadata' in rawEvent &&

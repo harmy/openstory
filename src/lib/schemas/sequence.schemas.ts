@@ -186,4 +186,3 @@ export const updateSequenceSchema = createUpdateSchema(sequences, {
 });
 
 export type CreateSequenceInput = z.infer<typeof createSequenceSchema>;
-export type UpdateSequenceInput = z.infer<typeof updateSequenceSchema>;

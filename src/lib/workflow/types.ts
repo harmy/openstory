@@ -389,18 +389,6 @@ export type TalentCharacterMatch = {
 };
 
 /**
- * Result from talent matching service
- */
-export type TalentMatchResult = {
-  /** Successfully matched talent to characters */
-  matches: TalentCharacterMatch[];
-  /** Talent IDs that couldn't be matched to any character */
-  unusedTalentIds: string[];
-  /** Talent names that couldn't be matched (for display) */
-  unusedTalentNames: string[];
-};
-
-/**
  * Talent matching workflow input
  */
 export interface TalentMatchingWorkflowInput extends SequenceWorkflowContext {
@@ -431,7 +419,7 @@ export interface CharacterBibleWorkflowInput extends SequenceWorkflowContext {
   styleConfig?: StyleConfig;
 }
 
-export type FrameMapping = Array<{ sceneId: string; frameId: string }>;
+type FrameMapping = Array<{ sceneId: string; frameId: string }>;
 
 export interface VisualPromptWorkflowInput extends SequenceWorkflowContext {
   scenes: Scene[];
@@ -494,12 +482,6 @@ export interface MotionPromptSceneWorkflowInput extends SequenceWorkflowContext 
 /**
  * Workflow result types
  */
-export interface ImageWorkflowResult {
-  imageUrl: string;
-  frameId?: string;
-  sequenceId?: string;
-}
-
 export interface MotionWorkflowResult {
   videoUrl: string;
   duration?: number;
@@ -674,19 +656,6 @@ export interface LocationMatchingWorkflowInput extends SequenceWorkflowContext {
 export interface LocationMatchingWorkflowOutput {
   matches: LibraryLocationMatch[];
 }
-/**
- * Regenerate frames workflow input for locations
- * Bulk regenerates images for frames at a specific location after recast
- */
-export interface RegenerateLocationFramesWorkflowInput extends SequenceWorkflowContext {
-  /** Frame IDs to regenerate */
-  frameIds: string[];
-  /** Location ID that triggered regeneration (for logging/tracking) */
-  triggeringLocationId: string;
-  /** Image model to use */
-  imageModel?: TextToImageModel;
-}
-
 /**
  * Recast location workflow input
  * Orchestrates location sheet generation + frame regeneration for recast

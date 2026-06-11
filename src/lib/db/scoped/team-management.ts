@@ -45,7 +45,7 @@ type AcceptInvitationParams = {
 /**
  * Read-only team management methods + acceptInvitation (needed by invitation flow).
  */
-export function createTeamManagementReadMethods(db: Database, teamId: string) {
+function createTeamManagementReadMethods(db: Database, teamId: string) {
   async function getMembers(): Promise<TeamMember[]> {
     const members: TeamMember[] = await db
       .select({

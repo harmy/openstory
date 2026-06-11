@@ -55,7 +55,7 @@ async function highlightCode(code: string, lang: string): Promise<string> {
   });
 }
 
-export type MarkdownHeading = {
+type MarkdownHeading = {
   id: string;
   text: string;
   level: number;

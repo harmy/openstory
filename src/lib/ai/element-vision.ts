@@ -32,7 +32,7 @@ export type DescribeElementInput = {
  * Normalize a vision-suggested token to canonical UPPERCASE_SNAKE_CASE.
  * Drops everything outside `[A-Z0-9]`, collapses runs to `_`, caps length.
  */
-export function normalizeSuggestedToken(raw: string): string {
+function normalizeSuggestedToken(raw: string): string {
   const cleaned = raw
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, '_')
@@ -45,7 +45,7 @@ export function normalizeSuggestedToken(raw: string): string {
  * Build the multimodal chat messages for the vision LLM.
  * Exported for testing.
  */
-export function buildVisionMessages(
+function buildVisionMessages(
   filename: string,
   imageSource: ChatMessageImagePart['source']
 ): ChatMessage[] {

@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react';
 import type { Frame, FrameVariant } from '@/lib/db/schema';
 import type { VariantType } from '@/lib/db/schema/frame-variants';
 
-export type DivergencePromptDiff = {
+type DivergencePromptDiff = {
   label: string;
   before: string;
   after: string;

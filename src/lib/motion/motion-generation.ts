@@ -2,16 +2,12 @@ import { getEnv } from '#env';
 import { calculateVideoCost } from '@/lib/ai/fal-cost';
 import {
   DEFAULT_VIDEO_MODEL,
-  IMAGE_TO_VIDEO_MODEL_KEYS,
   IMAGE_TO_VIDEO_MODELS,
   type ImageToVideoModel,
   videoModelSupportsAudio,
 } from '@/lib/ai/models';
 import type { Microdollars } from '@/lib/billing/money';
-import {
-  type AspectRatio,
-  aspectRatioSchema,
-} from '@/lib/constants/aspect-ratios';
+import { type AspectRatio } from '@/lib/constants/aspect-ratios';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { MOTION_JSON_SCHEMAS } from '@/lib/motion/endpoint-map';
 import {
@@ -21,21 +17,6 @@ import {
 } from '@/lib/motion/motion-transform';
 import { generateVideo, getVideoJobStatus } from '@tanstack/ai';
 import { falVideo } from '@tanstack/ai-fal';
-import { z } from 'zod';
-
-export const generationMotionOptionsSchema = z.object({
-  imageUrl: z.url(),
-  prompt: z.string(),
-  model: z
-    .enum(IMAGE_TO_VIDEO_MODEL_KEYS)
-    .optional()
-    .default(DEFAULT_VIDEO_MODEL),
-  duration: z.number().optional(),
-  fps: z.number().optional(),
-  motionBucket: z.number().optional(),
-  aspectRatio: aspectRatioSchema.optional(),
-  generateAudio: z.boolean().optional(),
-});
 
 export type GenerateMotionOptions = {
   scopedDb?: ScopedDb; // scopedDb is used to resolve the API key for the motion generation with BYOK
@@ -143,13 +124,6 @@ export async function submitMotionJob(
     submittedAt: Date.now(),
   };
 }
-
-export type MotionPollResult = {
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  videoUrl?: string;
-  progress?: number;
-  error?: string;
-};
 
 /**
  * Check the status of a submitted motion job.

@@ -3,7 +3,6 @@ import { createInsertSchema, createUpdateSchema } from 'drizzle-orm/zod';
 import { frames, FRAME_GENERATION_STATUSES } from '@/lib/db/schema/frames';
 import { IMAGE_MODELS, IMAGE_TO_VIDEO_MODELS } from '@/lib/ai/models';
 import { sceneSchema } from '@/lib/ai/scene-analysis.schema';
-import { ulidSchema } from '@/lib/schemas/id.schemas';
 
 /**
  * Shared Zod schemas for frame operations
@@ -45,23 +44,6 @@ export const updateFrameSchema = createUpdateSchema(frames, {
   sequenceId: true,
   createdAt: true,
   updatedAt: true,
-});
-
-const deleteFrameSchema = z.object({
-  id: ulidSchema,
-});
-
-const generateFramesSchema = z.object({
-  sequenceId: ulidSchema,
-  options: z
-    .object({
-      framesPerScene: z.number().min(1).max(10).optional(),
-      generateThumbnails: z.boolean().optional(),
-      generateDescriptions: z.boolean().optional(),
-      aiProvider: z.enum(['openai', 'anthropic', 'openrouter']).optional(),
-      regenerateAll: z.boolean().optional(),
-    })
-    .optional(),
 });
 
 export const regenerateFrameSchema = z.object({
@@ -108,12 +90,4 @@ export const bulkFrameSchema = z.object({
   frames: z.array(createFrameSchema.omit({ sequenceId: true })).min(1),
 });
 
-export type CreateFrameInput = z.infer<typeof createFrameSchema>;
-export type UpdateFrameInput = z.infer<typeof updateFrameSchema>;
-export type DeleteFrameInput = z.infer<typeof deleteFrameSchema>;
-export type GenerateFramesInput = z.infer<typeof generateFramesSchema>;
-export type RegenerateFrameInput = z.infer<typeof regenerateFrameSchema>;
-export type GenerateMotionInput = z.infer<typeof generateMotionSchema>;
 export type GenerateVariantInput = z.infer<typeof generateVariantSchema>;
-export type SingleFrameInput = z.infer<typeof singleFrameSchema>;
-export type BulkFrameInput = z.infer<typeof bulkFrameSchema>;

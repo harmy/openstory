@@ -1,6 +1,5 @@
 import {
   addModelToSequenceFn,
-  archiveSequenceFn,
   createSequenceFn,
   getSequenceAudioModelsFn,
   getSequenceAudioVariantsFn,
@@ -8,16 +7,12 @@ import {
   getSequencesFn,
   setSequenceModelFn,
   setSequenceMusicFn,
-  updateSequenceFn,
   type AddModelResult,
 } from '@/functions/sequences';
 import { DEFAULT_ANALYSIS_MODEL } from '@/lib/ai/models.config';
 import type { SequenceMusicVariant } from '@/lib/db/schema';
 import type { VariantType } from '@/lib/db/schema/frame-variants';
-import {
-  type CreateSequenceInput,
-  type UpdateSequenceInput,
-} from '@/lib/schemas/sequence.schemas';
+import { type CreateSequenceInput } from '@/lib/schemas/sequence.schemas';
 import type { Sequence } from '@/types/database';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePostHog } from '@posthog/react';
@@ -221,36 +216,6 @@ export function useCreateSequence() {
   });
 }
 
-// Hook for updating sequence
-export function useUpdateSequence() {
-  const queryClient = useQueryClient();
-
-  return useMutation<Sequence, Error, UpdateSequenceInput & { id: string }>({
-    mutationFn: async (input: UpdateSequenceInput & { id: string }) => {
-      const { id, ...updateData } = input;
-      return updateSequenceFn({
-        data: {
-          sequenceId: id,
-          ...updateData,
-        },
-      });
-    },
-    onSuccess: (data) => {
-      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
-      if (data?.id) {
-        queryClient.setQueryData(sequenceKeys.detail(data.id), data);
-      }
-      queryClient
-        .invalidateQueries({ queryKey: sequenceKeys.lists() })
-        .catch((error) => {
-          logger.error('Error invalidating sequences list on success:', {
-            err: error,
-          });
-        });
-    },
-  });
-}
-
 /**
  * Persist the per-sequence "include music in playback + export" toggle (#834).
  * Shared by the theatre player's music button and the music tab's checkbox.
@@ -301,21 +266,6 @@ export function useSetSequenceMusic(sequenceId: string) {
       void queryClient.invalidateQueries({
         queryKey: sequenceKeys.detail(sequenceId),
       });
-    },
-  });
-}
-
-// Hook for archiving sequence
-export function useArchiveSequence() {
-  const queryClient = useQueryClient();
-
-  return useMutation<void, Error, string>({
-    mutationFn: async (id: string) => {
-      await archiveSequenceFn({ data: { sequenceId: id } });
-    },
-    onSuccess: (_, id) => {
-      queryClient.removeQueries({ queryKey: sequenceKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: sequenceKeys.lists() });
     },
   });
 }

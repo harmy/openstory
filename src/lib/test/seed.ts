@@ -557,23 +557,6 @@ export async function cleanupLocationByName(
 }
 
 /**
- * Find and clean up a talent by team + name.
- */
-export async function cleanupTalentByName(
-  teamId: string,
-  name: string
-): Promise<void> {
-  const db = getDb();
-  const [created] = await db
-    .select({ id: talent.id })
-    .from(talent)
-    .where(and(eq(talent.teamId, teamId), eq(talent.name, name)));
-  if (created) {
-    await db.delete(talent).where(eq(talent.id, created.id));
-  }
-}
-
-/**
  * Look up a seeded system location by name (isPublic).
  */
 export async function getSystemLocationByName(name: string): Promise<{
