@@ -20,7 +20,9 @@ import { aspectRatioSchema } from '@/lib/constants/aspect-ratios';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { handleApiError } from '@/lib/errors';
 import { getLogger, toErrorPayload } from '@/lib/observability/logger';
+import { createSequenceLink, enhanceScriptLink } from './discovery';
 import type { ApiEnhanceScriptInput } from './enhance-input-schema';
+import { API_V1_BASE, type HalLinks, getLink } from './hal';
 import { resolveStyle } from './resolve';
 
 const logger = getLogger(['openstory', 'api-v1']);
@@ -76,6 +78,26 @@ export async function buildEnhanceGenerator(
   });
 }
 
+/**
+ * The HAL affordance catalog for the terminal `done` frame — the SSE analogue
+ * of the `_links` every JSON response carries. The natural next action is
+ * creating a sequence from the just-enhanced script, so `create-sequence`
+ * embeds a ready-to-POST example body (with `enhance: 'off'`, since the script
+ * is already enhanced).
+ */
+function doneLinks(enhancedScript: string): HalLinks {
+  return {
+    self: enhanceScriptLink(),
+    'create-sequence': {
+      ...createSequenceLink(),
+      title:
+        'Create a video sequence from this enhanced script (use enhance: "off" — it is already enhanced)',
+      examples: [{ script: enhancedScript, enhance: 'off' }],
+    },
+    root: getLink(API_V1_BASE, 'API root / instructions'),
+  };
+}
+
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream; charset=utf-8',
   'Cache-Control': 'no-cache, no-transform',
@@ -92,8 +114,10 @@ const SSE_HEADERS = {
  *
  * Wire format (matches the OpenAPI doc): each delta is an unnamed `data:` frame
  * `{ "delta": "…" }`; a terminal `event: done` frame carries the full
- * `{ "enhancedScript": "…" }`. A mid-stream failure (headers already sent)
- * becomes an `event: error` frame `{ code, message }`.
+ * `{ "enhancedScript": "…", "_links": {…} }` — the `_links` catalog of next
+ * actions every other v1 response carries, attached to the one frame that
+ * represents the completed resource. A mid-stream failure (headers already
+ * sent) becomes an `event: error` frame `{ code, message }`.
  */
 export function enhanceSseResponse(
   first: IteratorResult<{ delta: string }>,
@@ -122,7 +146,8 @@ export function enhanceSseResponse(
       try {
         if (!first.done) push(first.value.delta);
         for await (const chunk of rest) push(chunk.delta);
-        event('done', { enhancedScript: full.trim() });
+        const enhancedScript = full.trim();
+        event('done', { enhancedScript, _links: doneLinks(enhancedScript) });
       } catch (err) {
         const handled = handleApiError(err);
         // Headers are already committed, so this can't become a JSON 500 — but

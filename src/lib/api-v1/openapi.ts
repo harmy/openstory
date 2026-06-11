@@ -232,7 +232,7 @@ export function buildOpenApiDocument(): JsonObject {
           tags: ['scripts'],
           summary: 'Enhance a script (streaming)',
           description:
-            'Enhance/expand a script WITHOUT creating a sequence, using the enhancement-relevant inputs (style, aspect ratio, target duration, elements). Streams the result as Server-Sent Events: unnamed `data:` frames each carry `{ "delta": "..." }`; a terminal `event: done` frame carries the full `{ "enhancedScript": "..." }`. A failure after streaming starts arrives as an `event: error` frame `{ code, message }`. Pre-stream failures (invalid body, unresolvable style, billing) return the JSON error envelope instead.',
+            'Enhance/expand a script WITHOUT creating a sequence, using the enhancement-relevant inputs (style, aspect ratio, target duration, elements). Streams the result as Server-Sent Events: unnamed `data:` frames each carry `{ "delta": "..." }`; a terminal `event: done` frame carries the full `{ "enhancedScript": "...", "_links": {...} }` — a HAL catalog whose `create-sequence` affordance embeds a ready-to-POST example body using the enhanced script. A failure after streaming starts arrives as an `event: error` frame `{ code, message }`. Pre-stream failures (invalid body, unresolvable style, billing) return the JSON error envelope instead.',
           requestBody: {
             required: true,
             content: {
@@ -245,12 +245,12 @@ export function buildOpenApiDocument(): JsonObject {
           responses: {
             '200': {
               description:
-                'An SSE stream of the enhanced script. Delta frames, then a terminal `done` frame with the full text.',
+                'An SSE stream of the enhanced script. Delta frames, then a terminal `done` frame with the full text and a HAL `_links` catalog of next actions.',
               content: {
                 'text/event-stream': {
                   schema: { type: 'string' },
                   example:
-                    'data: {"delta":"INT. "}\n\ndata: {"delta":"LIGHTHOUSE"}\n\nevent: done\ndata: {"enhancedScript":"INT. LIGHTHOUSE - NIGHT\\n..."}\n\n',
+                    'data: {"delta":"INT. "}\n\ndata: {"delta":"LIGHTHOUSE"}\n\nevent: done\ndata: {"enhancedScript":"INT. LIGHTHOUSE - NIGHT\\n...","_links":{"create-sequence":{"href":"/api/v1/sequences","method":"POST"}}}\n\n',
                 },
               },
             },

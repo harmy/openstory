@@ -30,8 +30,10 @@ Enhance only (no sequence):
   video. Takes the enhancement-relevant inputs (style, aspectRatio, targetSeconds,
   elements) and STREAMS the result back as Server-Sent Events: unnamed 'data:'
   frames each carry { "delta": "..." }; a final 'event: done' frame carries the
-  full { "enhancedScript": "..." }. Errors after streaming starts arrive as an
-  'event: error' frame.
+  full { "enhancedScript": "..." } plus a '_links' catalog whose
+  'create-sequence' affordance embeds a ready-to-POST example body using the
+  enhanced script (with enhance: "off"). Errors after streaming starts arrive
+  as an 'event: error' frame.
 
 Authentication:
   Every endpoint except this root requires an API key. Create one in the

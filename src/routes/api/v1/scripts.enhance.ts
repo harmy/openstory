@@ -4,7 +4,9 @@
  * Enhances a script WITHOUT creating a sequence: takes the enhancement-relevant
  * inputs (style, aspect ratio, target duration, reference elements) and streams
  * the enhanced script back as Server-Sent Events (unnamed `data:` delta frames,
- * then a terminal `event: done` carrying the full text).
+ * then a terminal `event: done` carrying the full text plus the HAL `_links`
+ * catalog of next actions — notably `create-sequence` pre-filled with the
+ * enhanced script).
  *
  * Authenticated via `authWithTeamRequestMiddleware` (API key or dashboard
  * session), billed per request like the dashboard enhance. Pre-stream failures

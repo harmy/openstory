@@ -32,10 +32,28 @@ describe('enhanceSseResponse', () => {
     const body = await readSse(res);
     expect(body).toContain('data: {"delta":"INT. "}\n\n');
     expect(body).toContain('data: {"delta":"LIGHTHOUSE"}\n\n');
-    // The done frame carries the trimmed, concatenated script.
-    expect(body).toContain(
-      'event: done\ndata: {"enhancedScript":"INT. LIGHTHOUSE - NIGHT"}\n\n'
+
+    // The done frame carries the trimmed, concatenated script plus the HAL
+    // affordance catalog every v1 response exposes.
+    const doneFrame = body
+      .split('\n\n')
+      .find((frame) => frame.startsWith('event: done'));
+    expect(doneFrame).toBeDefined();
+    const donePayload = JSON.parse(
+      (doneFrame ?? '').replace('event: done\ndata: ', '')
     );
+    expect(donePayload.enhancedScript).toBe('INT. LIGHTHOUSE - NIGHT');
+    expect(donePayload._links.self.href).toBe('/api/v1/scripts/enhance');
+    expect(donePayload._links.root.href).toBe('/api/v1');
+    const createLink = donePayload._links['create-sequence'];
+    expect(createLink.href).toBe('/api/v1/sequences');
+    expect(createLink.method).toBe('POST');
+    expect(createLink.contentType).toBe('application/json');
+    // The create affordance is ready-to-POST: it embeds the enhanced script
+    // with enhancement disabled (the script is already enhanced).
+    expect(createLink.examples).toEqual([
+      { script: 'INT. LIGHTHOUSE - NIGHT', enhance: 'off' },
+    ]);
   });
 
   it('emits an error frame when the generator fails mid-stream', async () => {
