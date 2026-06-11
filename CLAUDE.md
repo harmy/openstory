@@ -40,8 +40,9 @@ bun db:studio:d1                   # Drizzle Studio against production D1
 # Build / deploy
 bun run build                      # Vite production build (NOT `bun build`)
 bun cf:dev                         # wrangler dev against built worker (preview)
-bun cf:deploy:prd                  # Cloudflare Workers production deploy (build → migrate → deploy)
-bun run deploy                     # Deploy-button / Workers Builds deploy command (migrate + deploy, default env)
+bun cf:deploy:prd                  # Manual production deploy (build → migrate → deploy)
+bun run deploy                     # Deploy-button deploy command (migrate + deploy, default env)
+bun deploy:production              # Workers Builds prod deploy command (migrate --env=production + deploy)
 ```
 
 `bun dev` runs vite dev (cf-plugin → Workerd via Miniflare, port 3000) alongside the Stripe listener (skipped without `STRIPE_SECRET_KEY`). Its first step (`scripts/ensure-env.ts`) creates `.env.local` with generated secrets if missing, so a fresh clone needs only `bun install && bun dev`. The app runs in **Workerd locally** — same runtime as production — so D1, R2 bindings, **Cloudflare Workflows**, env.\* access, and request lifecycle all match prod. No QStash/Docker needed: workflows execute in-process in Workerd.
@@ -242,13 +243,13 @@ bun db:migrate   # Apply migrations to local.db
 **The structure.** `wrangler.jsonc` separates dev from prod via env blocks:
 
 - **default** (no env) — triple duty: (1) `bun dev` / `vite dev` / `bun cf:dev` local simulation, (2) the patch base for PR-preview deploys (CI rewrites D1/bucket/workflow names in place), and (3) the provisioning template for Deploy-to-Cloudflare button deploys — its `database_name`/`bucket_name` are what a button user's fresh resources get called, and `tail_consumers` must stay `[]` so button deploys don't reference our log-forwarder Worker. The D1 binding has a **placeholder** `database_id: "dev-local-d1"` so any misrouted remote call (or buggy preview patch, or wrong-env deploy) 404s against Cloudflare rather than silently writing to prod. R2 buckets are **local Miniflare** too — reads are served by the worker's `/r2/$` route because `getPublicUrl()` falls back to `${VITE_APP_URL}/r2/<key>` when `R2_PUBLIC_STORAGE_DOMAIN` is unset. Local dev needs no Cloudflare credentials. (Opt back into remote R2 by setting `"remote": true` on the binding + `R2_PUBLIC_STORAGE_DOMAIN` in `.env.local`; revert when done.)
-- **`[env.production]`** — real prod D1 (`database_id: d6a35f64-...`). Production deploys MUST use `wrangler deploy --env=production` (already wired in `cf:deploy:prd`).
+- **`[env.production]`** — real prod D1 (`database_id: d6a35f64-...`). Production builds MUST set `CLOUDFLARE_ENV=production` (so the built `dist/server/wrangler.json` bakes this block) and the migrate step MUST pass `--env=production` (wired in `deploy:production` / `cf:deploy:prd`).
 - **`[env.test]`** — Playwright e2e. Local Miniflare D1 (`database_id: "openstory-test-local"`) AND local Miniflare R2 — fully hermetic, no Cloudflare credentials in CI. Activated via `CLOUDFLARE_ENV=test` (set in `playwright.config.ts` envPrefix and CI workflow env block) for `vite dev`, or `wrangler dev --env=test` for the built-server path.
 
 **Rules:**
 
 - Never add `"remote": true` to a D1 binding. The placeholder-id strategy is the safety net.
-- Production deploys go through `bun cf:deploy:prd` which passes `--env=production`. Don't bypass with raw `wrangler deploy` — that hits the default block (placeholder D1) and fails.
+- Production deploys run on **Workers Builds** (dashboard-connected to `main`, #900): build command `bun run build` with `CLOUDFLARE_ENV=production` as a build env var, deploy command `bun run deploy:production`. Manual fallback: `bun cf:deploy:prd`. Don't deploy a build made without `CLOUDFLARE_ENV=production` — it bakes the default block (placeholder D1) and fails loudly.
 - PR-preview deploys patch the default block at runtime in `.github/workflows/deploy-cloudflare.yml` and deploy without `--env`. Each PR gets its own real D1 named `openstory-pr-<n>`.
 
 **Local guardrail:** `bun dev` prints a wrangler-bindings banner on startup showing each binding's `local` / `REMOTE` status. If `DB` ever shows REMOTE, kill the server immediately and fix the config before any write lands in prod.
@@ -257,7 +258,7 @@ bun db:migrate   # Apply migrations to local.db
 
 ### D1 table-rebuild trap — READ BEFORE CHANGING SCHEMA
 
-Remote migrations apply via `wrangler d1 migrations apply` (#897: the `deploy` script for button deploys / Workers Builds, `db:migrate:prd` inside `cf:deploy:prd` for prod CI), which sends each migration file as one multi-statement body. D1 wraps multi-statement bodies in an implicit transaction, and SQLite **silently** ignores `PRAGMA foreign_keys = OFF` inside a transaction. So when the standard SQLite "table rebuild" pattern (`CREATE __new_X` → `INSERT SELECT` → `DROP X` → `RENAME`) drops the parent table, every inbound `ON DELETE CASCADE` FK fires and child rows are deleted. (The original #612 incident hit the same trap through drizzle-kit's `d1-http` migrator, which no longer touches remote DBs — drizzle-kit only generates migrations now. Note drizzle-kit emits nested `<dir>/migration.sql` files; `scripts/flatten-migrations.ts` renders the flat gitignored `drizzle/migrations-wrangler/` dir that wrangler reads.)
+Remote migrations apply via `wrangler d1 migrations apply` (#897/#900: the `deploy` script for button deploys, `deploy:production` for upstream prod on Workers Builds, `db:migrate:prd` inside `cf:deploy:prd` for manual deploys), which sends each migration file as one multi-statement body. D1 wraps multi-statement bodies in an implicit transaction, and SQLite **silently** ignores `PRAGMA foreign_keys = OFF` inside a transaction. So when the standard SQLite "table rebuild" pattern (`CREATE __new_X` → `INSERT SELECT` → `DROP X` → `RENAME`) drops the parent table, every inbound `ON DELETE CASCADE` FK fires and child rows are deleted. (The original #612 incident hit the same trap through drizzle-kit's `d1-http` migrator, which no longer touches remote DBs — drizzle-kit only generates migrations now. Note drizzle-kit emits nested `<dir>/migration.sql` files; `scripts/flatten-migrations.ts` renders the flat gitignored `drizzle/migrations-wrangler/` dir that wrangler reads.)
 
 This destroyed `team_members`, `session`, `account`, and `passkey` in production on 2026-04-29 (issue #612, migration `20260428013041_productive_kabuki`). `PRAGMA defer_foreign_keys = ON` does **not** help — it defers constraint _checks_ but CASCADE still fires.
 
@@ -402,7 +403,7 @@ When re-mocking inside an `it()` block to test a different code path, call `vi.r
 
 ## Platform & Deployment
 
-Production target: **Cloudflare Workers** (the only supported platform). Deployment-context helpers (preview/local detection) live in `src/lib/utils/environment.ts`. CI auto-deploys main; PRs get preview deployments with unique D1 databases. See `.env.example` for required vars (or `bun setup` for local defaults).
+Production target: **Cloudflare Workers** (the only supported platform). Deployment-context helpers (preview/local detection) live in `src/lib/utils/environment.ts`. Workers Builds auto-deploys main (same mechanism as Deploy-button clones); PRs get GitHub Actions preview deployments with unique D1 databases. See `.env.example` for required vars (or `bun setup` for local defaults).
 
 <!-- intent-skills:start -->
 

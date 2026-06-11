@@ -46,8 +46,10 @@
   // true), the request would 404 against Cloudflare rather than silently
   // writing to production.
   //
-  // PROD D1 lives in [env.production] below. Deploys MUST pass
-  // `--env=production` (see .github/workflows/deploy-cloudflare.yml).
+  // PROD D1 lives in [env.production] below. Prod builds MUST set
+  // CLOUDFLARE_ENV=production (a Workers Builds build env var; see
+  // docs/deployment/cloudflare.md) and the migrate step MUST pass
+  // `--env=production` (wired in the `deploy:production` package script).
   // PR-preview deploys patch this default block in CI before deploying.
   // ─────────────────────────────────────────────────────────────────────────
   "d1_databases": [
@@ -273,8 +275,9 @@
   ],
   "env": {
     // Production deploy target. @cloudflare/vite-plugin selects the env at
-    // BUILD time via CLOUDFLARE_ENV — `cf:deploy:prd` sets
-    // `CLOUDFLARE_ENV=production bun run build`, which bakes these bindings
+    // BUILD time via CLOUDFLARE_ENV — Workers Builds sets it as a dashboard
+    // build env var (manual deploys: `cf:deploy:prd` sets
+    // `CLOUDFLARE_ENV=production bun run build`), which bakes these bindings
     // into dist/server/wrangler.json. The `--env=production` flag on
     // `wrangler deploy` is a no-op against that generated (already-flattened)
     // config; without CLOUDFLARE_ENV the build bakes the DEFAULT block (whose

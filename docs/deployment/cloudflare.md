@@ -39,11 +39,33 @@ The Worker entry point is `src/server.ts` with `nodejs_compat` enabled.
 
 ## Build & Deploy
 
+Upstream production (`openstory-so/openstory` → the `openstory` worker) deploys
+through [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/)
+— the same mechanism Deploy-to-Cloudflare button clones use, so upstream
+dogfoods the exact pipeline users get. Workers Builds is wrangler-authenticated,
+so the prod path needs no Cloudflare secrets in GitHub. The dashboard
+configuration (the only deploy state not versioned in the repo):
+
+- **Repository / branch**: `openstory-so/openstory`, `main`
+- **Build command**: `bun run build`
+- **Build env vars**: `CLOUDFLARE_ENV=production` (bakes the
+  `[env.production]` block into `dist/server/wrangler.json`),
+  `VITE_R2_PUBLIC_ASSETS_DOMAIN`, `VITE_PUBLIC_POSTHOG_PROJECT_TOKEN`,
+  `VITE_PUBLIC_POSTHOG_HOST`
+- **Deploy command**: `bun run deploy:production` — flatten migrations →
+  `wrangler d1 migrations apply DB --env=production --remote` →
+  `wrangler deploy`. The plain `wrangler deploy` picks up the flattened
+  `dist/server/wrangler.json` via `.wrangler/deploy/config.json`; the
+  `--env` flag matters only for the migrate step, which reads the source
+  `wrangler.jsonc`.
+
+For a manual deploy from a local checkout:
+
 ```bash
 # Generate Worker types from wrangler.jsonc
 bun cf:typegen
 
-# Deploy to production (typegen, CLOUDFLARE_ENV=production build, wrangler deploy)
+# Deploy to production (typegen, CLOUDFLARE_ENV=production build, migrate, wrangler deploy)
 bun cf:deploy:prd
 ```
 
@@ -59,17 +81,20 @@ wrangler can't read, `scripts/flatten-migrations.ts` renders them to flat
 run it automatically:
 
 ```bash
-bun run deploy          # flatten → wrangler d1 migrations apply DB --remote → wrangler deploy
-                        # (what the Deploy to Cloudflare button / Workers Builds runs)
-bun db:migrate:prd      # flatten → wrangler d1 migrations apply DB --env=production --remote
+bun run deploy             # flatten → wrangler d1 migrations apply DB --remote → wrangler deploy
+                           # (what Deploy to Cloudflare button clones run)
+bun run deploy:production  # same, but --env=production on the migrate step
+                           # (what upstream's Workers Builds runs)
+bun db:migrate:prd         # flatten → wrangler d1 migrations apply DB --env=production --remote
 ```
 
-- **Button deploys / Workers Builds**: the `deploy` package script is picked
-  up as the deploy command and re-runs on every push, so new migrations apply
-  idempotently. It references the binding name `DB` (not the database name) so
-  it works whatever the user named their database.
-- **Production CI**: `cf:deploy:prd` runs `db:migrate:prd` between build and
-  deploy.
+- **Button deploys**: the `deploy` package script is picked up as the deploy
+  command and re-runs on every push, so new migrations apply idempotently. It
+  references the binding name `DB` (not the database name) so it works
+  whatever the user named their database.
+- **Upstream production (Workers Builds)**: `deploy:production` is the
+  configured deploy command — identical to `deploy` except the migrate step
+  targets the `[env.production]` D1.
 - **PR previews**: CI applies migrations with `wrangler d1 migrations apply DB
 --remote` after patching the PR's database id into the config.
 - **Local dev / e2e**: unchanged — drizzle-orm's migrator applies the nested
@@ -160,9 +185,8 @@ reopen the PR to get a fresh, wrangler-tracked preview database.
 
 ## CI/CD
 
-[`deploy-cloudflare.yml`](https://github.com/anthropics/openstory/blob/main/.github/workflows/deploy-cloudflare.yml) handles:
+Production pushes to `main` deploy via Workers Builds (see [Build & Deploy](#build--deploy) above). [`deploy-cloudflare.yml`](https://github.com/anthropics/openstory/blob/main/.github/workflows/deploy-cloudflare.yml) handles the PR previews, which stay on GitHub Actions because Workers Builds branch previews share production bindings — no per-PR D1 provisioning, no workflow-name namespacing, no teardown on close:
 
-- **Production**: pushes to `main` run `bun cf:deploy:prd` (build → migrate → deploy).
 - **PR previews**: each PR gets its own Worker (`pr-<number>`) and D1 database (`openstory-pr-<number>`), with secrets pushed and the preview URL posted as a PR comment.
 - **Cleanup**: closing a PR deletes both the Worker and the D1 database.
 

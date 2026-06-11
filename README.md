@@ -114,11 +114,11 @@ See [`.env.example`](.env.example) for all optional configuration (Google OAuth,
 
 ### Build & Deploy
 
-| Command             | Description                                  |
-| ------------------- | -------------------------------------------- |
-| `bun run build`     | Build for production (note: not `bun build`) |
-| `bun setup --prod`  | Interactive production setup + deploy        |
-| `bun cf:deploy:prd` | Deploy to Cloudflare Workers (production)    |
+| Command             | Description                                         |
+| ------------------- | --------------------------------------------------- |
+| `bun run build`     | Build for production (note: not `bun build`)        |
+| `bun setup --prod`  | Interactive production setup + deploy               |
+| `bun cf:deploy:prd` | Manual production deploy (build → migrate → deploy) |
 
 ## Project Structure
 
@@ -148,7 +148,7 @@ scripts/          # CLI utilities and setup
 
 The deploy button clones the repo into your Cloudflare account, provisions the resources declared in [`wrangler.jsonc`](wrangler.jsonc), and sets up CI. For a guided setup from your own clone, run `bun setup --prod`.
 
-**CI/CD:** GitHub Actions auto-deploys on push to `main`. Pull requests get preview deployments with dedicated D1 databases.
+**CI/CD:** Cloudflare Workers Builds auto-deploys on push to `main` — the same mechanism deploy-button clones use. Pull requests get GitHub Actions preview deployments with dedicated D1 databases.
 
 > See the [Platform & Deployment](CLAUDE.md#platform--deployment) section in CLAUDE.md for environment variable configuration and platform detection.
 

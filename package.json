@@ -67,7 +67,8 @@
     "cf:typegen": "wrangler types",
     "cf:dev": "wrangler dev",
     "cf:deploy:prd": "bun run cf:typegen && CLOUDFLARE_ENV=production bun run build && bun run db:migrate:prd && wrangler deploy --env=production",
-    "deploy": "bun scripts/flatten-migrations.ts && wrangler d1 migrations apply DB --remote && wrangler deploy"
+    "deploy": "bun scripts/flatten-migrations.ts && wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "deploy:production": "bun scripts/flatten-migrations.ts && wrangler d1 migrations apply DB --env=production --remote && wrangler deploy"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1047.0",
