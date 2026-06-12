@@ -1,3 +1,4 @@
+import { mediaUrlSchema } from '@/lib/schemas/media-url.schemas';
 import { getSignedUploadUrl } from '#storage';
 import { requireTeamAdminAccess } from '@/lib/auth/action-utils';
 import { generateId } from '@/lib/db/id';
@@ -91,7 +92,7 @@ export const createLibraryLocationFn = createServerFn({ method: 'POST' })
       z.object({
         name: z.string().min(1).max(255),
         description: z.string().optional(),
-        referenceImageUrls: z.array(z.string().url()).optional(),
+        referenceImageUrls: z.array(mediaUrlSchema).optional(),
       })
     )
   )
@@ -112,7 +113,7 @@ export const updateLibraryLocationFn = createServerFn({ method: 'POST' })
         locationId: ulidSchema,
         name: z.string().min(1).max(255).optional(),
         description: z.string().optional(),
-        referenceImageUrl: z.string().url().optional(),
+        referenceImageUrl: mediaUrlSchema.optional(),
       })
     )
   )
@@ -168,7 +169,7 @@ export const finalizeLocationUploadFn = createServerFn({ method: 'POST' })
     zodValidator(
       z.object({
         locationId: ulidSchema,
-        publicUrl: z.string().url(),
+        publicUrl: mediaUrlSchema,
         path: z.string().min(1),
       })
     )
@@ -194,7 +195,7 @@ export const addLocationSheetsFn = createServerFn({ method: 'POST' })
     zodValidator(
       z.object({
         locationId: ulidSchema,
-        imageUrls: z.array(z.string().url()).min(1),
+        imageUrls: z.array(mediaUrlSchema).min(1),
       })
     )
   )

@@ -298,10 +298,34 @@ export async function fileExists(
 }
 
 /**
- * Serve a storage object straight from the R2 binding. Backs the local
- * `/r2/$` route (see src/routes/r2.$.ts) that stands in for the public CDN
- * domain when `R2_PUBLIC_STORAGE_DOMAIN` is unset (local dev + e2e). Supports
- * Range requests so `<video>` seeking works.
+ * Read a storage object's bytes straight from the R2 binding by key
+ * (`<bucket>/<path>`). Used by server-side consumers of stored `/r2/<key>`
+ * URLs that need the bytes rather than a URL (fal-storage shim uploads,
+ * vision data-URIs, PNG header sniffing) — a relative URL can't be `fetch`ed
+ * from inside the worker, and reading the binding avoids an HTTP round-trip.
+ * Pass `range` to read a prefix (e.g. an image header) without downloading
+ * the whole object.
+ */
+export async function readStorageObject(
+  key: string,
+  range?: { offset: number; length: number }
+): Promise<{ bytes: Uint8Array<ArrayBuffer>; contentType: string } | null> {
+  const r2 = getR2Bucket();
+  const object = await r2.get(key, range ? { range } : undefined);
+  if (!object) return null;
+  return {
+    bytes: new Uint8Array(await object.arrayBuffer()),
+    contentType: object.httpMetadata?.contentType ?? '',
+  };
+}
+
+/**
+ * Serve a storage object straight from the R2 binding. Backs the `/r2/$`
+ * route (see src/routes/r2.$.ts), which streams stored media whenever no
+ * public CDN domain is configured — local dev, e2e, and CDN-less production
+ * deployments (deploy-button workers). With a CDN domain set the route
+ * redirects instead and this is not called. Supports Range requests so
+ * `<video>` seeking works.
  */
 export async function serveFile(
   key: string,

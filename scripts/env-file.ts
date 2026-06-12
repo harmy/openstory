@@ -79,8 +79,12 @@ const LOCAL_ENV_HEADER = `# ====================================================
 /**
  * Zero-touch local env bootstrap. Creates .env.local if missing and fills in
  * the few values the app cannot default at runtime (auth/encryption secrets
- * are generated; VITE_APP_URL is needed by the local /r2 serve route). Never
- * overwrites existing values. Returns the keys it added.
+ * are generated; VITE_APP_URL feeds marketing emails, the OpenRouter
+ * referer, workflow instance-id slugs, image-transform absolutization in
+ * app-image.tsx, and preview/production detection in utils/environment.ts —
+ * media *serving* no longer needs it, see #894, but dropping it silently
+ * disables image transforms). Never overwrites existing values. Returns the
+ * keys it added.
  */
 export function ensureLocalEnv(): string[] {
   const envFile = resolve(process.cwd(), '.env.local');

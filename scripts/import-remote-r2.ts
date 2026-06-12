@@ -11,8 +11,8 @@
  *      the source domain(s) — including JSON columns like frame.metadata,
  *   2. downloads each referenced object from the public CDN (no credentials
  *      needed) and puts it into the local R2 binding under the same key,
- *   3. rewrites the DB URLs in place to the local `${APP_URL}/r2/<key>` form
- *      so the /r2 serve route picks them up.
+ *   3. rewrites the DB URLs in place to the origin-relative `/r2/<key>` form
+ *      (#894) so the /r2 serve route picks them up.
  *
  * Usage:
  *   bun scripts/import-remote-r2.ts               # copy + rewrite (default env)
@@ -40,13 +40,6 @@ for (const arg of args) {
   const domain = /^--domain=(.+)$/.exec(arg)?.[1];
   if (domain) SOURCE_DOMAINS.push(domain);
 }
-
-// `||` (not `??`): the env type declares VITE_APP_URL as string, but it can
-// still be empty when .env.local omits it.
-const appUrl = (process.env.VITE_APP_URL || 'http://localhost:3000').replace(
-  /\/$/,
-  ''
-);
 
 const DOWNLOAD_CONCURRENCY = 8;
 
@@ -196,17 +189,17 @@ if (rewrite && !dryRun) {
         .prepare(
           `UPDATE "${table}" SET "${column}" = REPLACE("${column}", ?, ?) WHERE "${column}" LIKE ?`
         )
-        .bind(`https://${domain}/`, `${appUrl}/r2/`, `%${domain}%`)
+        .bind(`https://${domain}/`, '/r2/', `%${domain}%`)
         .run();
       rewrittenRows += result.meta.changes;
     }
   }
   console.log(
-    `[import-remote-r2] rewrote URLs in ${rewrittenRows} row(s) to ${appUrl}/r2/...`
+    `[import-remote-r2] rewrote URLs in ${rewrittenRows} row(s) to /r2/...`
   );
 } else if (rewrite && dryRun) {
   console.log(
-    `[import-remote-r2] [dry-run] would rewrite URLs in ${columnsWithMatches.length} column(s) to ${appUrl}/r2/...`
+    `[import-remote-r2] [dry-run] would rewrite URLs in ${columnsWithMatches.length} column(s) to /r2/...`
   );
 }
 

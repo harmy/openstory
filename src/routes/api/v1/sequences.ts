@@ -60,6 +60,7 @@ export const Route = createFileRoute('/api/v1/sequences')({
           // we drop the now-redundant top-level status/statusUrl/_links from the
           // entry to avoid handing an agent a stale duplicate `status`.
           const waitMs = getWaitMs(request);
+          const origin = new URL(request.url).origin;
           if (waitMs > 0) {
             const sequences: OneShotWaitResult['sequences'] = await Promise.all(
               result.sequences.map(async (entry) => {
@@ -81,7 +82,11 @@ export const Route = createFileRoute('/api/v1/sequences')({
                       );
                       return null;
                     }
-                    return buildSequenceState(context.scopedDb, sequence);
+                    return buildSequenceState(
+                      context.scopedDb,
+                      sequence,
+                      origin
+                    );
                   },
                   cursor: (state) => (state ? sequenceStateCursor(state) : ''),
                   // A null snapshot (logged anomaly above) is terminal for the

@@ -10,6 +10,7 @@
 import type { ScopedDb } from '@/lib/db/scoped';
 import { FRAME_GENERATION_STATUSES } from '@/lib/db/schema/frames';
 import type { MusicStatus, SequenceStatus } from '@/lib/db/schema/sequences';
+import { toShareableUrl } from '@/lib/storage/buckets';
 import type { Sequence } from '@/types/database';
 import { API_V1_BASE, type HalResource, waitLink, withLinks } from './hal';
 
@@ -57,10 +58,17 @@ export type SequenceState = {
 
 export async function buildSequenceState(
   scopedDb: { frames: Pick<ScopedDb['frames'], 'listBySequence'> },
-  sequence: Sequence
+  sequence: Sequence,
+  // Scheme+host the request arrived on. Stored media URLs are origin-relative
+  // (#894); the API hands them to off-origin clients, so absolutize them to a
+  // shareable form (CDN domain when configured, else this origin). See
+  // toShareableUrl.
+  origin: string
 ): Promise<SequenceState> {
   const frames = await scopedDb.frames.listBySequence(sequence.id);
   const ordered = [...frames].sort((a, b) => a.orderIndex - b.orderIndex);
+  const share = (url: string | null): string | null =>
+    url === null ? null : toShareableUrl(url, origin);
 
   const stateFrames: SequenceStateFrame[] = ordered.map((frame) => {
     const imageUrl = frame.thumbnailUrl ?? frame.previewThumbnailUrl ?? null;
@@ -72,11 +80,11 @@ export async function buildSequenceState(
         // Frames track video status explicitly; image readiness is signalled by
         // the presence of a thumbnail URL.
         status: imageUrl ? 'completed' : 'pending',
-        url: imageUrl,
+        url: share(imageUrl),
       },
       video: {
         status: frame.videoStatus ?? 'pending',
-        url: frame.videoUrl ?? null,
+        url: share(frame.videoUrl ?? null),
       },
     };
   });
@@ -89,10 +97,12 @@ export async function buildSequenceState(
     aspectRatio: sequence.aspectRatio,
     createdAt: sequence.createdAt.toISOString(),
     updatedAt: sequence.updatedAt.toISOString(),
-    poster: sequence.posterUrl ? { url: sequence.posterUrl } : null,
+    poster: sequence.posterUrl
+      ? { url: toShareableUrl(sequence.posterUrl, origin) }
+      : null,
     music: {
       status: sequence.musicStatus ?? 'pending',
-      url: sequence.musicUrl ?? null,
+      url: share(sequence.musicUrl ?? null),
     },
     frames: stateFrames,
     counts: {

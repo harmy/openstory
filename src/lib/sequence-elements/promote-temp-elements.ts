@@ -1,3 +1,4 @@
+import { mediaUrlSchema } from '@/lib/schemas/media-url.schemas';
 import { moveFile } from '#storage';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { generateId } from '@/lib/db/id';
@@ -19,7 +20,7 @@ const logger = getLogger([
 
 const tempUploadSchema = z.object({
   tempPath: z.string().min(1),
-  tempPublicUrl: z.string().url(),
+  tempPublicUrl: mediaUrlSchema,
   filename: z.string().min(1),
   // Optional: vision-suggested token returned by analyzeDraftElementFn during
   // draft upload. Falls back to filename-derived when missing (legacy clients).

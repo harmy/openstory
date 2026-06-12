@@ -30,6 +30,7 @@ export const Route = createFileRoute('/api/v1/sequences/$id')({
       GET: async ({ params, context, request }) =>
         runApiV1Handler(async () => {
           const waitMs = getWaitMs(request);
+          const origin = new URL(request.url).origin;
 
           const { value, changed, done } = await longPoll({
             waitMs,
@@ -41,7 +42,7 @@ export const Route = createFileRoute('/api/v1/sequences/$id')({
               if (!sequence) {
                 throw new NotFoundError('Sequence not found');
               }
-              return buildSequenceState(context.scopedDb, sequence);
+              return buildSequenceState(context.scopedDb, sequence, origin);
             },
             cursor: sequenceStateCursor,
             done: isTerminalSequenceState,

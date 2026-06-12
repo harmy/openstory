@@ -1,5 +1,5 @@
 import { getLogger } from '@/lib/observability/logger';
-import { isLocalStorageServing } from '@/lib/storage/buckets';
+import { isLocalStorageServing, toCdnUrl } from '@/lib/storage/buckets';
 
 const logger = getLogger(['openstory', 'image', 'image-compress']);
 /**
@@ -28,22 +28,34 @@ export async function ensureImageUnderLimit(
   imageUrl: string,
   maxBytes: number
 ): Promise<CompressionResult | null> {
-  // HEAD check — skip transform if already under limit
-  const headResponse = await fetch(imageUrl, { method: 'HEAD' });
-  const contentLength = headResponse.headers.get('content-length');
-
-  if (contentLength && Number(contentLength) <= maxBytes) {
+  // Stored URLs are origin-relative (#894) — absolutize against the CDN
+  // domain. No CDN domain (local dev / e2e) means no Cloudflare edge in
+  // front of storage, so /cdn-cgi/image/ transform URLs wouldn't resolve.
+  // Skip compression and let the oversize image through — rare in dev, and
+  // better than a guaranteed 404.
+  const cdnUrl = toCdnUrl(imageUrl);
+  const absoluteUrl =
+    cdnUrl ?? (/^https?:\/\//.test(imageUrl) ? imageUrl : null);
+  if (isLocalStorageServing()) {
+    // Fires regardless of image size (the size check below needs an
+    // absolute URL to HEAD) — "unavailable", not "image was oversize".
+    logger.warn(
+      `Image compression unavailable for ${imageUrl} — local storage serving has no Image Resizing edge; passing the original through`
+    );
+    return null;
+  }
+  if (!absoluteUrl) {
+    logger.warn(
+      `Image compression unavailable for ${imageUrl} — relative non-/r2/ URL cannot be absolutized for the transform edge; passing the original through`
+    );
     return null;
   }
 
-  // Locally-served storage (no R2_PUBLIC_STORAGE_DOMAIN) has no Cloudflare
-  // edge in front of it, so /cdn-cgi/image/ transform URLs don't resolve.
-  // Skip compression and let the oversize image through — rare in dev, and
-  // better than a guaranteed 404.
-  if (isLocalStorageServing()) {
-    logger.warn(
-      `Image exceeds ${(maxBytes / 1024 / 1024).toFixed(1)}MB but local storage serving has no Image Resizing edge — skipping compression`
-    );
+  // HEAD check — skip transform if already under limit
+  const headResponse = await fetch(absoluteUrl, { method: 'HEAD' });
+  const contentLength = headResponse.headers.get('content-length');
+
+  if (contentLength && Number(contentLength) <= maxBytes) {
     return null;
   }
 
@@ -56,7 +68,7 @@ export async function ensureImageUnderLimit(
   // Construct a Cloudflare Image Resizing URL.
   // When fetched, Cloudflare transforms the image at the edge — the application
   // never downloads or buffers the original image.
-  const parsed = new URL(imageUrl);
+  const parsed = new URL(absoluteUrl);
   const transformUrl = `${parsed.origin}/cdn-cgi/image/quality=85,format=jpeg${parsed.pathname}`;
 
   return { url: transformUrl, originalSizeBytes };

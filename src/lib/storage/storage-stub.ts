@@ -124,5 +124,11 @@ export const fileExists = (
   _path: string
 ): Promise<boolean> => throwStub();
 
+export const readStorageObject = (
+  _key: string,
+  _range?: { offset: number; length: number }
+): Promise<{ bytes: Uint8Array<ArrayBuffer>; contentType: string } | null> =>
+  throwStub();
+
 export const serveFile = (_key: string, _request: Request): Promise<Response> =>
   throwStub();

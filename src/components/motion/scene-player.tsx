@@ -116,7 +116,14 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
   const handleCopyImageUrl = useCallback(async () => {
     if (!currentFrame?.thumbnailUrl) return;
     try {
-      await navigator.clipboard.writeText(currentFrame.thumbnailUrl);
+      // Stored media URLs are origin-relative (#894) — absolutize against the
+      // current origin so the copied link is usable when pasted elsewhere. The
+      // worker's public /r2 route serves it (redirecting to the CDN in prod).
+      const absoluteUrl = new URL(
+        currentFrame.thumbnailUrl,
+        window.location.origin
+      ).href;
+      await navigator.clipboard.writeText(absoluteUrl);
       toast.success('Image URL copied');
     } catch {
       toast.error('Failed to copy URL');
@@ -126,7 +133,9 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
   const handleCopyVideoUrl = useCallback(async () => {
     if (!currentFrame?.videoUrl) return;
     try {
-      await navigator.clipboard.writeText(currentFrame.videoUrl);
+      const absoluteUrl = new URL(currentFrame.videoUrl, window.location.origin)
+        .href;
+      await navigator.clipboard.writeText(absoluteUrl);
       toast.success('Video URL copied');
     } catch {
       toast.error('Failed to copy URL');

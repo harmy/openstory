@@ -1,11 +1,34 @@
 import type { Frame } from '@/lib/db/schema/frames';
 import type { Sequence } from '@/lib/db/schema/sequences';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
-  buildSequenceState,
+  buildSequenceState as buildSequenceStateRaw,
   isTerminalSequenceState,
   sequenceStateCursor,
 } from './state';
+
+// toShareableUrl reads R2_PUBLIC_STORAGE_DOMAIN via getEnv() — process.env
+// under vitest, which bun-as-launcher fills from .env.local. A developer who
+// opted into remote R2 (the documented wrangler.jsonc workflow) would flip
+// the origin-fallback assertions below to their CDN domain; pin local
+// serving so the tests are environment-independent. (stubEnv with undefined
+// deletes the var — `delete process.env.X` fails typecheck since the env
+// typings mark it non-optional.)
+beforeAll(() => {
+  vi.stubEnv('R2_PUBLIC_STORAGE_DOMAIN', undefined);
+});
+
+const TEST_ORIGIN = 'https://api.example.com';
+
+// All existing assertions use absolute `https://cdn/...` URLs, which
+// toShareableUrl passes through unchanged; the origin only matters for the
+// origin-relative `/r2/...` rows exercised in the dedicated test below. Wrap so
+// each call supplies a fixed origin without threading it through every case.
+const build = (
+  deps: Parameters<typeof buildSequenceStateRaw>[0],
+  sequence: Parameters<typeof buildSequenceStateRaw>[1],
+  origin = TEST_ORIGIN
+) => buildSequenceStateRaw(deps, sequence, origin);
 
 function makeFrame(overrides: Partial<Frame> = {}): Frame {
   return {
@@ -107,7 +130,7 @@ describe('buildSequenceState', () => {
       musicUrl: 'https://cdn/music.mp3',
       statusError: null,
     });
-    const state = await buildSequenceState(depsWithFrames([]), sequence);
+    const state = await build(depsWithFrames([]), sequence);
 
     expect(state).toMatchObject({
       id: 'seq-1',
@@ -128,7 +151,7 @@ describe('buildSequenceState', () => {
   });
 
   it('null poster and falls back to pending music status', async () => {
-    const state = await buildSequenceState(
+    const state = await build(
       depsWithFrames([]),
       makeSequence({ posterUrl: null, musicStatus: null })
     );
@@ -150,10 +173,7 @@ describe('buildSequenceState', () => {
         thumbnailUrl: 'https://cdn/t1.png',
       }),
     ];
-    const state = await buildSequenceState(
-      depsWithFrames(frames),
-      makeSequence()
-    );
+    const state = await build(depsWithFrames(frames), makeSequence());
 
     // ordered by orderIndex
     expect(state.frames.map((f) => f.id)).toEqual(['f1', 'f2']);
@@ -181,7 +201,7 @@ describe('buildSequenceState', () => {
   });
 
   it('treats a preview thumbnail as an available image', async () => {
-    const state = await buildSequenceState(
+    const state = await build(
       depsWithFrames([
         makeFrame({
           thumbnailUrl: null,
@@ -197,7 +217,7 @@ describe('buildSequenceState', () => {
   });
 
   it('counts failed videos so a terminal-but-partial result is legible', async () => {
-    const state = await buildSequenceState(
+    const state = await build(
       depsWithFrames([
         makeFrame({ id: 'f1', videoStatus: 'failed' }),
         makeFrame({
@@ -216,25 +236,71 @@ describe('buildSequenceState', () => {
       videosFailed: 1,
     });
   });
+
+  it('absolutizes origin-relative media URLs against the request origin', async () => {
+    // No CDN domain in the unit env, so toShareableUrl falls back to the
+    // request origin. Stored rows are `/r2/...` (#894); the API must hand
+    // off-origin clients a usable absolute URL.
+    const state = await build(
+      depsWithFrames([
+        makeFrame({
+          id: 'f1',
+          thumbnailUrl: '/r2/thumbnails/team/t1.png',
+          videoStatus: 'completed',
+          videoUrl: '/r2/videos/team/v1.mp4',
+        }),
+      ]),
+      makeSequence({
+        posterUrl: '/r2/thumbnails/team/poster.png',
+        musicStatus: 'completed',
+        musicUrl: '/r2/audio/team/music.mp3',
+      })
+    );
+
+    expect(state.poster).toEqual({
+      url: 'https://api.example.com/r2/thumbnails/team/poster.png',
+    });
+    expect(state.music.url).toBe(
+      'https://api.example.com/r2/audio/team/music.mp3'
+    );
+    expect(state.frames[0]?.image.url).toBe(
+      'https://api.example.com/r2/thumbnails/team/t1.png'
+    );
+    expect(state.frames[0]?.video.url).toBe(
+      'https://api.example.com/r2/videos/team/v1.mp4'
+    );
+  });
+
+  it('passes through already-absolute (external / legacy) media URLs', async () => {
+    const state = await build(
+      depsWithFrames([
+        makeFrame({
+          videoStatus: 'completed',
+          videoUrl: 'https://v3.fal.media/files/b/abc/out.mp4',
+        }),
+      ]),
+      makeSequence({ posterUrl: 'https://storage.openstory.so/old/poster.png' })
+    );
+    expect(state.poster?.url).toBe(
+      'https://storage.openstory.so/old/poster.png'
+    );
+    expect(state.frames[0]?.video.url).toBe(
+      'https://v3.fal.media/files/b/abc/out.mp4'
+    );
+  });
 });
 
 describe('isTerminalSequenceState', () => {
   it('treats completed / failed / archived as terminal', async () => {
     for (const status of ['completed', 'failed', 'archived'] as const) {
-      const state = await buildSequenceState(
-        depsWithFrames([]),
-        makeSequence({ status })
-      );
+      const state = await build(depsWithFrames([]), makeSequence({ status }));
       expect(isTerminalSequenceState(state)).toBe(true);
     }
   });
 
   it('treats draft / processing as non-terminal', async () => {
     for (const status of ['draft', 'processing'] as const) {
-      const state = await buildSequenceState(
-        depsWithFrames([]),
-        makeSequence({ status })
-      );
+      const state = await build(depsWithFrames([]), makeSequence({ status }));
       expect(isTerminalSequenceState(state)).toBe(false);
     }
   });
@@ -250,14 +316,14 @@ describe('sequenceStateCursor', () => {
 
   it('is stable for identical state', async () => {
     const seq = makeSequence({ updatedAt });
-    const a = await buildSequenceState(depsWithFrames([]), seq);
-    const b = await buildSequenceState(depsWithFrames([]), seq);
+    const a = await build(depsWithFrames([]), seq);
+    const b = await build(depsWithFrames([]), seq);
     expect(sequenceStateCursor(a)).toBe(sequenceStateCursor(b));
   });
 
   it('changes when each polled field advances independently', async () => {
     const baseline = sequenceStateCursor(
-      await buildSequenceState(depsWithFrames([]), makeSequence({ updatedAt }))
+      await build(depsWithFrames([]), makeSequence({ updatedAt }))
     );
 
     const cursorFor = async (
@@ -265,7 +331,7 @@ describe('sequenceStateCursor', () => {
       seqOverrides: Parameters<typeof makeSequence>[0]
     ) =>
       sequenceStateCursor(
-        await buildSequenceState(
+        await build(
           depsWithFrames(frames),
           makeSequence({ updatedAt, ...seqOverrides })
         )

@@ -1,21 +1,26 @@
 /**
- * Outbound-URL shim for locally-served storage.
+ * Outbound-URL shim for stored media.
  *
- * When `R2_PUBLIC_STORAGE_DOMAIN` is unset, `getPublicUrl()` returns
- * `${VITE_APP_URL}/r2/<key>` URLs that only resolve on this machine. Anything
- * we hand to a REAL external service must therefore be made publicly
- * fetchable first:
+ * Stored media URLs are origin-relative (`/r2/<key>`, see #894) — browsers
+ * resolve them against the serving origin, but anything we hand to a REAL
+ * external service must be made publicly fetchable first:
  *
- * - fal model inputs (Kling `image_url`, nano-banana `image_urls`, …) →
- *   upload the bytes to fal storage and substitute the returned fal URL.
- * - OpenRouter vision messages → inline the bytes as a base64 data part.
+ * - With a public CDN domain configured (production / opt-in remote dev):
+ *   absolutize against `R2_PUBLIC_STORAGE_DOMAIN` at the moment of use.
+ * - Without one (local dev / e2e record, but also CDN-less production
+ *   deploy-button workers — this path is load-bearing in real deployments,
+ *   not just a dev convenience), there is no public URL at all:
+ *   - fal model inputs (Kling `image_url`, nano-banana `image_urls`, …) →
+ *     read the bytes from the R2 binding and upload them to fal storage,
+ *     substituting the returned fal URL.
+ *   - OpenRouter vision messages → inline the bytes as a base64 data part.
  *
- * Both paths are no-ops when:
- * - a public CDN domain is configured (production / opt-in remote dev), or
- * - the URL isn't ours, or
+ * Pass-through cases:
+ * - the URL isn't ours (fal CDN outputs, user-supplied externals, legacy
+ *   absolute CDN-domain rows — still fetchable on their original domain), or
  * - we're in e2e REPLAY (aimock string-matches request bodies and never
- *   fetches URLs, so the local URL can pass through untouched). Record mode
- *   (`E2E_RECORD=1`) talks to real providers and takes the shim path.
+ *   fetches URLs, so the relative URL can pass through untouched). Record
+ *   mode (`E2E_RECORD=1`) talks to real providers and takes the shim path.
  */
 
 import { getEnv } from '#env';
@@ -25,48 +30,42 @@ import { getEnv } from '#env';
 // storage-initiate fixtures in aimock. Model calls still go through the
 // proxied clients as usual.
 import { createFalClient } from '@fal-ai/client';
-import { getPublicStorageBase, isLocalStorageServing } from './buckets';
-
-function isLocallyServedUrl(url: string): boolean {
-  if (!isLocalStorageServing()) return false;
-  // Without VITE_APP_URL there is no local serve base to compare against
-  // (unit tests run with neither var set) — nothing to shim.
-  if (!getEnv().VITE_APP_URL) return false;
-  return url.startsWith(`${getPublicStorageBase()}/`);
-}
+import { readStorageObject } from '#storage';
+import { r2KeyFromUrl, toCdnUrl } from './buckets';
 
 function isReplayMode(): boolean {
   const env = getEnv();
   return env.E2E_TEST === 'true' && env.E2E_RECORD !== '1';
 }
 
-function shouldShim(url: string): boolean {
-  return isLocallyServedUrl(url) && !isReplayMode();
-}
-
-async function fetchLocalBlob(url: string): Promise<Blob> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(
-      `Failed to read local storage object ${url}: ${res.status}`
-    );
+async function readStoredBytes(
+  key: string
+): Promise<{ bytes: Uint8Array<ArrayBuffer>; contentType: string }> {
+  const object = await readStorageObject(key);
+  if (!object) {
+    throw new Error(`Failed to read storage object ${key}: not found`);
   }
-  return res.blob();
+  return object;
 }
 
 /**
- * Make a storage URL fetchable by real fal. Local `/r2/` URLs are uploaded to
- * fal storage (short-lived scratch space — these are model inputs, not user
- * content); everything else passes through.
+ * Make a stored media URL fetchable by real fal. CDN-backed deployments
+ * absolutize; local `/r2/` URLs are uploaded to fal storage (short-lived
+ * scratch space — these are model inputs, not user content); everything else
+ * passes through.
  */
 export async function ensureExternallyFetchableUrl(
   url: string
 ): Promise<string> {
-  if (!shouldShim(url)) return url;
-  const blob = await fetchLocalBlob(url);
+  const key = r2KeyFromUrl(url);
+  if (key === null) return url;
+  const cdnUrl = toCdnUrl(url);
+  if (cdnUrl) return cdnUrl;
+  if (isReplayMode()) return url;
+  const { bytes, contentType } = await readStoredBytes(key);
   const fal = createFalClient({ credentials: getEnv().FAL_KEY });
-  const filename = new URL(url).pathname.split('/').pop() || 'upload';
-  const file = new File([blob], filename, { type: blob.type });
+  const filename = key.split('/').pop() || 'upload';
+  const file = new File([bytes], filename, { type: contentType });
   return fal.storage.upload(file);
 }
 
@@ -77,9 +76,10 @@ export async function ensureExternallyFetchableUrls(
 }
 
 /**
- * Vision-message image source for a storage URL: local URLs become inline
- * base64 data parts (OpenRouter can't fetch localhost); public URLs stay
- * URL-sourced.
+ * Vision-message image source for a storage URL: stored URLs become CDN
+ * absolutes when a domain is configured, or inline base64 data parts when
+ * served locally (OpenRouter can't fetch what only this machine can see);
+ * public URLs stay URL-sourced.
  */
 export async function toVisionImageSource(
   url: string
@@ -87,13 +87,16 @@ export async function toVisionImageSource(
   | { type: 'url'; value: string }
   | { type: 'data'; value: string; mimeType: string }
 > {
-  if (!shouldShim(url)) return { type: 'url', value: url };
-  const blob = await fetchLocalBlob(url);
-  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const key = r2KeyFromUrl(url);
+  if (key === null) return { type: 'url', value: url };
+  const cdnUrl = toCdnUrl(url);
+  if (cdnUrl) return { type: 'url', value: cdnUrl };
+  if (isReplayMode()) return { type: 'url', value: url };
+  const { bytes, contentType } = await readStoredBytes(key);
   return {
     type: 'data',
     value: toBase64(bytes),
-    mimeType: blob.type || 'image/png',
+    mimeType: contentType || 'image/png',
   };
 }
 

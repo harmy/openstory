@@ -1,3 +1,4 @@
+import { mediaUrlSchema } from '@/lib/schemas/media-url.schemas';
 import { safeTextToImageModel } from '@/lib/ai/models';
 import { type SequenceLocation, StyleConfigSchema } from '@/lib/db/schema';
 import { getGenerationChannel } from '@/lib/realtime';
@@ -76,7 +77,7 @@ export const getFrameIdsForLocationFn = createServerFn({ method: 'GET' })
 const recastLocationInputSchema = z.object({
   locationId: z.string().min(1),
   libraryLocationId: z.string().min(1),
-  referenceImageUrl: z.string().url(),
+  referenceImageUrl: mediaUrlSchema,
   description: z.string().optional(),
 });
 

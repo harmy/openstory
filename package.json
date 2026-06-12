@@ -210,9 +210,6 @@
   },
   "cloudflare": {
     "bindings": {
-      "VITE_APP_URL": {
-        "description": "Public URL of this deployment, e.g. `https://<worker-name>.<your-subdomain>.workers.dev` ([find your subdomain](https://dash.cloudflare.com/?to=/:account/workers-and-pages)). Media URLs are served under this origin until you configure a custom R2 domain."
-      },
       "BETTER_AUTH_SECRET": {
         "description": "Signs session cookies. Generate a random string with `openssl rand -hex 32`."
       },

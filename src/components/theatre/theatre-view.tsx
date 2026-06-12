@@ -51,7 +51,11 @@ export const TheatreView: React.FC<TheatreViewProps> = ({ sequence }) => {
       return;
     }
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      // Stored export URLs are origin-relative (#894) — absolutize against the
+      // current origin so the copied link is usable when pasted elsewhere. The
+      // worker's public /r2 route serves it (redirecting to the CDN in prod).
+      const absoluteUrl = new URL(shareUrl, window.location.origin).href;
+      await navigator.clipboard.writeText(absoluteUrl);
       toast.success('Video URL copied');
       posthog.capture('video_url_copied', { sequence_id: sequence.id });
     } catch (err) {

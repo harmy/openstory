@@ -23,10 +23,33 @@ const TRANSFORM_DOMAIN =
 const TRANSFORM_ZONE = TRANSFORM_DOMAIN.split('.').slice(-2).join('.');
 
 /**
+ * Canonical app origin, when configured. Stored media URLs are
+ * origin-relative (`/r2/<key>`, see #894); to hand one to the Cloudflare
+ * transform endpoint we need an absolute source URL, and `VITE_APP_URL` is
+ * the only origin known identically on the server and the client (using the
+ * runtime origin would make SSR and hydration disagree). Deployments without
+ * it simply skip transforms and render a plain `<img>`.
+ */
+const APP_ORIGIN = (import.meta.env.VITE_APP_URL || '').replace(/\/$/, '');
+
+/**
+ * Absolute form of an image src: origin-relative srcs resolve against the
+ * configured app origin (or null without one); absolute srcs pass through.
+ * Protocol-relative `//host/...` is treated as not-ours (null → plain img):
+ * it resolves cross-origin in the browser, so it must never be joined onto
+ * the app origin or routed through the transform endpoint.
+ */
+function toAbsoluteSrc(src: string): string | null {
+  if (src.startsWith('//')) return null;
+  if (!src.startsWith('/')) return src;
+  return APP_ORIGIN ? `${APP_ORIGIN}${src}` : null;
+}
+
+/**
  * True when `src` is an image Cloudflare's edge is allowed to fetch and
- * transform — i.e. an absolute URL on the transform zone. Relative paths,
- * `data:`/`blob:` URIs, local dev/e2e hosts, and cross-origin sources
- * (fal.media) fall back to a plain `<img>`.
+ * transform — i.e. an absolute URL on the transform zone. `data:`/`blob:`
+ * URIs, local dev/e2e hosts, and cross-origin sources (fal.media) fall back
+ * to a plain `<img>`.
  */
 export function isTransformableUrl(src: string): boolean {
   let url: URL;
@@ -55,7 +78,9 @@ export function isTransformableUrl(src: string): boolean {
  * Use this instead of importing `Image` from `@unpic/react` directly.
  */
 export const AppImage: React.FC<ImageProps> = (props) => {
-  if (typeof props.src !== 'string' || !isTransformableUrl(props.src)) {
+  const absoluteSrc =
+    typeof props.src === 'string' ? toAbsoluteSrc(props.src) : null;
+  if (!absoluteSrc || !isTransformableUrl(absoluteSrc)) {
     return <Image {...props} />;
   }
 
@@ -67,6 +92,7 @@ export const AppImage: React.FC<ImageProps> = (props) => {
       // would override those classes.
       unstyled
       {...props}
+      src={absoluteSrc}
       cdn="cloudflare"
       options={{
         ...props.options,

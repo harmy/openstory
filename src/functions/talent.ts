@@ -1,3 +1,4 @@
+import { mediaUrlSchema } from '@/lib/schemas/media-url.schemas';
 import { deleteFile, getSignedUploadUrl } from '#storage';
 import { requireTeamAdminAccess } from '@/lib/auth/action-utils';
 import { generateId } from '@/lib/db/id';
@@ -310,7 +311,7 @@ export const finalizeTalentUploadFn = createServerFn({ method: 'POST' })
         talentId: ulidSchema,
         type: mediaTypeSchema,
         mediaId: ulidSchema,
-        publicUrl: z.string().url(),
+        publicUrl: mediaUrlSchema,
         path: z.string().min(1),
       })
     )

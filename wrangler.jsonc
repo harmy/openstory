@@ -66,10 +66,11 @@
       "migrations_dir": "drizzle/migrations-wrangler",
     },
   ],
-  // Local-only R2 (Miniflare state in .wrangler/state). Reads are served by
-  // the worker's /r2/$ route (src/routes/r2.$.ts) because getPublicUrl()
-  // falls back to `${VITE_APP_URL}/r2/<key>` when R2_PUBLIC_STORAGE_DOMAIN
-  // is unset — so local dev needs no remote R2 and no Cloudflare credentials.
+  // Local-only R2 (Miniflare state in .wrangler/state). Stored media URLs are
+  // origin-relative (`/r2/<key>`, #894) and the worker's /r2/$ route
+  // (src/routes/r2.$.ts) streams them from the binding when
+  // R2_PUBLIC_STORAGE_DOMAIN is unset — so local dev needs no remote R2 and
+  // no Cloudflare credentials.
   // To opt back into remote R2 (e.g. to repro a CDN-specific bug), set
   // `"remote": true` here plus R2_PUBLIC_STORAGE_DOMAIN in .env.local, and
   // revert when done.

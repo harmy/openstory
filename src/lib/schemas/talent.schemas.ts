@@ -1,3 +1,4 @@
+import { mediaUrlSchema } from '@/lib/schemas/media-url.schemas';
 import { characterBibleEntrySchema } from '@/lib/ai/scene-analysis.schema';
 import { talent, talentSheets } from '@/lib/db/schema';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-orm/zod';
@@ -20,7 +21,7 @@ export const createTalentSchema = createInsertSchema(talent, {
     updatedAt: true,
   })
   .extend({
-    referenceImageUrls: z.array(z.string().url()).optional(),
+    referenceImageUrls: z.array(mediaUrlSchema).optional(),
   });
 
 export const updateTalentSchema = createUpdateSchema(talent).omit({

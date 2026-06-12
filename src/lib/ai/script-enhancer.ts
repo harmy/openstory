@@ -1,3 +1,4 @@
+import { mediaUrlSchema } from '@/lib/schemas/media-url.schemas';
 import type { EnhanceStyle } from '@/lib/ai/enhance-inputs';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { z } from 'zod';
@@ -5,7 +6,7 @@ import { z } from 'zod';
 const enhanceElementSchema = z.object({
   token: z.string().min(1),
   description: z.string().nullable().optional(),
-  imageUrl: z.string().url(),
+  imageUrl: mediaUrlSchema,
 });
 
 type EnhanceElement = z.infer<typeof enhanceElementSchema>;

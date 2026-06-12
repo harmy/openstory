@@ -1,3 +1,4 @@
+import { mediaUrlSchema } from '@/lib/schemas/media-url.schemas';
 import { getSignedUploadUrl } from '#storage';
 import { describeElementImage } from '@/lib/ai/element-vision';
 import { generateId } from '@/lib/db/id';
@@ -126,7 +127,7 @@ export const analyzeDraftElementFn = createServerFn({ method: 'POST' })
   .inputValidator(
     zodValidator(
       z.object({
-        publicUrl: z.string().url(),
+        publicUrl: mediaUrlSchema,
         filename: z.string().min(1),
       })
     )
@@ -155,7 +156,7 @@ export const finalizeElementUploadFn = createServerFn({ method: 'POST' })
     zodValidator(
       z.object({
         sequenceId: ulidSchema,
-        publicUrl: z.string().url(),
+        publicUrl: mediaUrlSchema,
         path: z.string().min(1),
         filename: z.string().min(1),
       })
@@ -327,7 +328,7 @@ export const replaceSequenceElementFn = createServerFn({ method: 'POST' })
       z.object({
         sequenceId: ulidSchema,
         elementId: ulidSchema,
-        publicUrl: z.string().url(),
+        publicUrl: mediaUrlSchema,
         path: z.string().min(1),
         filename: z.string().min(1),
       })

@@ -4,6 +4,7 @@
  */
 
 import { getEnv } from '#env';
+import { mediaUrlSchema } from '@/lib/schemas/media-url.schemas';
 import {
   callLLM,
   callLLMStream,
@@ -283,7 +284,7 @@ const enhanceScriptInputSchema = z.object({
       z.object({
         token: z.string().min(1),
         description: z.string().nullable().optional(),
-        imageUrl: z.string().url(),
+        imageUrl: mediaUrlSchema,
       })
     )
     .optional(),

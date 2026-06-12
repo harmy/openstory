@@ -5,6 +5,7 @@
 
 import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import { index, integer, snakeCase, text } from 'drizzle-orm/sqlite-core';
+import { mediaUrlSchema } from '@/lib/schemas/media-url.schemas';
 import z from 'zod';
 import { generateId } from '../id';
 import { user } from './auth';
@@ -25,7 +26,7 @@ export type StyleConfig = z.infer<typeof StyleConfigSchema>;
 const StyleSampleVideoKindSchema = z.enum(['canonical', 'category', 'bespoke']);
 
 export const StyleSampleVideoSchema = z.object({
-  url: z.string().url(),
+  url: mediaUrlSchema,
   kind: StyleSampleVideoKindSchema,
   label: z.string(),
   durationSeconds: z.number().nonnegative(),

@@ -7,11 +7,6 @@
 # Local development does NOT use this file — `bun dev` auto-generates
 # .env.local. See .env.example for the full list of options.
 
-# Public URL of the deployment (required — media URLs are served under
-# <VITE_APP_URL>/r2/ until a custom R2 domain is configured). For a Workers
-# deploy this is https://<worker-name>.<account-subdomain>.workers.dev
-VITE_APP_URL=
-
 # Better Auth signing secret (required). Generate with: openssl rand -hex 32
 BETTER_AUTH_SECRET=
 
