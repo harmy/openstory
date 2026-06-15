@@ -1,8 +1,9 @@
 {
   // Preview server config for Claude Code (desktop + web).
   // `bun dev` bootstraps .env.local, applies local D1 migrations, seeds, and
-  // starts Vite (Workerd via the cf-plugin) on port 3000. The Stripe listener
-  // it also spawns is skipped automatically when STRIPE_SECRET_KEY is unset.
+  // starts Vite (Workerd via the cf-plugin) on port 3000. It is app-only — the
+  // Stripe listener lives in `dev:all` so it never disrupts the preview (the
+  // Stripe CLI isn't installed in cloud sandboxes).
   "version": "0.0.1",
   "configurations": [
     {

@@ -49,13 +49,14 @@ Lefthook automatically tags commits with the issue number extracted from the bra
 
 ### Daily Development
 
-`bun dev` runs everything: env bootstrap, DB migration + seeding, the dev server, and the Stripe listener (skipped when `STRIPE_SECRET_KEY` isn't set).
+`bun dev` runs env bootstrap, DB migration + seeding, and the dev server. For billing work, `bun dev:all` also starts the Stripe listener (skipped when `STRIPE_SECRET_KEY` isn't set).
 
 Key commands:
 
 | Command         | Description                                                     |
 | --------------- | --------------------------------------------------------------- |
-| `bun dev`       | Start all dev services                                          |
+| `bun dev`       | Start the app dev services                                      |
+| `bun dev:all`   | Same as `bun dev` plus the Stripe listener                      |
 | `bun run build` | Build for production (**not** `bun build` — that's the bundler) |
 | `bun typecheck` | Type-check with tsgo                                            |
 | `bun run test`  | Run unit tests (Vitest)                                         |

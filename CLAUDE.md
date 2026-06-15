@@ -6,7 +6,8 @@ AI-powered video sequence platform built with TanStack Start, deployed to Cloudf
 
 ```bash
 # Dev
-bun dev                            # All-in-one: env bootstrap, DB migrate + seed, Vite (Workerd via cf-plugin), Stripe listener
+bun dev                            # App: env bootstrap, DB migrate + seed, Vite (Workerd via cf-plugin)
+bun dev:all                        # bun dev + the Stripe listener (billing webhooks)
 bun storybook                      # Storybook on :6006
 bun db:studio:local                # Inspect local D1 tables (wrangler d1 execute)
 
@@ -45,7 +46,7 @@ bun run deploy                     # Deploy-button deploy command (migrate + dep
 bun deploy:production              # Workers Builds prod deploy command (migrate --env=production + deploy)
 ```
 
-`bun dev` runs vite dev (cf-plugin → Workerd via Miniflare, port 3000) alongside the Stripe listener (skipped without `STRIPE_SECRET_KEY`). Its first step (`scripts/ensure-env.ts`) creates `.env.local` with generated secrets if missing, so a fresh clone needs only `bun install && bun dev`. The app runs in **Workerd locally** — same runtime as production — so D1, R2 bindings, **Cloudflare Workflows**, env.\* access, and request lifecycle all match prod. No QStash/Docker needed: workflows execute in-process in Workerd.
+`bun dev` runs vite dev (cf-plugin → Workerd via Miniflare, port 3000). Its first step (`scripts/ensure-env.ts`) creates `.env.local` with generated secrets if missing, so a fresh clone needs only `bun install && bun dev`. Billing work uses `bun dev:all`, which additionally runs the Stripe listener (skipped without `STRIPE_SECRET_KEY`); it lives outside `bun dev` so a missing/uninstalled Stripe CLI never takes down the app server (e.g. in cloud preview sandboxes). The app runs in **Workerd locally** — same runtime as production — so D1, R2 bindings, **Cloudflare Workflows**, env.\* access, and request lifecycle all match prod. No QStash/Docker needed: workflows execute in-process in Workerd.
 
 **Bun-as-launcher pattern:** `bun script.ts` (no `--bun`) keeps Bun as the CLI launcher but executes under **Node**, while still autoloading `.env*`. Use `bun --env-file=<path>` to override the default `.env.local`. No `--bun` flag should appear in package.json scripts.
 
