@@ -1,0 +1,19 @@
+{
+  // Preview server config for Claude Code (desktop + web).
+  // `bun dev` bootstraps .env.local, applies local D1 migrations, seeds, and
+  // starts Vite (Workerd via the cf-plugin) on port 3000. It is app-only — the
+  // Stripe listener lives in `dev:all` so it never disrupts the preview (the
+  // Stripe CLI isn't installed in cloud sandboxes).
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "openstory",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["dev"],
+      // Vite is hardcoded to 3000 in vite.config.ts and does not honor $PORT,
+      // so the preview must use this exact port — keep autoPort off.
+      "port": 3000,
+      "autoPort": false
+    }
+  ]
+}
