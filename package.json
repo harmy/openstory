@@ -56,6 +56,7 @@
     "db:migrate:local": "bun scripts/migrate-local-d1.ts",
     "db:migrate:test": "bun scripts/migrate-local-d1.ts --test",
     "db:migrate:prd": "bun scripts/flatten-migrations.ts && wrangler d1 migrations apply DB --env=production --remote",
+    "explorer": "open http://localhost:3000/cdn-cgi/explorer/",
     "db:studio:local": "bun drizzle-kit studio --config=drizzle.config.local.ts",
     "db:studio:d1": "bun drizzle-kit studio --config=drizzle.config.d1.ts",
     "db:seed:local": "bun scripts/seed.ts --local",

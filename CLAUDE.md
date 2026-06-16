@@ -9,6 +9,7 @@ AI-powered video sequence platform built with TanStack Start, deployed to Cloudf
 bun dev                            # App: env bootstrap, DB migrate + seed, Vite (Workerd via cf-plugin)
 bun dev:all                        # bun dev + the Stripe listener (billing webhooks)
 bun storybook                      # Storybook on :6006
+bun explorer                       # Open the local CF Explorer (KV/R2/D1/DOs/Workflows)
 bun db:studio:local                # Inspect local D1 tables (wrangler d1 execute)
 
 # Quality
@@ -47,6 +48,8 @@ bun deploy:production              # Workers Builds prod deploy command (migrate
 ```
 
 `bun dev` runs vite dev (cf-plugin → Workerd via Miniflare, port 3000). Its first step (`scripts/ensure-env.ts`) creates `.env.local` with generated secrets if missing, so a fresh clone needs only `bun install && bun dev`. Billing work uses `bun dev:all`, which additionally runs the Stripe listener (skipped without `STRIPE_SECRET_KEY`); it lives outside `bun dev` so a missing/uninstalled Stripe CLI never takes down the app server (e.g. in cloud preview sandboxes). The app runs in **Workerd locally** — same runtime as production — so D1, R2 bindings, **Cloudflare Workflows**, env.\* access, and request lifecycle all match prod. No QStash/Docker needed: workflows execute in-process in Workerd.
+
+**Local Cloudflare services via the Explorer API.** While `bun dev` is running you have access to local Cloudflare services (KV, R2, D1, Durable Objects, and Workflows) for this app via the Explorer API at `http://localhost:3000/cdn-cgi/explorer/api`. Fetch that URL to get the OpenAPI schema and discover available operations, then use those endpoints to list, query, and manage local resources during development. `bun explorer` opens the Explorer UI in a browser.
 
 **Bun-as-launcher pattern:** `bun script.ts` (no `--bun`) keeps Bun as the CLI launcher but executes under **Node**, while still autoloading `.env*`. Use `bun --env-file=<path>` to override the default `.env.local`. No `--bun` flag should appear in package.json scripts.
 

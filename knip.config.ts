@@ -69,5 +69,6 @@ export default {
     // CLI tools / shell builtins invoked from package.json scripts.
     'stripe',
     'printf',
+    'open', // macOS URL/file opener (bun explorer)
   ],
 } satisfies KnipConfig;
