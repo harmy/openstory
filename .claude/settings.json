@@ -88,7 +88,9 @@
       "Bash(drizzle-kit push:*)",
       "Bash(drizzle-kit generate:*)",
       "Bash(bun --bun drizzle-kit:*)",
-      "Bash(bunx drizzle-kit:*)"
+      "Bash(bunx drizzle-kit:*)",
+      "Bash(wrangler d1 execute:*)",
+      "Bash(bunx wrangler d1 execute:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

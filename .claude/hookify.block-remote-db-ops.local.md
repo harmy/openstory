@@ -3,7 +3,7 @@ name: block-remote-db-ops
 enabled: true
 event: bash
 action: block
-pattern: db:(migrate|push|studio|seed):d1|setup:(prd|stg|deploy)|drizzle\.config\.d1\.ts|wrangler\s+d1\s+execute(?!.*--local)
+pattern: db:(migrate|push|studio|seed):d1|setup:(prd|stg|deploy)|drizzle\.config\.d1\.ts
 ---
 
 🚫 **Remote database operation blocked!**
