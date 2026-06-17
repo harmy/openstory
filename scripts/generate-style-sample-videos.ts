@@ -102,6 +102,8 @@ type Flags = {
   force: boolean;
   dryRun: boolean;
   submitOnly: boolean;
+  /** Images-only render: no image-to-video clips, no music. */
+  noMotion: boolean;
 };
 
 function parseFlags(argv: string[]): Flags {
@@ -120,6 +122,7 @@ function parseFlags(argv: string[]): Flags {
     force: argv.includes('--force'),
     dryRun: argv.includes('--dry-run'),
     submitOnly: argv.includes('--submit-only'),
+    noMotion: argv.includes('--no-motion'),
   };
 }
 
@@ -134,6 +137,8 @@ type RenderJob = {
   aspectRatio: AspectRatio;
   outputPath: string;
   force: boolean;
+  /** Images-only render when false — no motion clips, no music. */
+  motion: boolean;
   /** Canonical only: the platform enhances this per-category brief. */
   brief?: string;
   /** Bespoke only: curated beats, sent verbatim (no enhancement). */
@@ -172,6 +177,7 @@ function buildJobs(flags: Flags): RenderJob[] {
       videoModel,
       aspectRatio,
       force: flags.force,
+      motion: !flags.noMotion,
     };
 
     if (!flags.bespokeOnly) {
@@ -283,6 +289,7 @@ async function ensureSampleSequence(
       aspectRatio: job.aspectRatio,
       imageModel: job.imageModel,
       videoModel: job.videoModel,
+      motion: job.motion,
     }
   );
   console.log(
@@ -534,6 +541,14 @@ async function main() {
 
   if (jobs.length === 0) {
     console.error('No matching styles. Check --filter / flags.');
+    process.exit(1);
+  }
+
+  // Images-only renders produce no clips, so the poll/download/concat path
+  // (which requires a video URL per frame) can't complete — only submitting is
+  // meaningful. Review the stills in the app via each sequence id.
+  if (flags.noMotion && !flags.submitOnly && !flags.dryRun) {
+    console.error('--no-motion requires --submit-only (no clips to download).');
     process.exit(1);
   }
 

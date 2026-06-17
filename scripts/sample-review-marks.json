@@ -1,0 +1,169 @@
+[
+  { "set": "cur", "mark": "keep", "slug": "360-turntable" },
+  { "set": "cur", "mark": "keep", "slug": "action" },
+  { "set": "cur", "mark": "keep", "slug": "alcohol-pour" },
+  { "set": "cur", "mark": "keep", "slug": "animatic" },
+  { "set": "cur", "mark": "keep", "slug": "as-seen-on-phone" },
+  { "set": "cur", "mark": "keep", "slug": "automotive-cinematic" },
+  { "set": "cur", "mark": "keep", "slug": "automotive-showroom" },
+  { "set": "cur", "mark": "keep", "slug": "award-season" },
+  { "set": "cur", "mark": "keep", "slug": "b2b-keynote" },
+  { "set": "cur", "mark": "keep", "slug": "bathroom-counter-ugc" },
+  { "set": "cur", "mark": "keep", "slug": "beauty-macro" },
+  { "set": "cur", "mark": "keep", "slug": "bedtime-storybook" },
+  { "set": "cur", "mark": "keep", "slug": "black-white-previz" },
+  { "set": "cur", "mark": "keep", "slug": "car-talk" },
+  { "set": "cur", "mark": "keep", "slug": "chalkboard-doodle" },
+  { "set": "cur", "mark": "keep", "slug": "claymation" },
+  { "set": "cur", "mark": "keep", "slug": "corporate" },
+  { "set": "cur", "mark": "keep", "slug": "documentary" },
+  { "set": "cur", "mark": "keep", "slug": "felt-and-yarn" },
+  { "set": "cur", "mark": "keep", "slug": "fintech-explainer" },
+  { "set": "cur", "mark": "keep", "slug": "fitness-coaching" },
+  { "set": "cur", "mark": "keep", "slug": "flat-lay-overhead" },
+  { "set": "cur", "mark": "keep", "slug": "glossy-product-hero" },
+  { "set": "cur", "mark": "keep", "slug": "greyscale-layout" },
+  { "set": "cur", "mark": "keep", "slug": "hand-drawn-picture-book" },
+  { "set": "cur", "mark": "keep", "slug": "healthcare-patient-story" },
+  { "set": "cur", "mark": "keep", "slug": "horror-gothic" },
+  { "set": "cur", "mark": "keep", "slug": "in-context-use" },
+  { "set": "cur", "mark": "keep", "slug": "intentionally-unfinished" },
+  { "set": "cur", "mark": "keep", "slug": "jewellery-rotation" },
+  { "set": "cur", "mark": "keep", "slug": "kitchen-counter-ugc" },
+  { "set": "cur", "mark": "keep", "slug": "lifestyle-on-model" },
+  { "set": "cur", "mark": "keep", "slug": "lo-fi-anime" },
+  { "set": "cur", "mark": "keep", "slug": "lo-fi-retro" },
+  { "set": "cur", "mark": "keep", "slug": "low-detail-blockout" },
+  { "set": "cur", "mark": "keep", "slug": "marker-rough" },
+  { "set": "cur", "mark": "keep", "slug": "marketplace-listing" },
+  { "set": "cur", "mark": "keep", "slug": "mood-only-frames" },
+  { "set": "cur", "mark": "keep", "slug": "nonprofit-cause" },
+  { "set": "cur", "mark": "keep", "slug": "packaging-close-up" },
+  { "set": "cur", "mark": "keep", "slug": "paper-cutout" },
+  { "set": "cur", "mark": "keep", "slug": "pastel" },
+  { "set": "cur", "mark": "keep", "slug": "premium-lifestyle" },
+  { "set": "cur", "mark": "keep", "slug": "real-estate-listing" },
+  { "set": "cur", "mark": "keep", "slug": "restaurant-menu-hero" },
+  { "set": "cur", "mark": "keep", "slug": "ring-light-tutorial" },
+  { "set": "cur", "mark": "keep", "slug": "rough-storyboard" },
+  { "set": "cur", "mark": "keep", "slug": "saas-product-demo" },
+  { "set": "cur", "mark": "keep", "slug": "saturday-morning-cartoon" },
+  { "set": "cur", "mark": "keep", "slug": "sci-fi-futuristic" },
+  { "set": "cur", "mark": "keep", "slug": "sportswear-motion" },
+  { "set": "cur", "mark": "keep", "slug": "tech-keynote" },
+  { "set": "cur", "mark": "keep", "slug": "travel-destination" },
+  { "set": "cur", "mark": "keep", "slug": "warm-vlog" },
+  { "set": "cur", "mark": "keep", "slug": "watercolour-fable" },
+  { "set": "cur", "mark": "keep", "slug": "western-epic" },
+  { "set": "cur", "mark": "keep", "slug": "white-background-studio" },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "animated",
+    "redoneSeq": "01KV7VJFZX4HKGK19M0TXEY57Z"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "bedroom-confessional",
+    "redoneSeq": "01KV7VJZ0019B78R0AGZH7NWSG"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "edtech-explainer",
+    "redoneSeq": "01KV7VJFZGTBR2Y8FWZWM759D9"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "gym-selfie-cam",
+    "redoneSeq": "01KV7VKQBK20PGVV66QDCHM58G"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "hospitality-lifestyle",
+    "redoneSeq": "01KV7PHWV8CQX005G3J1QNRZFF"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "kitchen-tutorial",
+    "redoneSeq": "01KV7VHY04RFJ6VKH5FP6RBABD"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "luxury-still",
+    "redoneSeq": "01KV7VKGCKVC8W6KCWJ57WJ4B3"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "neo-noir-thriller",
+    "redoneSeq": "01KV7VK2SABC5Y6HM6Q30J8HXV"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "perfume-editorial",
+    "redoneSeq": "01KV7VJR24CWF253TJRF6BJGXM"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "podcast-clip",
+    "redoneSeq": "01KV7VJQ6KM9AH2KCSAGTSBAH8"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "product-ad",
+    "redoneSeq": "01KV7VK2ZNGBEFXXT8TNGYJMCR"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "reaction-cam",
+    "redoneSeq": "01KV7VJERPFJV47WFJ21MECZ07"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "rom-com",
+    "redoneSeq": "01KV7VJBCTG31N3R3WN7KJ13ZK"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "street-interview",
+    "redoneSeq": "01KV7VJPN98H7KK08GCTVWQ3V1"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "ugc-unboxing",
+    "redoneSeq": "01KV7VJD9X4K08ZDW5DH36YTJT"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "walking-and-talking",
+    "redoneSeq": "01KV7VJGNX2857J4AXR2YK5EHB"
+  },
+  {
+    "set": "cur",
+    "mark": "redo",
+    "slug": "watch-macro",
+    "redoneSeq": "01KV7VJTFFS8J4JSJR02E1N3XZ"
+  },
+  { "set": "v6", "mark": "keep", "slug": "food-beverage-hero" },
+  { "set": "v6", "mark": "keep", "slug": "pop-up-book" },
+  { "set": "v7", "mark": "keep", "slug": "fashion-editorial" },
+  { "set": "v7", "mark": "keep", "slug": "real-estate" },
+  { "set": "v7", "mark": "keep", "slug": "schematic-concept" },
+  { "set": "v7", "mark": "redo", "slug": "animated" },
+  { "set": "v7", "mark": "redo", "slug": "animatic" },
+  { "set": "v8", "mark": "keep", "slug": "returns-friendly-diagnostic" }
+]

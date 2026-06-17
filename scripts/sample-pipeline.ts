@@ -86,6 +86,12 @@ export type CreateSampleSequenceArgs = {
   aspectRatio: AspectRatio;
   imageModel: string;
   videoModel: string;
+  /**
+   * Generate motion (image-to-video) for each frame. Defaults to `true`.
+   * Set `false` for an images-only render — frames are produced and reviewable,
+   * but no clips, so {@link orderedFrameVideos}/concat are skipped by callers.
+   */
+  motion?: boolean;
 };
 
 function headers(config: SamplePipelineConfig): Record<string, string> {
@@ -141,11 +147,13 @@ export async function createSampleSequence(
       aspectRatio: args.aspectRatio,
       imageModels: [args.imageModel],
       videoModels: [args.videoModel],
-      motion: true,
+      motion: args.motion ?? true,
       // Sequence music is generated too — it's a sequence-level asset on the
       // account (mixed client-side in the app), NOT baked into the frame clips
       // this client downloads, so the local concat stays silent regardless.
-      music: true,
+      // Skipped alongside motion: an images-only render is for eyeballing
+      // stills, so there's no point billing music either.
+      music: args.motion ?? true,
     }),
   };
   let res = await fetchImpl(`${config.baseUrl}/api/v1/sequences`, init);

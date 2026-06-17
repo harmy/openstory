@@ -72,9 +72,14 @@ function discoverSets(): { dir: string; label: string }[] {
       // The live `sample-videos` set is always a column (the "cur" / newest),
       // even when it holds just a handful of freshly re-rendered fixes.
       if (d === 'sample-videos') return true;
-      // Skip near-empty versioned sets (e.g. v3/v4 partial test runs).
+      // Keep any set we deliberately evaluated (has judge files), even if it
+      // holds only a partial render — e.g. v8's 9 fully-judged clips.
       const inner = path.join(ROOT, d);
       try {
+        const judgeDir = path.join(inner, 'eval-judges');
+        const judged = existsSync(judgeDir) && readdirSync(judgeDir).length > 0;
+        if (judged) return true;
+        // Otherwise skip near-empty versioned sets (e.g. v3/v4 test runs).
         const count = readdirSync(inner).filter((slug) =>
           existsSync(path.join(inner, slug, 'canonical.mp4'))
         ).length;
@@ -105,6 +110,8 @@ type Cell = {
   judges: JudgeScore[];
   /** True when this set has its own multi-judge files → render the full block. */
   multi: boolean;
+  /** Link to this render's sequence in the main app, if recorded. */
+  seqUrl: string | null;
 };
 
 type StyleRow = {
@@ -112,12 +119,35 @@ type StyleRow = {
   name: string;
   category: string;
   brief: string;
+  /** Current style thumbnail on the public R2 assets bucket. */
+  preview: string;
   cells: Cell[];
 };
+
+// Same default the upload script uses; override via VITE_R2_PUBLIC_ASSETS_DOMAIN.
+const ASSETS_DOMAIN =
+  process.env.VITE_R2_PUBLIC_ASSETS_DOMAIN || 'assets.openstory.so';
+const previewUrlFor = (slug: string): string =>
+  `https://${ASSETS_DOMAIN}/styles/${slug}/thumbnail.webp`;
 
 function readScript(dir: string, slug: string): string | null {
   const f = path.join(ROOT, dir, slug, 'canonical.enhanced.txt');
   return existsSync(f) ? readFileSync(f, 'utf-8').trim() : null;
+}
+
+const seqMetaSchema = z.object({
+  id: z.string(),
+  baseUrl: z.string().url(),
+});
+
+/** Link to the rendered sequence on the main app (<baseUrl>/sequences/<id>). */
+function readSeqUrl(dir: string, slug: string): string | null {
+  const f = path.join(ROOT, dir, slug, 'canonical.sequence.json');
+  if (!existsSync(f)) return null;
+  const parsed = seqMetaSchema.safeParse(JSON.parse(readFileSync(f, 'utf-8')));
+  if (!parsed.success) return null;
+  const { id, baseUrl } = parsed.data;
+  return `${baseUrl.replace(/\/$/, '')}/sequences/${id}/script`;
 }
 
 function main(): void {
@@ -196,6 +226,7 @@ function main(): void {
         script: readScript(s.dir, slug),
         judges,
         multi: setHasMulti.get(s.label) ?? false,
+        seqUrl: readSeqUrl(s.dir, slug),
       };
     });
     return {
@@ -203,6 +234,7 @@ function main(): void {
       name: style.name,
       category: style.category ?? '—',
       brief: briefForStyle({ name: style.name, category: style.category }),
+      preview: previewUrlFor(slug),
       cells,
     };
   });
@@ -247,8 +279,10 @@ function render(data: unknown): string {
   button:hover { background: #333; }
   button.active { border-color: #6aa9ff; color: #6aa9ff; }
   main { padding: 12px; }
-  .style { border: 1px solid #2c2c2c; border-radius: 8px; margin-bottom: 14px; background: #181818; }
-  .style > .head { display: flex; gap: 12px; align-items: baseline; padding: 9px 12px; cursor: pointer; }
+  .style { display: flex; gap: 12px; border: 1px solid #2c2c2c; border-radius: 8px; margin-bottom: 14px; background: #181818; }
+  .style > .preview { flex: 0 0 240px; width: 240px; height: 240px; object-fit: cover; border-radius: 8px 0 0 8px; background: #000; align-self: flex-start; position: sticky; top: 56px; }
+  .style > .body { flex: 1 1 auto; min-width: 0; }
+  .style .head { display: flex; gap: 12px; align-items: center; padding: 9px 12px 9px 0; cursor: pointer; }
   .style .name { font-weight: 600; font-size: 14px; }
   .style .cat { color: #888; }
   .style .gradetag { margin-left: auto; color: #bbb; }
@@ -258,7 +292,12 @@ function render(data: unknown): string {
   .cell { flex: 0 0 300px; border: 2px solid #2c2c2c; border-radius: 7px; padding: 7px; background: #141414; }
   .cell.keep { border-color: #2e7d3a; background: #14210f; }
   .cell.redo { border-color: #a13030; background: #210f0f; }
-  .cell .setlabel { font-weight: 700; }
+  .cell.win { border-color: #d4af37; box-shadow: 0 0 0 1px #d4af37 inset; }
+  .cell .setlabel { font-weight: 700; display: flex; align-items: center; gap: 7px; }
+  .cell .winbadge { margin-right: -3px; }
+  .cell .avg { color: #d4af37; font-weight: 600; }
+  .cell .seqlink { margin-left: auto; font-weight: 500; color: #6aa9ff; text-decoration: none; }
+  .cell .seqlink:hover { text-decoration: underline; }
   .cell .scorerow { color: #bbb; margin: 2px 0 5px; }
   .cell video { width: 284px; height: 284px; object-fit: contain; background: #000; border-radius: 4px; display: block; cursor: pointer; }
   .cell .none { width: 284px; height: 284px; display: flex; align-items: center; justify-content: center; color: #555; background: #0d0d0d; border-radius: 4px; }
@@ -305,6 +344,28 @@ function curGrade(s) {
   return g && g.overall != null ? g.overall : (cur && cur.score != null ? cur.score : 99);
 }
 
+// A single comparable score for a cell: mean of its non-null judge overalls
+// (multi-judge sets), else the flash score. null when nothing was scored.
+function cellScore(c) {
+  const vals = (c.judges || []).map(j => j.overall).filter(v => v != null);
+  if (vals.length) return vals.reduce((a, b) => a + b, 0) / vals.length;
+  return c.score != null ? c.score : null;
+}
+
+// The set label(s) with the highest cellScore for a style — the version that won.
+function winningSets(s) {
+  let best = -Infinity;
+  for (const c of s.cells) {
+    if (!c.video) continue;
+    const v = cellScore(c);
+    if (v != null && v > best) best = v;
+  }
+  if (best === -Infinity) return new Set();
+  return new Set(
+    s.cells.filter(c => c.video && cellScore(c) === best).map(c => c.set)
+  );
+}
+
 function render() {
   const main = document.getElementById('main');
   let rows = DATA.styles.slice();
@@ -326,22 +387,26 @@ function render() {
       ? cur.judges.filter(j=>j.overall!=null).map(j => j.judge[0] + ':' + j.overall).join('  ')
       : (cur && cur.score != null ? 'f:' + cur.score : '');
     el.innerHTML =
-      '<div class="head"><span class="name">'+esc(s.name)+'</span>'
+      '<img class="preview" loading="lazy" src="'+encodeURI(s.preview)+'" alt="" onerror="this.style.visibility=&#39;hidden&#39;">'
+      + '<div class="body">'
+      + '<div class="head"><span class="name">'+esc(s.name)+'</span>'
       + '<span class="cat">'+esc(s.category)+'</span>'
       + '<span class="gradetag">'+gradeTxt+'</span></div>'
       + '<div class="brief">BRIEF: '+esc(s.brief)+'</div>'
-      + '<div class="cols"></div>';
+      + '<div class="cols"></div>'
+      + '</div>';
     el.querySelector('.head').onclick = () => el.querySelector('.brief').classList.toggle('show');
     const cols = el.querySelector('.cols');
-    s.cells.forEach((c, i) => cols.appendChild(cellEl(s, c, marks[i])));
+    const winners = winningSets(s);
+    s.cells.forEach((c, i) => cols.appendChild(cellEl(s, c, marks[i], winners.has(c.set))));
     main.appendChild(el);
   }
   updateCounts();
 }
 
-function cellEl(s, c, mark) {
+function cellEl(s, c, mark, isWin) {
   const d = document.createElement('div');
-  d.className = 'cell' + (mark ? ' ' + mark : '');
+  d.className = 'cell' + (mark ? ' ' + mark : '') + (isWin ? ' win' : '');
   const video = c.video
     ? '<video src="'+encodeURI(c.video)+'" controls preload="none" muted playsinline></video>'
     : '<div class="none">no video</div>';
@@ -351,8 +416,14 @@ function cellEl(s, c, mark) {
   const scoreBlock = c.multi
     ? '<div class="judges">'+c.judges.map(j=>jrow(j.judge, j.overall, j.note)).join('')+'</div>'
     : '<div class="judges">'+jrow('flash', c.score, c.note)+'</div>';
+  const avg = cellScore(c);
+  const seqLink = c.seqUrl
+    ? '<a class="seqlink" href="'+encodeURI(c.seqUrl)+'" target="_blank" rel="noopener" title="Open sequence in app">↗ app</a>'
+    : '';
   d.innerHTML =
-    '<div class="setlabel">'+esc(c.set)+'</div>'
+    '<div class="setlabel">'+(isWin?'<span class="winbadge">🏆</span> ':'')+esc(c.set)
+    + (avg!=null?' <span class="avg">avg '+avg.toFixed(1)+'</span>':'')
+    + seqLink+'</div>'
     + scoreBlock
     + video
     + '<div class="marks"><button class="keepb'+(mark==='keep'?' on':'')+'">✓ keep</button>'

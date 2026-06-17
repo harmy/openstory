@@ -110,6 +110,11 @@ export const CATEGORY_BRIEFS: Record<string, string> = {
  * (`enhance: 'off'`), so it needs no brief here.
  */
 export const STYLE_BRIEF_OVERRIDES: Record<string, string> = {
+  // Creative-direction override: perfume advertising trades on allure, so the
+  // generated "woman reaches into the haze" brief read too chaste. This pushes
+  // the canonical render toward the sultry, sensual register the genre expects.
+  'perfume-editorial':
+    'A sultry high-fashion perfume film in warm, low-key light. A strikingly beautiful woman in a liquid-gold silk slip reclines against deep velvet, bare shoulders and collarbone glowing; she draws a faceted amber bottle slowly along the line of her neck, lips parted, eyes half-closed, as backlit mist drifts past — then turns a slow, smouldering look straight to camera while a sheer curtain billows behind her.',
   // Single-shot review labels — the verbatim render lives in
   // CANONICAL_SCRIPT_OVERRIDES; kept matching so the review BRIEF isn't the
   // generated multi-cut text.
