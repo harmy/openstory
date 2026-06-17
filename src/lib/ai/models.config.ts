@@ -11,6 +11,11 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'proprietary' as const,
     qualityRank: 1,
     contextWindow: 1_048_576,
+    // Accepts image input — required so the motion-prompt pass can be
+    // conditioned on the rendered starting frame (#929). Conservative: only
+    // models known to accept image input are `true`; text-only models fall
+    // back to the text-only motion prompt path.
+    vision: true,
     description: 'Frontier xAI reasoning model with 1M context',
   },
   {
@@ -20,6 +25,7 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'proprietary' as const,
     qualityRank: 2,
     contextWindow: 1_000_000,
+    vision: true,
     description: 'State-of-the-art coding and structured output',
   },
   {
@@ -29,6 +35,7 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'proprietary' as const,
     qualityRank: 3,
     contextWindow: 2_000_000,
+    vision: true,
     description: 'Lowest hallucination rate, flagship agentic model',
   },
   {
@@ -38,6 +45,7 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'proprietary' as const,
     qualityRank: 4,
     contextWindow: 1_000_000,
+    vision: true,
     description: 'Frontier reasoning and coding',
   },
   {
@@ -47,6 +55,7 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'open-source' as const,
     qualityRank: 5,
     contextWindow: 262_144,
+    vision: true,
     description: 'Apache 2.0, 119B MoE, multimodal + agentic coding',
   },
   {
@@ -56,6 +65,8 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'open-source' as const,
     qualityRank: 6,
     contextWindow: 163_840,
+    // Text-only.
+    vision: false,
     description: 'MIT license, MMLU 94.2, GPT-5 class reasoning',
   },
   {
@@ -65,6 +76,9 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'open-source' as const,
     qualityRank: 7,
     contextWindow: 202_752,
+    // Treated as text-only for the vision-conditioned motion path (#929)
+    // until confirmed to accept image input.
+    vision: false,
     description: 'MIT license, 744B MoE, SWE-bench 77.8',
   },
   {
@@ -74,6 +88,7 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'proprietary' as const,
     qualityRank: 8,
     contextWindow: 1_048_576,
+    vision: true,
     description: 'Frontier multimodal reasoning with 1M context',
   },
   {
@@ -83,6 +98,7 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'proprietary' as const,
     qualityRank: 9,
     contextWindow: 1_050_000,
+    vision: true,
     description: 'Latest GPT-5 series with 1M context',
   },
   {
@@ -92,6 +108,7 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'proprietary' as const,
     qualityRank: 10,
     contextWindow: 1_048_576,
+    vision: true,
     description: 'Fast multimodal with 1M context',
   },
   {
@@ -101,6 +118,7 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'proprietary' as const,
     qualityRank: 11,
     contextWindow: 400_000,
+    vision: true,
     description: 'Fast reasoning with configurable effort modes',
   },
   {
@@ -110,6 +128,7 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'proprietary' as const,
     qualityRank: 12,
     contextWindow: 262_144,
+    vision: true,
     description: 'Fast multimodal with 4 reasoning effort modes',
   },
   {
@@ -119,6 +138,7 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'proprietary' as const,
     qualityRank: 13,
     contextWindow: 400_000,
+    vision: true,
     description: 'Fastest and most cost-efficient GPT-5.4 variant',
   },
 ] as const;
@@ -162,6 +182,17 @@ export const ANALYSIS_MODEL_IDS = getAllModelIds();
 export function getContextWindow(modelId: string): number {
   const model = SCRIPT_ANALYSIS_MODELS.find((m) => m.id === modelId);
   return model?.contextWindow ?? 128_000;
+}
+
+/**
+ * Whether an analysis model accepts image input. Used by the motion-prompt
+ * pass to decide whether to attach the rendered starting frame as a vision
+ * input (#929). Unknown models default to `false` so an image is never sent
+ * to a model that can't accept one — the motion prompt simply falls back to
+ * the text-only path.
+ */
+export function analysisModelSupportsVision(modelId: string): boolean {
+  return getAnalysisModelById(modelId)?.vision ?? false;
 }
 /**
  * Default model to use when none is specified

@@ -463,6 +463,13 @@ export interface MotionPromptWorkflowInput extends SequenceWorkflowContext {
   styleConfig: StyleConfig;
   analysisModelId: AnalysisModelId;
   frameMapping?: FrameMapping;
+  /**
+   * Rendered starting-frame image URL per scene (`sceneId` → primary
+   * `thumbnailUrl`), captured at trigger time so the per-scene motion-prompt
+   * children never look it up mid-run (#929). Absent / null entry → that scene
+   * had no rendered still and falls back to the text-only motion path.
+   */
+  startingFrameImageUrls?: Record<string, string | null>;
 }
 
 export interface MotionPromptSceneWorkflowInput extends SequenceWorkflowContext {
@@ -476,6 +483,14 @@ export interface MotionPromptSceneWorkflowInput extends SequenceWorkflowContext 
   styleConfig: StyleConfig;
   analysisModelId: AnalysisModelId;
   frameId?: string;
+  /**
+   * Rendered starting-frame image URL, captured at trigger time (#929). The
+   * motion prompt is conditioned on this exact still (vision input) and the
+   * URL is its staleness identity — it must be PASSED IN, never looked up
+   * inside the workflow, so a concurrent re-render can't swap it mid-run. Null
+   * / absent → no still available, text-only motion path.
+   */
+  startingFrameImageUrl?: string | null;
   /** See {@link VisualPromptSceneWorkflowInput.emitStreaming}. */
   emitStreaming?: boolean;
 }
@@ -877,6 +892,13 @@ export interface MotionMusicPromptsWorkflowInput extends SequenceWorkflowContext
    * downstream in `motion-batch`.
    */
   videoModels?: ImageToVideoModel[];
+  /**
+   * Rendered starting-frame image URL per scene (`sceneId` → primary
+   * `thumbnailUrl`), captured by analyze-script after frame images render and
+   * threaded down to the per-scene motion-prompt children (#929). See
+   * {@link MotionPromptWorkflowInput.startingFrameImageUrls}.
+   */
+  startingFrameImageUrls?: Record<string, string | null>;
 }
 
 export interface MotionMusicPromptsWorkflowResult {

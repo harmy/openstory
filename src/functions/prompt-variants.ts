@@ -214,6 +214,10 @@ export const regenerateFramePromptFn = createServerFn({ method: 'POST' })
       scopedDb,
       sequence,
       scene: frame.metadata,
+      // Motion prompts are conditioned on the rendered still (#929); feeding
+      // its URL here keeps this regen-bail check in lockstep with the
+      // generation-time stamp and the staleness verify. No-op for visual.
+      startingFrameImageUrl: frame.thumbnailUrl,
     });
 
     // Bail if the cached input hash already matches the live recompute —
@@ -259,6 +263,13 @@ export const regenerateFramePromptFn = createServerFn({ method: 'POST' })
       analysisModelId:
         getAnalysisModelById(ctx.analysisModel)?.id ?? DEFAULT_ANALYSIS_MODEL,
       emitStreaming: data.force === true,
+      // Snapshot the rendered still at trigger time (#929) — the motion
+      // workflow must NOT look it up mid-run, or a concurrent re-render could
+      // swap it. No-op for the visual path. `frame` was loaded at the top of
+      // this handler, so this is the image as it exists right now.
+      ...(data.promptType === 'motion' && {
+        startingFrameImageUrl: frame.thumbnailUrl,
+      }),
     };
 
     const urlPath =

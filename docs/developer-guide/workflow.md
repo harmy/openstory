@@ -49,14 +49,15 @@ flowchart TD
     LocationSub --> LocSheets
     LocationSub --> VisualPrompts
 
-    subgraph "Phase 4 — Images + Motion/Music Prompts (parallel) · ~2min"
+    subgraph "Phase 4 — Frame Images, then Motion/Music Prompts (sequential) · ~3min"
         ImageGen["<b>Frame Images</b> · Fal.ai ×N scenes parallel<br/>IN: fullPrompt, imageModels[], imageSize,<br/>characterRefs[], locationRefs[] per scene<br/>OUT: imageUrls[] + variant images"]
-        MotionMusicPrompts["<b>Motion + Music Prompts</b> · LLM parallel<br/>IN: scenesWithVisualPrompts[], aspectRatio,<br/>characterBible[], styleConfig, videoModel<br/>OUT: completeScenes[], musicPrompt, musicTags"]
+        MotionMusicPrompts["<b>Motion + Music Prompts</b> · LLM<br/>IN: scenesWithVisualPrompts[], styleConfig,<br/>rendered starting frame (thumbnailUrl as<br/>vision input, #929)<br/>OUT: completeScenes[], musicPrompt, musicTags"]
     end
 
     CharSheets -->|"charactersWithSheets"| ImageGen
     LocSheets -->|"locationsWithSheets"| ImageGen
     VisualPrompts -->|"scenesWithVisualPrompts"| ImageGen
+    ImageGen -->|"rendered stills (#929)"| MotionMusicPrompts
     VisualPrompts -->|"scenesWithVisualPrompts"| MotionMusicPrompts
 
     subgraph "Phase 5 — Motion + Music Generation (conditional) · ~1-5min"
@@ -81,21 +82,21 @@ flowchart TD
     style Trace fill:#1a472a,color:#fff
 ```
 
-> **Timing source:** Measured from local QStash logs for a 9-scene run. Phase 4 runs image generation and motion/music prompt generation in parallel, reducing wall-clock time significantly.
+> **Timing source:** Measured from local Cloudflare Workflows runs (Workerd via Miniflare) for a 9-scene run. As of #929, Phase 4 runs **sequentially** — frame images render first, then motion/music prompts — because the motion-prompt pass is conditioned on the actual rendered starting frame (passed to the LLM as a vision input). This trades the prior image∥prompt parallelism for image-grounded motion.
 
 ## Triggering Flow
 
 The pipeline starts from server handlers in `src/functions/sequences.ts`:
 
-1. **`createSequenceFn`** — Creates a new sequence record, then calls `triggerWorkflow('/storyboard', input)` via QStash
+1. **`createSequenceFn`** — Creates a new sequence record, then calls `triggerWorkflow('/storyboard', input)`
 2. **`updateSequenceFn`** — If script, style, aspect ratio, or analysis model changed, triggers the same workflow
 3. **`retryStoryboardFn`** — Retries a failed sequence (resets status to `processing`, re-triggers)
 
 All three use `triggerWorkflow()` from `src/lib/workflow/client.ts`, which:
 
-- Resolves the webhook URL (rewrites localhost to `host.docker.internal` for local dev)
-- Calls `WorkflowClient.trigger()` with the URL `{baseUrl}/api/workflows/storyboard`
-- Returns a `workflowRunId` for tracking
+- Resolves the **Cloudflare Workflows binding** for the trigger path via `TRIGGER_TO_BINDING` (`src/lib/workflow/trigger-bindings.ts`) — e.g. `/storyboard` → `STORYBOARD_WORKFLOW`
+- Calls `binding.create({ id, params: body })` to start a durable workflow instance in-process (Workerd locally, same runtime as production — no HTTP webhook, no QStash). `options.deduplicationId` becomes the instance id, making a trigger idempotent
+- Returns the workflow instance id, persisted as `workflowRunId` on the relevant DB row for tracking
 
 **Input shape (`StoryboardWorkflowInput`):**
 
@@ -116,14 +117,14 @@ All three use `triggerWorkflow()` from `src/lib/workflow/client.ts`, which:
 
 **File:** `src/lib/workflows/storyboard-workflow.ts`
 
-The storyboard workflow validates data, generates a poster image, then delegates to the analyze-script workflow.
+The storyboard workflow (`StoryboardWorkflow`, a `WorkflowEntrypoint` extending `OpenStoryWorkflowEntrypoint`) validates data, generates a poster image, then delegates to the analyze-script workflow. Each unit of work runs inside `step.do('name', …)` so the Workflows engine checkpoints and auto-retries it.
 
 ```mermaid
 flowchart TD
-    Start["POST /api/workflows/storyboard"] --> Verify["verify-clear-and-start-processing"]
-    Verify -->|"Validates auth<br/>Loads sequence + style<br/>Deletes existing frames<br/>Sets status = processing"| Poster["generate-poster"]
-    Poster -->|"Non-critical poster image<br/>for video player empty state"| Invoke["context.invoke('analyze-script')"]
-    Invoke -->|"retries: 3<br/>retryDelay: exponential"| ASW["analyzeScriptWorkflow"]
+    Start["STORYBOARD_WORKFLOW.create()"] --> Verify["step.do('verify-clear-and-start-processing')"]
+    Verify -->|"Validates auth<br/>Loads sequence + style<br/>Deletes existing frames<br/>Sets status = processing"| Poster["step.do('generate-poster')"]
+    Poster -->|"Non-critical poster image<br/>for video player empty state"| Invoke["spawnAndAwaitChild(ANALYZE_SCRIPT_WORKFLOW)"]
+    Invoke -->|"child gets its own<br/>step retry budget"| ASW["AnalyzeScriptWorkflow"]
     ASW --> Complete["mark-completed + emit generation.complete"]
 ```
 
@@ -142,7 +143,7 @@ flowchart TD
 - Non-critical — failures are logged and swallowed
 - Emits `generation.poster:ready` with the URL
 
-Then invokes `analyzeScriptWorkflow` with retries (3 attempts, exponential backoff).
+Then spawns the `AnalyzeScriptWorkflow` child via `spawnAndAwaitChild(ANALYZE_SCRIPT_WORKFLOW, …)` (`src/lib/workflow/await-child.ts`) and awaits its completion. The child runs as its own durable instance with its own per-step retry budget.
 
 After the analyze-script workflow completes, marks status as `completed` and emits `generation.complete`.
 
@@ -150,7 +151,7 @@ After the analyze-script workflow completes, marks status as `completed` and emi
 
 **File:** `src/lib/workflows/analyze-script-workflow.ts`
 
-This is the core orchestration workflow. It uses `context.invoke()` for sub-workflows and `Promise.all()` for parallelism.
+This is the core orchestration workflow. It runs durable units via `step.do()`, spawns child workflows via `spawnAndAwaitChild()`, and uses `Promise.all()` / `Promise.allSettled()` to fan child workflows out in parallel. It reads its input from `event.payload` and its instance id from `event.instanceId`.
 
 ### Phase 1: Scene Splitting (Streaming LLM)
 
@@ -167,7 +168,7 @@ Uses streaming LLM output to create frames progressively as scenes arrive, plus 
    - On title detection: updates the sequence title, emits `generation.updated`
    - **Preview images:** After each scene completes, triggers an image workflow (fire-and-forget via `triggerWorkflow`) using `PREVIEW_IMAGE_MODEL` for instant visual feedback
    - On `scene:updated` events: upserts frame with partial metadata as scenes stream in
-3. **`reconcile-frames`** — Bulk upserts all frames via `bulkInsertFrames()` to handle QStash replay safety (idempotent on `sequenceId + orderIndex` conflict). Also emits `frame:created` for any frames missed during streaming.
+3. **`reconcile-frames`** — Bulk upserts all frames via `bulkInsertFrames()` for workflow replay safety — a Cloudflare Workflows body re-executes from the top on every step callback, so this is idempotent on `sequenceId + orderIndex` conflict. Also emits `frame:created` for any frames missed during streaming.
 4. **`deduct-llm-credits-scene-splitting`** — Credit deduction
 
 - **Prompt:** `phase/scene-splitting-chat`
@@ -177,7 +178,7 @@ Uses streaming LLM output to create frames progressively as scenes arrive, plus 
 
 ### Phase 2: Casting Characters & Locations (Parallel Sub-Workflows)
 
-After scene splitting, two sub-workflows run **in parallel** via `Promise.all([context.invoke(...)])`:
+After scene splitting, two child workflows run **in parallel** via `Promise.all` over `spawnAndAwaitChild(...)`:
 
 ```mermaid
 flowchart LR
@@ -189,7 +190,7 @@ flowchart LR
 
 **Talent Matching Workflow** (`src/lib/workflows/talent-matching-workflow.ts`):
 
-1. **Character extraction** — `durableLLMCall('character-extraction')` with prompt `phase/character-extraction-chat`
+1. **Character extraction** — `durableLLMCallCf('character-extraction')` (`src/lib/workflows/llm-call-helper.ts`, wraps the LLM call in a `step.do`) with prompt `phase/character-extraction-chat`
    - Input: `{ scenes }` (JSON-serialized)
    - Output: `{ characterBible }` — array of characters with physical descriptions, clothing, consistency tags
 2. **Talent matching** (skipped if no `suggestedTalentIds`):
@@ -200,7 +201,7 @@ flowchart LR
 
 **Location Matching Workflow** (`src/lib/workflows/location-matching-workflow.ts`):
 
-1. **Location extraction** — `durableLLMCall('location-extraction')` with prompt `phase/location-extraction-chat`
+1. **Location extraction** — `durableLLMCallCf('location-extraction')` with prompt `phase/location-extraction-chat`
    - Input: `{ scenes }` (JSON-serialized)
    - Output: `{ locationBible }` — array of locations with descriptions, architecture, color palettes
 2. **Location matching** (skipped if no `suggestedLocationIds`):
@@ -211,7 +212,7 @@ flowchart LR
 
 ### Phase 3: References & Prompts (Parallel Sub-Workflows)
 
-Three sub-workflows invoked in parallel via `Promise.all([context.invoke(...)])`:
+Three child workflows spawned in parallel via `Promise.all` over `spawnAndAwaitChild(...)`:
 
 ```mermaid
 flowchart LR
@@ -239,36 +240,35 @@ flowchart LR
 
 **Visual Prompt Workflow** (`src/lib/workflows/visual-prompt-workflow.ts`):
 
-- Delegates to `visualPromptSceneWorkflow` per scene (parallel via `context.invoke`)
+- Delegates to `visualPromptSceneWorkflow` per scene (parallel via `spawnAndAwaitChild`)
 - Each scene gets an LLM call that generates a `fullPrompt`, `negativePrompt`, and `continuity` data (character tags, environment tag, color palette, lighting, style tag)
 - Merges results back into scene objects
 
-### Phase 4: Images + Motion/Music Prompts (Parallel)
+### Phase 4: Frame Images, then Motion/Music Prompts (Sequential)
 
-This is the key parallelization — image generation and motion/music prompt generation run **simultaneously** since they have no dependency on each other.
+As of #929, frame images render **before** motion/music prompts (the two ran in parallel previously). The motion-prompt pass is conditioned on the actual rendered starting frame — the per-scene motion workflow reads the frame's `thumbnailUrl` and passes it to the LLM as a vision input — so the still must exist first. The motion prompt then describes movement that continues _that exact pose and composition_, instead of guessing a plausible start from scene text alone. Music has no image dependency but rides along with motion in the same child workflow, so it inherits the wait (an accepted latency cost on the non-critical music artifact).
 
 ```mermaid
 flowchart LR
     P4["Visual prompts<br/>complete"] --> FI["frameImagesWorkflow<br/>Generate images + variants"]
-    P4 --> MMP["motionMusicPromptsWorkflow<br/>Motion prompts + music design"]
-    FI --> Join["Both complete"]
-    MMP --> Join
+    FI -->|"rendered stills"| MMP["motionMusicPromptsWorkflow<br/>Motion prompts + music design"]
+    MMP --> Join["Phase complete"]
 ```
 
 **Frame Images Workflow** (`src/lib/workflows/frame-images-workflow.ts`):
 
 1. Builds per-scene character and location reference maps
-2. For each scene, generates images with each selected model in parallel:
-   - Invokes `generateImageWorkflow` per scene per model (retries: 3, exponential backoff)
-   - After each image completes, invokes `generateVariantWorkflow` for shot grid variants
-3. Returns `{ imageUrls }` — primary model's URL per scene
+2. For each scene, generates images with each selected model in parallel (one `spawnAndAwaitChild` per scene × model, gathered with `Promise.allSettled`):
+   - Spawns the `ImageWorkflow` child (binding `IMAGE_WORKFLOW`) per scene per model
+   - After each image completes, fires the shot-grid variant generation via `triggerWorkflow('/variant-image', …)` (fire-and-forget; its progress is tracked on `frame.variantImageStatus`)
+3. Returns `{ imageUrls }` — primary model's URL per scene. The primary still is persisted to `frame.thumbnailUrl`, which the motion-prompt pass reads next.
 
 **Motion + Music Prompts Workflow** (`src/lib/workflows/motion-music-prompts-workflow.ts`):
 
 1. **Snap durations** — Snaps scene durations to video model capabilities upfront so both motion prompts and music design see identical values
-2. **Parallel generation** — Motion prompts and music design run simultaneously:
-   - `motionPromptWorkflow` — Per-scene LLM calls for camera movement, motion style, timing
-   - `generateMusicPromptWorkflow` — Single LLM call classifying per-scene music requirements + generating unified prompt with tags
+2. **Parallel generation** — Motion prompts and music design run simultaneously (parallel _within_ this child; the child itself runs after frame images):
+   - `MotionPromptWorkflow` — fans out one `MotionPromptSceneWorkflow` child per scene. Each per-scene call (`motion-prompt-scene-workflow.ts`) loads the rendered starting frame and, when the chosen analysis model accepts image input, attaches it to the LLM as a vision input (#929). The image's input-hash is folded into `motionPromptInputHash`, so re-rendering the still re-stales the motion prompt. When no image exists (render failed) or the model is text-only, it falls back to the text-only path.
+   - `MusicPromptWorkflow` — Single LLM call classifying per-scene music requirements + generating unified prompt with tags
 3. **Merge** — Combines motion prompts and music design into `completeScenes[]`
 4. **Returns:** `{ completeScenes, musicPrompt, musicTags }`
 
@@ -278,7 +278,7 @@ flowchart LR
 
 Only runs if `autoGenerateMotion` is enabled, a video model is set, and images were generated. A single orchestrator handles:
 
-1. **Parallel generation** — All frame motion workflows + optional music workflow invoked simultaneously
+1. **Parallel generation** — All frame motion child workflows + the optional music workflow spawned simultaneously (`spawnAndAwaitChild` under `Promise.all`)
 2. **Collect video URLs** — Reads from DB (authoritative ordering by `orderIndex`)
 3. **Merge video** — Concatenates all frame videos into one sequence video
 4. **Merge audio+video** — If music was generated, muxes audio onto the merged video
@@ -370,76 +370,82 @@ Events emitted via Upstash Realtime on a per-sequence channel (`getGenerationCha
 
 ## Error Handling
 
-### Failure Function
+### Failure Handling (`onFailure`)
 
-The analyze-script workflow registers a `failureFunction` that:
+Every workflow extends `OpenStoryWorkflowEntrypoint` (`src/lib/workflow/base-workflow.ts`), which wraps the workflow body: when `runImpl` throws, the base class builds a `ScopedDb` from the payload and invokes the subclass-supplied `onFailure({ event, error, scopedDb })`. The analyze-script `onFailure`:
 
-1. Sanitizes the error via `sanitizeFailResponse()` — extracts inner errors from QStash wrapper patterns, maps known Cloudflare error codes (e.g., `1102` → "Worker exceeded memory limit"), and truncates messages over 500 characters
+1. Sanitizes the error via `sanitizeFailResponse()` — extracts inner errors from nested failure wrappers, maps known Cloudflare error codes (e.g., `1102` → "Worker exceeded memory limit"), and truncates messages over 500 characters
 2. Updates sequence status to `'failed'` with the error message
 3. Emits `generation.failed` with the sanitized error
 
-Sub-workflows (image, motion, music, character bible, location bible, talent matching, location matching, frame-images, motion-batch) each have their own failure functions that update the relevant record's status to `'failed'`.
+> The base class deliberately skips `onFailure` when the engine aborts mid-run (a transient state the instance resumes from), so it doesn't mark user-facing rows failed for a retry that will succeed.
+
+Child workflows (image, motion, music, character bible, location bible, talent matching, location matching, frame-images, motion-batch) each implement their own `onFailure` that updates the relevant record's status to `'failed'`.
 
 ### Retry Strategy
 
-| Level                              | Retries | Backoff                            |
-| ---------------------------------- | ------- | ---------------------------------- |
-| Storyboard invoking analyze-script | 3       | Exponential (`2^retried * 1000ms`) |
-| Image generation per scene         | 3       | Exponential                        |
-| Variant generation per scene       | 3       | Exponential                        |
-| Motion generation per frame        | 3       | Exponential                        |
-| Music generation                   | 3       | Exponential                        |
-| Individual `context.run()` steps   | —       | Managed by QStash (automatic)      |
+Under Cloudflare Workflows, retries are configured per `step.do()` (and on the workflow class), not on the trigger — the legacy `retries`/`retryDelay` options on `triggerWorkflow()` are accepted for back-compat but are **no-ops**.
 
-### QStash Durability
+| Level                                  | Retries         | Backoff                                                   |
+| -------------------------------------- | --------------- | --------------------------------------------------------- |
+| Individual `step.do()` steps           | engine default  | Managed by the Workflows engine                           |
+| LLM-call steps (`durableLLMCallCf`)    | via `step.do`   | Engine-managed                                            |
+| Child workflows (`spawnAndAwaitChild`) | own step budget | Awaited with a `timeout`; the child retries its own steps |
 
-- Each `context.run()` step is checkpointed — if the server restarts mid-workflow, execution resumes from the last completed step
-- `context.invoke()` creates a child workflow that runs independently with its own retries
-- No application-level concurrency gating — fal queues submissions server-side (`IN_QUEUE` doesn't count toward the cap, jobs are never rejected), and OpenRouter handles its own rate limits. Past attempts at gating via QStash `flowControl` produced ghost slot leaks on cancel and PR-preview cross-contamination; see #725.
+Per-scene fan-out (image, variant, motion) uses `Promise.allSettled` over `spawnAndAwaitChild`, so one scene's failure or timeout doesn't kill the rest of the batch — failures are collected and surfaced as a single error.
+
+### Cloudflare Workflows Durability
+
+- Each `step.do()` step is checkpointed by the Workflows engine. The workflow body **replays from the top** on every step callback; already-completed steps return their persisted result instead of re-executing, so on failure or restart execution effectively resumes from the last completed step. (This is why steps must be idempotent and why large blobs shouldn't be returned across a step boundary.)
+- `spawnAndAwaitChild()` starts a child workflow instance (its own `binding.create()`) and awaits its result via a wake event (`waitForEvent`). The child is durable independently of the parent.
+- No application-level concurrency gating — fal queues submissions server-side (`IN_QUEUE` doesn't count toward the cap, jobs are never rejected), and OpenRouter handles its own rate limits. (A past QStash-era attempt at gating via `flowControl` produced ghost slot leaks on cancel and PR-preview cross-contamination; see #725. Cloudflare Workflows likewise has no app-level gate.)
 
 ## Key Files Reference
 
-| File                                                 | Purpose                                                   |
-| ---------------------------------------------------- | --------------------------------------------------------- |
-| `src/functions/sequences.ts`                         | Server functions that trigger the pipeline                |
-| `src/lib/workflow/client.ts`                         | `triggerWorkflow()` — QStash integration                  |
-| `src/routes/api/workflows/$.ts`                      | Workflow route registration (`serveMany`)                 |
-| `src/lib/workflows/storyboard-workflow.ts`           | Wrapper: verify, clear, poster, invoke analyze-script     |
-| `src/lib/workflows/analyze-script-workflow.ts`       | Core orchestration (phases 1-5)                           |
-| `src/lib/workflows/scene-split-workflow.ts`          | Phase 1: streaming scene split + preview images           |
-| `src/lib/ai/streaming-scene-parser.ts`               | Incremental JSON parser for streaming scene creation      |
-| `src/lib/workflow/sanitize-fail-response.ts`         | Error message extraction from QStash failures             |
-| `src/lib/db/helpers/frames.ts`                       | `upsertFrame()` / `bulkInsertFrames()` idempotent helpers |
-| **Extraction + Matching**                            |                                                           |
-| `src/lib/workflows/talent-matching-workflow.ts`      | Character extraction + talent matching sub-workflow       |
-| `src/lib/workflows/location-matching-workflow.ts`    | Location extraction + location matching sub-workflow      |
-| **Reference Generation**                             |                                                           |
-| `src/lib/workflows/character-bible-workflow.ts`      | Character sheet generation (parallel per character)       |
-| `src/lib/workflows/character-sheet-workflow.ts`      | Single character sheet image generation                   |
-| `src/lib/workflows/location-bible-workflow.ts`       | Location sheet generation (parallel per location)         |
-| `src/lib/workflows/location-sheet-workflow.ts`       | Single location reference image generation                |
-| **Prompt Generation**                                |                                                           |
-| `src/lib/workflows/visual-prompt-workflow.ts`        | Visual prompt sub-workflow (parallel per scene)           |
-| `src/lib/workflows/visual-prompt-scene-workflow.ts`  | Per-scene visual prompt LLM call                          |
-| `src/lib/workflows/motion-prompt-workflow.ts`        | Motion prompt sub-workflow (parallel per scene)           |
-| `src/lib/workflows/motion-prompt-scene-workflow.ts`  | Per-scene motion prompt LLM call                          |
-| `src/lib/workflows/motion-music-prompts-workflow.ts` | Orchestrates motion + music prompts in parallel           |
-| `src/lib/workflows/music-prompt-workflow.ts`         | Music design LLM call                                     |
-| **Image Generation**                                 |                                                           |
-| `src/lib/workflows/frame-images-workflow.ts`         | Orchestrates image + variant gen for all scenes           |
-| `src/lib/workflows/image-workflow.ts`                | Single image generation (Fal.ai)                          |
-| `src/lib/workflows/variant-workflow.ts`              | Shot grid variant generation                              |
-| **Motion + Music Generation**                        |                                                           |
-| `src/lib/workflows/motion-batch-workflow.ts`         | Orchestrates motion + music + merge                       |
-| `src/lib/workflows/motion-workflow.ts`               | Single motion/video generation (Fal.ai)                   |
-| `src/lib/workflows/music-workflow.ts`                | Music generation (Fal.ai)                                 |
-| `src/lib/workflows/merge-video-workflow.ts`          | Merge frame videos into sequence video                    |
-| `src/lib/workflows/merge-audio-video-workflow.ts`    | Merge music audio with video                              |
-| **Recasting + Regeneration**                         |                                                           |
-| `src/lib/workflows/recast-character-workflow.ts`     | Recast a character and regenerate affected frames         |
-| `src/lib/workflows/recast-location-workflow.ts`      | Recast a location and regenerate affected frames          |
-| `src/lib/workflows/regenerate-frames-workflow.ts`    | Regenerate specific frames with new prompts               |
-| **Schemas + Events**                                 |                                                           |
-| `src/lib/realtime/index.ts`                          | Real-time event schema and channel helpers                |
-| `src/lib/ai/scene-analysis.schema.ts`                | `Scene` type definition                                   |
-| `src/lib/ai/response-schemas.ts`                     | `musicDesignResultSchema` and other LLM response schemas  |
+| File                                                 | Purpose                                                             |
+| ---------------------------------------------------- | ------------------------------------------------------------------- |
+| `src/functions/sequences.ts`                         | Server functions that trigger the pipeline                          |
+| `src/lib/workflow/client.ts`                         | `triggerWorkflow()` — resolves binding + `binding.create()`         |
+| `src/lib/workflow/trigger-bindings.ts`               | `TRIGGER_TO_BINDING` — maps trigger path → Workflows binding        |
+| `src/lib/workflow/base-workflow.ts`                  | `OpenStoryWorkflowEntrypoint` — base class, `onFailure`, `ScopedDb` |
+| `src/lib/workflow/await-child.ts`                    | `spawnAndAwaitChild()` — parent→child fan-out + await               |
+| `src/lib/workflows/llm-call-helper.ts`               | `durableLLMCallCf` / `durableStreamingLLMCallCf`                    |
+| `src/lib/workflows/storyboard-workflow.ts`           | Wrapper: verify, clear, poster, spawn analyze-script                |
+| `src/lib/workflows/analyze-script-workflow.ts`       | Core orchestration (phases 1-5)                                     |
+| `src/lib/workflows/scene-split-workflow.ts`          | Phase 1: streaming scene split + preview images                     |
+| `src/lib/ai/streaming-scene-parser.ts`               | Incremental JSON parser for streaming scene creation                |
+| `src/lib/workflow/sanitize-fail-response.ts`         | Error message extraction + Cloudflare error-code mapping            |
+| `src/lib/db/helpers/frames.ts`                       | `upsertFrame()` / `bulkInsertFrames()` idempotent helpers           |
+| **Extraction + Matching**                            |                                                                     |
+| `src/lib/workflows/talent-matching-workflow.ts`      | Character extraction + talent matching sub-workflow                 |
+| `src/lib/workflows/location-matching-workflow.ts`    | Location extraction + location matching sub-workflow                |
+| **Reference Generation**                             |                                                                     |
+| `src/lib/workflows/character-bible-workflow.ts`      | Character sheet generation (parallel per character)                 |
+| `src/lib/workflows/character-sheet-workflow.ts`      | Single character sheet image generation                             |
+| `src/lib/workflows/location-bible-workflow.ts`       | Location sheet generation (parallel per location)                   |
+| `src/lib/workflows/location-sheet-workflow.ts`       | Single location reference image generation                          |
+| **Prompt Generation**                                |                                                                     |
+| `src/lib/workflows/visual-prompt-workflow.ts`        | Visual prompt sub-workflow (parallel per scene)                     |
+| `src/lib/workflows/visual-prompt-scene-workflow.ts`  | Per-scene visual prompt LLM call                                    |
+| `src/lib/workflows/motion-prompt-workflow.ts`        | Motion prompt sub-workflow (parallel per scene)                     |
+| `src/lib/workflows/motion-prompt-scene-workflow.ts`  | Per-scene motion prompt LLM call                                    |
+| `src/lib/workflows/motion-music-prompts-workflow.ts` | Orchestrates motion + music prompts in parallel                     |
+| `src/lib/workflows/music-prompt-workflow.ts`         | Music design LLM call                                               |
+| **Image Generation**                                 |                                                                     |
+| `src/lib/workflows/frame-images-workflow.ts`         | Orchestrates image + variant gen for all scenes                     |
+| `src/lib/workflows/image-workflow.ts`                | Single image generation (Fal.ai)                                    |
+| `src/lib/workflows/variant-workflow.ts`              | Shot grid variant generation                                        |
+| **Motion + Music Generation**                        |                                                                     |
+| `src/lib/workflows/motion-batch-workflow.ts`         | Orchestrates motion + music + merge                                 |
+| `src/lib/workflows/motion-workflow.ts`               | Single motion/video generation (Fal.ai)                             |
+| `src/lib/workflows/music-workflow.ts`                | Music generation (Fal.ai)                                           |
+| `src/lib/workflows/merge-video-workflow.ts`          | Merge frame videos into sequence video                              |
+| `src/lib/workflows/merge-audio-video-workflow.ts`    | Merge music audio with video                                        |
+| **Recasting + Regeneration**                         |                                                                     |
+| `src/lib/workflows/recast-character-workflow.ts`     | Recast a character and regenerate affected frames                   |
+| `src/lib/workflows/recast-location-workflow.ts`      | Recast a location and regenerate affected frames                    |
+| `src/lib/workflows/regenerate-frames-workflow.ts`    | Regenerate specific frames with new prompts                         |
+| **Schemas + Events**                                 |                                                                     |
+| `src/lib/realtime/index.ts`                          | Real-time event schema and channel helpers                          |
+| `src/lib/ai/scene-analysis.schema.ts`                | `Scene` type definition                                             |
+| `src/lib/ai/response-schemas.ts`                     | `musicDesignResultSchema` and other LLM response schemas            |

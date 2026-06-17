@@ -64,6 +64,7 @@ export class MotionPromptWorkflow extends OpenStoryWorkflowEntrypoint<MotionProm
       analysisModelId,
       frameMapping,
       sequenceId,
+      startingFrameImageUrls,
     } = input;
 
     // ============================================================
@@ -103,6 +104,10 @@ export class MotionPromptWorkflow extends OpenStoryWorkflowEntrypoint<MotionProm
           sequenceId,
           frameId: frameMapping?.find((f) => f.sceneId === scene.sceneId)
             ?.frameId,
+          // Pass the rendered still per scene, snapshotted upstream (#929) —
+          // never looked up inside the child workflow.
+          startingFrameImageUrl:
+            startingFrameImageUrls?.[scene.sceneId] ?? null,
         };
 
         return spawnAndAwaitChild<

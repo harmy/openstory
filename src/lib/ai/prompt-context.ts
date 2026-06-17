@@ -30,6 +30,13 @@ export type FramePromptContext = {
   elementBible: ElementBibleEntry[];
   aspectRatio: string;
   analysisModel: string;
+  /**
+   * URL of the rendered starting-frame image (`frames.thumbnailUrl`), when
+   * known. Only the motion-prompt hash consumes it (#929); pass it at sites
+   * that stamp or verify `motionPromptInputHash` so a re-rendered image
+   * re-stales the motion prompt. Left undefined for visual-only sites.
+   */
+  startingFrameImageUrl?: string | null;
 };
 
 export type FramePromptContextSequence = {
@@ -48,8 +55,19 @@ export async function loadFramePromptContext(args: {
   scene: Scene;
   /** Override analysis model — used when a stored variant pins one. */
   analysisModelOverride?: string | null;
+  /**
+   * URL of the frame's rendered starting image, when this context will feed a
+   * motion-prompt hash (#929). Callers pass `frame.thumbnailUrl`.
+   */
+  startingFrameImageUrl?: string | null;
 }): Promise<FramePromptContext> {
-  const { scopedDb, sequence, scene, analysisModelOverride } = args;
+  const {
+    scopedDb,
+    sequence,
+    scene,
+    analysisModelOverride,
+    startingFrameImageUrl,
+  } = args;
 
   if (!sequence.styleId) {
     throw new Error(
@@ -81,6 +99,7 @@ export async function loadFramePromptContext(args: {
     elementBible: sequenceElementsToBible(elements),
     aspectRatio: sequence.aspectRatio,
     analysisModel,
+    startingFrameImageUrl,
   };
 }
 
@@ -103,6 +122,7 @@ export async function loadNarrowFramePromptContext(args: {
   sequence: FramePromptContextSequence;
   scene: Scene;
   analysisModelOverride?: string | null;
+  startingFrameImageUrl?: string | null;
 }): Promise<FramePromptContext> {
   const full = await loadFramePromptContext(args);
   return narrowFramePromptContext(full);

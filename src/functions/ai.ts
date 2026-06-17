@@ -393,12 +393,12 @@ export async function* streamScriptEnhancement(
   for await (const chunk of callLLMStream({
     model,
     messages,
-    // Must hold reasoning tokens (PROMPT_REASONING, medium) PLUS a full
-    // multi-scene script (up to ~3500 words / 180s). At 4000 the reasoning ate
-    // the budget and the visible script truncated mid-first-scene, so 30s+
-    // targets rendered as a single scene (#915). Sized like the other
-    // reasoning calls (scene-split/visual-prompt) which scale to the model.
-    max_tokens: 16000,
+    // No max_tokens: every model routes through OpenRouter, which falls back
+    // to the model's own max output when the field is omitted — so long
+    // scripts use the full available output budget instead of an artificial
+    // cap. Reasoning (PROMPT_REASONING, medium) shares the completion budget,
+    // but the per-model default is far larger than any realistic script, so
+    // the #915 truncation (seen when this was a flat 4000) can't recur.
     temperature: 0.7,
     ...(useWebSearch && { webSearch: true }),
     reasoning: PROMPT_REASONING,

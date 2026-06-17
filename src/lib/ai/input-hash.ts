@@ -318,6 +318,16 @@ export type PromptSceneContextHashInput = {
   aspectRatio: string;
   /** Analysis model id (e.g. `anthropic/claude-haiku-4.5`). */
   analysisModel: string;
+  /**
+   * URL of the rendered starting-frame image this prompt was conditioned on
+   * (`frames.thumbnailUrl`), or null when no image has been rendered yet. Only
+   * the MOTION prompt consumes this — motion is now generated with the actual
+   * still as a vision input (#929). The stored URL embeds a fresh id per
+   * render, so re-rendering the still changes it and re-stales the motion
+   * prompt. The visual prompt ignores it (the visual prompt produces the
+   * image — it can't depend on it).
+   */
+  startingFrameImageUrl?: string | null;
 };
 
 /**
@@ -455,6 +465,9 @@ export function computeMotionPromptInputHash(
       : null,
     aspectRatio: trim(input.aspectRatio),
     analysisModel: trim(input.analysisModel),
+    // The rendered still motion is conditioned on (#929). Re-rendering the
+    // image yields a new URL, which flips this and re-stales the motion prompt.
+    startingFrameImageUrl: trim(input.startingFrameImageUrl),
   });
 }
 

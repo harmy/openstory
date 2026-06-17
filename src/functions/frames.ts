@@ -407,6 +407,7 @@ export const updateFrameFn = createServerFn({ method: 'POST' })
                   analysisModel: preEditSequenceForSplice.analysisModel,
                 },
                 scene: context.frame.metadata,
+                startingFrameImageUrl: context.frame.thumbnailUrl,
               });
               updateData.motionPromptInputHash =
                 await computeMotionPromptInputHash(ctx);
@@ -690,6 +691,7 @@ export const getFrameStalenessFn = createServerFn({ method: 'GET' })
             sequence,
             scene: frame.metadata,
             analysisModelOverride: latest?.analysisModel ?? null,
+            startingFrameImageUrl: frame.thumbnailUrl,
           });
           const liveHash = await computeMotionPromptInputHash(ctx);
           motionPrompt = liveHash !== referenceHash ? 'stale' : 'fresh';

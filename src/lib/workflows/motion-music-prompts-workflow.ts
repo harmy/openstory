@@ -62,6 +62,7 @@ export class MotionMusicPromptsWorkflow extends OpenStoryWorkflowEntrypoint<Moti
       elementBible,
       styleConfig,
       frameMapping,
+      startingFrameImageUrls,
     } = input;
 
     // Snap durations against the primary video model. The structured motion
@@ -112,6 +113,7 @@ export class MotionMusicPromptsWorkflow extends OpenStoryWorkflowEntrypoint<Moti
           styleConfig,
           analysisModelId,
           frameMapping,
+          startingFrameImageUrls,
         },
         spawnStepName: 'spawn-motion-prompts',
         awaitStepName: 'await-motion-prompts',

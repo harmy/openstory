@@ -547,6 +547,40 @@ describe('prompt input hashes', () => {
     expect(motion).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it('motion prompt hash changes when the rendered starting frame changes (#929)', async () => {
+    const baseline = await computeMotionPromptInputHash(sceneCtx);
+    const withImage = await computeMotionPromptInputHash({
+      ...sceneCtx,
+      startingFrameImageUrl: '/r2/frames/a.png',
+    });
+    const withReRenderedImage = await computeMotionPromptInputHash({
+      ...sceneCtx,
+      startingFrameImageUrl: '/r2/frames/b.png',
+    });
+    // Absent vs present, and present-A vs present-B, must all differ so a
+    // re-rendered still (new URL) re-stales the motion prompt.
+    expect(withImage).not.toBe(baseline);
+    expect(withReRenderedImage).not.toBe(withImage);
+  });
+
+  it('omitting startingFrameImageUrl equals passing null (legacy frames)', async () => {
+    const omitted = await computeMotionPromptInputHash(sceneCtx);
+    const explicitNull = await computeMotionPromptInputHash({
+      ...sceneCtx,
+      startingFrameImageUrl: null,
+    });
+    expect(omitted).toBe(explicitNull);
+  });
+
+  it('the visual prompt hash ignores the starting frame (it produces the image)', async () => {
+    const baseline = await computeVisualPromptInputHash(sceneCtx);
+    const withImage = await computeVisualPromptInputHash({
+      ...sceneCtx,
+      startingFrameImageUrl: '/r2/frames/a.png',
+    });
+    expect(withImage).toBe(baseline);
+  });
+
   it('bible array order does not affect the visual prompt hash', async () => {
     const second: CharacterBibleEntry = {
       ...aliceCharacter,

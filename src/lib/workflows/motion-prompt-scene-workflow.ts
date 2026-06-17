@@ -14,6 +14,7 @@
  *     by `step.do`. */
 
 import { computeMotionPromptInputHash } from '@/lib/ai/input-hash';
+import { analysisModelSupportsVision } from '@/lib/ai/models.config';
 import { narrowFramePromptContext } from '@/lib/ai/prompt-context';
 import {
   motionPromptSchema,
@@ -53,11 +54,29 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
       analysisModelId,
       sequenceId,
       frameId,
+      startingFrameImageUrl,
     } = input;
 
     // ============================================================
     // PHASE 3: Motion Prompt Generation (using durableLLMCall helper)
     // ============================================================
+
+    // The motion prompt is conditioned on the rendered starting frame (#929):
+    // it's passed to the LLM as a vision input so motion continues the exact
+    // pose/composition the image committed to, and the image URL is folded
+    // into the staleness hash so a re-render re-stales the prompt.
+    //
+    // CRITICAL: the still arrives as an INPUT (`startingFrameImageUrl`),
+    // snapshotted by the trigger when frame images finished — this workflow
+    // must NOT look it up from the DB. A workflow can run/retry/replay at any
+    // time, and a concurrent re-render could swap `frame.thumbnailUrl` mid-run;
+    // reading it here would condition the prompt on an image the trigger never
+    // saw. Null/absent → no still, text-only path.
+    if (!startingFrameImageUrl) {
+      logger.info(
+        `[MotionPromptSceneWorkflow:cf] No starting frame provided for ${scene.sceneId}; generating motion prompt without vision input`
+      );
+    }
 
     // Narrow the bibles to this scene's entities (via `scene.continuity`, set
     // by scene-split) before the LLM call, so the model and the staleness hash
@@ -70,6 +89,7 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
       elementBible,
       aspectRatio,
       analysisModel: analysisModelId,
+      startingFrameImageUrl: startingFrameImageUrl ?? null,
     });
 
     const promptVariables = {
@@ -100,6 +120,15 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
         responseSchema: motionPromptSchema,
         additionalMetadata: { frameId },
         reasoning: true,
+        // Only attach the still when the chosen analysis model accepts image
+        // input; otherwise OpenRouter would reject the request. Non-vision
+        // models still get the (now image-aware) text prompt. The staleness
+        // hash always folds in the image regardless, so switching to a vision
+        // model later re-generates with the still.
+        visionImageUrls:
+          startingFrameImageUrl && analysisModelSupportsVision(analysisModelId)
+            ? [startingFrameImageUrl]
+            : undefined,
       },
       {
         sequenceId,

@@ -21,8 +21,13 @@ import { ZERO_MICROS } from '@/lib/billing/money';
 import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { getLogger } from '@/lib/observability/logger';
-import { getChatPrompt } from '@/lib/prompts';
+import {
+  getChatPrompt,
+  type ChatMessage,
+  type ChatMessageImagePart,
+} from '@/lib/prompts';
 import { getFramePromptChannel } from '@/lib/realtime';
+import { toVisionImageSource } from '@/lib/storage/external-url';
 import { chat } from '@tanstack/ai';
 import type { WorkflowStep } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
@@ -43,7 +48,91 @@ export type DurableLLMCallConfig<TSchema extends z.ZodType> = {
    * prompt-generation flows).
    */
   reasoning?: boolean;
+  /**
+   * Stored-media URLs to attach to the final user turn as vision input (#929).
+   * Resolved to URL-or-inlined-bytes via {@link toVisionImageSource} INSIDE the
+   * LLM step, so any base64 data part stays ephemeral within that step instead
+   * of being persisted (and size-capped) as a CF step return. The model must
+   * be vision-capable, and the prompt template should reference the image.
+   */
+  visionImageUrls?: string[];
 };
+
+/**
+ * Resolve the configured vision image URLs into chat content sources. Returns
+ * `undefined` when none are configured so non-vision calls are untouched.
+ * MUST be awaited inside the LLM `step.do` so inlined bytes never cross a step
+ * boundary.
+ */
+async function resolveVisionImageSources(
+  visionImageUrls: string[] | undefined
+): Promise<ChatMessageImagePart['source'][] | undefined> {
+  if (!visionImageUrls || visionImageUrls.length === 0) return undefined;
+  return Promise.all(visionImageUrls.map((url) => toVisionImageSource(url)));
+}
+
+/**
+ * Flatten Langfuse/local chat messages into `chat()`-ready form: system turns
+ * become `systemPrompts`, the rest become `{ role, content }`. When vision
+ * sources are supplied they are appended to the LAST user turn as image
+ * content parts (its text is preserved), so a vision-capable model sees the
+ * still alongside the instructions. Mirrors `element-vision.ts`.
+ */
+function buildChatMessages(
+  messages: ChatMessage[],
+  visionImageSources: ChatMessageImagePart['source'][] | undefined
+): {
+  systemPrompts: string[];
+  chatMessages: Array<{
+    role: 'user' | 'assistant';
+    content: ChatMessage['content'];
+  }>;
+} {
+  const systemPrompts: string[] = [];
+  const chatMessages: Array<{
+    role: 'user' | 'assistant';
+    content: ChatMessage['content'];
+  }> = [];
+  for (const msg of messages) {
+    const flat =
+      typeof msg.content === 'string'
+        ? msg.content
+        : msg.content
+            .map((part) => (part.type === 'text' ? part.content : ''))
+            .filter(Boolean)
+            .join('\n');
+    if (msg.role === 'system') {
+      systemPrompts.push(flat);
+    } else {
+      chatMessages.push({ role: msg.role, content: flat });
+    }
+  }
+
+  if (visionImageSources && visionImageSources.length > 0) {
+    const imageParts: ChatMessageImagePart[] = visionImageSources.map(
+      (source) => ({ type: 'image', source })
+    );
+    let lastUserIdx = -1;
+    for (let i = chatMessages.length - 1; i >= 0; i--) {
+      if (chatMessages[i]?.role === 'user') {
+        lastUserIdx = i;
+        break;
+      }
+    }
+    if (lastUserIdx >= 0) {
+      const target = chatMessages[lastUserIdx];
+      const text = typeof target?.content === 'string' ? target.content : '';
+      chatMessages[lastUserIdx] = {
+        role: 'user',
+        content: [{ type: 'text', content: text }, ...imageParts],
+      };
+    } else {
+      chatMessages.push({ role: 'user', content: imageParts });
+    }
+  }
+
+  return { systemPrompts, chatMessages };
+}
 
 /**
  * Resolve the `modelOptions.reasoning` config for a call. Returns `{}` (no
@@ -153,25 +242,13 @@ export async function durableLLMCallCf<TSchema extends z.ZodType>(
       messageCount: messages.length,
     });
 
-    const systemPrompts: string[] = [];
-    const chatMessages: Array<{
-      role: 'user' | 'assistant';
-      content: string;
-    }> = [];
-    for (const msg of messages) {
-      const flat =
-        typeof msg.content === 'string'
-          ? msg.content
-          : msg.content
-              .map((part) => (part.type === 'text' ? part.content : ''))
-              .filter(Boolean)
-              .join('\n');
-      if (msg.role === 'system') {
-        systemPrompts.push(flat);
-      } else {
-        chatMessages.push({ role: msg.role, content: flat });
-      }
-    }
+    const visionImageSources = await resolveVisionImageSources(
+      config.visionImageUrls
+    );
+    const { systemPrompts, chatMessages } = buildChatMessages(
+      messages,
+      visionImageSources
+    );
 
     const abortController = new AbortController();
     const timeout = setTimeout(() => abortController.abort(), 300_000);
@@ -289,25 +366,13 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
         promptType,
       });
 
-      const systemPrompts: string[] = [];
-      const chatMessages: Array<{
-        role: 'user' | 'assistant';
-        content: string;
-      }> = [];
-      for (const msg of messages) {
-        const flat =
-          typeof msg.content === 'string'
-            ? msg.content
-            : msg.content
-                .map((part) => (part.type === 'text' ? part.content : ''))
-                .filter(Boolean)
-                .join('\n');
-        if (msg.role === 'system') {
-          systemPrompts.push(flat);
-        } else {
-          chatMessages.push({ role: msg.role, content: flat });
-        }
-      }
+      const visionImageSources = await resolveVisionImageSources(
+        config.visionImageUrls
+      );
+      const { systemPrompts, chatMessages } = buildChatMessages(
+        messages,
+        visionImageSources
+      );
 
       const abortController = new AbortController();
       const timeout = setTimeout(() => abortController.abort(), 300_000);

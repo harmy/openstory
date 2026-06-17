@@ -489,7 +489,18 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
       sceneSnapshots,
     });
 
-    const [frameImagesSettled, motionMusicSettled] = await Promise.allSettled([
+    // Render frame images FIRST, then run motion/music prompts — the prior
+    // parallel fan-out is now sequential (#929). The motion-prompt pass is
+    // conditioned on the ACTUAL rendered starting frame (vision input), which
+    // only exists once images have rendered. We capture each scene's primary
+    // still here and thread it down as an INPUT — the motion children must
+    // never look it up mid-run (a concurrent re-render could swap it). Music
+    // has no image dependency but rides along with motion in the same child,
+    // so it inherits the wait — an accepted latency cost on the non-critical
+    // music artifact in exchange for image-grounded motion. Each child is
+    // wrapped in `Promise.allSettled` so a rejection is captured (not thrown)
+    // and surfaced together below after recording the analysis duration.
+    const [frameImagesSettled] = await Promise.allSettled([
       spawnAndAwaitChild<FrameImagesWorkflowInput, FrameImagesWorkflowResult>(
         step,
         {
@@ -505,6 +516,25 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
           timeout: '90 minutes',
         }
       ),
+    ]);
+
+    // Snapshot the rendered primary still per scene. `imageUrls` is aligned to
+    // `scenesWithVisualPrompts` order (frame-images preserves slots, null for a
+    // failed scene); a rejected batch → empty map → motion falls back to
+    // text-only (and the rejection is raised below regardless).
+    const frameImageUrls =
+      frameImagesSettled.status === 'fulfilled'
+        ? frameImagesSettled.value.imageUrls
+        : [];
+    const startingFrameImageUrls: Record<string, string | null> =
+      Object.fromEntries(
+        scenesWithVisualPrompts.map((scene, i) => [
+          scene.sceneId,
+          frameImageUrls[i] ?? null,
+        ])
+      );
+
+    const [motionMusicSettled] = await Promise.allSettled([
       spawnAndAwaitChild<
         MotionMusicPromptsWorkflowInput,
         MotionMusicPromptsWorkflowResult
@@ -527,6 +557,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
           analysisModelId,
           videoModel,
           videoModels,
+          startingFrameImageUrls,
         },
         spawnStepName: 'spawn-motion-music-prompts',
         awaitStepName: 'await-motion-music-prompts',

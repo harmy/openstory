@@ -12,17 +12,17 @@ const enhanceElementSchema = z.object({
 type EnhanceElement = z.infer<typeof enhanceElementSchema>;
 
 /**
- * Convert a target duration in seconds to approximate scene count and word count guidance.
+ * Convert a target duration in seconds to approximate scene-count guidance.
+ * Word-count guidance was removed deliberately — it capped enhanced scripts
+ * too aggressively. Length is now anchored by the duration + scene count, and
+ * the output budget is the model's full max output (see `streamScriptEnhancement`).
  */
-function getDurationGuidance(seconds: number): {
-  sceneRange: string;
-  wordCount: number;
-} {
-  if (seconds <= 15) return { sceneRange: '2-3', wordCount: 400 };
-  if (seconds <= 30) return { sceneRange: '4-6', wordCount: 800 };
-  if (seconds <= 60) return { sceneRange: '8-12', wordCount: 1500 };
-  if (seconds <= 120) return { sceneRange: '15-20', wordCount: 2500 };
-  return { sceneRange: '20-30', wordCount: 3500 };
+function getDurationGuidance(seconds: number): { sceneRange: string } {
+  if (seconds <= 15) return { sceneRange: '2-3' };
+  if (seconds <= 30) return { sceneRange: '4-6' };
+  if (seconds <= 60) return { sceneRange: '8-12' };
+  if (seconds <= 120) return { sceneRange: '15-20' };
+  return { sceneRange: '20-30' };
 }
 
 function formatDuration(seconds: number): string {
@@ -43,7 +43,7 @@ export function createUserPrompt(
   }
 ): string {
   const durationSeconds = options?.targetDuration ?? 30;
-  const { sceneRange, wordCount } = getDurationGuidance(durationSeconds);
+  const { sceneRange } = getDurationGuidance(durationSeconds);
 
   // Per-request payload only. The enhancement rules (event/subject/motion/
   // genre/no-furniture) live in the `script/enhance` system prompt — not
@@ -56,7 +56,7 @@ export function createUserPrompt(
 ${originalScript}
 </USER_SCRIPT>
 
-Target video duration: ${formatDuration(durationSeconds)} (${sceneRange} scenes, ~${wordCount} words)`,
+Target video duration: ${formatDuration(durationSeconds)} (about ${sceneRange} scenes). Give each scene a realistic single-clip duration — most around 5 seconds, a few up to ~8 when the motion genuinely needs it — and label it in the script (e.g. a "Scene 3 — 5s" heading). Reach the target length through the number of scenes, not by stretching clips or padding with repeated beats.`,
   ];
 
   if (options?.elements && options.elements.length > 0) {

@@ -230,6 +230,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
                     analysisModel: sequence.analysisModel,
                   },
                   scene: frame.metadata,
+                  startingFrameImageUrl: frame.thumbnailUrl,
                 });
                 userEditInputHash = await computeMotionPromptInputHash(ctx);
                 userEditAnalysisModel = ctx.analysisModel;

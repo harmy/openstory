@@ -1,13 +1,6 @@
 import { styleSlug } from '@/lib/style/style-slug';
+import { getPublicAssetsDomain } from '@/lib/storage/public-assets';
 import type { Style } from '@/types/database';
-
-// VITE_-prefixed vars are client-safe and inlined by Vite at build time on
-// every target (client, SSR, workerd). Reading via import.meta.env avoids
-// the server-only #env shim, which fails at module load in Storybook and
-// would also fail on the real client.
-function getPublicAssetsDomain(): string {
-  return import.meta.env.VITE_R2_PUBLIC_ASSETS_DOMAIN ?? '';
-}
 
 function getStylePreviewUrl(styleName: string): string {
   return `https://${getPublicAssetsDomain()}/styles/${styleSlug(styleName)}/thumbnail.webp`;
