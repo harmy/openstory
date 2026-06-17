@@ -1,8 +1,5 @@
 import type { LibraryLocation } from '@/lib/db/schema';
-
-function getPublicAssetsDomain(): string {
-  return import.meta.env.VITE_R2_PUBLIC_ASSETS_DOMAIN ?? '';
-}
+import { getPublicAssetsDomain } from '@/lib/storage/public-assets';
 
 function sanitizeName(name: string): string {
   return name

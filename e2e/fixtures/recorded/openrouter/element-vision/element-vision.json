@@ -8,7 +8,7 @@
         "hasToolResult": false
       },
       "response": {
-        "content": "{\"description\":\"A large-diaphragm condenser studio microphone with a matte champagne/silver cylindrical body. The upper capsule section features a fine mesh metal grille. Engraved text on the body reads 'PHANTOM classic' with a circular logo above it, and 'Nr. 1307' near the base. The microphone is mounted in a silver spider shock mount with elastic suspension bands. A round black pop filter with a dual-mesh screen is attached via a gooseneck arm to the left side of the stand. The overall finish is brushed satin nickel/champagne metal.\",\"consistencyTag\":\"champagne-condenser-studio-microphone\",\"suggestedToken\":\"PHANTOM_CLASSIC_MIC\"}"
+        "content": "{\"description\":\"A large-diaphragm condenser studio microphone with a cylindrical champagne/satin-nickel metal body. The upper capsule section features a fine woven mesh grille in a darker silver tone, flanked by matching metal rings. The body bears an engraved circular logo and the text 'PHANTOM classic' with serial number 'Nr. 1307' near the base. The microphone is mounted in a silver spider shock mount with elastic bands, attached to a black stand arm. A circular black pop filter with dual mesh layers is positioned to the upper right on a gooseneck arm.\",\"consistencyTag\":\"phantom-classic-condenser-studio-mic\",\"suggestedToken\":\"PHANTOM_CLASSIC_MIC\"}"
       },
       "metadata": {
         "systemHash": "d7a7c7ae"
