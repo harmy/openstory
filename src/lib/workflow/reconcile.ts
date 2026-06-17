@@ -10,6 +10,7 @@
 
 import { getEnv } from '#env';
 import { getCfBindingForRunId } from '@/lib/workflow/trigger-bindings';
+import { disposeRpcStub } from '@/lib/workflow/rpc-dispose';
 import type { CloudflareEnv } from '@/lib/workflow/types';
 
 import { getLogger } from '@/lib/observability/logger';
@@ -49,11 +50,17 @@ export async function resolveRunState(
   if (!binding) return 'failed';
 
   try {
+    // `binding.get()` hands back a WorkflowInstance RPC result; dispose it once
+    // the status read is done so the runtime doesn't warn about a leaked result.
     const instance = await binding.get(runId);
-    const { status } = await instance.status();
-    if (status === 'complete') return 'completed';
-    if (status === 'errored' || status === 'terminated') return 'failed';
-    return null;
+    try {
+      const { status } = await instance.status();
+      if (status === 'complete') return 'completed';
+      if (status === 'errored' || status === 'terminated') return 'failed';
+      return null;
+    } finally {
+      disposeRpcStub(instance);
+    }
   } catch (error) {
     logger.error(`Failed to check workflow ${runId}:`, {
       data: error instanceof Error ? error.message : error,

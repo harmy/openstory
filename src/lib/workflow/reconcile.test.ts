@@ -7,7 +7,14 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const statusMock = vi.fn<() => Promise<{ status: string }>>();
-const getInstanceMock = vi.fn(async () => ({ status: statusMock }));
+// The mocked instance carries a `Symbol.dispose` so the dispose-on-read wiring
+// (#933) is actually exercised — without it `disposeRpcStub` is a silent no-op
+// and a dropped dispose call would go unnoticed.
+const disposeMock = vi.fn();
+const getInstanceMock = vi.fn(async () => ({
+  status: statusMock,
+  [Symbol.dispose]: disposeMock,
+}));
 const getCfBindingForRunIdMock = vi.fn<
   (runId: string, env: unknown) => { get: typeof getInstanceMock } | null
 >(() => ({ get: getInstanceMock }));
@@ -20,6 +27,7 @@ vi.doMock('@/lib/workflow/trigger-bindings', () => ({
 describe('resolveRunState', () => {
   beforeEach(() => {
     statusMock.mockReset();
+    disposeMock.mockClear();
     getInstanceMock.mockClear();
     getCfBindingForRunIdMock.mockReset();
     getCfBindingForRunIdMock.mockReturnValue({ get: getInstanceMock });
@@ -69,5 +77,19 @@ describe('resolveRunState', () => {
     statusMock.mockRejectedValueOnce(new Error('network'));
     const { resolveRunState } = await import('./reconcile');
     expect(await resolveRunState('local_image_5')).toBe('unknown');
+  });
+
+  test('disposes the instance RPC stub after a successful status read (#933)', async () => {
+    statusMock.mockResolvedValueOnce({ status: 'complete' });
+    const { resolveRunState } = await import('./reconcile');
+    await resolveRunState('local_image_6');
+    expect(disposeMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('disposes the instance RPC stub even when status() rejects (finally path)', async () => {
+    statusMock.mockRejectedValueOnce(new Error('network'));
+    const { resolveRunState } = await import('./reconcile');
+    await resolveRunState('local_image_7');
+    expect(disposeMock).toHaveBeenCalledTimes(1);
   });
 });

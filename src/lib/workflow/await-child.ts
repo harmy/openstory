@@ -34,6 +34,7 @@ import {
   isInstanceAlreadyExistsError,
   isRecipientInFiniteStateError,
 } from '@/lib/workflow/errors';
+import { disposeRpcStub } from '@/lib/workflow/rpc-dispose';
 import type { CloudflareEnv } from '@/lib/workflow/types';
 import type { WorkflowSleepDuration, WorkflowStep } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
@@ -172,7 +173,11 @@ export async function spawnAndAwaitChild<TInput, TOutput>(
 
   await step.do(args.spawnStepName, async () => {
     try {
-      await args.binding.create({
+      // `binding.create()` returns a WorkflowInstance RPC result on every child
+      // spawn; dispose it (we don't need the handle here) or the runtime warns
+      // about the leaked result — fires on every child spawn, a primary source
+      // of the #933 warning burst.
+      const instance = await args.binding.create({
         id: childInstanceId,
         params: {
           ...args.childPayload,
@@ -183,6 +188,7 @@ export async function spawnAndAwaitChild<TInput, TOutput>(
           },
         },
       });
+      disposeRpcStub(instance);
     } catch (error) {
       if (!isInstanceAlreadyExistsError(error)) throw error;
       // A prior attempt of *this* step already created the instance (durable
@@ -221,18 +227,26 @@ export async function spawnAndAwaitChild<TInput, TOutput>(
     const child = await step.do(
       `${args.awaitStepName}-status-fallback`,
       async () => {
+        // `binding.get()` returns a WorkflowInstance RPC result; dispose it once
+        // the status read is done so the runtime doesn't warn about a leak.
+        // Everything returned below is already flattened to plain JSON, so no
+        // stub escapes the step boundary.
         const instance = await args.binding.get(childInstanceId);
-        const { status, output, error } = await instance.status();
-        return {
-          status,
-          // Engine error shape is { name, message }; flatten to a string for
-          // the step's serializable return.
-          error: error ? `${error.name}: ${error.message}` : null,
-          // The output is the child's JSON-serializable runImpl return; carry
-          // it through the step boundary as JSON text (absent while the
-          // instance is still in flight).
-          outputJson: output === undefined ? null : JSON.stringify(output),
-        };
+        try {
+          const { status, output, error } = await instance.status();
+          return {
+            status,
+            // Engine error shape is { name, message }; flatten to a string for
+            // the step's serializable return.
+            error: error ? `${error.name}: ${error.message}` : null,
+            // The output is the child's JSON-serializable runImpl return; carry
+            // it through the step boundary as JSON text (absent while the
+            // instance is still in flight).
+            outputJson: output === undefined ? null : JSON.stringify(output),
+          };
+        } finally {
+          disposeRpcStub(instance);
+        }
       }
     );
     if (child.status === 'complete') {
@@ -274,11 +288,18 @@ export async function notifyParent<TOutput>(
 ): Promise<void> {
   if (!hint) return;
   await step.do('notify-parent', async () => {
+    // `resolveParentInstance` (via `binding.get()`) returns a WorkflowInstance
+    // RPC result; dispose it after the sendEvent so it doesn't leak. Fires on
+    // every child completion — a primary source of the #933 warning burst.
     const parent = await resolveParentInstance(env, hint);
-    await sendEventFailFast(parent, {
-      type: hint.eventType,
-      payload: { status: 'ok', output } satisfies ChildOutcome<TOutput>,
-    });
+    try {
+      await sendEventFailFast(parent, {
+        type: hint.eventType,
+        payload: { status: 'ok', output } satisfies ChildOutcome<TOutput>,
+      });
+    } finally {
+      disposeRpcStub(parent);
+    }
   });
 }
 
@@ -298,11 +319,16 @@ export async function notifyParentOfFailure(
 ): Promise<void> {
   if (!hint) return;
   await step.do('notify-parent-failure', async () => {
+    // Dispose the WorkflowInstance RPC result after the sendEvent (see notifyParent).
     const parent = await resolveParentInstance(env, hint);
-    await sendEventFailFast(parent, {
-      type: hint.eventType,
-      payload: { status: 'failed', error } satisfies ChildOutcome<never>,
-    });
+    try {
+      await sendEventFailFast(parent, {
+        type: hint.eventType,
+        payload: { status: 'failed', error } satisfies ChildOutcome<never>,
+      });
+    } finally {
+      disposeRpcStub(parent);
+    }
   });
 }
 

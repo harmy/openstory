@@ -14,6 +14,7 @@
 import type { CloudflareEnv } from '@/lib/workflow/types';
 import { isInstanceAlreadyExistsError } from '@/lib/workflow/errors';
 import { buildInstanceId } from '@/lib/workflow/instance-id';
+import { disposeRpcStub } from '@/lib/workflow/rpc-dispose';
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'trigger-bindings']);
@@ -140,8 +141,14 @@ async function getInstanceStatus<T>(
   id: string
 ): Promise<InstanceStatus['status'] | null> {
   try {
+    // `binding.get()` returns a WorkflowInstance RPC result; dispose it once
+    // we've read the status so the runtime doesn't warn the result leaked.
     const instance = await binding.get(id);
-    return (await instance.status()).status;
+    try {
+      return (await instance.status()).status;
+    } finally {
+      disposeRpcStub(instance);
+    }
   } catch {
     return null;
   }
@@ -171,8 +178,14 @@ export async function triggerCfWorkflow<T extends Rpc.Serializable<T>>({
   });
 
   try {
+    // The created WorkflowInstance is an RPC result; dispose it after reading
+    // its id so the runtime doesn't warn about an undisposed result.
     const instance = await binding.create({ id, params: body });
-    return { workflowRunId: instance.id };
+    try {
+      return { workflowRunId: instance.id };
+    } finally {
+      disposeRpcStub(instance);
+    }
   } catch (error) {
     // A deterministic id (caller passed `deduplicationId`) hitting
     // `instance.already_exists` usually means a prior attempt of this same
