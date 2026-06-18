@@ -22,6 +22,7 @@ import {
   isContentRejectionError,
 } from '@/lib/ai/content-rejection';
 import { computeMotionPromptInputHash } from '@/lib/ai/input-hash';
+import { falCostFromUnits } from '@/lib/ai/fal-cost';
 import { DEFAULT_VIDEO_MODEL, IMAGE_TO_VIDEO_MODELS } from '@/lib/ai/models';
 import { loadNarrowFramePromptContext } from '@/lib/ai/prompt-context';
 import { microsToUsd, type Microdollars } from '@/lib/billing/money';
@@ -79,7 +80,7 @@ const MAX_MOTION_ATTEMPTS = 3;
  *  whole submit→poll cycle; a non-content `failed` is a hard stop as today. */
 type MotionPollOutcome =
   | { kind: 'pending' }
-  | { kind: 'completed'; url: string }
+  | { kind: 'completed'; url: string; unitsBilled?: number }
   | { kind: 'rejected'; rejection: string }
   | { kind: 'failed'; error: string };
 
@@ -148,8 +149,10 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
       );
     }
 
-    // Step 0: Get cost and check if team has enough credits
-    const { cost, duration } = await step.do('check-credits', async () => {
+    // Step 0: Estimate cost and check the team can afford it. The estimate only
+    // gates affordability — the exact charge is computed from fal's billed
+    // units after the clip completes (see actualCost below).
+    const { duration } = await step.do('check-credits', async () => {
       const { cost, duration } = calculateMotionMetadata({
         imageUrl: input.imageUrl,
         prompt: input.prompt,
@@ -329,6 +332,9 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
     // exhausts its budget fails only its own slot — motion-batch's
     // Promise.allSettled keeps sibling clips and the sequence alive.
     let videoUrl = '';
+    // Real quantity fal billed for the clip that succeeded — drives the exact
+    // credit deduction below (the check-credits estimate only gates affordability).
+    let billedUnits: number | undefined;
     let lastRejection: string | null = null;
     // The job behind the clip that ultimately succeeded — its `submittedAt` /
     // `usedOwnKey` drive observation timing and credit deduction below.
@@ -454,7 +460,11 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
               if (pollResult.status === 'completed') {
                 if (pollResult.url) {
                   logger.info(`[MotionWorkflow:cf] Generation completed`);
-                  return { kind: 'completed', url: pollResult.url };
+                  return {
+                    kind: 'completed',
+                    url: pollResult.url,
+                    unitsBilled: pollResult.usage?.unitsBilled,
+                  };
                 }
                 return classifyMotionFailure(
                   pollResult.error || 'No URL returned'
@@ -477,6 +487,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
 
         if (poll.kind === 'completed') {
           videoUrl = poll.url;
+          billedUnits = poll.unitsBilled;
           break;
         }
         if (poll.kind === 'rejected') {
@@ -551,13 +562,20 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
     // narrowing (a `let` could be reassigned, so TS widens it inside closures).
     const job = succeededJob;
 
+    // Exact charge from fal's reported billed units (the check-credits `cost`
+    // was only an estimate for the affordability gate).
+    const actualCost = falCostFromUnits(
+      IMAGE_TO_VIDEO_MODELS[model].id,
+      billedUnits
+    );
+
     await step.do('record-motion-observation', async () => {
       recordMotionObservation({
         model,
         prompt: input.prompt,
         imageUrl: input.imageUrl,
         videoUrl,
-        cost: cost,
+        cost: actualCost,
         videoDuration: duration,
         generationTimeMs: Date.now() - job.submittedAt,
       });
@@ -567,11 +585,11 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
     // deductWorkflowCredits so insufficient balances warn-and-skip (with an
     // auto-top-up attempt) like every other workflow, instead of debiting
     // the balance negative.
-    if (cost > 0 && input.teamId && !job.usedOwnKey) {
+    if (actualCost > 0 && input.teamId && !job.usedOwnKey) {
       await step.do('deduct-credits', async () => {
         await deductWorkflowCredits({
           scopedDb,
-          costMicros: cost,
+          costMicros: actualCost,
           usedOwnKey: job.usedOwnKey,
           description: `Motion generation (${model})`,
           idempotencyKey: `${event.instanceId}:motion`,
@@ -580,6 +598,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
             frameId: input.frameId,
             sequenceId: input.sequenceId,
             duration: duration,
+            unitsBilled: billedUnits,
           },
           workflowName: 'MotionWorkflow:cf',
         });

@@ -1,23 +1,23 @@
 /**
  * Fetch live pricing from fal.ai and write src/lib/ai/fal-pricing-data.ts
  * Usage:
- *   bun scripts/update-fal-pricing.ts            # API pricing only
- *   bun scripts/update-fal-pricing.ts --llms-txt  # Also fetch llms.txt pricing notes
+ *   bun scripts/update-fal-pricing.ts
+ *
+ * The output is a single flat map of `endpointId -> { unitPrice, unit }` taken
+ * verbatim from fal's pricing API. Actual credit deduction multiplies fal's
+ * reported `unitsBilled` by `unitPrice` (see `falCostFromUnits` in
+ * `src/lib/ai/fal-cost.ts`), so no per-model multipliers/matrices are needed —
+ * fal already accounts for resolution/audio/duration in `unitsBilled`. The
+ * `unit` field is only used by pre-flight cost ESTIMATION to predict a unit
+ * count before a generation runs.
  */
 import { writeFile } from 'node:fs/promises';
 import { getEnv } from '#env';
-import {
-  AUDIO_MODELS,
-  EDIT_ENDPOINTS,
-  IMAGE_MODELS,
-  IMAGE_TO_VIDEO_MODELS,
-} from '@/lib/ai/models';
-import { typedEntries } from '@/lib/utils/typed-object';
 import { getFalEndpointIds } from './fal-endpoints';
 
 /**
- * Wrapper to tag numeric values that should be serialized as `X as Microdollars`
- * in the generated output file. Multipliers stay as plain numbers.
+ * Wrapper to tag numeric values that should be serialized as `micros(X)` in the
+ * generated output file.
  */
 class MicrosValue {
   constructor(readonly value: number) {}
@@ -27,60 +27,16 @@ class MicrosValue {
 const m = (usd: number): MicrosValue =>
   new MicrosValue(Math.round(usd * 1_000_000));
 
-// ============================================================================
-// Builder types — mirror the output types but with MicrosValue for price fields
-// ============================================================================
+type FalUnit =
+  | 'images'
+  | 'megapixels'
+  | 'compute_seconds'
+  | 'seconds'
+  | 'minutes'
+  | 'tokens'
+  | 'flat';
 
-type BuilderImagePricing = {
-  basePrice: MicrosValue;
-  unit: 'per_image' | 'per_megapixel' | 'per_compute_second';
-  resolutionMultipliers?: Partial<Record<'0.5K' | '1K' | '2K' | '4K', number>>;
-  styleMultipliers?: Record<string, number>;
-  qualitySizeMatrix?: Record<string, Record<string, MicrosValue>>;
-  surcharges?: { webSearch?: MicrosValue };
-  pricingNotes?: string;
-};
-
-type BuilderVideoPricingPerSecond = {
-  mode: 'per_second';
-  basePrice: MicrosValue;
-  noAudioMultiplier?: number;
-  audioMultiplier?: number;
-  voiceControlMultiplier?: number;
-  resolutionPricing?: Record<string, MicrosValue>;
-  resolutionAudioPricing?: Record<
-    string,
-    { noAudio: MicrosValue; withAudio: MicrosValue }
-  >;
-  surcharges?: { imageInput?: MicrosValue };
-  pricingNotes?: string;
-};
-
-type BuilderVideoPricingPerToken = {
-  mode: 'per_token';
-  pricePerMillionTokens: MicrosValue;
-  pricingNotes?: string;
-};
-
-type BuilderVideoPricingFlat = {
-  mode: 'flat';
-  basePrice: MicrosValue;
-  pricingNotes?: string;
-};
-
-type BuilderVideoPricing =
-  | BuilderVideoPricingPerSecond
-  | BuilderVideoPricingPerToken
-  | BuilderVideoPricingFlat;
-
-type BuilderAudioPricing = {
-  basePrice: MicrosValue;
-  unit: 'per_second' | 'per_minute' | 'per_compute_second';
-  roundUpToMinute?: boolean;
-  pricingNotes?: string;
-};
-
-const fetchLlmsTxt = process.argv.includes('--llms-txt');
+type BuilderFalPricing = { unitPrice: MicrosValue; unit: FalUnit };
 
 const apiKey = getEnv().FAL_KEY;
 if (!apiKey) {
@@ -91,127 +47,50 @@ if (!apiKey) {
 const endpoints = getFalEndpointIds();
 
 // ============================================================================
-// Classify endpoints into image/video/audio
+// "units" disambiguation
+//
+// The pricing API reports the ambiguous unit `"units"` for several distinct
+// billing kinds (flat-per-video, per-1000-token, and per-image all show up as
+// "units"). Tag the known ones so pre-flight ESTIMATION can predict a unit
+// count. This never affects an actual charge — billing always multiplies fal's
+// reported `unitsBilled` by `unitPrice` regardless of `unit`.
 // ============================================================================
 
-const imageEndpointIds = new Set<string>(
-  Object.values(IMAGE_MODELS).map((m) => m.id)
-);
-// Include edit endpoints from the single source of truth
-for (const editId of Object.values(EDIT_ENDPOINTS)) {
-  if (editId) imageEndpointIds.add(editId);
+const UNITS_KIND: Record<string, FalUnit> = {
+  'openai/gpt-image-2': 'images',
+  'openai/gpt-image-2/edit': 'images',
+  'fal-ai/phota': 'images',
+  'fal-ai/phota/edit': 'images',
+  'fal-ai/ace-step-1.5': 'seconds',
+  'fal-ai/minimax/hailuo-2.3/pro/image-to-video': 'flat',
+  'bytedance/seedance-2.0/enterprise/v2/image-to-video': 'tokens',
+};
+
+function normalizeUnit(apiUnit: string, endpointId: string): FalUnit {
+  const u = apiUnit.toLowerCase();
+  // The bare "units" is ambiguous (flat / per-image / per-1000-token all report
+  // it), so it must be tagged in UNITS_KIND. Everything else is recognised by
+  // substring so variants like "processed megapixels" still resolve.
+  if (u === 'units') {
+    const kind = UNITS_KIND[endpointId];
+    if (!kind) {
+      console.warn(
+        `  ? ${endpointId}: unit "units" with no kind override — defaulting to 'flat' (estimation only)`
+      );
+      return 'flat';
+    }
+    return kind;
+  }
+  if (u.includes('megapixel')) return 'megapixels';
+  if (u.includes('compute second')) return 'compute_seconds';
+  if (u.includes('second')) return 'seconds';
+  if (u.includes('minute')) return 'minutes';
+  if (u.includes('image')) return 'images';
+  console.warn(
+    `  ? ${endpointId}: unknown unit "${apiUnit}" — defaulting to 'flat' (estimation only)`
+  );
+  return 'flat';
 }
-
-const videoEndpointIds = new Set<string>(
-  Object.values(IMAGE_TO_VIDEO_MODELS).map((m) => m.id)
-);
-
-const audioEndpointIds = new Set<string>(
-  Object.values(AUDIO_MODELS).map((m) => m.id)
-);
-
-function classifyEndpoint(id: string): 'image' | 'video' | 'audio' | 'unknown' {
-  if (imageEndpointIds.has(id)) return 'image';
-  if (videoEndpointIds.has(id)) return 'video';
-  if (audioEndpointIds.has(id)) return 'audio';
-  return 'unknown';
-}
-
-// ============================================================================
-// Manual overrides — conditional pricing that can't be auto-derived from API
-// ============================================================================
-
-const IMAGE_OVERRIDES: Record<string, Partial<BuilderImagePricing>> = {
-  'fal-ai/nano-banana-2': {
-    resolutionMultipliers: { '0.5K': 0.75, '1K': 1, '2K': 1.5, '4K': 2 },
-    surcharges: { webSearch: m(0.015) },
-  },
-  'fal-ai/nano-banana-2/edit': {
-    resolutionMultipliers: { '0.5K': 0.75, '1K': 1, '2K': 1.5, '4K': 2 },
-    surcharges: { webSearch: m(0.015) },
-  },
-  'fal-ai/nano-banana-pro': {
-    resolutionMultipliers: { '4K': 2 },
-    surcharges: { webSearch: m(0.015) },
-  },
-  'fal-ai/nano-banana-pro/edit': {
-    resolutionMultipliers: { '4K': 2 },
-    surcharges: { webSearch: m(0.015) },
-  },
-  'fal-ai/recraft/v3/text-to-image': {
-    styleMultipliers: { vector_illustration: 2, vector: 2 },
-  },
-  'fal-ai/gpt-image-1.5': {
-    basePrice: m(0), // Overridden by matrix
-    qualitySizeMatrix: {
-      // Prices from llms.txt + ~$0.01 buffer for prompt token processing costs
-      low: {
-        '1024x1024': m(0.02),
-        '1024x1536': m(0.025),
-        '1536x1024': m(0.025),
-      },
-      medium: {
-        '1024x1024': m(0.045),
-        '1024x1536': m(0.062),
-        '1536x1024': m(0.061),
-      },
-      high: {
-        '1024x1024': m(0.144),
-        '1024x1536': m(0.211),
-        '1536x1024': m(0.21),
-      },
-    },
-  },
-};
-
-const VIDEO_OVERRIDES: Record<
-  string,
-  | Partial<BuilderVideoPricingPerSecond>
-  // `tokensPerUnit`: how many tokens the pricing API's "unit" represents, used
-  // to scale unit_price up to a per-million-token rate (fal's token pricing is
-  // quoted per 1000 tokens, the default).
-  | { mode: 'per_token'; tokensPerUnit?: number }
-  | { mode: 'flat' }
-> = {
-  'fal-ai/minimax/hailuo-2.3/pro/image-to-video': {
-    // Flat $0.49/video fee regardless of duration (no duration param in schema)
-    mode: 'flat',
-  },
-  'fal-ai/veo3': {
-    // API returns audio-on rate ($0.40); no multiplier needed
-  },
-  'fal-ai/veo3.1/image-to-video': {
-    resolutionAudioPricing: {
-      '720p': { noAudio: m(0.2), withAudio: m(0.4) },
-      '1080p': { noAudio: m(0.2), withAudio: m(0.4) },
-      '4K': { noAudio: m(0.4), withAudio: m(0.6) },
-    },
-  },
-  'fal-ai/kling-video/v3/pro/image-to-video': {
-    noAudioMultiplier: 0.8,
-    audioMultiplier: 1.2,
-    voiceControlMultiplier: 1.4,
-  },
-  'wan/v2.6/image-to-video/flash': {
-    resolutionPricing: { '720p': m(0.05), '1080p': m(0.075) },
-  },
-  'xai/grok-imagine-video/v1.5/image-to-video': {
-    resolutionPricing: { '480p': m(0.08), '720p': m(0.14) },
-    surcharges: { imageInput: m(0.01) },
-  },
-  'bytedance/seedance-2.0/enterprise/v2/image-to-video': {
-    // fal bills $0.014 per 1000 tokens; the pricing API reports unit_price per
-    // 1000-token "unit", so scale up to a per-million-token rate ($14/M).
-    mode: 'per_token',
-    tokensPerUnit: 1000,
-  },
-};
-
-const AUDIO_OVERRIDES: Record<string, Partial<BuilderAudioPricing>> = {
-  'fal-ai/elevenlabs/music': {
-    roundUpToMinute: true,
-  },
-};
 
 // ============================================================================
 // Fetch pricing from API
@@ -248,196 +127,32 @@ if (missing.length > 0) {
 }
 
 // ============================================================================
-// Read existing file for diff and pricingNotes preservation
+// Read existing file for a price-change diff
 // ============================================================================
 
 const outPath = new URL('../src/lib/ai/fal-pricing-data.ts', import.meta.url)
   .pathname;
 
-type OldPricingEntry = {
-  basePrice?: number;
-  pricePerMillionTokens?: number;
-  pricingNotes?: string;
-};
-let oldImagePricing: Record<string, OldPricingEntry> = {};
-let oldVideoPricing: Record<string, OldPricingEntry> = {};
-let oldAudioPricing: Record<string, OldPricingEntry> = {};
+let oldPricing: Record<string, { unitPrice?: number }> = {};
 try {
   const existing = await import(outPath);
-  oldImagePricing = existing.IMAGE_PRICING ?? {};
-  oldVideoPricing = existing.VIDEO_PRICING ?? {};
-  oldAudioPricing = existing.AUDIO_PRICING ?? {};
+  oldPricing = existing.FAL_PRICING ?? {};
 } catch {
   // First run — no existing file
 }
 
 // ============================================================================
-// Build pricing maps (prices wrapped in MicrosValue for serialization)
+// Build the flat pricing map (prices wrapped in MicrosValue for serialization)
 // ============================================================================
 
-const imagePricing: Record<string, BuilderImagePricing> = {};
-const videoPricing: Record<string, BuilderVideoPricing> = {};
-const audioPricing: Record<string, BuilderAudioPricing> = {};
-
-function mapImageUnit(
-  apiUnit: string
-): 'per_image' | 'per_megapixel' | 'per_compute_second' {
-  const u = apiUnit.toLowerCase();
-  if (u === 'megapixels') return 'per_megapixel';
-  if (u === 'compute seconds') return 'per_compute_second';
-  return 'per_image';
-}
-
-function mapAudioUnit(
-  apiUnit: string
-): 'per_second' | 'per_minute' | 'per_compute_second' {
-  const u = apiUnit.toLowerCase();
-  if (u === 'minutes') return 'per_minute';
-  if (u === 'compute seconds') return 'per_compute_second';
-  return 'per_second';
-}
-
+const pricing: Record<string, BuilderFalPricing> = {};
 for (const p of data.prices.sort((a, b) =>
   a.endpoint_id.localeCompare(b.endpoint_id)
 )) {
-  const type = classifyEndpoint(p.endpoint_id);
-
-  switch (type) {
-    case 'image': {
-      const override = IMAGE_OVERRIDES[p.endpoint_id];
-      imagePricing[p.endpoint_id] = {
-        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
-        basePrice: override?.basePrice ?? m(p.unit_price),
-        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
-        unit: override?.unit ?? mapImageUnit(p.unit),
-        ...override,
-      };
-      break;
-    }
-    case 'video': {
-      const override = VIDEO_OVERRIDES[p.endpoint_id];
-      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
-      if (override && 'mode' in override && override.mode === 'per_token') {
-        const tokensPerUnit = override.tokensPerUnit ?? 1000;
-        videoPricing[p.endpoint_id] = {
-          mode: 'per_token',
-          pricePerMillionTokens: m((p.unit_price * 1_000_000) / tokensPerUnit),
-        };
-      } else if (override && 'mode' in override && override.mode === 'flat') {
-        videoPricing[p.endpoint_id] = {
-          mode: 'flat',
-          basePrice: m(p.unit_price),
-        };
-      } else {
-        const secOverride = override as
-          | Partial<BuilderVideoPricingPerSecond>
-          | undefined;
-        videoPricing[p.endpoint_id] = {
-          mode: 'per_second',
-          basePrice: secOverride?.basePrice ?? m(p.unit_price),
-          ...secOverride,
-        };
-      }
-      break;
-    }
-    case 'audio': {
-      const override = AUDIO_OVERRIDES[p.endpoint_id];
-      audioPricing[p.endpoint_id] = {
-        basePrice: m(p.unit_price),
-        // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
-        unit: override?.unit ?? mapAudioUnit(p.unit),
-        ...override,
-      };
-      break;
-    }
-    default:
-      console.warn(`  ? ${p.endpoint_id}: unclassified, skipping`);
-  }
-}
-
-// ============================================================================
-// Fetch llms.txt pricing notes
-// ============================================================================
-
-type PricingEntry = { pricingNotes?: string };
-const allPricing = new Map<string, PricingEntry>();
-for (const [id, p] of typedEntries(imagePricing)) allPricing.set(id, p);
-for (const [id, p] of typedEntries(videoPricing)) allPricing.set(id, p);
-for (const [id, p] of typedEntries(audioPricing)) allPricing.set(id, p);
-
-if (fetchLlmsTxt) {
-  console.log('\nFetching llms.txt pricing notes...\n');
-
-  const falEndpoints = endpoints.filter(
-    (id) =>
-      id.startsWith('fal-ai/') ||
-      id.startsWith('xai/') ||
-      id.startsWith('wan/') ||
-      id.startsWith('beatoven/')
-  );
-
-  const results = await Promise.allSettled(
-    falEndpoints.map(async (endpointId) => {
-      const llmsUrl = `https://fal.ai/models/${endpointId}/llms.txt`;
-      const res = await fetch(llmsUrl);
-      if (!res.ok) return { endpointId, notes: null };
-      const text = await res.text();
-      return { endpointId, notes: text };
-    })
-  );
-
-  for (const result of results) {
-    if (result.status !== 'fulfilled' || !result.value.notes) {
-      const id =
-        result.status === 'fulfilled' ? result.value.endpointId : 'unknown';
-      console.log(`  \u23ED ${id}: no llms.txt`);
-      continue;
-    }
-
-    const { endpointId, notes } = result.value;
-
-    const pricingMatch = notes.match(
-      /## Pricing\s*\n([\s\S]*?)(?=\n## |\n# |$)/
-    );
-    if (!pricingMatch) {
-      console.log(`  \u23ED ${endpointId}: no pricing section`);
-      continue;
-    }
-
-    const pricingText = (pricingMatch[1] ?? '').trim();
-    console.log(`  \u2713 ${endpointId}:`);
-    console.log(`    ${pricingText.split('\n').join('\n    ')}\n`);
-
-    const entry = allPricing.get(endpointId);
-    if (entry) {
-      entry.pricingNotes = pricingText;
-    }
-  }
-}
-
-// Preserve existing pricingNotes when not fetching llms.txt
-if (!fetchLlmsTxt) {
-  for (const [id, entry] of typedEntries(imagePricing)) {
-    const old = oldImagePricing[id];
-    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
-    if (old?.pricingNotes && !entry.pricingNotes) {
-      entry.pricingNotes = old.pricingNotes;
-    }
-  }
-  for (const [id, entry] of typedEntries(videoPricing)) {
-    const old = oldVideoPricing[id];
-    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
-    if (old?.pricingNotes && !entry.pricingNotes) {
-      entry.pricingNotes = old.pricingNotes;
-    }
-  }
-  for (const [id, entry] of typedEntries(audioPricing)) {
-    const old = oldAudioPricing[id];
-    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
-    if (old?.pricingNotes && !entry.pricingNotes) {
-      entry.pricingNotes = old.pricingNotes;
-    }
-  }
+  pricing[p.endpoint_id] = {
+    unitPrice: m(p.unit_price),
+    unit: normalizeUnit(p.unit, p.endpoint_id),
+  };
 }
 
 // ============================================================================
@@ -445,234 +160,83 @@ if (!fetchLlmsTxt) {
 // ============================================================================
 
 let changes = 0;
-
-function getBasePrice(entry: OldPricingEntry): number {
-  return entry.basePrice ?? entry.pricePerMillionTokens ?? 0;
-}
-
-function getMicrosBasePrice(
-  entry: BuilderImagePricing | BuilderVideoPricing | BuilderAudioPricing
-): number {
-  if ('basePrice' in entry) return entry.basePrice.value;
-  if ('pricePerMillionTokens' in entry)
-    return entry.pricePerMillionTokens.value;
-  return 0;
-}
-
-function diffMap(
-  label: string,
-  newIds: string[],
-  oldIds: string[],
-  getNew: (id: string) => number,
-  getOld: (id: string) => number | undefined
-) {
-  for (const id of newIds) {
-    const bp = getNew(id);
-    const oldBp = getOld(id);
-    if (oldBp === undefined) {
-      console.log(`  + [${label}] ${id}: ${bp} micros (new)`);
-      changes++;
-    } else if (oldBp !== bp) {
-      console.log(`  ~ [${label}] ${id}: ${oldBp} → ${bp} micros`);
-      changes++;
-    }
-  }
-  for (const id of oldIds) {
-    if (!newIds.includes(id)) {
-      console.log(`  - [${label}] ${id}: removed`);
-      changes++;
-    }
+for (const [id, entry] of Object.entries(pricing)) {
+  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
+  const old = oldPricing[id];
+  const newPrice = entry.unitPrice.value;
+  if (!old) {
+    console.log(`  + ${id}: ${newPrice} micros (new)`);
+    changes++;
+  } else if (old.unitPrice !== newPrice) {
+    console.log(`  ~ ${id}: ${old.unitPrice} → ${newPrice} micros`);
+    changes++;
   }
 }
-
-diffMap(
-  'image',
-  Object.keys(imagePricing),
-  Object.keys(oldImagePricing),
-  (id) => {
-    const entry = imagePricing[id];
-    if (!entry) throw new Error(`unknown image pricing id: ${id}`);
-    return getMicrosBasePrice(entry);
-  },
-  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
-  (id) => (oldImagePricing[id] ? getBasePrice(oldImagePricing[id]) : undefined)
-);
-diffMap(
-  'video',
-  Object.keys(videoPricing),
-  Object.keys(oldVideoPricing),
-  (id) => {
-    const entry = videoPricing[id];
-    if (!entry) throw new Error(`unknown video pricing id: ${id}`);
-    return getMicrosBasePrice(entry);
-  },
-  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
-  (id) => (oldVideoPricing[id] ? getBasePrice(oldVideoPricing[id]) : undefined)
-);
-diffMap(
-  'audio',
-  Object.keys(audioPricing),
-  Object.keys(oldAudioPricing),
-  (id) => {
-    const entry = audioPricing[id];
-    if (!entry) throw new Error(`unknown audio pricing id: ${id}`);
-    return getMicrosBasePrice(entry);
-  },
-  // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- Record lookup returns undefined for missing keys
-  (id) => (oldAudioPricing[id] ? getBasePrice(oldAudioPricing[id]) : undefined)
-);
+for (const id of Object.keys(oldPricing)) {
+  if (!(id in pricing)) {
+    console.log(`  - ${id}: removed`);
+    changes++;
+  }
+}
 
 // ============================================================================
 // Write the generated file
 // ============================================================================
 
-function escapeString(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
-}
-
 /** Format large integers with underscore separators for readability */
 function formatMicros(value: number): string {
   if (value === 0) return '0';
   const str = String(value);
-  // Add underscore separators for values >= 1000
   if (value >= 1000) {
     return str.replace(/\B(?=(\d{3})+(?!\d))/g, '_');
   }
   return str;
 }
 
-function serializeValue(value: unknown, indent: number): string {
-  const pad = '  '.repeat(indent);
-  const padInner = '  '.repeat(indent + 1);
-
-  if (value === undefined || value === null) return 'undefined';
-  if (value instanceof MicrosValue)
-    return `micros(${formatMicros(value.value)})`;
-  if (typeof value === 'string') return `'${escapeString(value)}'`;
-  if (typeof value === 'number' || typeof value === 'boolean')
-    return String(value);
-
-  if (Array.isArray(value)) {
-    const items = value.map((v) => serializeValue(v, indent + 1));
-    return `[${items.join(', ')}]`;
-  }
-
-  if (typeof value === 'object') {
-    const entries = Object.entries(value).filter(([, v]) => v !== undefined);
-    if (entries.length === 0) return '{}';
-    const lines = entries.map(
-      ([k, v]) => `${padInner}${quoteKey(k)}: ${serializeValue(v, indent + 1)}`
-    );
-    return `{\n${lines.join(',\n')},\n${pad}}`;
-  }
-
-  return JSON.stringify(value);
-}
-
-function quoteKey(key: string): string {
-  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) ? key : `'${key}'`;
-}
-
-function serializeMap(
-  name: string,
-  type: string,
-  map: Record<
-    string,
-    BuilderImagePricing | BuilderVideoPricing | BuilderAudioPricing
-  >
-): string {
-  const entries = Object.entries(map)
-    .map(([id, p]) => `  '${id}': ${serializeValue(p, 1)},`)
-    .join('\n');
-
-  return `export const ${name}: Record<string, ${type}> = {\n${entries}\n};`;
-}
+const entries = Object.entries(pricing)
+  .map(
+    ([id, p]) =>
+      `  '${id}': { unitPrice: micros(${formatMicros(p.unitPrice.value)}), unit: '${p.unit}' },`
+  )
+  .join('\n');
 
 const now = new Date().toISOString();
 const output = `// AUTO-GENERATED — do not edit manually. Run: bun scripts/update-fal-pricing.ts
-// Manual overrides (multipliers, matrices) are maintained in scripts/update-fal-pricing.ts
+// The "units" disambiguation map is maintained in scripts/update-fal-pricing.ts
 
 import { type Microdollars, micros } from '@/lib/billing/money';
 
 // ============================================================================
-// Image Pricing (all prices in microdollars: 1 USD = 1,000,000)
+// Fal Pricing (all prices in microdollars: 1 USD = 1,000,000)
+//
+// \`unitPrice\` is fal's per-unit price, taken verbatim from the pricing API.
+// Actual cost = unitsBilled (from the adapter) * unitPrice. \`unit\` is the
+// billed unit, used only by pre-flight cost estimation.
 // ============================================================================
 
-type ImagePricingUnit = 'per_image' | 'per_megapixel' | 'per_compute_second';
+export type FalUnit =
+  | 'images'
+  | 'megapixels'
+  | 'compute_seconds'
+  | 'seconds'
+  | 'minutes'
+  | 'tokens'
+  | 'flat';
 
-export type ImagePricing = {
-  basePrice: Microdollars;
-  unit: ImagePricingUnit;
-  resolutionMultipliers?: Partial<Record<'0.5K' | '1K' | '2K' | '4K', number>>;
-  styleMultipliers?: Record<string, number>;
-  qualitySizeMatrix?: Record<string, Record<string, Microdollars>>;
-  surcharges?: { webSearch?: Microdollars };
-  pricingNotes?: string;
+export type FalPricing = {
+  unitPrice: Microdollars;
+  unit: FalUnit;
 };
 
-${serializeMap('IMAGE_PRICING', 'ImagePricing', imagePricing)}
-
-// ============================================================================
-// Video Pricing (all prices in microdollars: 1 USD = 1,000,000)
-// ============================================================================
-
-type VideoPricingBase = { pricingNotes?: string };
-
-type VideoPricingPerSecond = VideoPricingBase & {
-  mode: 'per_second';
-  basePrice: Microdollars;
-  noAudioMultiplier?: number;
-  audioMultiplier?: number;
-  voiceControlMultiplier?: number;
-  resolutionPricing?: Record<string, Microdollars>;
-  resolutionAudioPricing?: Record<string, { noAudio: Microdollars; withAudio: Microdollars }>;
-  surcharges?: { imageInput?: Microdollars };
+export const FAL_PRICING: Record<string, FalPricing> = {
+${entries}
 };
-
-type VideoPricingPerToken = VideoPricingBase & {
-  mode: 'per_token';
-  pricePerMillionTokens: Microdollars;
-};
-
-type VideoPricingFlat = VideoPricingBase & {
-  mode: 'flat';
-  basePrice: Microdollars;
-};
-
-export type VideoPricing =
-  | VideoPricingPerSecond
-  | VideoPricingPerToken
-  | VideoPricingFlat;
-
-${serializeMap('VIDEO_PRICING', 'VideoPricing', videoPricing)}
-
-// ============================================================================
-// Audio Pricing (all prices in microdollars: 1 USD = 1,000,000)
-// ============================================================================
-
-type AudioPricingUnit = 'per_second' | 'per_minute' | 'per_compute_second';
-
-export type AudioPricing = {
-  basePrice: Microdollars;
-  unit: AudioPricingUnit;
-  roundUpToMinute?: boolean;
-  pricingNotes?: string;
-};
-
-${serializeMap('AUDIO_PRICING', 'AudioPricing', audioPricing)}
 
 export const PRICING_LAST_UPDATED = '${now}';
 `;
 
 await writeFile(outPath, output);
 
-const total =
-  Object.keys(imagePricing).length +
-  Object.keys(videoPricing).length +
-  Object.keys(audioPricing).length;
 console.log(
-  `\nWrote ${total} endpoints to fal-pricing-data.ts (${changes} changes)`
-);
-console.log(
-  `  Image: ${Object.keys(imagePricing).length}, Video: ${Object.keys(videoPricing).length}, Audio: ${Object.keys(audioPricing).length}`
+  `\nWrote ${Object.keys(pricing).length} endpoints to fal-pricing-data.ts (${changes} changes)`
 );

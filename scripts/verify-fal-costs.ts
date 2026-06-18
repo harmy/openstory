@@ -18,18 +18,13 @@
  *   bun scripts/verify-fal-costs.ts --compare            # fetch usage for existing results
  */
 
-import {
-  calculateAudioCost,
-  calculateImageCost,
-  calculateVideoCost,
-} from '@/lib/ai/fal-cost';
+import { estimateFalCost } from '@/lib/ai/fal-cost';
 import {
   AUDIO_MODELS,
   IMAGE_MODELS,
   IMAGE_TO_VIDEO_MODELS,
   type AudioModel,
   type TextToImageModel,
-  videoModelSupportsAudio,
 } from '@/lib/ai/models';
 import { buildModelInput } from '@/lib/motion/build-model-input';
 import { snapDuration } from '@/lib/motion/motion-generation';
@@ -183,8 +178,7 @@ function calculateImageCostForVariation(
   variation: ImageVariation
 ): number {
   const dims = IMAGE_DIMS[variation];
-  return calculateImageCost({
-    endpointId,
+  return estimateFalCost(endpointId, {
     numImages: 1,
     widthPx: dims.width,
     heightPx: dims.height,
@@ -263,10 +257,8 @@ function buildVideoTasks(imageUrl: string): Task[] {
         variation: label,
         tier,
         input: input as Record<string, unknown>,
-        estimatedCost: calculateVideoCost({
-          endpointId: config.id,
+        estimatedCost: estimateFalCost(config.id, {
           durationSeconds: duration,
-          audioEnabled: videoModelSupportsAudio(modelKey),
           resolution,
         }),
       });
@@ -337,8 +329,7 @@ function buildAudioTasks(): Task[] {
         variation: label,
         tier,
         input: buildAudioInput(modelKey, config, duration),
-        estimatedCost: calculateAudioCost({
-          endpointId: config.id,
+        estimatedCost: estimateFalCost(config.id, {
           durationSeconds: duration,
         }),
       });

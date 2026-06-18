@@ -4,11 +4,7 @@
  * All functions return Microdollars for exact arithmetic.
  */
 
-import {
-  calculateAudioCost,
-  calculateImageCost,
-  calculateVideoCost,
-} from '@/lib/ai/fal-cost';
+import { estimateFalCost } from '@/lib/ai/fal-cost';
 import {
   AUDIO_MODELS,
   IMAGE_MODELS,
@@ -16,56 +12,41 @@ import {
   type AudioModel,
   type ImageToVideoModel,
   type TextToImageModel,
-  videoModelSupportsAudio,
 } from '@/lib/ai/models';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { aspectRatioToDimensions } from '@/lib/constants/aspect-ratios';
 import { type Microdollars, addMicros, micros, multiplyMicros } from './money';
 
 /**
- * Estimate the raw cost (before markup) of generating images
+ * Estimate the raw cost (before markup) of generating images. Rough pre-flight
+ * gate only — the exact charge comes from fal's reported units post-generation.
  */
 export function estimateImageCost(
   model: TextToImageModel,
   aspectRatio: AspectRatio,
   numImages: number,
-  opts?: {
-    resolution?: '0.5K' | '1K' | '2K' | '4K';
-    style?: string;
-    quality?: string;
-    imageSize?: string;
-  }
+  opts?: { resolution?: string }
 ): Microdollars {
-  const endpointId = IMAGE_MODELS[model].id;
   const { width, height } = aspectRatioToDimensions(aspectRatio);
 
-  return calculateImageCost({
-    endpointId,
+  return estimateFalCost(IMAGE_MODELS[model].id, {
     numImages,
     widthPx: width,
     heightPx: height,
     resolution: opts?.resolution,
-    style: opts?.style,
-    quality: opts?.quality,
-    imageSize: opts?.imageSize,
   });
 }
 
 /**
- * Estimate the raw cost (before markup) of generating video
+ * Estimate the raw cost (before markup) of generating video.
  */
 export function estimateVideoCost(
   model: ImageToVideoModel,
   durationSeconds: number,
-  opts?: { audioEnabled?: boolean; resolution?: string }
+  opts?: { resolution?: string }
 ): Microdollars {
-  const modelConfig = IMAGE_TO_VIDEO_MODELS[model];
-  const endpointId = modelConfig.id;
-
-  return calculateVideoCost({
-    endpointId,
+  return estimateFalCost(IMAGE_TO_VIDEO_MODELS[model].id, {
     durationSeconds,
-    audioEnabled: opts?.audioEnabled ?? videoModelSupportsAudio(model),
     resolution: opts?.resolution,
   });
 }
@@ -77,10 +58,7 @@ export function estimateAudioCost(
   model: AudioModel,
   durationSeconds: number
 ): Microdollars {
-  return calculateAudioCost({
-    endpointId: AUDIO_MODELS[model].id,
-    durationSeconds,
-  });
+  return estimateFalCost(AUDIO_MODELS[model].id, { durationSeconds });
 }
 
 /**

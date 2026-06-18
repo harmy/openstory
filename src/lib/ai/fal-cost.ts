@@ -2,130 +2,27 @@ import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'ai', 'fal-cost']);
 /**
- * Type-safe fal.ai cost calculation with per-output-type pricing.
+ * Fal.ai cost calculation.
  *
- * Three domain-specific functions accept real generation parameters
- * instead of generic quantity/unit pairs. All return Microdollars.
+ * Billing is exact: fal reports the quantity it billed for a generation as
+ * `unitsBilled` (via the `x-fal-billable-units` header, surfaced by the TanStack
+ * AI adapter), denominated in the endpoint's priced unit. The cost is simply
+ * `unitsBilled * unitPrice` — fal already accounts for resolution, audio,
+ * duration, etc. in the unit count, so no per-model multipliers are needed.
+ *
+ * `estimateFalCost` predicts a cost BEFORE a generation runs (no `unitsBilled`
+ * yet) for the pre-flight credit gate. It is deliberately rough.
  */
 
-import {
-  IMAGE_PRICING,
-  VIDEO_PRICING,
-  AUDIO_PRICING,
-  type ImagePricing,
-  type VideoPricing,
-  type AudioPricing,
-} from '@/lib/ai/fal-pricing-data';
+import { FAL_PRICING } from '@/lib/ai/fal-pricing-data';
 import {
   type Microdollars,
   ZERO_MICROS,
   multiplyMicros,
-  addMicros,
 } from '@/lib/billing/money';
 
 /** Default compute time estimate for compute_seconds-priced models */
 const DEFAULT_COMPUTE_SECONDS = 3;
-
-// ============================================================================
-// Image Cost
-// ============================================================================
-
-export type ImageCostParams = {
-  endpointId: string;
-  numImages: number;
-  widthPx?: number;
-  heightPx?: number;
-  resolution?: '0.5K' | '1K' | '2K' | '4K';
-  style?: string;
-  quality?: string;
-  imageSize?: string;
-};
-
-export function calculateImageCost(params: ImageCostParams): Microdollars {
-  const pricing = IMAGE_PRICING[params.endpointId] as ImagePricing | undefined;
-  if (!pricing) {
-    logger.error(`No image pricing data for endpoint: ${params.endpointId}`);
-    return ZERO_MICROS;
-  }
-
-  // Quality/size matrix (e.g. GPT Image 1.5)
-  if (pricing.qualitySizeMatrix && params.quality && params.imageSize) {
-    const qualityPrices = pricing.qualitySizeMatrix[params.quality];
-    if (qualityPrices) {
-      const price = qualityPrices[params.imageSize];
-      if (price !== undefined) {
-        return multiplyMicros(price, params.numImages);
-      }
-    }
-    // Fall through to base price if matrix doesn't match
-  }
-
-  if (pricing.unit === 'per_megapixel') {
-    const w = params.widthPx ?? 1024;
-    const h = params.heightPx ?? 1024;
-    const megapixels = (w * h) / 1_000_000;
-    return multiplyMicros(pricing.basePrice, megapixels * params.numImages);
-  }
-
-  if (pricing.unit === 'per_compute_second') {
-    return multiplyMicros(
-      pricing.basePrice,
-      DEFAULT_COMPUTE_SECONDS * params.numImages
-    );
-  }
-
-  // per_image
-  let cost = multiplyMicros(pricing.basePrice, params.numImages);
-
-  // Apply resolution multiplier
-  if (pricing.resolutionMultipliers && params.resolution) {
-    const mult = pricing.resolutionMultipliers[params.resolution];
-    if (mult !== undefined) cost = multiplyMicros(cost, mult);
-  }
-
-  // Apply style multiplier
-  if (pricing.styleMultipliers && params.style) {
-    const mult = pricing.styleMultipliers[params.style];
-    if (mult !== undefined) cost = multiplyMicros(cost, mult);
-  }
-
-  return cost;
-}
-
-// ============================================================================
-// Video Cost
-// ============================================================================
-
-export type VideoCostParams = {
-  endpointId: string;
-  durationSeconds: number;
-  audioEnabled?: boolean;
-  voiceControl?: boolean;
-  resolution?: string;
-  widthPx?: number;
-  heightPx?: number;
-  fps?: number;
-};
-
-export function calculateVideoCost(params: VideoCostParams): Microdollars {
-  const pricing = VIDEO_PRICING[params.endpointId] as VideoPricing | undefined;
-  if (!pricing) {
-    logger.error(`No video pricing data for endpoint: ${params.endpointId}`);
-    return ZERO_MICROS;
-  }
-
-  if (pricing.mode === 'per_token') {
-    return calculateTokenBasedVideoCost(pricing, params);
-  }
-
-  // Flat per-video fee (e.g. MiniMax Hailuo 2.3): one price regardless of
-  // requested duration.
-  if (pricing.mode === 'flat') {
-    return pricing.basePrice;
-  }
-
-  return calculateSecondBasedVideoCost(pricing, params);
-}
 
 /** Assumed 16:9 output dimensions per resolution tier for token-priced models */
 const TOKEN_RESOLUTION_DIMENSIONS: Record<
@@ -137,97 +34,103 @@ const TOKEN_RESOLUTION_DIMENSIONS: Record<
   '1080p': { width: 1920, height: 1080 },
 };
 
-function calculateTokenBasedVideoCost(
-  pricing: Extract<VideoPricing, { mode: 'per_token' }>,
-  params: VideoCostParams
+// ============================================================================
+// Actual cost (billing) — unitsBilled * unitPrice
+// ============================================================================
+
+/**
+ * Exact fal cost for a completed generation: `unitsBilled * unitPrice`.
+ *
+ * Returns `ZERO_MICROS` and logs an error when pricing is missing or fal did
+ * not report `unitsBilled` — we charge nothing rather than guess, so a usage
+ * regression surfaces loudly instead of silently mis-billing.
+ */
+export function falCostFromUnits(
+  endpointId: string,
+  unitsBilled: number | undefined
 ): Microdollars {
-  const dims = params.resolution
-    ? TOKEN_RESOLUTION_DIMENSIONS[params.resolution]
-    : undefined;
-  const w = params.widthPx ?? dims?.width ?? 1920;
-  const h = params.heightPx ?? dims?.height ?? 1080;
-  const fps = params.fps ?? 24;
-  const tokens = (w * h * fps * params.durationSeconds) / 1024;
-  // Actual rendered frames slightly exceed nominal fps (~3% overhead)
-  const millionTokens = (tokens / 1_000_000) * 1.05;
-  return multiplyMicros(pricing.pricePerMillionTokens, millionTokens);
-}
-
-function calculateSecondBasedVideoCost(
-  pricing: Extract<VideoPricing, { mode: 'per_second' }>,
-  params: VideoCostParams
-): Microdollars {
-  let rate = pricing.basePrice;
-
-  // Resolution+audio matrix (e.g. Veo 3.1)
-  if (pricing.resolutionAudioPricing && params.resolution) {
-    const resPricing = pricing.resolutionAudioPricing[params.resolution];
-    if (resPricing) {
-      rate = params.audioEnabled ? resPricing.withAudio : resPricing.noAudio;
-      let cost = multiplyMicros(rate, params.durationSeconds);
-      if (pricing.surcharges?.imageInput) {
-        cost = addMicros(cost, pricing.surcharges.imageInput);
-      }
-      return cost;
-    }
+  const pricing = FAL_PRICING[endpointId];
+  if (!pricing) {
+    logger.error(`No fal pricing data for endpoint: ${endpointId}`);
+    return ZERO_MICROS;
   }
-
-  // Resolution-only pricing (e.g. Wan Flash, Grok Video)
-  if (pricing.resolutionPricing && params.resolution) {
-    const resRate = pricing.resolutionPricing[params.resolution];
-    if (resRate !== undefined) rate = resRate;
+  if (unitsBilled == null || !Number.isFinite(unitsBilled)) {
+    logger.error(
+      `No unitsBilled reported for ${endpointId} — charging nothing`,
+      { unitsBilled }
+    );
+    return ZERO_MICROS;
   }
-
-  // Audio/voice multipliers (e.g. Kling v3 Pro, Veo3)
-  if (params.voiceControl && pricing.voiceControlMultiplier) {
-    rate = multiplyMicros(pricing.basePrice, pricing.voiceControlMultiplier);
-  } else if (params.audioEnabled && pricing.audioMultiplier) {
-    rate = multiplyMicros(pricing.basePrice, pricing.audioMultiplier);
-  } else if (!params.audioEnabled && pricing.noAudioMultiplier) {
-    rate = multiplyMicros(pricing.basePrice, pricing.noAudioMultiplier);
-  }
-
-  let cost = multiplyMicros(rate, params.durationSeconds);
-
-  // Image input surcharge (e.g. Grok Video)
-  if (pricing.surcharges?.imageInput) {
-    cost = addMicros(cost, pricing.surcharges.imageInput);
-  }
-
-  return cost;
+  return multiplyMicros(pricing.unitPrice, unitsBilled);
 }
 
 // ============================================================================
-// Audio Cost
+// Pre-flight estimation — predicts a unit count from generation params
 // ============================================================================
 
-export type AudioCostParams = {
-  endpointId: string;
-  durationSeconds: number;
+export type FalCostEstimateParams = {
+  numImages?: number;
+  durationSeconds?: number;
+  widthPx?: number;
+  heightPx?: number;
+  fps?: number;
+  resolution?: string;
 };
 
-export function calculateAudioCost(params: AudioCostParams): Microdollars {
-  const pricing = AUDIO_PRICING[params.endpointId] as AudioPricing | undefined;
+/**
+ * Rough pre-flight cost estimate, used only for the credit-availability gate
+ * before a generation runs. Predicts the billed unit count from the requested
+ * parameters, then multiplies by `unitPrice`. Audio/resolution premiums are
+ * intentionally ignored — the exact charge comes from `falCostFromUnits` once
+ * fal reports `unitsBilled`.
+ */
+export function estimateFalCost(
+  endpointId: string,
+  params: FalCostEstimateParams
+): Microdollars {
+  const pricing = FAL_PRICING[endpointId];
   if (!pricing) {
-    logger.error(`No audio pricing data for endpoint: ${params.endpointId}`);
+    logger.error(`No fal pricing data for endpoint: ${endpointId}`);
     return ZERO_MICROS;
   }
 
-  if (pricing.roundUpToMinute) {
-    return multiplyMicros(
-      pricing.basePrice,
-      Math.ceil(params.durationSeconds / 60)
-    );
-  }
+  const numImages = params.numImages ?? 1;
+  const duration = params.durationSeconds ?? 0;
 
-  if (pricing.unit === 'per_second') {
-    return multiplyMicros(pricing.basePrice, params.durationSeconds);
-  }
+  switch (pricing.unit) {
+    case 'images':
+    case 'flat':
+      return multiplyMicros(pricing.unitPrice, numImages);
 
-  if (pricing.unit === 'per_minute') {
-    return multiplyMicros(pricing.basePrice, params.durationSeconds / 60);
-  }
+    case 'megapixels': {
+      const w = params.widthPx ?? 1024;
+      const h = params.heightPx ?? 1024;
+      const megapixels = (w * h) / 1_000_000;
+      return multiplyMicros(pricing.unitPrice, megapixels * numImages);
+    }
 
-  // per_compute_second
-  return multiplyMicros(pricing.basePrice, DEFAULT_COMPUTE_SECONDS);
+    case 'compute_seconds':
+      return multiplyMicros(
+        pricing.unitPrice,
+        DEFAULT_COMPUTE_SECONDS * numImages
+      );
+
+    case 'seconds':
+      return multiplyMicros(pricing.unitPrice, duration);
+
+    case 'minutes':
+      return multiplyMicros(pricing.unitPrice, Math.ceil(duration / 60));
+
+    case 'tokens': {
+      const dims = params.resolution
+        ? TOKEN_RESOLUTION_DIMENSIONS[params.resolution]
+        : undefined;
+      const w = params.widthPx ?? dims?.width ?? 1920;
+      const h = params.heightPx ?? dims?.height ?? 1080;
+      const fps = params.fps ?? 24;
+      // fal prices per 1000-token unit; ~5% overhead on nominal frames.
+      const units = ((w * h * fps * duration) / 1024 / 1000) * 1.05;
+      return multiplyMicros(pricing.unitPrice, units);
+    }
+  }
 }

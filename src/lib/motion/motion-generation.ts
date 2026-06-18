@@ -1,10 +1,9 @@
 import { getEnv } from '#env';
-import { calculateVideoCost } from '@/lib/ai/fal-cost';
+import { estimateFalCost } from '@/lib/ai/fal-cost';
 import {
   DEFAULT_VIDEO_MODEL,
   IMAGE_TO_VIDEO_MODELS,
   type ImageToVideoModel,
-  videoModelSupportsAudio,
 } from '@/lib/ai/models';
 import type { Microdollars } from '@/lib/billing/money';
 import { type AspectRatio } from '@/lib/constants/aspect-ratios';
@@ -159,7 +158,9 @@ export async function pollMotionJob(
 }
 
 /**
- * Calculate motion cost + metadata after job completes.
+ * Pre-flight motion cost estimate + metadata, computed before the job runs.
+ * `cost` is a rough estimate used for the credit-availability gate — the exact
+ * charge comes from `falCostFromUnits` once fal reports `unitsBilled`.
  */
 export function calculateMotionMetadata(options: GenerateMotionOptions): {
   cost: Microdollars;
@@ -173,12 +174,8 @@ export function calculateMotionMetadata(options: GenerateMotionOptions): {
   const validatedDuration = snapDuration(options.duration, modelKey);
 
   const providerInput = buildModelInput(options, modelConfig, modelKey);
-  const audioEnabled =
-    videoModelSupportsAudio(modelKey) && options.generateAudio !== false;
-  const cost = calculateVideoCost({
-    endpointId: modelConfig.id,
+  const cost = estimateFalCost(modelConfig.id, {
     durationSeconds: validatedDuration,
-    audioEnabled,
     resolution:
       'resolution' in providerInput &&
       typeof providerInput.resolution === 'string'

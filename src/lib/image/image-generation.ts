@@ -1,4 +1,4 @@
-import { calculateImageCost } from '@/lib/ai/fal-cost';
+import { falCostFromUnits } from '@/lib/ai/fal-cost';
 import { extractFalErrorMessage } from '@/lib/ai/fal-error';
 import {
   getEditEndpoint,
@@ -237,22 +237,9 @@ async function generateImageInternal(
 
   const processingTimeMs = Date.now() - startTime;
 
-  const imageSize = params.imageSize ?? DEFAULT_IMAGE_SIZE;
-  const dims = IMAGE_SIZE_DIMENSIONS[imageSize];
-  const sizeMap: Record<ImageSize, string> = {
-    square_hd: '1024x1024',
-    portrait_16_9: '1024x1536',
-    landscape_16_9: '1536x1024',
-  };
-  const cost = calculateImageCost({
-    endpointId: endpoint,
-    numImages: imageUrls.length,
-    widthPx: dims.width,
-    heightPx: dims.height,
-    resolution: params.resolution,
-    style: params.style,
-    imageSize: sizeMap[imageSize],
-  });
+  // Exact cost from fal's reported billed units (resolution/style premiums are
+  // already baked into the count by fal).
+  const cost = falCostFromUnits(endpoint, result.usage?.unitsBilled);
 
   return {
     imageUrls,
@@ -440,13 +427,3 @@ function buildFalModelOptions(
     }
   }
 }
-
-/** Pixel dimensions for megapixel-based cost calculation */
-const IMAGE_SIZE_DIMENSIONS: Record<
-  ImageSize,
-  { width: number; height: number }
-> = {
-  square_hd: { width: 1024, height: 1024 },
-  portrait_16_9: { width: 576, height: 1024 },
-  landscape_16_9: { width: 1344, height: 768 },
-};

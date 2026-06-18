@@ -1,5 +1,5 @@
 import { getEnv } from '#env';
-import { calculateAudioCost } from '@/lib/ai/fal-cost';
+import { falCostFromUnits } from '@/lib/ai/fal-cost';
 import { extractFalErrorMessage } from '@/lib/ai/fal-error';
 import {
   AUDIO_MODELS,
@@ -202,10 +202,8 @@ async function callFalAudio(
     throw new Error('No audio URL returned from music generation');
   }
 
-  const cost = calculateAudioCost({
-    endpointId: modelConfig.id,
-    durationSeconds: billedDuration,
-  });
+  // Exact cost from fal's reported billed units.
+  const cost = falCostFromUnits(modelConfig.id, result.usage?.unitsBilled);
 
   return {
     success: true,

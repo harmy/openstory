@@ -1,316 +1,91 @@
 import { describe, expect, test } from 'vitest';
-import {
-  calculateImageCost,
-  calculateVideoCost,
-  calculateAudioCost,
-} from './fal-cost';
-import { micros, ZERO_MICROS, usdToMicros } from '@/lib/billing/money';
+import { estimateFalCost, falCostFromUnits } from './fal-cost';
+import { micros, usdToMicros, ZERO_MICROS } from '@/lib/billing/money';
 
-/** Helper: convert expected USD to micros for comparison */
 const usd = (n: number) => usdToMicros(n);
 
-describe('calculateImageCost', () => {
-  test('per_compute_second model (grok-imagine-image-quality)', () => {
-    const cost = calculateImageCost({
-      endpointId: 'xai/grok-imagine-image/quality/text-to-image',
-      numImages: 2,
-    });
-    // 170 micros * 3 (DEFAULT_COMPUTE_SECONDS) * 2 = 1_020
-    expect(cost).toBe(micros(1_020));
+describe('falCostFromUnits', () => {
+  test('per-image: unitsBilled * unitPrice (resolution premium is in the count)', () => {
+    // nano-banana-2 = $0.08/image. A 2K image fal bills as 1.5 units.
+    expect(falCostFromUnits('fal-ai/nano-banana-2', 1)).toBe(micros(80_000));
+    expect(falCostFromUnits('fal-ai/nano-banana-2', 1.5)).toBe(micros(120_000));
   });
 
-  test('per_megapixel model (flux-2-max)', () => {
-    const cost = calculateImageCost({
-      endpointId: 'fal-ai/flux-2-max',
-      numImages: 1,
-      widthPx: 1024,
-      heightPx: 1024,
-    });
-    const megapixels = (1024 * 1024) / 1_000_000;
-    // 70_000 micros * megapixels
-    expect(cost).toBe(micros(Math.round(70_000 * megapixels)));
+  test('per-megapixel: fractional units', () => {
+    // flux-2-max = $0.07/megapixel.
+    expect(falCostFromUnits('fal-ai/flux-2-max', 1.05)).toBe(micros(73_500));
   });
 
-  test('per_compute_second model (hunyuan-image instruct/edit)', () => {
-    const cost = calculateImageCost({
-      endpointId: 'fal-ai/hunyuan-image/v3/instruct/edit',
-      numImages: 1,
-    });
-    // 1_670 micros * 3 (default compute seconds) = 5_010
-    expect(cost).toBe(micros(5_010));
+  test('flat: hailuo bills 1 unit at $0.49', () => {
+    expect(
+      falCostFromUnits('fal-ai/minimax/hailuo-2.3/pro/image-to-video', 1)
+    ).toBe(usd(0.49));
   });
 
-  test('nano-banana-2 base resolution', () => {
-    const cost = calculateImageCost({
-      endpointId: 'fal-ai/nano-banana-2',
-      numImages: 1,
-    });
-    expect(cost).toBe(micros(80_000));
+  test('per-token: seedance bills 1000-token units at $0.014', () => {
+    expect(
+      falCostFromUnits(
+        'bytedance/seedance-2.0/enterprise/v2/image-to-video',
+        108
+      )
+    ).toBe(micros(1_512_000));
   });
 
-  test('nano-banana-2 at 4K resolution (2x multiplier)', () => {
-    const cost = calculateImageCost({
-      endpointId: 'fal-ai/nano-banana-2',
-      numImages: 1,
-      resolution: '4K',
-    });
-    expect(cost).toBe(micros(160_000));
+  test('audio per-minute: elevenlabs bills 1 unit at $0.80', () => {
+    expect(falCostFromUnits('fal-ai/elevenlabs/music', 1)).toBe(usd(0.8));
   });
 
-  test('nano-banana-2 at 0.5K resolution (0.75x multiplier)', () => {
-    const cost = calculateImageCost({
-      endpointId: 'fal-ai/nano-banana-2',
-      numImages: 1,
-      resolution: '0.5K',
-    });
-    expect(cost).toBe(micros(60_000));
+  test('missing unitsBilled charges nothing', () => {
+    expect(falCostFromUnits('fal-ai/nano-banana-2', undefined)).toBe(
+      ZERO_MICROS
+    );
   });
 
-  test('nano-banana-pro at 4K (2x multiplier)', () => {
-    const cost = calculateImageCost({
-      endpointId: 'fal-ai/nano-banana-pro',
-      numImages: 1,
-      resolution: '4K',
-    });
-    expect(cost).toBe(micros(300_000));
-  });
-
-  test('unknown endpoint returns 0', () => {
-    const cost = calculateImageCost({
-      endpointId: 'unknown/model',
-      numImages: 1,
-    });
-    expect(cost).toBe(ZERO_MICROS);
+  test('unknown endpoint charges nothing', () => {
+    expect(falCostFromUnits('unknown/model', 5)).toBe(ZERO_MICROS);
   });
 });
 
-describe('calculateVideoCost', () => {
-  test('Veo3.1 audio on at 1080p ($0.40/s)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'fal-ai/veo3.1/image-to-video',
-      durationSeconds: 8,
-      audioEnabled: true,
-      resolution: '1080p',
-    });
-    // 400_000 * 8 = 3_200_000
-    expect(cost).toBe(usd(3.2));
+describe('estimateFalCost', () => {
+  test('per-image scales by numImages', () => {
+    expect(estimateFalCost('fal-ai/nano-banana-2', { numImages: 2 })).toBe(
+      micros(160_000)
+    );
   });
 
-  test('Veo3.1 audio off at 1080p ($0.20/s)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'fal-ai/veo3.1/image-to-video',
-      durationSeconds: 8,
-      audioEnabled: false,
-      resolution: '1080p',
-    });
-    // 200_000 * 8 = 1_600_000
-    expect(cost).toBe(usd(1.6));
+  test('per-second scales by duration', () => {
+    expect(
+      estimateFalCost('fal-ai/veo3.1/image-to-video', { durationSeconds: 8 })
+    ).toBe(usd(3.2));
   });
 
-  test('Veo3.1 at 1080p with audio ($0.40/s)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'fal-ai/veo3.1/image-to-video',
-      durationSeconds: 8,
-      audioEnabled: true,
-      resolution: '1080p',
-    });
-    expect(cost).toBe(usd(3.2));
+  test('per-minute rounds up', () => {
+    expect(
+      estimateFalCost('fal-ai/elevenlabs/music', { durationSeconds: 61 })
+    ).toBe(usd(1.6));
   });
 
-  test('Veo3.1 at 4K with audio ($0.60/s)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'fal-ai/veo3.1/image-to-video',
-      durationSeconds: 8,
-      audioEnabled: true,
-      resolution: '4K',
-    });
-    expect(cost).toBe(usd(4.8));
+  test('compute-seconds uses a fixed estimate', () => {
+    // grok-imagine-image = $0.00017/compute-second, 3s default * 2 images.
+    expect(
+      estimateFalCost('xai/grok-imagine-image/quality/text-to-image', {
+        numImages: 2,
+      })
+    ).toBe(micros(1_020));
   });
 
-  test('Veo3.1 at 4K no audio ($0.40/s)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'fal-ai/veo3.1/image-to-video',
-      durationSeconds: 8,
-      audioEnabled: false,
-      resolution: '4K',
-    });
-    expect(cost).toBe(usd(3.2));
+  test('tokens estimate from resolution', () => {
+    expect(
+      estimateFalCost('bytedance/seedance-2.0/enterprise/v2/image-to-video', {
+        durationSeconds: 5,
+        resolution: '720p',
+      })
+    ).toBe(micros(1_587_600));
   });
 
-  test('Veo3.1 at 1080p no audio ($0.20/s)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'fal-ai/veo3.1/image-to-video',
-      durationSeconds: 8,
-      audioEnabled: false,
-      resolution: '1080p',
-    });
-    expect(cost).toBe(usd(1.6));
-  });
-
-  test('Kling v3 Pro audio off (0.8x multiplier)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'fal-ai/kling-video/v3/pro/image-to-video',
-      durationSeconds: 5,
-      audioEnabled: false,
-    });
-    // 140_000 * 0.8 = 112_000 per second, * 5 = 560_000
-    expect(cost).toBe(micros(560_000));
-  });
-
-  test('Kling v3 Pro audio on (1.2x multiplier)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'fal-ai/kling-video/v3/pro/image-to-video',
-      durationSeconds: 5,
-      audioEnabled: true,
-    });
-    // 140_000 * 1.2 = 168_000 per second, * 5 = 840_000
-    expect(cost).toBe(micros(840_000));
-  });
-
-  test('Kling v3 Pro voice control (1.4x multiplier)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'fal-ai/kling-video/v3/pro/image-to-video',
-      durationSeconds: 5,
-      audioEnabled: true,
-      voiceControl: true,
-    });
-    // 140_000 * 1.4 = 196_000 per second, * 5 = 980_000
-    expect(cost).toBe(micros(980_000));
-  });
-
-  test('LTX 2.3 simple per_second pricing ($0.08/s)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'fal-ai/ltx-2.3/image-to-video',
-      durationSeconds: 5,
-    });
-    // 80_000 * 5 = 400_000
-    expect(cost).toBe(micros(400_000));
-  });
-
-  test('Minimax Hailuo 2.3 Pro flat per-video pricing ($0.49, duration-independent)', () => {
-    const cost5s = calculateVideoCost({
-      endpointId: 'fal-ai/minimax/hailuo-2.3/pro/image-to-video',
-      durationSeconds: 5,
-    });
-    const cost10s = calculateVideoCost({
-      endpointId: 'fal-ai/minimax/hailuo-2.3/pro/image-to-video',
-      durationSeconds: 10,
-    });
-    // Flat fee — same cost regardless of requested duration
-    expect(cost5s).toBe(micros(490_000));
-    expect(cost10s).toBe(micros(490_000));
-  });
-
-  test('Grok Video 1.5 480p ($0.08/s + $0.01)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'xai/grok-imagine-video/v1.5/image-to-video',
-      durationSeconds: 6,
-      resolution: '480p',
-    });
-    // 80_000 * 6 + 10_000 = 490_000
-    expect(cost).toBe(micros(490_000));
-  });
-
-  test('Grok Video 1.5 720p ($0.14/s + $0.01)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'xai/grok-imagine-video/v1.5/image-to-video',
-      durationSeconds: 6,
-      resolution: '720p',
-    });
-    // 140_000 * 6 + 10_000 = 850_000
-    expect(cost).toBe(micros(850_000));
-  });
-
-  test('Seedance 2.0 per_token at 720p ($0.014/1k tokens)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'bytedance/seedance-2.0/enterprise/v2/image-to-video',
-      durationSeconds: 5,
-      resolution: '720p',
-    });
-    // tokens = 1280*720*24*5/1024 = 108_000 → 0.108M * 1.05 overhead = 0.1134M
-    // 14_000_000 * 0.1134 = 1_587_600 (~$0.32/s, matches fal's quoted $0.3024/s + overhead)
-    expect(cost).toBe(micros(1_587_600));
-  });
-
-  test('Seedance 2.0 per_token at 1080p ($0.014/1k tokens)', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'bytedance/seedance-2.0/enterprise/v2/image-to-video',
-      durationSeconds: 5,
-      resolution: '1080p',
-    });
-    // tokens = 1920*1080*24*5/1024 = 243_000 → 0.243M * 1.05 = 0.25515M
-    // 14_000_000 * 0.25515 = 3_572_100 (~$0.71/s, matches fal's quoted $0.682/s + overhead)
-    expect(cost).toBe(micros(3_572_100));
-  });
-
-  test('per_token explicit dimensions take precedence over resolution', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'bytedance/seedance-2.0/enterprise/v2/image-to-video',
-      durationSeconds: 5,
-      resolution: '720p',
-      widthPx: 1920,
-      heightPx: 1080,
-    });
-    expect(cost).toBe(micros(3_572_100));
-  });
-
-  test('unknown endpoint returns 0', () => {
-    const cost = calculateVideoCost({
-      endpointId: 'unknown/model',
-      durationSeconds: 5,
-    });
-    expect(cost).toBe(ZERO_MICROS);
-  });
-});
-
-describe('calculateAudioCost', () => {
-  test('ElevenLabs Music 30s (rounds to 1 min)', () => {
-    const cost = calculateAudioCost({
-      endpointId: 'fal-ai/elevenlabs/music',
-      durationSeconds: 30,
-    });
-    expect(cost).toBe(usd(0.8));
-  });
-
-  test('ElevenLabs Music 60s (exactly 1 min)', () => {
-    const cost = calculateAudioCost({
-      endpointId: 'fal-ai/elevenlabs/music',
-      durationSeconds: 60,
-    });
-    expect(cost).toBe(usd(0.8));
-  });
-
-  test('ElevenLabs Music 61s (rounds to 2 min)', () => {
-    const cost = calculateAudioCost({
-      endpointId: 'fal-ai/elevenlabs/music',
-      durationSeconds: 61,
-    });
-    expect(cost).toBe(usd(1.6));
-  });
-
-  test('ACE-Step per_second pricing', () => {
-    const cost = calculateAudioCost({
-      endpointId: 'fal-ai/ace-step/prompt-to-audio',
-      durationSeconds: 60,
-    });
-    // 200 micros * 60 = 12_000
-    expect(cost).toBe(micros(12_000));
-  });
-
-  test('ACE-Step 1.5 per_second pricing', () => {
-    const cost = calculateAudioCost({
-      endpointId: 'fal-ai/ace-step-1.5',
-      durationSeconds: 60,
-    });
-    // 300 * 60 = 18_000
-    expect(cost).toBe(micros(18_000));
-  });
-
-  test('unknown endpoint returns 0', () => {
-    const cost = calculateAudioCost({
-      endpointId: 'unknown/model',
-      durationSeconds: 60,
-    });
-    expect(cost).toBe(ZERO_MICROS);
+  test('unknown endpoint estimates nothing', () => {
+    expect(estimateFalCost('unknown/model', { numImages: 1 })).toBe(
+      ZERO_MICROS
+    );
   });
 });
