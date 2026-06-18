@@ -128,9 +128,16 @@ export function estimateFalCost(
       const w = params.widthPx ?? dims?.width ?? 1920;
       const h = params.heightPx ?? dims?.height ?? 1080;
       const fps = params.fps ?? 24;
-      // fal prices per 1000-token unit; ~5% overhead on nominal frames.
+      // fal derives tokens from pixels (≈ w·h·fps·sec / 1024) and prices per
+      // 1000-token unit; ~5% overhead on nominal frames.
       const units = ((w * h * fps * duration) / 1024 / 1000) * 1.05;
       return multiplyMicros(pricing.unitPrice, units);
+    }
+
+    default: {
+      // Exhaustiveness guard: a new FalUnit without a case fails to compile.
+      const _exhaustive: never = pricing.unit;
+      return _exhaustive;
     }
   }
 }

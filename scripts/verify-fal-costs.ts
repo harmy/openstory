@@ -118,7 +118,7 @@ function buildImageInput(
   const isHighRes = variation === 'high_res';
 
   switch (modelKey) {
-    // Nano Banana Pro/2 — aspect_ratio + resolution (has cost multipliers)
+    // Nano Banana Pro/2 — aspect_ratio + resolution
     case 'nano_banana_pro':
       return {
         ...base,

@@ -21,7 +21,11 @@
  *     JSON-stringify around the step boundary (same pattern as
  *     `visual-prompt-scene-workflow.ts`). */
 
-import { callLLMStream, PROMPT_REASONING } from '@/lib/ai/llm-client';
+import {
+  callLLMStream,
+  llmCostFromUsage,
+  PROMPT_REASONING,
+} from '@/lib/ai/llm-client';
 import { PREVIEW_IMAGE_MODEL } from '@/lib/ai/models';
 import { getContextWindow } from '@/lib/ai/models.config';
 import {
@@ -32,7 +36,8 @@ import {
   createStreamingSceneParser,
   type SceneSplittingScene,
 } from '@/lib/ai/streaming-scene-parser';
-import { ZERO_MICROS } from '@/lib/billing/money';
+import type { Microdollars } from '@/lib/billing/money';
+import type { TokenUsage } from '@tanstack/ai';
 import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import { aspectRatioToImageSize } from '@/lib/constants/aspect-ratios';
 import type { NewFrame } from '@/lib/db/schema';
@@ -76,6 +81,8 @@ type StreamResult = {
   characterBible: SceneSplittingResult['characterBible'];
   locationBible: SceneSplittingResult['locationBible'];
   elementBible: SceneSplittingResult['elementBible'];
+  /** Provider-reported cost for the LLM call, billed after reconciliation. */
+  llmCostMicros: Microdollars;
 };
 
 export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWorkflowInput> {
@@ -152,6 +159,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
         let prevScene: SceneSplittingScene | undefined = undefined;
         let prevFrameId: string | undefined = undefined;
         let parsedResult: SceneSplittingResult | undefined;
+        let capturedUsage: TokenUsage | undefined;
 
         for await (const chunk of callLLMStream<SceneSplittingResult>({
           model: modelId,
@@ -167,8 +175,9 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
           userId: input.userId,
           sessionId: input.sequenceId,
         })) {
-          if (chunk.done && chunk.parsed !== undefined) {
-            parsedResult = chunk.parsed;
+          if (chunk.done) {
+            if (chunk.parsed !== undefined) parsedResult = chunk.parsed;
+            capturedUsage = chunk.usage;
           }
           chunkCount++;
           finalText = chunk.accumulated;
@@ -395,6 +404,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
           characterBible: parsed.characterBible,
           locationBible: parsed.locationBible,
           elementBible: parsed.elementBible,
+          llmCostMicros: llmCostFromUsage(capturedUsage, modelId),
         };
         return JSON.stringify(streamResult);
       }
@@ -529,7 +539,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
     await step.do('deduct-llm-credits-scene-splitting', async () => {
       await deductWorkflowCredits({
         scopedDb,
-        costMicros: ZERO_MICROS,
+        costMicros: streamResult.llmCostMicros,
         usedOwnKey: llmCreditKeyInfo.source === 'team',
         description: `LLM analysis (${modelId})`,
         idempotencyKey: `${event.instanceId}:llm-${STEP_NAME}`,
@@ -539,6 +549,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
           phaseName: PHASE.name,
           stepName: STEP_NAME,
           sequenceId,
+          costMicros: streamResult.llmCostMicros,
         },
       });
     });

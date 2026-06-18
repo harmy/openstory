@@ -21,6 +21,7 @@ import { computeVisualPromptInputHash } from '@/lib/ai/input-hash';
 import {
   extractRunError,
   formatRunErrorMessage,
+  llmCostFromUsage,
   PROMPT_REASONING,
 } from '@/lib/ai/llm-client';
 import { getContextWindow } from '@/lib/ai/models.config';
@@ -31,7 +32,7 @@ import {
   visualPromptResultSchema,
 } from '@/lib/ai/scene-analysis.schema';
 import { extractStreamingStringField } from '@/lib/ai/stream-extract';
-import { ZERO_MICROS } from '@/lib/billing/money';
+import type { Microdollars } from '@/lib/billing/money';
 import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { getLogger } from '@/lib/observability/logger';
@@ -40,7 +41,7 @@ import { getFramePromptChannel, getGenerationChannel } from '@/lib/realtime';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import type { VisualPromptSceneWorkflowInput } from '@/lib/workflow/types';
-import { chat } from '@tanstack/ai';
+import { chat, type TokenUsage } from '@tanstack/ai';
 import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 
 const logger = getLogger(['openstory', 'workflow', 'visual-prompt-scene']);
@@ -142,62 +143,122 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
     // members confuse the check), but is JSON-safe at runtime. JSON-stringify
     // around the step boundary so the type round-trips through Serializable
     // cleanly.
-    const resultJson = await step.do(llmStepName, async (): Promise<string> => {
-      const adapter = createAdapter(analysisModelId, llmKeyInfo);
+    const { resultJson, costMicros } = await step.do(
+      llmStepName,
+      async (): Promise<{ resultJson: string; costMicros: Microdollars }> => {
+        const adapter = createAdapter(analysisModelId, llmKeyInfo);
+        let capturedUsage: TokenUsage | undefined;
+        const captureUsage = [
+          {
+            onFinish: (_ctx: unknown, info: { usage?: TokenUsage }) => {
+              capturedUsage = info.usage;
+            },
+          },
+        ];
 
-      logger.info(
-        `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Starting${
-          streamConfig ? ' streaming' : ''
-        } call`,
-        {
-          model: analysisModelId,
-          keySource: llmKeyInfo.source,
-          keyVia: llmKeyInfo.via,
-          messageCount: messages.length,
-          ...(streamConfig
-            ? {
-                frameId: streamConfig.frameId,
-                promptType: streamConfig.promptType,
-              }
-            : {}),
+        logger.info(
+          `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Starting${
+            streamConfig ? ' streaming' : ''
+          } call`,
+          {
+            model: analysisModelId,
+            keySource: llmKeyInfo.source,
+            keyVia: llmKeyInfo.via,
+            messageCount: messages.length,
+            ...(streamConfig
+              ? {
+                  frameId: streamConfig.frameId,
+                  promptType: streamConfig.promptType,
+                }
+              : {}),
+          }
+        );
+
+        const systemPrompts: string[] = [];
+        const chatMessages: Array<{
+          role: 'user' | 'assistant';
+          content: string;
+        }> = [];
+        for (const msg of messages) {
+          const flat =
+            typeof msg.content === 'string'
+              ? msg.content
+              : msg.content
+                  .map((part) => (part.type === 'text' ? part.content : ''))
+                  .filter(Boolean)
+                  .join('\n');
+          if (msg.role === 'system') {
+            systemPrompts.push(flat);
+          } else {
+            chatMessages.push({ role: msg.role, content: flat });
+          }
         }
-      );
 
-      const systemPrompts: string[] = [];
-      const chatMessages: Array<{
-        role: 'user' | 'assistant';
-        content: string;
-      }> = [];
-      for (const msg of messages) {
-        const flat =
-          typeof msg.content === 'string'
-            ? msg.content
-            : msg.content
-                .map((part) => (part.type === 'text' ? part.content : ''))
-                .filter(Boolean)
-                .join('\n');
-        if (msg.role === 'system') {
-          systemPrompts.push(flat);
-        } else {
-          chatMessages.push({ role: msg.role, content: flat });
-        }
-      }
+        const abortController = new AbortController();
+        const timeout = setTimeout(() => abortController.abort(), 300_000);
 
-      const abortController = new AbortController();
-      const timeout = setTimeout(() => abortController.abort(), 300_000);
+        // Reasoning lifts prompt-generation quality. Enabled in E2E too — it's
+        // deterministic once recorded, so aimock records + replays it normally.
+        const reasoningOptions = { reasoning: PROMPT_REASONING };
 
-      // Reasoning lifts prompt-generation quality. Enabled in E2E too — it's
-      // deterministic once recorded, so aimock records + replays it normally.
-      const reasoningOptions = { reasoning: PROMPT_REASONING };
+        try {
+          if (!streamConfig) {
+            const text = await chat({
+              adapter,
+              messages: chatMessages,
+              systemPrompts: systemPrompts,
+              outputSchema: visualPromptResultSchema,
+              stream: false,
+              abortController,
+              modelOptions: {
+                ...reasoningOptions,
+                maxCompletionTokens: Math.floor(
+                  getContextWindow(analysisModelId) * 0.5
+                ),
+              },
+              metadata: {
+                observationName: LOG_NAME,
+                prompt: promptReference,
+                tags: [...LOG_TAGS],
+                metadata: logMetadata,
+                sessionId: sequenceId,
+                userId,
+              },
+              middleware: captureUsage,
+              debug: false,
+            });
+            logger.info(
+              `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Call succeeded`
+            );
+            return {
+              resultJson: JSON.stringify(text),
+              costMicros: llmCostFromUsage(capturedUsage, analysisModelId),
+            };
+          }
 
-      try {
-        if (!streamConfig) {
-          const text = await chat({
+          // Streaming path — emit visible `fullPrompt` deltas while accumulating.
+          const channel = getFramePromptChannel(streamConfig.frameId);
+          let accumulated = '';
+          let lastExtracted = '';
+          let pendingDelta = '';
+          let lastEmitAt = 0;
+
+          const flushDelta = async () => {
+            if (!pendingDelta) return;
+            const delta = pendingDelta;
+            pendingDelta = '';
+            lastEmitAt = Date.now();
+            await channel.emit('framePrompt.streaming', {
+              promptType: streamConfig.promptType,
+              delta,
+            });
+          };
+
+          for await (const streamEvent of chat({
             adapter,
             messages: chatMessages,
             systemPrompts: systemPrompts,
-            outputSchema: visualPromptResultSchema,
-            stream: false,
+            stream: true,
             abortController,
             modelOptions: {
               ...reasoningOptions,
@@ -208,98 +269,60 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
             metadata: {
               observationName: LOG_NAME,
               prompt: promptReference,
-              tags: [...LOG_TAGS],
+              tags: [...LOG_TAGS_STREAM],
               metadata: logMetadata,
               sessionId: sequenceId,
               userId,
             },
+            outputSchema: visualPromptResultSchema,
+            middleware: captureUsage,
             debug: false,
-          });
-          logger.info(
-            `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Call succeeded`
-          );
-          return JSON.stringify(text);
-        }
-
-        // Streaming path — emit visible `fullPrompt` deltas while accumulating.
-        const channel = getFramePromptChannel(streamConfig.frameId);
-        let accumulated = '';
-        let lastExtracted = '';
-        let pendingDelta = '';
-        let lastEmitAt = 0;
-
-        const flushDelta = async () => {
-          if (!pendingDelta) return;
-          const delta = pendingDelta;
-          pendingDelta = '';
-          lastEmitAt = Date.now();
-          await channel.emit('framePrompt.streaming', {
-            promptType: streamConfig.promptType,
-            delta,
-          });
-        };
-
-        for await (const streamEvent of chat({
-          adapter,
-          messages: chatMessages,
-          systemPrompts: systemPrompts,
-          stream: true,
-          abortController,
-          modelOptions: {
-            ...reasoningOptions,
-            maxCompletionTokens: Math.floor(
-              getContextWindow(analysisModelId) * 0.5
-            ),
-          },
-          metadata: {
-            observationName: LOG_NAME,
-            prompt: promptReference,
-            tags: [...LOG_TAGS_STREAM],
-            metadata: logMetadata,
-            sessionId: sequenceId,
-            userId,
-          },
-          outputSchema: visualPromptResultSchema,
-          debug: false,
-        })) {
-          if (
-            streamEvent.type === 'TEXT_MESSAGE_CONTENT' &&
-            typeof streamEvent.delta === 'string'
-          ) {
-            accumulated += streamEvent.delta;
-            const next = extractStreamingStringField(accumulated, 'fullPrompt');
-            if (next.length > lastExtracted.length) {
-              pendingDelta += next.slice(lastExtracted.length);
-              lastExtracted = next;
-            }
+          })) {
             if (
-              pendingDelta &&
-              Date.now() - lastEmitAt >= streamConfig.flushIntervalMs
+              streamEvent.type === 'TEXT_MESSAGE_CONTENT' &&
+              typeof streamEvent.delta === 'string'
             ) {
-              await flushDelta();
+              accumulated += streamEvent.delta;
+              const next = extractStreamingStringField(
+                accumulated,
+                'fullPrompt'
+              );
+              if (next.length > lastExtracted.length) {
+                pendingDelta += next.slice(lastExtracted.length);
+                lastExtracted = next;
+              }
+              if (
+                pendingDelta &&
+                Date.now() - lastEmitAt >= streamConfig.flushIntervalMs
+              ) {
+                await flushDelta();
+              }
+              continue;
             }
-            continue;
+            const runError = extractRunError(streamEvent);
+            if (runError) {
+              logger.error(
+                `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Streaming call RUN_ERROR`,
+                { runError: runError.event }
+              );
+              throw new Error(formatRunErrorMessage(runError));
+            }
           }
-          const runError = extractRunError(streamEvent);
-          if (runError) {
-            logger.error(
-              `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Streaming call RUN_ERROR`,
-              { runError: runError.event }
-            );
-            throw new Error(formatRunErrorMessage(runError));
-          }
+          await flushDelta();
+          logger.info(
+            `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Streaming call succeeded`
+          );
+          return {
+            resultJson: JSON.stringify(
+              visualPromptResultSchema.parse(JSON.parse(accumulated))
+            ),
+            costMicros: llmCostFromUsage(capturedUsage, analysisModelId),
+          };
+        } finally {
+          clearTimeout(timeout);
         }
-        await flushDelta();
-        logger.info(
-          `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Streaming call succeeded`
-        );
-        return JSON.stringify(
-          visualPromptResultSchema.parse(JSON.parse(accumulated))
-        );
-      } finally {
-        clearTimeout(timeout);
       }
-    });
+    );
     const result: VisualPromptResult = visualPromptResultSchema.parse(
       JSON.parse(resultJson)
     );
@@ -308,7 +331,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
     await step.do(`deduct-llm-credits-${STEP_NAME}`, async () => {
       await deductWorkflowCredits({
         scopedDb,
-        costMicros: ZERO_MICROS,
+        costMicros,
         usedOwnKey: llmKeyInfo.source === 'team',
         description: `LLM analysis (${analysisModelId})`,
         idempotencyKey: `${event.instanceId}:llm-${STEP_NAME}`,
@@ -318,6 +341,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
           phaseName: PHASE.name,
           stepName: STEP_NAME,
           sequenceId,
+          costMicros,
         },
       });
     });

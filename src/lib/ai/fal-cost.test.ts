@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vitest';
 import { estimateFalCost, falCostFromUnits } from './fal-cost';
+import { FAL_PRICING } from './fal-pricing-data';
+import {
+  AUDIO_MODELS,
+  EDIT_ENDPOINTS,
+  IMAGE_MODELS,
+  IMAGE_TO_VIDEO_MODELS,
+} from '@/lib/ai/models';
 import { micros, usdToMicros, ZERO_MICROS } from '@/lib/billing/money';
 
 const usd = (n: number) => usdToMicros(n);
@@ -87,5 +94,21 @@ describe('estimateFalCost', () => {
     expect(estimateFalCost('unknown/model', { numImages: 1 })).toBe(
       ZERO_MICROS
     );
+  });
+});
+
+describe('FAL_PRICING coverage', () => {
+  // Every model we can generate with must have pricing, or it bills $0 at
+  // runtime (a loud error, but only after free generations). This turns a
+  // missing entry — e.g. after a model bump — into a pre-merge failure.
+  const endpointIds = [
+    ...Object.values(IMAGE_MODELS).map((m) => m.id),
+    ...Object.values(IMAGE_TO_VIDEO_MODELS).map((m) => m.id),
+    ...Object.values(AUDIO_MODELS).map((m) => m.id),
+    ...Object.values(EDIT_ENDPOINTS).filter((id): id is string => !!id),
+  ];
+
+  test.each([...new Set(endpointIds)])('has pricing for %s', (id) => {
+    expect(FAL_PRICING[id]).toBeDefined();
   });
 });

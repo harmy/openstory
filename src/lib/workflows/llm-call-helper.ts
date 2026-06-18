@@ -12,16 +12,13 @@ import { createAdapter, getPlatformLlmKey } from '@/lib/ai/create-adapter';
 import {
   extractRunError,
   formatRunErrorMessage,
+  llmCostFromUsage,
   PROMPT_REASONING,
 } from '@/lib/ai/llm-client';
 import type { TextModel } from '@/lib/ai/models';
 import { getContextWindow } from '@/lib/ai/models.config';
 import { extractStreamingStringField } from '@/lib/ai/stream-extract';
-import {
-  usdToMicros,
-  ZERO_MICROS,
-  type Microdollars,
-} from '@/lib/billing/money';
+import type { Microdollars } from '@/lib/billing/money';
 import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { getLogger } from '@/lib/observability/logger';
@@ -38,31 +35,6 @@ import { NonRetryableError } from 'cloudflare:workflows';
 import type { z } from 'zod';
 
 const logger = getLogger(['openstory', 'workflow', 'llm-call-helper']);
-
-/**
- * Convert a completed LLM call's usage into a charge. OpenRouter reports an
- * authoritative per-request `cost` (USD) on every response; we charge that raw
- * cost (markup is applied downstream in `deductCredits`). Logs and charges
- * nothing when no cost was reported (e.g. a provider that doesn't surface it),
- * surfacing the gap rather than guessing.
- */
-function llmCostFromUsage(
-  usage: TokenUsage | undefined,
-  modelId: string
-): Microdollars {
-  if (
-    !usage ||
-    typeof usage.cost !== 'number' ||
-    !Number.isFinite(usage.cost)
-  ) {
-    logger.error(
-      `No usage cost reported for LLM call (${modelId}) — charging nothing`,
-      { usage }
-    );
-    return ZERO_MICROS;
-  }
-  return usdToMicros(usage.cost);
-}
 
 export type DurableLLMCallConfig<TSchema extends z.ZodType> = {
   name: string;

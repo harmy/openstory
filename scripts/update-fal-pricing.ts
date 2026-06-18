@@ -50,10 +50,10 @@ const endpoints = getFalEndpointIds();
 // "units" disambiguation
 //
 // The pricing API reports the ambiguous unit `"units"` for several distinct
-// billing kinds (flat-per-video, per-1000-token, and per-image all show up as
-// "units"). Tag the known ones so pre-flight ESTIMATION can predict a unit
-// count. This never affects an actual charge — billing always multiplies fal's
-// reported `unitsBilled` by `unitPrice` regardless of `unit`.
+// billing kinds (e.g. flat-per-video, per-1000-token, per-image, and per-second
+// all show up as "units"). Tag the known ones so pre-flight ESTIMATION can
+// predict a unit count. This never affects an actual charge — billing always
+// multiplies fal's reported `unitsBilled` by `unitPrice` regardless of `unit`.
 // ============================================================================
 
 const UNITS_KIND: Record<string, FalUnit> = {
