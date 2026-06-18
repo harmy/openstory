@@ -1,42 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import {
   analysisModelSupportsVision,
-  getVisionCompanionModelId,
+  DEFAULT_VISION_MODEL,
   resolveVisionModel,
-  SCRIPT_ANALYSIS_MODELS,
 } from '../models.config';
 
-// GLM-5.2 is text-only but declares GLM-4.6V as its vision companion (#942):
-// image-bearing calls must transparently swap to the companion.
+// Text-only analysis models can't see the rendered still the motion-prompt pass
+// conditions on (#929), so an image-bearing call on one routes to
+// DEFAULT_VISION_MODEL. GLM-4.6V was tried as GLM-5.2's companion (#942) but
+// can't do strict structured outputs, so we fall back to the default (#944).
 describe('vision-model routing', () => {
-  it('GLM-5.2 is text-only and points at GLM-4.6V as its companion', () => {
+  it('routes a text-only model with an image to DEFAULT_VISION_MODEL', () => {
     expect(analysisModelSupportsVision('z-ai/glm-5.2')).toBe(false);
-    expect(analysisModelSupportsVision('z-ai/glm-4.6v')).toBe(true);
-    expect(getVisionCompanionModelId('z-ai/glm-5.2')).toBe('z-ai/glm-4.6v');
+    expect(resolveVisionModel('z-ai/glm-5.2', true)).toBe(DEFAULT_VISION_MODEL);
+    // Also any other text-only model — the fallback is universal, not per-model.
+    expect(resolveVisionModel('deepseek/deepseek-v3.2', true)).toBe(
+      DEFAULT_VISION_MODEL
+    );
   });
 
-  it('swaps a text-only model to its companion only when an image is present', () => {
-    expect(resolveVisionModel('z-ai/glm-5.2', true)).toBe('z-ai/glm-4.6v');
+  it('leaves a text-only model unchanged when there is no image', () => {
     expect(resolveVisionModel('z-ai/glm-5.2', false)).toBe('z-ai/glm-5.2');
   });
 
-  // The type system catches a typo'd companion id, but not a companion that
-  // points at a real-yet-text-only model — assert the semantic invariant.
-  it('every declared vision companion is itself a vision-capable model', () => {
-    for (const model of SCRIPT_ANALYSIS_MODELS) {
-      if ('visionCompanion' in model) {
-        expect(analysisModelSupportsVision(model.visionCompanion)).toBe(true);
-      }
-    }
+  it('leaves a vision-capable model unchanged even with an image', () => {
+    expect(resolveVisionModel('x-ai/grok-4.3', true)).toBe('x-ai/grok-4.3');
   });
 
-  it('leaves vision-capable models and companionless text models unchanged', () => {
-    // Already sees images — no swap.
-    expect(resolveVisionModel('x-ai/grok-4.3', true)).toBe('x-ai/grok-4.3');
-    // Text-only with no companion — stays put (caller drops the image).
-    expect(resolveVisionModel('deepseek/deepseek-v3.2', true)).toBe(
-      'deepseek/deepseek-v3.2'
-    );
-    expect(getVisionCompanionModelId('deepseek/deepseek-v3.2')).toBeUndefined();
+  // The fallback target must itself accept images, or routing to it is pointless.
+  it('DEFAULT_VISION_MODEL is itself vision-capable', () => {
+    expect(analysisModelSupportsVision(DEFAULT_VISION_MODEL)).toBe(true);
   });
 });

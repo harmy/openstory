@@ -77,26 +77,12 @@ export const SCRIPT_ANALYSIS_MODELS = [
     qualityRank: 7,
     contextWindow: 1_048_576,
     // GLM-5.2 is text-only. Image-bearing calls (the vision-conditioned motion
-    // path, #929/#942) transparently delegate to its multimodal sibling
-    // GLM-4.6V via `visionCompanion` — see `resolveVisionModel`.
+    // path, #929) transparently route to `DEFAULT_VISION_MODEL` — see
+    // `resolveVisionModel`. GLM's own vision sibling GLM-4.6V was tried (#942)
+    // but can't do strict structured outputs, which the motion-prompt call
+    // requires, so it failed; we fall back to the default vision model (#944).
     vision: false,
-    visionCompanion: 'z-ai/glm-4.6v',
     description: 'Large-scale reasoning model, 1M context, long-horizon agents',
-  },
-  {
-    id: 'z-ai/glm-4.6v',
-    name: 'GLM-4.6V',
-    provider: 'Z.ai',
-    license: 'open-source' as const,
-    // Hidden from the analysis-model picker: GLM-4.6V is GLM-5.2's vision
-    // sibling, used automatically for image-bearing calls when GLM-5.2 is the
-    // selected model (#942). Not offered as a standalone text-analysis choice.
-    qualityRank: 99,
-    contextWindow: 131_072,
-    vision: true,
-    hidden: true,
-    description:
-      'Multimodal vision sibling of GLM-5.2 for image-conditioned tasks',
   },
   {
     id: 'google/gemini-3.1-pro-preview',
@@ -213,32 +199,29 @@ export function analysisModelSupportsVision(modelId: string): boolean {
 }
 
 /**
- * The multimodal sibling a text-only model delegates image-bearing calls to,
- * if it declares one (e.g. GLM-5.2 → GLM-4.6V, #942). Undefined when the model
- * has no companion.
+ * Vision-capable model that image-bearing calls fall back to when the chosen
+ * analysis model is text-only (#944). The motion-prompt pass conditions on the
+ * rendered still (#929), so a text model selected for analysis still needs a
+ * multimodal model for that one call. Sonnet is the default: it does vision +
+ * strict structured outputs + reasoning, which the motion-prompt call requires
+ * (GLM's vision siblings can't do strict structured outputs — see #942/#944).
  */
-export function getVisionCompanionModelId(
-  modelId: string
-): AnalysisModelId | undefined {
-  const model = getAnalysisModelById(modelId);
-  return model && 'visionCompanion' in model
-    ? model.visionCompanion
-    : undefined;
-}
+export const DEFAULT_VISION_MODEL: AnalysisModelId =
+  'anthropic/claude-sonnet-4.6';
 
 /**
  * Resolve which model should actually run a call given whether it carries image
- * input. A text-only model with image input is swapped to its declared vision
- * companion so the image can be used; everything else runs as chosen. A
- * text-only model with image input but no companion stays put — the caller then
- * drops the image and falls back to the text-only path.
+ * input. A text-only model with image input is swapped to `DEFAULT_VISION_MODEL`
+ * so the image can be used; everything else runs as chosen. The effective model
+ * drives the adapter, context window, and cost; callers keep storing/hashing the
+ * requested model.
  */
 export function resolveVisionModel(
   modelId: AnalysisModelId,
   hasImageInput: boolean
 ): AnalysisModelId {
   if (!hasImageInput || analysisModelSupportsVision(modelId)) return modelId;
-  return getVisionCompanionModelId(modelId) ?? modelId;
+  return DEFAULT_VISION_MODEL;
 }
 /**
  * Default model to use when none is specified

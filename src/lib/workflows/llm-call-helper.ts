@@ -207,10 +207,10 @@ export async function durableLLMCallCf<TSchema extends z.ZodType>(
   callContext: DurableLLMCallContext
 ): Promise<z.infer<TSchema>> {
   const { name, phase } = config;
-  // Image-bearing calls on a text-only model transparently route to its vision
-  // companion (e.g. GLM-5.2 → GLM-4.6V, #942); everything else runs as chosen.
-  // The effective model drives the adapter, context window, and cost; callers
-  // keep storing/hashing the requested model.
+  // Image-bearing calls on a text-only model transparently route to
+  // DEFAULT_VISION_MODEL (e.g. GLM-5.2 → Claude Sonnet, #944); everything else
+  // runs as chosen. The effective model drives the adapter, context window, and
+  // cost; callers keep storing/hashing the requested model.
   const hasImageInput = (config.visionImageUrls?.length ?? 0) > 0;
   const modelId = resolveVisionModel(config.modelId, hasImageInput);
   const logName = `phase-${phase.number}-${name}`;
@@ -258,14 +258,14 @@ export async function durableLLMCallCf<TSchema extends z.ZodType>(
       });
 
       // Only attach the still when the effective model accepts image input.
-      // Warn (don't fail — the text-only path is a supported mode) when an
-      // image was supplied but is being dropped: that means a text-only model
-      // with no vision companion is wired into a vision-conditioned call, which
-      // would otherwise be invisible in the logs.
+      // resolveVisionModel routes text-only models to DEFAULT_VISION_MODEL, so
+      // reaching here with an image but no vision support means that default is
+      // misconfigured to a text-only model. Warn and drop the image (don't fail
+      // — text-only is a supported mode) rather than send it to a text model.
       const effectiveSupportsVision = analysisModelSupportsVision(modelId);
       if (hasImageInput && !effectiveSupportsVision) {
         logger.warn(
-          `[LLM:${logName}:cf] Dropping vision image(s): effective model ${modelId} (requested ${config.modelId}) is text-only with no vision companion; running text-only`
+          `[LLM:${logName}:cf] Dropping vision image(s): effective model ${modelId} (requested ${config.modelId}) is text-only; DEFAULT_VISION_MODEL may be misconfigured — running text-only`
         );
       }
       const visionImageSources = effectiveSupportsVision
@@ -363,7 +363,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
 
   const { name, phase } = config;
   // See durableLLMCallCf: image-bearing calls on a text-only model route to
-  // their vision companion; the effective model drives adapter/window/cost.
+  // DEFAULT_VISION_MODEL; the effective model drives adapter/window/cost.
   const hasImageInput = (config.visionImageUrls?.length ?? 0) > 0;
   const modelId = resolveVisionModel(config.modelId, hasImageInput);
   const {

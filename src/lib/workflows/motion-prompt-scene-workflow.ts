@@ -121,10 +121,9 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
         reasoning: true,
         // Attach the rendered still whenever we have one. The LLM helper owns
         // the vision-routing policy: it runs the call on a vision-capable model
-        // (the chosen model if it sees images, else its `visionCompanion` —
-        // e.g. GLM-5.2 → GLM-4.6V, #942) and drops the image only when neither
-        // can, falling back to the text-only path. The staleness hash always
-        // folds in the image regardless, so a re-render re-stales the prompt.
+        // (the chosen model if it sees images, else DEFAULT_VISION_MODEL —
+        // e.g. GLM-5.2 → Claude Sonnet, #944). The staleness hash always folds
+        // in the image regardless, so a re-render re-stales the prompt.
         visionImageUrls: startingFrameImageUrl
           ? [startingFrameImageUrl]
           : undefined,
