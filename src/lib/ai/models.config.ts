@@ -76,10 +76,27 @@ export const SCRIPT_ANALYSIS_MODELS = [
     license: 'open-source' as const,
     qualityRank: 7,
     contextWindow: 1_048_576,
-    // Treated as text-only for the vision-conditioned motion path (#929)
-    // until confirmed to accept image input.
+    // GLM-5.2 is text-only. Image-bearing calls (the vision-conditioned motion
+    // path, #929/#942) transparently delegate to its multimodal sibling
+    // GLM-4.6V via `visionCompanion` — see `resolveVisionModel`.
     vision: false,
+    visionCompanion: 'z-ai/glm-4.6v',
     description: 'Large-scale reasoning model, 1M context, long-horizon agents',
+  },
+  {
+    id: 'z-ai/glm-4.6v',
+    name: 'GLM-4.6V',
+    provider: 'Z.ai',
+    license: 'open-source' as const,
+    // Hidden from the analysis-model picker: GLM-4.6V is GLM-5.2's vision
+    // sibling, used automatically for image-bearing calls when GLM-5.2 is the
+    // selected model (#942). Not offered as a standalone text-analysis choice.
+    qualityRank: 99,
+    contextWindow: 131_072,
+    vision: true,
+    hidden: true,
+    description:
+      'Multimodal vision sibling of GLM-5.2 for image-conditioned tasks',
   },
   {
     id: 'google/gemini-3.1-pro-preview',
@@ -193,6 +210,35 @@ export function getContextWindow(modelId: string): number {
  */
 export function analysisModelSupportsVision(modelId: string): boolean {
   return getAnalysisModelById(modelId)?.vision ?? false;
+}
+
+/**
+ * The multimodal sibling a text-only model delegates image-bearing calls to,
+ * if it declares one (e.g. GLM-5.2 → GLM-4.6V, #942). Undefined when the model
+ * has no companion.
+ */
+export function getVisionCompanionModelId(
+  modelId: string
+): AnalysisModelId | undefined {
+  const model = getAnalysisModelById(modelId);
+  return model && 'visionCompanion' in model
+    ? model.visionCompanion
+    : undefined;
+}
+
+/**
+ * Resolve which model should actually run a call given whether it carries image
+ * input. A text-only model with image input is swapped to its declared vision
+ * companion so the image can be used; everything else runs as chosen. A
+ * text-only model with image input but no companion stays put — the caller then
+ * drops the image and falls back to the text-only path.
+ */
+export function resolveVisionModel(
+  modelId: AnalysisModelId,
+  hasImageInput: boolean
+): AnalysisModelId {
+  if (!hasImageInput || analysisModelSupportsVision(modelId)) return modelId;
+  return getVisionCompanionModelId(modelId) ?? modelId;
 }
 /**
  * Default model to use when none is specified

@@ -24,6 +24,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const models = useMemo(
     () =>
       [...SCRIPT_ANALYSIS_MODELS]
+        .filter((m) => !('hidden' in m))
         .sort((a, b) => a.qualityRank - b.qualityRank)
         .map((m) => ({
           id: m.id,

@@ -16,7 +16,11 @@ import {
   PROMPT_REASONING,
 } from '@/lib/ai/llm-client';
 import type { TextModel } from '@/lib/ai/models';
-import { getContextWindow } from '@/lib/ai/models.config';
+import {
+  analysisModelSupportsVision,
+  getContextWindow,
+  resolveVisionModel,
+} from '@/lib/ai/models.config';
 import { extractStreamingStringField } from '@/lib/ai/stream-extract';
 import type { Microdollars } from '@/lib/billing/money';
 import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
@@ -202,7 +206,13 @@ export async function durableLLMCallCf<TSchema extends z.ZodType>(
   config: DurableLLMCallConfig<TSchema>,
   callContext: DurableLLMCallContext
 ): Promise<z.infer<TSchema>> {
-  const { name, phase, modelId } = config;
+  const { name, phase } = config;
+  // Image-bearing calls on a text-only model transparently route to its vision
+  // companion (e.g. GLM-5.2 → GLM-4.6V, #942); everything else runs as chosen.
+  // The effective model drives the adapter, context window, and cost; callers
+  // keep storing/hashing the requested model.
+  const hasImageInput = (config.visionImageUrls?.length ?? 0) > 0;
+  const modelId = resolveVisionModel(config.modelId, hasImageInput);
   const logName = `phase-${phase.number}-${name}`;
   const logTags = [name, `phase-${phase.number}`, 'analysis'];
   const logMetadata = {
@@ -241,14 +251,26 @@ export async function durableLLMCallCf<TSchema extends z.ZodType>(
 
       logger.info(`[LLM:${logName}:cf] Starting call`, {
         model: modelId,
+        requestedModel: config.modelId,
         keySource: llmKeyInfo.source,
         keyVia: llmKeyInfo.via,
         messageCount: messages.length,
       });
 
-      const visionImageSources = await resolveVisionImageSources(
-        config.visionImageUrls
-      );
+      // Only attach the still when the effective model accepts image input.
+      // Warn (don't fail — the text-only path is a supported mode) when an
+      // image was supplied but is being dropped: that means a text-only model
+      // with no vision companion is wired into a vision-conditioned call, which
+      // would otherwise be invisible in the logs.
+      const effectiveSupportsVision = analysisModelSupportsVision(modelId);
+      if (hasImageInput && !effectiveSupportsVision) {
+        logger.warn(
+          `[LLM:${logName}:cf] Dropping vision image(s): effective model ${modelId} (requested ${config.modelId}) is text-only with no vision companion; running text-only`
+        );
+      }
+      const visionImageSources = effectiveSupportsVision
+        ? await resolveVisionImageSources(config.visionImageUrls)
+        : undefined;
       const { systemPrompts, chatMessages } = buildChatMessages(
         messages,
         visionImageSources
@@ -267,9 +289,7 @@ export async function durableLLMCallCf<TSchema extends z.ZodType>(
           abortController,
           modelOptions: {
             ...reasoningModelOptions(config.reasoning),
-            maxCompletionTokens: Math.floor(
-              getContextWindow(config.modelId) * 0.5
-            ),
+            maxCompletionTokens: Math.floor(getContextWindow(modelId) * 0.5),
           },
           metadata: {
             observationName: logName,
@@ -341,7 +361,11 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
     return durableLLMCallCf(step, config, callContext);
   }
 
-  const { name, phase, modelId } = config;
+  const { name, phase } = config;
+  // See durableLLMCallCf: image-bearing calls on a text-only model route to
+  // their vision companion; the effective model drives adapter/window/cost.
+  const hasImageInput = (config.visionImageUrls?.length ?? 0) > 0;
+  const modelId = resolveVisionModel(config.modelId, hasImageInput);
   const {
     frameId,
     promptType,
@@ -376,6 +400,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
 
       logger.info(`[LLM:${logName}:cf] Starting streaming call`, {
         model: modelId,
+        requestedModel: config.modelId,
         keySource: llmKeyInfo.source,
         keyVia: llmKeyInfo.via,
         messageCount: messages.length,
@@ -383,9 +408,17 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
         promptType,
       });
 
-      const visionImageSources = await resolveVisionImageSources(
-        config.visionImageUrls
-      );
+      // Only attach the still when the effective model accepts image input;
+      // warn (don't fail) when an image is dropped — see durableLLMCallCf.
+      const effectiveSupportsVision = analysisModelSupportsVision(modelId);
+      if (hasImageInput && !effectiveSupportsVision) {
+        logger.warn(
+          `[LLM:${logName}:cf] Dropping vision image(s): effective model ${modelId} (requested ${config.modelId}) is text-only with no vision companion; running text-only`
+        );
+      }
+      const visionImageSources = effectiveSupportsVision
+        ? await resolveVisionImageSources(config.visionImageUrls)
+        : undefined;
       const { systemPrompts, chatMessages } = buildChatMessages(
         messages,
         visionImageSources
@@ -418,9 +451,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
           abortController,
           modelOptions: {
             ...reasoningModelOptions(config.reasoning),
-            maxCompletionTokens: Math.floor(
-              getContextWindow(config.modelId) * 0.5
-            ),
+            maxCompletionTokens: Math.floor(getContextWindow(modelId) * 0.5),
           },
           metadata: {
             observationName: logName,

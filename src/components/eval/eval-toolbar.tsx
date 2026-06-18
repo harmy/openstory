@@ -307,10 +307,12 @@ export const EvalToolbar: React.FC<EvalToolbarProps> = ({
   // Build options for select components
   const analysisModelOptions = [
     { value: 'all', label: 'All Analysis Models' },
-    ...SCRIPT_ANALYSIS_MODELS.map((model) => ({
-      value: model.id,
-      label: model.name,
-    })),
+    ...SCRIPT_ANALYSIS_MODELS.filter((model) => !('hidden' in model)).map(
+      (model) => ({
+        value: model.id,
+        label: model.name,
+      })
+    ),
   ];
 
   const imageModelOptions = [

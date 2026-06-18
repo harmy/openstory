@@ -14,7 +14,6 @@
  *     by `step.do`. */
 
 import { computeMotionPromptInputHash } from '@/lib/ai/input-hash';
-import { analysisModelSupportsVision } from '@/lib/ai/models.config';
 import { narrowFramePromptContext } from '@/lib/ai/prompt-context';
 import {
   motionPromptSchema,
@@ -120,15 +119,15 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
         responseSchema: motionPromptSchema,
         additionalMetadata: { frameId },
         reasoning: true,
-        // Only attach the still when the chosen analysis model accepts image
-        // input; otherwise OpenRouter would reject the request. Non-vision
-        // models still get the (now image-aware) text prompt. The staleness
-        // hash always folds in the image regardless, so switching to a vision
-        // model later re-generates with the still.
-        visionImageUrls:
-          startingFrameImageUrl && analysisModelSupportsVision(analysisModelId)
-            ? [startingFrameImageUrl]
-            : undefined,
+        // Attach the rendered still whenever we have one. The LLM helper owns
+        // the vision-routing policy: it runs the call on a vision-capable model
+        // (the chosen model if it sees images, else its `visionCompanion` —
+        // e.g. GLM-5.2 → GLM-4.6V, #942) and drops the image only when neither
+        // can, falling back to the text-only path. The staleness hash always
+        // folds in the image regardless, so a re-render re-stales the prompt.
+        visionImageUrls: startingFrameImageUrl
+          ? [startingFrameImageUrl]
+          : undefined,
       },
       {
         sequenceId,
