@@ -173,19 +173,33 @@ export class CharacterBibleWorkflow extends OpenStoryWorkflowEntrypoint<Characte
     const settled = await Promise.allSettled(spawnPromises);
 
     const seqCharacters: CharacterMinimal[] = [];
+    const failures: string[] = [];
     for (const [index, outcome] of settled.entries()) {
       if (outcome.status === 'rejected') {
-        // Log the per-child failure but do not throw — Promise.allSettled
-        // ensures one timed-out / failed child cannot tank the parent. The
-        // child's own `onFailure` already wrote the failed status + emitted
-        // the realtime event for the affected character row.
+        // A reference sheet is what anchors a character's identity across cuts
+        // (#801), and every character in the bible recurs by construction — so
+        // a missing sheet means the sequence would render an unanchored,
+        // different-looking person each cut. We therefore do NOT swallow a
+        // failed child and press on (the old behaviour, which left the row
+        // `completed` with a null sheet and silently continued); instead we
+        // collect every failure and throw once below so the parent
+        // (analyze-script) fails the whole sequence with a clear status error
+        // rather than completing it unanchored (#939). The child's own
+        // `onFailure` already wrote the failed status + emitted the realtime
+        // event for the affected character row.
         const character = input.characterBible[index];
+        const name = character?.name ?? `index ${index}`;
+        const reason =
+          outcome.reason instanceof Error
+            ? outcome.reason.message
+            : String(outcome.reason);
         logger.error(
-          `[CharacterBibleWorkflow:cf] Child character-sheet failed for ${character?.name ?? `index ${index}`}:`,
+          `[CharacterBibleWorkflow:cf] Child character-sheet failed for ${name}:`,
           {
             err: outcome.reason,
           }
         );
+        failures.push(`${name} (${reason})`);
         continue;
       }
 
@@ -204,6 +218,17 @@ export class CharacterBibleWorkflow extends OpenStoryWorkflowEntrypoint<Characte
         consistencyTag:
           castingAttrs?.consistencyTag ?? character.consistencyTag,
       });
+    }
+
+    if (failures.length > 0) {
+      // Stop the sequence rather than continue with an unanchored character
+      // (#939). This rejection propagates up through `spawnAndAwaitChild` to
+      // analyze-script's `charSettled.status === 'rejected'` branch, which marks
+      // the sequence `failed` with this message and emits `generation.failed`.
+      throw new Error(
+        `Character sheet generation failed for ${failures.length} of ${settled.length} character(s); ` +
+          `stopping rather than rendering an unanchored sequence: ${failures.join('; ')}`
+      );
     }
 
     return seqCharacters;

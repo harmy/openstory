@@ -14,6 +14,12 @@
  *   - Calls the snapshot DTO computers directly instead of going through
  *     the `context.snapshot.*` extension. */
 
+import {
+  CONTENT_REJECTION_EVENT,
+  CONTENT_REJECTION_RETRY_EVENT,
+  isContentRejectionError,
+} from '@/lib/ai/content-rejection';
+import { extractFalErrorMessage } from '@/lib/ai/fal-error';
 import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
 import {
   deductWorkflowCredits,
@@ -24,6 +30,7 @@ import type { ScopedDb } from '@/lib/db/scoped';
 import {
   generateImageWithProvider,
   type ImageGenerationParams,
+  type ImageGenerationResult,
 } from '@/lib/image/image-generation';
 import { buildCharacterSheetPrompt } from '@/lib/prompts/character-prompt';
 import { getGenerationChannel } from '@/lib/realtime';
@@ -43,10 +50,21 @@ import {
   computeCharacterSheetHashCurrent,
   computeCharacterSheetHashFromDto,
 } from '@/lib/workflows/sheet-snapshots';
+import { NonRetryableError } from 'cloudflare:workflows';
 import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'character-sheet']);
+
+/**
+ * Total sheet generation attempts on a content-flag rejection (#881/#939): the
+ * initial attempt plus 2 reseeded re-rolls. `generateImageWithProvider` is
+ * called without a fixed seed, so each attempt is naturally reseeded; the
+ * stochastic content-checker hits clear on a re-roll, while deterministic ones
+ * exhaust this budget and fail hard (a character with no reference sheet can't
+ * anchor identity across cuts, so we stop rather than continue unanchored).
+ */
+const MAX_SHEET_ATTEMPTS = 3;
 
 export class CharacterSheetWorkflow extends OpenStoryWorkflowEntrypoint<CharacterSheetWorkflowInput> {
   protected override async runImpl(
@@ -129,14 +147,86 @@ export class CharacterSheetWorkflow extends OpenStoryWorkflowEntrypoint<Characte
       }
     );
 
-    // Step 2: Generate the character sheet image
-    const imageResult = await step.do('generate-sheet-image', async () => {
-      logger.info(
-        `[CharacterSheetWorkflow:cf] Generating sheet for ${input.characterName} with model ${generationParams.model}`
+    // Step 2: Generate the character sheet image with a bounded same-model
+    // reseed retry on content-flag rejections (#881/#939). A content rejection
+    // is caught INSIDE the step and surfaced as a sentinel so CF's per-step
+    // retry doesn't burn its budget re-rolling it — the loop owns that re-roll;
+    // genuine transient errors still throw and lean on CF's per-step retries.
+    // The sheet anchors a character's identity across cuts (#801), so an
+    // exhausted budget is a HARD failure: we throw rather than persist a null
+    // sheet and let the sequence render an unanchored character (#939).
+    let imageResult: ImageGenerationResult | null = null;
+    let lastRejection: string | null = null;
+    for (let attempt = 0; attempt < MAX_SHEET_ATTEMPTS; attempt++) {
+      const tag = attempt === 0 ? '' : `-retry-${attempt}`;
+      const outcome = await step.do(
+        `generate-sheet-image${tag}`,
+        async (): Promise<
+          | { ok: true; result: ImageGenerationResult }
+          | { ok: false; rejection: string }
+        > => {
+          logger.info(
+            `[CharacterSheetWorkflow:cf] Generating sheet for ${input.characterName} with model ${generationParams.model} (attempt ${attempt + 1}/${MAX_SHEET_ATTEMPTS})`
+          );
+          try {
+            const result = await generateImageWithProvider(generationParams, {
+              scopedDb,
+            });
+            return { ok: true, result };
+          } catch (error) {
+            if (isContentRejectionError(error)) {
+              return { ok: false, rejection: extractFalErrorMessage(error) };
+            }
+            // Not a content flag → transient. Let CF retry the step.
+            throw error;
+          }
+        }
       );
 
-      return await generateImageWithProvider(generationParams, { scopedDb });
-    });
+      if (outcome.ok) {
+        imageResult = outcome.result;
+        if (attempt > 0) {
+          logger.info(
+            `[CharacterSheetWorkflow:cf] content-flag retry rescued sheet for character ${input.characterDbId} on attempt ${attempt + 1}`,
+            {
+              event: CONTENT_REJECTION_RETRY_EVENT,
+              outcome: 'rescued',
+              kind: 'character-sheet',
+              model: generationParams.model,
+              attempts: attempt + 1,
+              characterDbId: input.characterDbId,
+              sequenceId: input.sequenceId,
+            }
+          );
+        }
+        break;
+      }
+
+      lastRejection = outcome.rejection;
+      logger.warn(
+        `[CharacterSheetWorkflow:cf] content-flag rejection on sheet attempt ${attempt + 1}/${MAX_SHEET_ATTEMPTS} for character ${input.characterDbId}: ${outcome.rejection}`
+      );
+    }
+
+    if (!imageResult) {
+      logger.error(
+        `[CharacterSheetWorkflow:cf] content-flag retry exhausted for character ${input.characterDbId} after ${MAX_SHEET_ATTEMPTS} attempts`,
+        {
+          event: CONTENT_REJECTION_RETRY_EVENT,
+          outcome: 'exhausted',
+          kind: 'character-sheet',
+          model: generationParams.model,
+          attempts: MAX_SHEET_ATTEMPTS,
+          characterDbId: input.characterDbId,
+          sequenceId: input.sequenceId,
+          rejection: lastRejection,
+        }
+      );
+      throw new NonRetryableError(
+        `Character sheet rejected by content filter after ${MAX_SHEET_ATTEMPTS} attempts: ${lastRejection ?? 'unknown rejection'}`,
+        'ContentRejectionExhausted'
+      );
+    }
 
     // Deduct credits for image generation (skip if team used own fal key)
     await step.do('deduct-credits', async () => {
@@ -341,6 +431,22 @@ export class CharacterSheetWorkflow extends OpenStoryWorkflowEntrypoint<Characte
           {
             characterId: input.characterDbId,
             status: 'failed',
+            error,
+          }
+        );
+      }
+
+      if (isContentRejectionError(error)) {
+        // Mirror image/motion `onFailure` so "how many sheets failed a content
+        // checker" is one queryable PostHog Logs metric across all three paths.
+        logger.warn(
+          `[CharacterSheetWorkflow:cf] character ${input.characterDbId} sheet failed a content checker`,
+          {
+            event: CONTENT_REJECTION_EVENT,
+            kind: 'character-sheet',
+            model: input.imageModel ?? DEFAULT_IMAGE_MODEL,
+            characterDbId: input.characterDbId,
+            sequenceId: input.sequenceId,
             error,
           }
         );
