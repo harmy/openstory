@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
-import { useQueries } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useSequences } from './use-sequences';
-import { frameKeys } from './use-frames';
-import { getFramesFn } from '@/functions/frames';
+import { getFramesForSequencesFn } from '@/functions/frames';
 import type { Sequence, Frame } from '@/types/database';
 
 export type SequenceWithFrames = Sequence & {
@@ -14,9 +13,12 @@ export type SequenceWithFrames = Sequence & {
 };
 
 /**
- * Fetches all sequences and their frames in parallel.
- * Returns sequences as soon as they resolve so the UI can render rows
- * progressively; frames are reported via `framesLoadingMap` per sequence.
+ * Fetches all sequences and their frames. Previously this fanned out one
+ * `getFramesFn` per sequence via `useQueries`, which crashed iOS Chrome's
+ * WebProcess once teams accumulated ~50+ sequences (the parallel server-fn
+ * round-trips saturated the connection pool — see the
+ * `claude/mobile-sequence-navigation-dmLJn` branch history for the wrangler
+ * tail). Now one batched call returns every frame, grouped client-side.
  */
 export function useSequencesWithFrames() {
   const {
@@ -25,37 +27,54 @@ export function useSequencesWithFrames() {
     error: seqError,
   } = useSequences();
 
-  const framesQueries = useQueries({
-    queries: (sequences || []).map((seq: Sequence) => ({
-      queryKey: frameKeys.list(seq.id),
-      queryFn: async (): Promise<Frame[]> => {
-        const data = await getFramesFn({ data: { sequenceId: seq.id } });
-        return data;
-      },
-      staleTime: 5 * 60 * 1000,
-      enabled: !!sequences && sequences.length > 0,
-    })),
+  const sequenceIds = useMemo(
+    () => (sequences ?? []).map((s) => s.id),
+    [sequences]
+  );
+
+  const {
+    data: framesBySequenceId,
+    isLoading: framesLoading,
+    error: framesError,
+  } = useQuery({
+    queryKey: ['frames', 'by-sequences', [...sequenceIds].sort()],
+    queryFn: async (): Promise<Map<string, Frame[]>> => {
+      if (sequenceIds.length === 0) return new Map();
+      const allFrames = await getFramesForSequencesFn({
+        data: { sequenceIds },
+      });
+      const map = new Map<string, Frame[]>();
+      for (const frame of allFrames) {
+        const existing = map.get(frame.sequenceId) ?? [];
+        existing.push(frame);
+        map.set(frame.sequenceId, existing);
+      }
+      return map;
+    },
+    enabled: sequenceIds.length > 0,
+    staleTime: 5 * 60 * 1000,
   });
 
   const data = useMemo<SequenceWithFrames[]>(() => {
     if (!sequences) return [];
-
-    return sequences.map((seq: Sequence, i: number) => ({
+    return sequences.map((seq) => ({
       ...seq,
-      frames: framesQueries[i]?.data ?? [],
+      frames: framesBySequenceId?.get(seq.id) ?? [],
     }));
-  }, [sequences, framesQueries]);
+  }, [sequences, framesBySequenceId]);
 
+  // Single batch query means a single in-flight signal — every row reflects
+  // it identically. Kept as a per-id map so callers (EvalSequencesMobile,
+  // EvalMatrix) can render row-level skeletons without a behavior change.
   const framesLoadingMap = useMemo<Record<string, boolean>>(() => {
     const map: Record<string, boolean> = {};
-    (sequences ?? []).forEach((seq, i) => {
-      const q = framesQueries[i];
-      map[seq.id] = Boolean(q?.isLoading);
-    });
+    for (const seq of sequences ?? []) {
+      map[seq.id] = framesLoading;
+    }
     return map;
-  }, [sequences, framesQueries]);
+  }, [sequences, framesLoading]);
 
-  const error = seqError || framesQueries.find((q) => q.error)?.error;
+  const error = seqError || framesError;
 
   return {
     data,

@@ -9,11 +9,11 @@ import {
   DEFAULT_ASPECT_RATIO,
 } from '@/lib/constants/aspect-ratios';
 import type { Database } from '@/lib/db/client';
+import { frames, sequences } from '@/lib/db/schema';
 import type { Frame, NewSequence, Sequence, Style } from '@/lib/db/schema';
-import { sequences } from '@/lib/db/schema';
 import type { MusicStatus, SequenceStatus } from '@/lib/db/schema/sequences';
 import { ValidationError } from '@/lib/errors';
-import { and, desc, eq, isNull, not } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, not } from 'drizzle-orm';
 
 export type MusicFieldsUpdate = {
   musicStatus?: MusicStatus;
@@ -79,6 +79,30 @@ function createSequencesReadMethods(db: Database, teamId: string) {
         throw new ValidationError('Sequence not found');
       }
       return sequence;
+    },
+
+    /**
+     * Batched frame fetch for a list of sequences. Replaces N parallel
+     * `frames.listBySequence` round-trips from the sequences list page — the
+     * fan-out saturated iOS Chrome's connection pool and crashed the
+     * WebProcess once teams accumulated >~50 sequences. teamId filter is
+     * applied via the join so caller-supplied ids from another team simply
+     * return nothing rather than leak.
+     */
+    listFramesByIds: async (sequenceIds: string[]): Promise<Frame[]> => {
+      if (sequenceIds.length === 0) return [];
+      return await db
+        .select()
+        .from(frames)
+        .innerJoin(sequences, eq(frames.sequenceId, sequences.id))
+        .where(
+          and(
+            inArray(frames.sequenceId, sequenceIds),
+            eq(sequences.teamId, teamId)
+          )
+        )
+        .orderBy(asc(frames.sequenceId), asc(frames.orderIndex))
+        .then((rows) => rows.map((row) => row.frames));
     },
   };
 }
