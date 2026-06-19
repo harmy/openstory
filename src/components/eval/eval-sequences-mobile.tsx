@@ -1,5 +1,6 @@
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { AppImage } from '@/components/ui/app-image';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,6 +18,11 @@ import { getCreatorIdentity } from './creator-identity';
 // Strip cell height in px. Widths follow each sequence's aspect ratio so the
 // strip stays visually coherent inside one row.
 const STRIP_HEIGHT = 180;
+
+// Virtualized-row size estimate: strip (180) + title/creator block + paddings.
+// `measureElement` corrects each row's real height once mounted, so this only
+// needs to be in the right ballpark to seed the initial scroll window.
+const ESTIMATED_ROW_HEIGHT = 248;
 
 type OpenDialogState = {
   sequenceIndex: number;
@@ -42,6 +48,7 @@ export const EvalSequencesMobile: React.FC<EvalSequencesMobileProps> = ({
   hasMore,
 }) => {
   const [openDialog, setOpenDialog] = useState<OpenDialogState>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
 
   const maxSceneCount = useMemo(
     () => Math.max(1, ...sequences.map((s) => s.frames.length)),
@@ -59,29 +66,68 @@ export const EvalSequencesMobile: React.FC<EvalSequencesMobileProps> = ({
     }
   };
 
+  // Mirror EvalMatrix's row virtualization (#748). The mobile reel view used to
+  // mount every sequence row — and every frame strip within each row — in one
+  // synchronous pass. On a large team that N×M mount is what pushed iOS WebKit
+  // past its per-tab memory budget and killed the WebProcess ("Can't open this
+  // page"). Render only the visible rows (+overscan); row height is measured
+  // because the title/creator block varies.
+  const rowVirtualizer = useVirtualizer({
+    count: sequences.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ESTIMATED_ROW_HEIGHT,
+    overscan: 5,
+  });
+
+  // Infinite scroll: fetch the next page as the last rows come into view, the
+  // same trigger EvalMatrix uses so support mode pages in identically. Replaces
+  // the old manual "Load more" button (regular users have hasMore=false, so the
+  // visible behavior only changes in support mode).
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const lastItemIndex = virtualItems[virtualItems.length - 1]?.index;
+  useEffect(() => {
+    if (!onLoadMore || !hasMore) return;
+    // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- lastItemIndex is undefined until rows are virtualized
+    if (lastItemIndex == null || lastItemIndex >= sequences.length - 5) {
+      onLoadMore();
+    }
+  }, [lastItemIndex, sequences.length, onLoadMore, hasMore]);
+
   return (
-    <div className="flex-1 overflow-y-auto flex flex-col divide-y divide-border">
-      {sequences.map((sequence, sequenceIndex) => (
-        <MobileReelRow
-          key={sequence.id}
-          sequence={sequence}
-          sequenceIndex={sequenceIndex}
-          sequenceCount={sequences.length}
-          viewMode={viewMode}
-          framesLoading={framesLoadingMap[sequence.id] ?? false}
-          divergence={divergenceMap?.get(sequence.id)}
-          openDialog={openDialog}
-          onOpenDialogChange={setOpenDialog}
-          onNavigateToCell={handleNavigateToCell}
-        />
-      ))}
-      {hasMore && onLoadMore && (
-        <div className="flex justify-center p-4">
-          <Button variant="outline" size="sm" onClick={onLoadMore}>
-            Load more
-          </Button>
-        </div>
-      )}
+    <div ref={parentRef} className="flex-1 overflow-y-auto">
+      <div
+        style={{
+          height: rowVirtualizer.getTotalSize(),
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        {virtualItems.map((virtualRow) => {
+          const sequence = sequences[virtualRow.index];
+          if (!sequence) return null;
+          return (
+            <div
+              key={sequence.id}
+              data-index={virtualRow.index}
+              ref={rowVirtualizer.measureElement}
+              className="absolute left-0 right-0 top-0 border-b border-border"
+              style={{ transform: `translateY(${virtualRow.start}px)` }}
+            >
+              <MobileReelRow
+                sequence={sequence}
+                sequenceIndex={virtualRow.index}
+                sequenceCount={sequences.length}
+                viewMode={viewMode}
+                framesLoading={framesLoadingMap[sequence.id] ?? false}
+                divergence={divergenceMap?.get(sequence.id)}
+                openDialog={openDialog}
+                onOpenDialogChange={setOpenDialog}
+                onNavigateToCell={handleNavigateToCell}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
