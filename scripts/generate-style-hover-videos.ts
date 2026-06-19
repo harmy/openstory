@@ -10,6 +10,11 @@
  *      with the still attached as a vision input on a vision-capable model.
  *      Uses the 512px `{scene}-preview.webp` here — the 2048px originals are
  *      ~5MB, over common vision-API per-image limits (see eval-redo-sequences.ts).
+ *      There's no script/scene-before/after/cast for a lone still, so instead
+ *      of fabricating one we tell the model to READ the frame and bring exactly
+ *      what's there to life — a person turns to and engages the viewer; a
+ *      product/empty scene gets a confident camera move + world motion. The
+ *      vision model decides which case applies (it won't invent a person).
  *   2. Motion generation — image-to-video the FULL-RES `{scene}.webp` (2048px,
  *      some older styles 1024px) with the style's recommended video model.
  *
@@ -32,7 +37,12 @@
  *
  * Flags:
  *   [styleNameOrSlug]   Only this style (matched by exact name OR slug).
+ *   --prompts-only      Generate + print the motion prompts, skip video (cheap
+ *                       way to eyeball/tune liveliness before burning credits).
  *   --concurrency=N     Parallel styles in flight (default 4).
+ *
+ * Every run (both modes) saves the generated motion prompts to
+ * `sample-videos/_hover-prompts.md` for review.
  */
 
 import {
@@ -181,7 +191,34 @@ const THUMBNAIL_SCENES: Record<string, string> = {
 
 const DEFAULT_THUMBNAIL_SCENE = 'character';
 
+/** Where the generated motion prompts are saved for review/tuning. */
+const PROMPTS_FILE = path.join(OUTPUT_DIR, '_hover-prompts.md');
+
 type StyleTemplate = (typeof DEFAULT_STYLE_TEMPLATES)[number];
+
+/** One style's generated motion prompt, collected for the saved review file. */
+type PromptRecord = {
+  slug: string;
+  name: string;
+  scene: string;
+  model: string;
+  assembled: string;
+};
+
+/** Write all generated prompts to a single readable markdown file. */
+async function writePromptsFile(records: PromptRecord[]): Promise<void> {
+  const sorted = [...records].sort((a, b) => a.name.localeCompare(b.name));
+  const body = sorted
+    .map(
+      (r) =>
+        `## ${r.name}\n\n- scene: \`${r.scene}\`\n- model: ${r.model}\n\n${r.assembled}\n`
+    )
+    .join('\n---\n\n');
+  await writeFile(
+    PROMPTS_FILE,
+    `# Hover motion prompts\n\n${records.length} style(s).\n\n${body}`
+  );
+}
 
 /** The scene a style's hover clip animates (its thumbnail's source scene). */
 function sceneFor(style: StyleTemplate): string {
@@ -281,23 +318,41 @@ function buildChatMessages(
 }
 
 /**
- * Minimal scene fed to the motion-prompt template. The attached still is the
- * real driver (the template says "animate strictly from the attached frame");
- * this just gives the model a title, a 5s duration target, and no dialogue —
- * so the prompt is a single-shot animation of the preview, not a story beat.
+ * The one instruction that does the work. A hover clip is a single still with
+ * no script, no scene before/after, and no known cast — so instead of feeding
+ * the template a fabricated story, we tell it to READ the attached frame and
+ * bring exactly what's there to life. The vision model is what knows whether a
+ * person is in shot; the conditional keeps it from inventing one on a product
+ * still. This is the lever for "give the characters life + engage the viewer".
+ */
+const HOVER_STORY_BEAT =
+  'This is a SHORT LOOPING PREVIEW that plays when a viewer hovers the style ' +
+  'tile, so it must feel alive and eye-catching, never static. Read the ' +
+  'ATTACHED FRAME and animate exactly what is in it — never add a person, ' +
+  'object or element that is not already there. If a person is in the frame, ' +
+  'bring them to life: they turn toward the camera and engage the viewer — ' +
+  'meeting the lens with a warm smile, a knowing look, a small nod or inviting ' +
+  'gesture — with natural secondary motion in the hair, clothing and a shift ' +
+  'of weight. If there is no person (a product, object or empty scene), keep ' +
+  'it lively with one confident camera move and motion in the world: drifting ' +
+  'light, particles, steam, water or fabric.';
+
+/**
+ * A single honest scene for the motion-prompt template. No sceneBefore/After,
+ * no character bible — those don't exist for a lone hover still — just the
+ * title, duration, and the liveliness beat. The attached image carries the
+ * actual content (#929 vision input).
  */
 function previewScene(style: StyleTemplate) {
-  const slug = styleSlug(style.name);
   return {
-    sceneId: `style-hover-${slug}`,
+    sceneId: `style-hover-${styleSlug(style.name)}`,
     sceneNumber: 1,
     metadata: {
-      title: `${style.name} preview`,
+      title: style.name,
       durationSeconds: DURATION_SECONDS,
-      storyBeat: 'A single establishing shot of the preview frame.',
+      storyBeat: HOVER_STORY_BEAT,
     },
     originalScript: { dialogue: null },
-    continuity: { characterTags: [] as string[] },
   };
 }
 
@@ -315,6 +370,8 @@ async function generateMotionPrompt(
   const modelId = resolveVisionModel(DEFAULT_ANALYSIS_MODEL, true);
   const adapter = createAdapter(modelId, llmKey);
 
+  // A lone hover still: no surrounding scenes and no script-derived cast. The
+  // attached image + storyBeat carry everything; styleConfig drives the camera.
   const promptVariables = {
     scene: JSON.stringify(previewScene(style), null, 2),
     sceneBefore: '(none)',
@@ -414,7 +471,9 @@ async function assertAssetExists(url: string, label: string): Promise<void> {
 
 async function processStyle(
   style: StyleTemplate,
-  llmKey: LlmKeyInfo
+  llmKey: LlmKeyInfo,
+  promptsOnly: boolean,
+  collector: PromptRecord[]
 ): Promise<void> {
   const slug = styleSlug(style.name);
   const scene = sceneFor(style);
@@ -431,8 +490,11 @@ async function processStyle(
     `🎬 ${style.name} — scene "${scene}", model ${IMAGE_TO_VIDEO_MODELS[model].name} (${snappedDuration}s, ${ASPECT_RATIO})`
   );
 
-  // Fail fast if the full-res render is missing for this style/scene.
-  await assertAssetExists(motionUrl, `Motion source (${scene}.webp)`);
+  // Fail fast if the full-res render is missing (skip in prompts-only mode —
+  // we only need the vision still for the LLM there, no video is generated).
+  if (!promptsOnly) {
+    await assertAssetExists(motionUrl, `Motion source (${scene}.webp)`);
+  }
 
   const motionPrompt = await generateMotionPrompt(style, visionUrl, llmKey);
   const assembled = assembleMotionPrompt({
@@ -440,6 +502,21 @@ async function processStyle(
     model,
     characterTags: [],
   });
+
+  // Print the prompt + record it so the motion can be eyeballed/tuned for
+  // liveliness (written to _hover-prompts.md at the end of the run).
+  console.log(
+    `\n──────── ${style.name} (motion prompt) ────────\n${assembled}\n`
+  );
+  collector.push({
+    slug,
+    name: style.name,
+    scene,
+    model: IMAGE_TO_VIDEO_MODELS[model].name,
+    assembled,
+  });
+
+  if (promptsOnly) return;
 
   const clipUrl = await generateClip(motionUrl, assembled, model);
 
@@ -482,6 +559,7 @@ async function mapWithConcurrency<T>(
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const filter = args.find((a) => !a.startsWith('--'))?.trim() ?? null;
+  const promptsOnly = args.includes('--prompts-only');
   const concurrency = Number(
     args.find((a) => a.startsWith('--concurrency='))?.split('=')[1] ??
       DEFAULT_CONCURRENCY
@@ -507,19 +585,32 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `🎨 Generating ${DURATION_SECONDS}s ${ASPECT_RATIO} silent hover clips for ${styles.length} style(s) — concurrency ${concurrency}\n`
+    promptsOnly
+      ? `📝 Generating motion prompts only (no video) for ${styles.length} style(s) — concurrency ${concurrency}\n`
+      : `🎨 Generating ${DURATION_SECONDS}s ${ASPECT_RATIO} silent hover clips for ${styles.length} style(s) — concurrency ${concurrency}\n`
   );
 
+  // OUTPUT_DIR is needed for the saved prompts file in both modes.
   await mkdir(OUTPUT_DIR, { recursive: true });
 
+  const prompts: PromptRecord[] = [];
   const { failures } = await mapWithConcurrency(
     [...styles],
     concurrency,
-    (style) => processStyle(style, llmKey)
+    (style) => processStyle(style, llmKey, promptsOnly, prompts)
   );
 
+  if (prompts.length > 0) {
+    await writePromptsFile(prompts);
+    console.log(
+      `\n📝 Saved ${prompts.length} prompt(s) → ${path.relative(process.cwd(), PROMPTS_FILE)}`
+    );
+  }
+
   console.log(
-    `\n✨ Done: ${styles.length - failures.length}/${styles.length} clips generated.`
+    promptsOnly
+      ? `✨ Done: ${styles.length - failures.length}/${styles.length} prompts generated.`
+      : `\n✨ Done: ${styles.length - failures.length}/${styles.length} clips generated.`
   );
   if (failures.length > 0) {
     console.error(`\n❌ ${failures.length} failed:`);
