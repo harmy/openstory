@@ -1,0 +1,254 @@
+import type { Frame } from '@/lib/db/schema/frames';
+import type { Sequence } from '@/lib/db/schema/sequences';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  buildSequenceListPage,
+  decodeCursor,
+  encodeCursor,
+  parseLimitParam,
+} from './list';
+
+// toShareableUrl reads R2_PUBLIC_STORAGE_DOMAIN; pin local serving so the
+// origin-fallback assertions are environment-independent (see state.test.ts).
+beforeAll(() => {
+  vi.stubEnv('R2_PUBLIC_STORAGE_DOMAIN', undefined);
+});
+
+const TEST_ORIGIN = 'https://api.example.com';
+
+function makeSequence(overrides: Partial<Sequence> = {}): Sequence {
+  return {
+    id: 'seq-1',
+    teamId: 'team-1',
+    title: 'Test Sequence',
+    script: 'A test script',
+    status: 'processing',
+    createdAt: new Date('2026-01-01T00:00:00Z'),
+    updatedAt: new Date('2026-01-02T00:00:00Z'),
+    createdBy: null,
+    updatedBy: null,
+    styleId: 'style-1',
+    aspectRatio: '16:9',
+    analysisModel: 'anthropic/claude-haiku-4.5',
+    analysisDurationMs: 0,
+    imageModel: 'nano_banana_2',
+    videoModel: 'wan_i2v',
+    workflow: null,
+    musicUrl: null,
+    musicPath: null,
+    musicStatus: 'pending',
+    musicGeneratedAt: null,
+    musicError: null,
+    musicModel: null,
+    musicPrompt: null,
+    musicTags: null,
+    musicPromptInputHash: null,
+    includeMusic: true,
+    statusError: null,
+    workflowRunId: null,
+    posterUrl: null,
+    autoGenerateMotion: false,
+    autoGenerateMusic: false,
+    suggestedTalentIds: null,
+    suggestedLocationIds: null,
+    ...overrides,
+  };
+}
+
+function makeFrame(overrides: Partial<Frame> = {}): Frame {
+  return {
+    id: 'frame-1',
+    sequenceId: 'seq-1',
+    orderIndex: 0,
+    description: 'A scene',
+    durationMs: 3000,
+    thumbnailUrl: null,
+    thumbnailPath: null,
+    thumbnailStatus: 'pending',
+    thumbnailWorkflowRunId: null,
+    thumbnailGeneratedAt: null,
+    thumbnailError: null,
+    imageModel: 'nano_banana_2',
+    imagePrompt: null,
+    variantImageUrl: null,
+    variantImageStatus: 'pending',
+    variantWorkflowRunId: null,
+    variantImageGeneratedAt: null,
+    variantImageError: null,
+    videoUrl: null,
+    videoPath: null,
+    videoStatus: 'pending',
+    videoWorkflowRunId: null,
+    videoGeneratedAt: null,
+    videoError: null,
+    motionPrompt: null,
+    motionModel: null,
+    audioUrl: null,
+    audioPath: null,
+    audioStatus: 'pending',
+    audioWorkflowRunId: null,
+    audioGeneratedAt: null,
+    audioError: null,
+    audioModel: null,
+    thumbnailInputHash: null,
+    variantImageInputHash: null,
+    videoInputHash: null,
+    audioInputHash: null,
+    visualPromptInputHash: null,
+    motionPromptInputHash: null,
+    previewThumbnailUrl: null,
+    metadata: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+}
+
+/** A scopedDb stub exposing only the batched frame fetch the builder uses. */
+function depsWithFrames(frames: Frame[]) {
+  return { sequences: { listFramesByIds: async () => frames } };
+}
+
+describe('cursor encode/decode', () => {
+  it('round-trips an (updatedAt, id) position', () => {
+    const cursor = { updatedAt: new Date('2026-01-02T00:00:00Z'), id: 'seq-9' };
+    const decoded = decodeCursor(encodeCursor(cursor));
+    expect(decoded.id).toBe('seq-9');
+    expect(decoded.updatedAt.getTime()).toBe(cursor.updatedAt.getTime());
+  });
+
+  it('emits a URL-safe token (no +, /, or = padding)', () => {
+    const token = encodeCursor({
+      updatedAt: new Date('2026-06-21T12:34:56Z'),
+      id: '01JABCDEF0123456789XYZWVUT',
+    });
+    expect(token).not.toMatch(/[+/=]/);
+  });
+
+  it('rejects a malformed cursor with a 400 ValidationError', () => {
+    // Not base64, no separator, and a non-numeric timestamp all fail.
+    expect(() => decodeCursor('!!!not-base64!!!')).toThrow();
+    expect(() => decodeCursor(btoa('no-separator'))).toThrow();
+    expect(() => decodeCursor(btoa('notanumber:seq-1'))).toThrow();
+  });
+});
+
+describe('parseLimitParam', () => {
+  it('defaults to 20 when absent or empty', () => {
+    expect(parseLimitParam(null)).toBe(20);
+    expect(parseLimitParam('  ')).toBe(20);
+  });
+
+  it('clamps to [1, 100]', () => {
+    expect(parseLimitParam('0')).toBe(1);
+    expect(parseLimitParam('500')).toBe(100);
+    expect(parseLimitParam('20')).toBe(20);
+  });
+
+  it('rejects a non-integer limit', () => {
+    expect(() => parseLimitParam('abc')).toThrow();
+    expect(() => parseLimitParam('1.5')).toThrow();
+  });
+});
+
+describe('buildSequenceListPage', () => {
+  it('summarizes each sequence with counts and a self link', async () => {
+    const sequence = makeSequence({
+      posterUrl: 'https://cdn/poster.png',
+      musicStatus: 'completed',
+      musicUrl: 'https://cdn/music.mp3',
+    });
+    const frames = [
+      makeFrame({ id: 'f1', thumbnailUrl: 'https://cdn/f1.png' }),
+      makeFrame({ id: 'f2', videoStatus: 'completed' }),
+      makeFrame({ id: 'f3', videoStatus: 'failed' }),
+    ];
+
+    const page = await buildSequenceListPage({
+      scopedDb: depsWithFrames(frames),
+      sequences: [sequence],
+      hasMore: false,
+      limit: 20,
+      origin: TEST_ORIGIN,
+    });
+
+    expect(page.sequences).toHaveLength(1);
+    const [item] = page.sequences;
+    expect(item).toMatchObject({
+      id: 'seq-1',
+      title: 'Test Sequence',
+      status: 'processing',
+      aspectRatio: '16:9',
+      poster: { url: 'https://cdn/poster.png' },
+      music: { status: 'completed', url: 'https://cdn/music.mp3' },
+      counts: { frames: 3, imagesReady: 1, videosReady: 1, videosFailed: 1 },
+    });
+    // No per-frame array on the summary.
+    expect(item).not.toHaveProperty('frames');
+    expect(item?._links.self?.href).toBe('/api/v1/sequences/seq-1');
+  });
+
+  it('groups batched frames back to their own sequences', async () => {
+    const a = makeSequence({ id: 'seq-a' });
+    const b = makeSequence({ id: 'seq-b' });
+    const frames = [
+      makeFrame({ id: 'fa1', sequenceId: 'seq-a', videoStatus: 'completed' }),
+      makeFrame({ id: 'fb1', sequenceId: 'seq-b' }),
+      makeFrame({ id: 'fb2', sequenceId: 'seq-b' }),
+    ];
+
+    const page = await buildSequenceListPage({
+      scopedDb: depsWithFrames(frames),
+      sequences: [a, b],
+      hasMore: false,
+      limit: 20,
+      origin: TEST_ORIGIN,
+    });
+
+    const byId = new Map(page.sequences.map((s) => [s.id, s]));
+    expect(byId.get('seq-a')?.counts).toMatchObject({
+      frames: 1,
+      videosReady: 1,
+    });
+    expect(byId.get('seq-b')?.counts).toMatchObject({
+      frames: 2,
+      videosReady: 0,
+    });
+  });
+
+  it('omits next when no further page, includes it (with a cursor) when hasMore', async () => {
+    const last = makeSequence({
+      id: 'seq-last',
+      updatedAt: new Date('2026-01-02T00:00:00Z'),
+    });
+
+    const noMore = await buildSequenceListPage({
+      scopedDb: depsWithFrames([]),
+      sequences: [last],
+      hasMore: false,
+      limit: 5,
+      origin: TEST_ORIGIN,
+    });
+    expect(noMore._links.next).toBeUndefined();
+    expect(noMore._links.self?.href).toBe('/api/v1/sequences?limit=5');
+    expect(noMore._links['create-sequence']?.method).toBe('POST');
+
+    const more = await buildSequenceListPage({
+      scopedDb: depsWithFrames([]),
+      sequences: [last],
+      hasMore: true,
+      limit: 5,
+      origin: TEST_ORIGIN,
+    });
+    const nextHref = more._links.next?.href;
+    expect(nextHref).toBeDefined();
+    // The next link's cursor must point back at the last entry.
+    const cursorParam = new URL(nextHref ?? '', TEST_ORIGIN).searchParams.get(
+      'cursor'
+    );
+    expect(cursorParam).not.toBeNull();
+    const decoded = decodeCursor(cursorParam ?? '');
+    expect(decoded.id).toBe('seq-last');
+    expect(decoded.updatedAt.getTime()).toBe(last.updatedAt.getTime());
+  });
+});

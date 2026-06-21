@@ -13,7 +13,7 @@ import { frames, sequences } from '@/lib/db/schema';
 import type { Frame, NewSequence, Sequence, Style } from '@/lib/db/schema';
 import type { MusicStatus, SequenceStatus } from '@/lib/db/schema/sequences';
 import { ValidationError } from '@/lib/errors';
-import { and, asc, desc, eq, inArray, isNull, not } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, not, or } from 'drizzle-orm';
 
 export type MusicFieldsUpdate = {
   musicStatus?: MusicStatus;
@@ -49,6 +49,42 @@ function createSequencesReadMethods(db: Database, teamId: string) {
           )
         )
         .orderBy(desc(sequences.updatedAt));
+    },
+
+    /**
+     * Keyset-paginated, most-recent-first page of the team's non-archived
+     * sequences — backs the public `GET /api/v1/sequences` list. Ordered by
+     * `(updatedAt, id)` descending so the `id` tiebreaker keeps the order total
+     * even when several rows share an `updatedAt` second. Pass the last row's
+     * `(updatedAt, id)` as `cursor` to fetch the next page. Fetches `limit + 1`
+     * rows so the caller can tell whether a further page exists without a second
+     * query.
+     */
+    listPage: async (params: {
+      limit: number;
+      cursor: { updatedAt: Date; id: string } | null;
+    }): Promise<Sequence[]> => {
+      const { limit, cursor } = params;
+      return await db
+        .select()
+        .from(sequences)
+        .where(
+          and(
+            eq(sequences.teamId, teamId),
+            not(eq(sequences.status, 'archived')),
+            cursor
+              ? or(
+                  lt(sequences.updatedAt, cursor.updatedAt),
+                  and(
+                    eq(sequences.updatedAt, cursor.updatedAt),
+                    lt(sequences.id, cursor.id)
+                  )
+                )
+              : undefined
+          )
+        )
+        .orderBy(desc(sequences.updatedAt), desc(sequences.id))
+        .limit(limit + 1);
     },
 
     getById: async (sequenceId: string): Promise<Sequence | null> => {

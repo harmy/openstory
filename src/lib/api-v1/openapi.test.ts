@@ -27,10 +27,22 @@ describe('buildOpenApiDocument', () => {
 
   it('documents the operations', () => {
     expect(doc.paths['/api/v1'].get).toBeDefined();
+    expect(doc.paths['/api/v1/sequences'].get).toBeDefined();
     expect(doc.paths['/api/v1/sequences'].post).toBeDefined();
     expect(doc.paths['/api/v1/sequences/{id}'].get).toBeDefined();
     expect(doc.paths['/api/v1/openapi.json'].get).toBeDefined();
     expect(doc.paths['/api/v1/scripts/enhance'].post).toBeDefined();
+  });
+
+  it('documents the list endpoint with limit/cursor params and a result schema', () => {
+    const op = doc.paths['/api/v1/sequences'].get;
+    const paramNames = op.parameters.map((p: { name: string }) => p.name);
+    expect(paramNames).toEqual(expect.arrayContaining(['limit', 'cursor']));
+    expect(op.responses['200'].content['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/SequenceListResult',
+    });
+    expect(doc.components.schemas).toHaveProperty('SequenceListItem');
+    expect(doc.components.schemas).toHaveProperty('SequenceListResult');
   });
 
   it('documents the enhance endpoint as an SSE stream with a valid example', () => {

@@ -108,6 +108,25 @@ const genStatusObject: JsonObject = {
   required: ['status', 'url'],
   properties: { status: statusEnum(GEN_STATUSES), url: nullableString },
 };
+const countsObject: JsonObject = {
+  type: 'object',
+  required: ['frames', 'imagesReady', 'videosReady', 'videosFailed'],
+  properties: {
+    frames: { type: 'integer' },
+    imagesReady: { type: 'integer' },
+    videosReady: { type: 'integer' },
+    videosFailed: {
+      type: 'integer',
+      description:
+        'Frames whose video generation failed. Can be > 0 even when `status` is "completed".',
+    },
+  },
+};
+const posterObject: JsonObject = {
+  type: ['object', 'null'],
+  required: ['url'],
+  properties: { url: { type: 'string' } },
+};
 
 /** Shared error-envelope reference for 4xx/5xx responses. */
 function errorResponse(description: string): JsonObject {
@@ -190,6 +209,45 @@ export function buildOpenApiDocument(): JsonObject {
         },
       },
       [`${API_V1_BASE}/sequences`]: {
+        get: {
+          tags: ['sequences'],
+          summary: "List this team's sequences",
+          description:
+            "List the API key team's sequences, most recent first (by updatedAt). Each entry is a compact summary — status-document scalars plus a `counts` block, without the per-frame array — and carries a HAL `self` link to its full status document. Archived sequences are excluded. Page with ?limit (default 20, max 100) and the opaque ?cursor returned in the response's `next` link.",
+          parameters: [
+            {
+              name: 'limit',
+              in: 'query',
+              required: false,
+              description: 'Max sequences to return (1–100). Default 20.',
+              schema: { type: 'integer', minimum: 1, maximum: 100 },
+              example: 20,
+            },
+            {
+              name: 'cursor',
+              in: 'query',
+              required: false,
+              description:
+                "Opaque pagination cursor. Echo back the value from the response's `next` link to fetch the following page.",
+              schema: { type: 'string' },
+            },
+          ],
+          responses: {
+            '200': {
+              description:
+                'A page of sequence summaries with a HAL `_links` catalog (`self`, `create-sequence`, and `next` when more remain).',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/SequenceListResult' },
+                },
+              },
+            },
+            '400': errorResponse('Invalid limit or cursor.'),
+            '401': errorResponse('Missing or invalid API key.'),
+            '403': errorResponse('No team associated with the key.'),
+            '429': errorResponse('Per-key rate limit exceeded (10 req/s).'),
+          },
+        },
         post: {
           tags: ['sequences'],
           summary: 'Create a video sequence (one-shot)',
@@ -392,34 +450,56 @@ export function buildOpenApiDocument(): JsonObject {
             aspectRatio: { type: 'string' },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
-            poster: {
-              type: ['object', 'null'],
-              required: ['url'],
-              properties: { url: { type: 'string' } },
-            },
+            poster: posterObject,
             music: genStatusObject,
             frames: {
               type: 'array',
               items: { $ref: '#/components/schemas/SequenceStateFrame' },
             },
-            counts: {
-              type: 'object',
-              required: [
-                'frames',
-                'imagesReady',
-                'videosReady',
-                'videosFailed',
-              ],
-              properties: {
-                frames: { type: 'integer' },
-                imagesReady: { type: 'integer' },
-                videosReady: { type: 'integer' },
-                videosFailed: {
-                  type: 'integer',
-                  description:
-                    'Frames whose video generation failed. Can be > 0 even when `status` is "completed".',
-                },
-              },
+            counts: countsObject,
+            _links: { $ref: '#/components/schemas/HalLinks' },
+          },
+        },
+        SequenceListItem: {
+          type: 'object',
+          description:
+            'A compact sequence summary (status-document scalars + counts, without the frame array) as returned in a list page.',
+          required: [
+            'id',
+            'title',
+            'status',
+            'statusError',
+            'aspectRatio',
+            'createdAt',
+            'updatedAt',
+            'poster',
+            'music',
+            'counts',
+            '_links',
+          ],
+          properties: {
+            id: { type: 'string' },
+            title: { type: 'string' },
+            status: statusEnum(SEQUENCE_STATUSES),
+            statusError: nullableString,
+            aspectRatio: { type: 'string' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+            poster: posterObject,
+            music: genStatusObject,
+            counts: countsObject,
+            _links: { $ref: '#/components/schemas/HalLinks' },
+          },
+        },
+        SequenceListResult: {
+          type: 'object',
+          description:
+            'A page of sequence summaries, most recent first. `_links.next` is present only when a further page exists.',
+          required: ['sequences', '_links'],
+          properties: {
+            sequences: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/SequenceListItem' },
             },
             _links: { $ref: '#/components/schemas/HalLinks' },
           },

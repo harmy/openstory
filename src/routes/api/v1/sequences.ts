@@ -1,23 +1,38 @@
 /**
- * POST /api/v1/sequences — public "one-shot" sequence creation.
+ * /api/v1/sequences — public sequence collection.
+ *
+ *   GET  — list this team's sequences (most recent first, cursor-paginated).
+ *   POST — one-shot sequence creation.
  *
  * Authenticated via `authWithTeamRequestMiddleware`: an API key
  * (`Authorization: Bearer <key>` or `x-api-key`, resolved to its owner by the
- * Better Auth apiKey plugin) or, equivalently, a dashboard session cookie.
- * Optionally enhances the script, resolves a style + cast + locations +
+ * Better Auth apiKey plugin) or, equivalently, a dashboard session cookie. Both
+ * verbs are team-scoped, so a key only ever sees its own team's sequences.
+ *
+ * GET returns a compact summary per sequence (status-document scalars + a
+ * `counts` block, but not the full per-frame array) with a HAL `self` link to
+ * each sequence's full status document. `?limit` (default 20, cap 100) and an
+ * opaque `?cursor` page through the results; a `next` link appears while more
+ * remain. Archived sequences are excluded.
+ *
+ * POST optionally enhances the script, resolves a style + cast + locations +
  * elements, then triggers generation. Generation is async: responds 202 with
  * the created sequence id(s), workflow run id(s), a status URL to poll, and a
- * HAL `_links` catalog of next actions.
- *
- * Pass `?wait=60s` to additionally block until each new sequence shows its first
- * progress (or a terminal state) and embed that snapshot in the response — handy
- * for agents that have no sleep tool of their own.
+ * HAL `_links` catalog of next actions. Pass `?wait=60s` to additionally block
+ * until each new sequence shows its first progress (or a terminal state) and
+ * embed that snapshot in the response — handy for agents that have no sleep
+ * tool of their own.
  */
 
 import { authWithTeamRequestMiddleware } from '@/functions/middleware';
 import { type OneShotWaitResult, runOneShotCreate } from '@/lib/api-v1/create';
 import { apiJsonError, runApiV1Handler } from '@/lib/api-v1/errors';
 import { apiCreateSequenceSchema } from '@/lib/api-v1/input-schema';
+import {
+  buildSequenceListPage,
+  decodeCursor,
+  parseLimitParam,
+} from '@/lib/api-v1/list';
 import {
   buildSequenceState,
   isTerminalSequenceState,
@@ -34,6 +49,31 @@ export const Route = createFileRoute('/api/v1/sequences')({
   server: {
     middleware: [authWithTeamRequestMiddleware],
     handlers: {
+      GET: async ({ request, context }) =>
+        runApiV1Handler(async () => {
+          const url = new URL(request.url);
+          const limit = parseLimitParam(url.searchParams.get('limit'));
+          const cursorRaw = url.searchParams.get('cursor');
+          const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
+
+          // Fetch limit+1 to detect a further page without a second query.
+          const rows = await context.scopedDb.sequences.listPage({
+            limit,
+            cursor,
+          });
+          const hasMore = rows.length > limit;
+          const page = hasMore ? rows.slice(0, limit) : rows;
+
+          const document = await buildSequenceListPage({
+            scopedDb: context.scopedDb,
+            sequences: page,
+            hasMore,
+            limit,
+            origin: url.origin,
+          });
+          return Response.json(document);
+        }),
+
       POST: async ({ request, context }) =>
         runApiV1Handler(async () => {
           let body: unknown;

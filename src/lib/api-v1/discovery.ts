@@ -25,6 +25,13 @@ Workflow:
      status + URLs, music, poster, and ready counts. Status is derived from the
      database, so it is always correct even if you reconnect later.
 
+List your sequences:
+  GET /api/v1/sequences returns your team's sequences, most recent first. Each
+  entry is a compact summary (status, aspect ratio, poster, music, and ready/
+  failed counts) with a 'self' link to its full status document. Page with
+  ?limit (default 20, max 100) and the opaque ?cursor from the response's
+  'next' link.
+
 Enhance only (no sequence):
   POST /api/v1/scripts/enhance to expand/polish a script without generating a
   video. Takes the enhancement-relevant inputs (style, aspectRatio, targetSeconds,
@@ -129,6 +136,13 @@ export function buildRootDocument(): RootDocument {
         title: 'API root / instructions',
       },
       'create-sequence': createSequenceLink(),
+      'list-sequences': {
+        href: `${API_V1_BASE}/sequences{?limit,cursor}`,
+        method: 'GET',
+        templated: true,
+        title:
+          "List your team's sequences (most recent first; cursor-paginated)",
+      },
       'enhance-script': enhanceScriptLink(),
       'sequence-status': {
         href: `${API_V1_BASE}/sequences/{id}{?wait}`,

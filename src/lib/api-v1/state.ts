@@ -8,6 +8,7 @@
  */
 
 import type { ScopedDb } from '@/lib/db/scoped';
+import type { Frame } from '@/lib/db/schema/frames';
 import { FRAME_GENERATION_STATUSES } from '@/lib/db/schema/frames';
 import type { MusicStatus, SequenceStatus } from '@/lib/db/schema/sequences';
 import { toShareableUrl } from '@/lib/storage/buckets';
@@ -31,6 +32,19 @@ type SequenceStateFrame = {
   video: { status: FrameGenStatus; url: string | null };
 };
 
+export type SequenceCounts = {
+  frames: number;
+  imagesReady: number;
+  videosReady: number;
+  /**
+   * Frames whose video generation failed. A sequence can reach the terminal
+   * `completed` status with `videosFailed > 0` (per-frame motion failures
+   * don't fail the run), so an agent must check this to know a terminal
+   * result actually succeeded end-to-end.
+   */
+  videosFailed: number;
+};
+
 export type SequenceState = {
   id: string;
   title: string;
@@ -42,19 +56,32 @@ export type SequenceState = {
   poster: { url: string } | null;
   music: { status: MusicStatus; url: string | null };
   frames: SequenceStateFrame[];
-  counts: {
-    frames: number;
-    imagesReady: number;
-    videosReady: number;
-    /**
-     * Frames whose video generation failed. A sequence can reach the terminal
-     * `completed` status with `videosFailed > 0` (per-frame motion failures
-     * don't fail the run), so an agent must check this to know a terminal
-     * result actually succeeded end-to-end.
-     */
-    videosFailed: number;
-  };
+  counts: SequenceCounts;
 };
+
+/** The image URL a frame exposes once its still is ready (else null). */
+function frameImageUrl(frame: Frame): string | null {
+  // Frames track video status explicitly; image readiness is signalled by the
+  // presence of a thumbnail URL (the stored R2 url, else the fast preview CDN
+  // url).
+  return frame.thumbnailUrl ?? frame.previewThumbnailUrl ?? null;
+}
+
+/**
+ * Readiness tallies over a sequence's frames — the single source of truth for
+ * the `counts` block shared by the status document and the list summary.
+ */
+export function summarizeFrameCounts(frames: Frame[]): SequenceCounts {
+  let imagesReady = 0;
+  let videosReady = 0;
+  let videosFailed = 0;
+  for (const frame of frames) {
+    if (frameImageUrl(frame) !== null) imagesReady += 1;
+    if (frame.videoStatus === 'completed') videosReady += 1;
+    if (frame.videoStatus === 'failed') videosFailed += 1;
+  }
+  return { frames: frames.length, imagesReady, videosReady, videosFailed };
+}
 
 export async function buildSequenceState(
   scopedDb: { frames: Pick<ScopedDb['frames'], 'listBySequence'> },
@@ -71,14 +98,12 @@ export async function buildSequenceState(
     url === null ? null : toShareableUrl(url, origin);
 
   const stateFrames: SequenceStateFrame[] = ordered.map((frame) => {
-    const imageUrl = frame.thumbnailUrl ?? frame.previewThumbnailUrl ?? null;
+    const imageUrl = frameImageUrl(frame);
     return {
       id: frame.id,
       orderIndex: frame.orderIndex,
       title: frame.metadata?.metadata?.title ?? null,
       image: {
-        // Frames track video status explicitly; image readiness is signalled by
-        // the presence of a thumbnail URL.
         status: imageUrl ? 'completed' : 'pending',
         url: share(imageUrl),
       },
@@ -105,15 +130,7 @@ export async function buildSequenceState(
       url: share(sequence.musicUrl ?? null),
     },
     frames: stateFrames,
-    counts: {
-      frames: stateFrames.length,
-      imagesReady: stateFrames.filter((f) => f.image.status === 'completed')
-        .length,
-      videosReady: stateFrames.filter((f) => f.video.status === 'completed')
-        .length,
-      videosFailed: stateFrames.filter((f) => f.video.status === 'failed')
-        .length,
-    },
+    counts: summarizeFrameCounts(ordered),
   };
 }
 

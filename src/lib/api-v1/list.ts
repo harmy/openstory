@@ -1,0 +1,186 @@
+/**
+ * The list document for `GET /api/v1/sequences` — a cursor-paginated, most-
+ * recent-first page of the team's sequences.
+ *
+ * Each entry is a compact *summary* (the same scalar fields as the single-
+ * sequence status document, minus the per-frame array) plus a `counts` block
+ * and a HAL `self` link to its full status document. Counts are derived from a
+ * single batched frame query across the whole page, so listing N sequences
+ * costs one frames round-trip rather than N (see `listFramesByIds`).
+ */
+
+import type { ScopedDb } from '@/lib/db/scoped';
+import type { Frame } from '@/lib/db/schema/frames';
+import type { MusicStatus, SequenceStatus } from '@/lib/db/schema/sequences';
+import { ValidationError } from '@/lib/errors';
+import { toShareableUrl } from '@/lib/storage/buckets';
+import type { Sequence } from '@/types/database';
+import { createSequenceLink } from './discovery';
+import { API_V1_BASE, getLink, type HalResource, withLinks } from './hal';
+import { type SequenceCounts, summarizeFrameCounts } from './state';
+
+/** A compact list entry — status-document scalars without the frame array. */
+type SequenceListItem = {
+  id: string;
+  title: string;
+  status: SequenceStatus;
+  statusError: string | null;
+  aspectRatio: string;
+  createdAt: string;
+  updatedAt: string;
+  poster: { url: string } | null;
+  music: { status: MusicStatus; url: string | null };
+  counts: SequenceCounts;
+};
+
+export type SequenceListPage = HalResource<{
+  sequences: HalResource<SequenceListItem>[];
+}>;
+
+/** Keyset position: a sequence's `(updatedAt, id)`, encoded into the cursor. */
+export type SequenceCursor = { updatedAt: Date; id: string };
+
+// URL-safe base64 so the cursor drops straight into a `?cursor=` value with no
+// percent-encoding. The encoded payload is `<updatedAtMs>:<ulid>` — an opaque
+// token to callers, who only ever echo back the `next` link we hand them.
+function toBase64Url(input: string): string {
+  return btoa(input).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromBase64Url(input: string): string {
+  const padded = input.padEnd(
+    input.length + ((4 - (input.length % 4)) % 4),
+    '='
+  );
+  return atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
+}
+
+export function encodeCursor(cursor: SequenceCursor): string {
+  return toBase64Url(`${cursor.updatedAt.getTime()}:${cursor.id}`);
+}
+
+/**
+ * Decode a `?cursor=` token, throwing a 400 `ValidationError` if it's malformed
+ * (rather than silently restarting from the first page, which would loop an
+ * agent forever). Only ever called with a token this API minted.
+ */
+export function decodeCursor(raw: string): SequenceCursor {
+  let decoded: string;
+  try {
+    decoded = fromBase64Url(raw);
+  } catch {
+    throw new ValidationError('Invalid "cursor" parameter.');
+  }
+  const sep = decoded.indexOf(':');
+  if (sep <= 0) {
+    throw new ValidationError('Invalid "cursor" parameter.');
+  }
+  const ms = Number(decoded.slice(0, sep));
+  const id = decoded.slice(sep + 1);
+  if (!Number.isSafeInteger(ms) || id === '') {
+    throw new ValidationError('Invalid "cursor" parameter.');
+  }
+  return { updatedAt: new Date(ms), id };
+}
+
+function buildListItem(
+  sequence: Sequence,
+  frames: Frame[],
+  origin: string
+): HalResource<SequenceListItem> {
+  const item: SequenceListItem = {
+    id: sequence.id,
+    title: sequence.title,
+    status: sequence.status,
+    statusError: sequence.statusError ?? null,
+    aspectRatio: sequence.aspectRatio,
+    createdAt: sequence.createdAt.toISOString(),
+    updatedAt: sequence.updatedAt.toISOString(),
+    poster: sequence.posterUrl
+      ? { url: toShareableUrl(sequence.posterUrl, origin) }
+      : null,
+    music: {
+      status: sequence.musicStatus ?? 'pending',
+      url:
+        sequence.musicUrl == null
+          ? null
+          : toShareableUrl(sequence.musicUrl, origin),
+    },
+    counts: summarizeFrameCounts(frames),
+  };
+  return withLinks(item, {
+    self: getLink(`${API_V1_BASE}/sequences/${item.id}`, 'Sequence status'),
+  });
+}
+
+/**
+ * Build the `GET /api/v1/sequences` page document for the already-fetched page
+ * of `sequences` (most recent first). `hasMore` reflects whether a further page
+ * exists — when true, a `next` HAL link carries the keyset cursor of the last
+ * entry. `origin` absolutizes stored media URLs (see `buildSequenceState`).
+ */
+export async function buildSequenceListPage(params: {
+  scopedDb: { sequences: Pick<ScopedDb['sequences'], 'listFramesByIds'> };
+  sequences: Sequence[];
+  hasMore: boolean;
+  limit: number;
+  origin: string;
+}): Promise<SequenceListPage> {
+  const { scopedDb, sequences, hasMore, limit, origin } = params;
+
+  const framesById = new Map<string, Frame[]>();
+  const allFrames = await scopedDb.sequences.listFramesByIds(
+    sequences.map((s) => s.id)
+  );
+  for (const frame of allFrames) {
+    const bucket = framesById.get(frame.sequenceId);
+    if (bucket) bucket.push(frame);
+    else framesById.set(frame.sequenceId, [frame]);
+  }
+
+  const items = sequences.map((sequence) =>
+    buildListItem(sequence, framesById.get(sequence.id) ?? [], origin)
+  );
+
+  const last = sequences.at(-1);
+  const nextHref =
+    hasMore && last
+      ? `${API_V1_BASE}/sequences?limit=${limit}&cursor=${encodeCursor({
+          updatedAt: last.updatedAt,
+          id: last.id,
+        })}`
+      : null;
+
+  return withLinks(
+    { sequences: items },
+    {
+      self: getLink(
+        `${API_V1_BASE}/sequences?limit=${limit}`,
+        'List sequences'
+      ),
+      'create-sequence': createSequenceLink(),
+      ...(nextHref
+        ? { next: getLink(nextHref, 'Next page of sequences') }
+        : {}),
+    }
+  );
+}
+
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
+
+/**
+ * Parse the `?limit` query param: absent → 20; clamped to [1, 100]; present but
+ * non-integer → 400 (so a mistyped value fails loudly rather than silently
+ * snapping to a default).
+ */
+export function parseLimitParam(raw: string | null): number {
+  if (raw === null || raw.trim() === '') return DEFAULT_LIMIT;
+  const value = Number(raw);
+  if (!Number.isInteger(value)) {
+    throw new ValidationError(
+      'Invalid "limit" parameter. Use an integer between 1 and 100.'
+    );
+  }
+  return Math.min(Math.max(value, 1), MAX_LIMIT);
+}

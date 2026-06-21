@@ -37,6 +37,11 @@ describe('buildRootDocument', () => {
     const enhance = _links['enhance-script'];
     expect(enhance?.method).toBe('POST');
     expect(enhance?.href).toBe('/api/v1/scripts/enhance');
+
+    const list = _links['list-sequences'];
+    expect(list?.method).toBe('GET');
+    expect(list?.templated).toBe(true);
+    expect(list?.href).toBe('/api/v1/sequences{?limit,cursor}');
   });
 
   it('documents the streaming enhance endpoint in the narrative', () => {
