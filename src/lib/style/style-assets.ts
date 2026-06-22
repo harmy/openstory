@@ -78,30 +78,12 @@ export function stylePreviewImageUrls(style: Style): string[] {
 }
 
 /**
- * Display order + friendly labels for the style categories used across the
- * template catalogue. Categories not listed here fall back to a title-cased
- * version of the raw value and sort to the end (see `groupStylesByCategory`).
+ * Friendly labels for the style categories used across the template catalogue.
+ * Categories are displayed in alphabetical order by label; the special
+ * `specialized` bucket always sorts last (see `groupStylesByCategory`).
+ * Categories not listed here fall back to a title-cased version of the raw
+ * value.
  */
-const STYLE_CATEGORY_ORDER = [
-  'commercial',
-  'ecommerce',
-  'influencer',
-  'film',
-  'animation',
-  'animatic',
-  'kids',
-  'corporate',
-  'realestate',
-  'photography',
-  'food',
-  'fitness',
-  'healthcare',
-  'edtech',
-  'automotive',
-  'nonprofit',
-  'travel',
-] as const;
-
 const STYLE_CATEGORY_LABELS: Record<string, string> = {
   commercial: 'Commercial',
   ecommerce: 'E-commerce',
@@ -120,7 +102,38 @@ const STYLE_CATEGORY_LABELS: Record<string, string> = {
   automotive: 'Automotive',
   nonprofit: 'Nonprofit',
   travel: 'Travel',
+  specialized: 'Specialized',
 };
+
+/** Synthetic key for styles missing a category. */
+const UNCATEGORIZED_KEY = '__other__';
+
+/**
+ * The trailing catch-all group that small/niche categories collapse into so the
+ * browse experience isn't littered with one-style sections.
+ */
+export const SPECIALIZED_CATEGORY = 'specialized';
+
+/** Categories with fewer styles than this collapse into "Specialized". */
+const SMALL_CATEGORY_THRESHOLD = 3;
+
+/**
+ * Raw category keys (including the uncategorized bucket) that hold fewer than
+ * `SMALL_CATEGORY_THRESHOLD` styles in the given catalogue, and therefore
+ * collapse into the trailing "Specialized" group.
+ */
+export function smallCategoryKeys(styles: Style[]): Set<string> {
+  const counts = new Map<string, number>();
+  for (const style of styles) {
+    const key = style.category ?? UNCATEGORIZED_KEY;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const small = new Set<string>();
+  for (const [key, count] of counts) {
+    if (count < SMALL_CATEGORY_THRESHOLD) small.add(key);
+  }
+  return small;
+}
 
 /** Friendly heading for a style category (title-cases unknown values). */
 export function styleCategoryLabel(
@@ -140,35 +153,33 @@ export type StyleCategoryGroup = {
 };
 
 /**
- * Bucket styles into category groups in the canonical display order. Known
- * categories follow `STYLE_CATEGORY_ORDER`; unknown ones are appended
- * alphabetically; styles with no category land in a trailing "Other" group.
+ * Bucket styles into category groups, alphabetically by label, with the
+ * "Specialized" catch-all last. Categories with fewer than
+ * `SMALL_CATEGORY_THRESHOLD` styles (and uncategorized styles) collapse into
+ * Specialized; styles within each group are sorted A–Z by name.
  */
 export function groupStylesByCategory(styles: Style[]): StyleCategoryGroup[] {
+  const small = smallCategoryKeys(styles);
   const byCategory = new Map<string, Style[]>();
   for (const style of styles) {
-    const key = style.category ?? '__other__';
+    const rawKey = style.category ?? UNCATEGORIZED_KEY;
+    const key = small.has(rawKey) ? SPECIALIZED_CATEGORY : rawKey;
     const bucket = byCategory.get(key);
     if (bucket) bucket.push(style);
     else byCategory.set(key, [style]);
   }
 
-  const orderIndex = (key: string) => {
-    if (key === '__other__') return Number.MAX_SAFE_INTEGER;
-    const idx = STYLE_CATEGORY_ORDER.findIndex((c) => c === key);
-    return idx === -1 ? STYLE_CATEGORY_ORDER.length : idx;
-  };
-
   return [...byCategory.entries()]
-    .sort(([a], [b]) => {
-      const ai = orderIndex(a);
-      const bi = orderIndex(b);
-      if (ai !== bi) return ai - bi;
-      return a.localeCompare(b);
-    })
     .map(([category, groupStyles]) => ({
-      category: category === '__other__' ? 'other' : category,
-      label: category === '__other__' ? 'Other' : styleCategoryLabel(category),
-      styles: groupStyles,
-    }));
+      category: category === UNCATEGORIZED_KEY ? 'other' : category,
+      label:
+        category === UNCATEGORIZED_KEY ? 'Other' : styleCategoryLabel(category),
+      styles: [...groupStyles].sort((a, b) => a.name.localeCompare(b.name)),
+    }))
+    .sort((a, b) => {
+      // "Specialized" always sinks to the end; everything else A–Z by label.
+      if (a.category === SPECIALIZED_CATEGORY) return 1;
+      if (b.category === SPECIALIZED_CATEGORY) return -1;
+      return a.label.localeCompare(b.label);
+    });
 }

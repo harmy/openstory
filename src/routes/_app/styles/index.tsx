@@ -1,9 +1,6 @@
 import { useAuthGate } from '@/components/auth/auth-gate-provider';
 import { PageContainer } from '@/components/layout/page-container';
-import {
-  StyleLibraryView,
-  type StyleSortMode,
-} from '@/components/style-library/style-library-view';
+import { StyleLibraryView } from '@/components/style-library/style-library-view';
 import { PageDescription } from '@/components/typography/page-description';
 import { PageHeader } from '@/components/typography/page-header';
 import { useStyles } from '@/hooks/use-styles';
@@ -14,7 +11,6 @@ import { z } from 'zod';
 // to a redirect, which sours the sitemap. Fallbacks live in the component.
 const searchParamsSchema = z.object({
   category: z.string().optional(),
-  sort: z.enum(['popular', 'az']).optional(),
 });
 
 export const Route = createFileRoute('/_app/styles/')({
@@ -24,7 +20,7 @@ export const Route = createFileRoute('/_app/styles/')({
 });
 
 function StylesPage() {
-  const { category = 'all', sort = 'popular' } = Route.useSearch();
+  const { category = 'all' } = Route.useSearch();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthGate();
   const { data: styles } = useStyles();
@@ -35,15 +31,6 @@ function StylesPage() {
       search: (prev) => ({
         ...prev,
         category: next === 'all' ? undefined : next,
-      }),
-    });
-
-  const handleSortChange = (next: StyleSortMode) =>
-    void navigate({
-      to: '/styles',
-      search: (prev) => ({
-        ...prev,
-        sort: next === 'popular' ? undefined : next,
       }),
     });
 
@@ -62,9 +49,7 @@ function StylesPage() {
         <StyleLibraryView
           styles={styles}
           category={category}
-          sort={sort}
           onCategoryChange={handleCategoryChange}
-          onSortChange={handleSortChange}
         />
       </PageContainer>
     </div>

@@ -26,31 +26,11 @@ import type { ChangeEvent, FC } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { StyleLibraryCard } from './style-library-card';
 
-export type StyleSortMode = 'popular' | 'az';
-
 type StyleLibraryViewProps = {
   styles: Style[] | undefined;
   category: string;
-  sort: StyleSortMode;
   onCategoryChange: (category: string) => void;
-  onSortChange: (sort: StyleSortMode) => void;
 };
-
-function sortStyles(styles: Style[], sort: StyleSortMode): Style[] {
-  const sorted = [...styles];
-  if (sort === 'az') {
-    sorted.sort((a, b) => a.name.localeCompare(b.name));
-  } else {
-    // Popular: most-used first, then the curated sortOrder, then name.
-    sorted.sort(
-      (a, b) =>
-        (b.usageCount ?? 0) - (a.usageCount ?? 0) ||
-        (a.sortOrder ?? 0) - (b.sortOrder ?? 0) ||
-        a.name.localeCompare(b.name)
-    );
-  }
-  return sorted;
-}
 
 const CardGrid: FC<{ styles: Style[]; onSelect: (s: Style) => void }> = ({
   styles,
@@ -75,17 +55,15 @@ const GridSkeleton: FC = () => (
 );
 
 /**
- * The browse experience for the top-level styles page: search + sort + category
- * filter chips over a category-grouped grid of style tiles. Selecting a tile
- * opens the read-only detail dialog. Category and sort are owned by the route
- * (URL-reflected); the search box is local.
+ * The browse experience for the top-level styles page: search + category filter
+ * chips over a category-grouped grid of style tiles, each section sorted A–Z.
+ * Selecting a tile opens the read-only detail dialog. Category is owned by the
+ * route (URL-reflected); the search box is local.
  */
 export const StyleLibraryView: FC<StyleLibraryViewProps> = ({
   styles,
   category,
-  sort,
   onCategoryChange,
-  onSortChange,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStyle, setSelectedStyle] = useState<Style | null>(null);
@@ -93,7 +71,7 @@ export const StyleLibraryView: FC<StyleLibraryViewProps> = ({
 
   const isLoading = styles === undefined;
 
-  // Categories present in the catalogue, in canonical display order.
+  // Categories present in the catalogue, alphabetically (Specialized last).
   const categories = useMemo(
     () =>
       isLoading
@@ -107,23 +85,18 @@ export const StyleLibraryView: FC<StyleLibraryViewProps> = ({
     [styles, category, searchQuery]
   );
 
-  // When showing everything, bucket into category sections; otherwise a single
-  // sorted grid for the chosen category.
+  // When showing everything, bucket into category sections (each sorted A–Z);
+  // otherwise a single A–Z grid for the chosen category.
   const groups = useMemo(() => {
-    if (category === 'all') {
-      return groupStylesByCategory(filtered).map((g) => ({
-        ...g,
-        styles: sortStyles(g.styles, sort),
-      }));
-    }
+    if (category === 'all') return groupStylesByCategory(filtered);
     return [
       {
         category,
         label: styleCategoryLabel(category),
-        styles: sortStyles(filtered, sort),
+        styles: [...filtered].sort((a, b) => a.name.localeCompare(b.name)),
       },
     ];
-  }, [filtered, category, sort]);
+  }, [filtered, category]);
 
   const handleSelect = useCallback((style: Style) => {
     setSelectedStyle(style);
@@ -137,44 +110,29 @@ export const StyleLibraryView: FC<StyleLibraryViewProps> = ({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <InputGroup className="sm:max-w-xs">
-            <InputGroupAddon>
-              <Search />
+        <InputGroup className="sm:max-w-xs">
+          <InputGroupAddon>
+            <Search />
+          </InputGroupAddon>
+          <InputGroupInput
+            placeholder="Search styles"
+            value={searchQuery}
+            onChange={handleSearchChange}
+            aria-label="Search styles"
+          />
+          {searchQuery && (
+            <InputGroupAddon align="inline-end">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSearchQuery('')}
+              >
+                <X />
+                <span className="sr-only">Clear search</span>
+              </Button>
             </InputGroupAddon>
-            <InputGroupInput
-              placeholder="Search styles"
-              value={searchQuery}
-              onChange={handleSearchChange}
-              aria-label="Search styles"
-            />
-            {searchQuery && (
-              <InputGroupAddon align="inline-end">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setSearchQuery('')}
-                >
-                  <X />
-                  <span className="sr-only">Clear search</span>
-                </Button>
-              </InputGroupAddon>
-            )}
-          </InputGroup>
-
-          <ToggleGroup
-            type="single"
-            value={sort}
-            onValueChange={(value) => {
-              if (value === 'popular' || value === 'az') onSortChange(value);
-            }}
-            variant="outline"
-            className="sm:ml-auto"
-          >
-            <ToggleGroupItem value="popular">Popular</ToggleGroupItem>
-            <ToggleGroupItem value="az">A–Z</ToggleGroupItem>
-          </ToggleGroup>
-        </div>
+          )}
+        </InputGroup>
 
         {categories.length > 1 && (
           <ToggleGroup

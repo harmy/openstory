@@ -1379,7 +1379,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
   {
     name: 'Returns-Friendly Diagnostic',
     description:
-      'Hyper-honest product photography that shows scale, fit, dimensions, and material so customers buy with confidence. Built to reduce returns and dispel ambiguity on PDPs.',
+      'Shows a product at true scale from every side — next to real-world objects like a hand, a tape measure, or a phone — with close-ups of fit and material. The honest "exactly what you get" look that cuts returns.',
     category: 'ecommerce',
     tags: ['ecommerce', 'diagnostic', 'fit', 'scale', 'returns'],
     config: {

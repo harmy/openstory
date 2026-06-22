@@ -136,30 +136,53 @@ describe('styleCategoryLabel', () => {
   });
 });
 
+// Three styles per category clears the collapse threshold, so the category
+// survives as its own group.
+function trio(category: string): Style[] {
+  return [0, 1, 2].map((i) =>
+    makeStyle({ id: `${category}-${i}`, category, name: `${category} ${i}` })
+  );
+}
+
 describe('groupStylesByCategory', () => {
-  it('orders known categories canonically, unknowns then Other last', () => {
+  it('orders surviving categories alphabetically by label', () => {
     const groups = groupStylesByCategory([
-      makeStyle({ id: 'a', category: 'film' }),
-      makeStyle({ id: 'b', category: 'commercial' }),
-      makeStyle({ id: 'c', category: 'zebra' }),
-      makeStyle({ id: 'd', category: null }),
+      ...trio('film'), // "Film & Cinematic"
+      ...trio('commercial'), // "Commercial"
+      ...trio('zebra'), // title-cased "Zebra"
+    ]);
+    expect(groups.map((g) => g.label)).toEqual([
+      'Commercial',
+      'Film & Cinematic',
+      'Zebra',
+    ]);
+  });
+
+  it('collapses small/uncategorized categories into a trailing Specialized group', () => {
+    const groups = groupStylesByCategory([
+      ...trio('commercial'),
+      makeStyle({ id: 'travel', category: 'travel' }),
+      makeStyle({ id: 'nonprofit', category: 'nonprofit' }),
+      makeStyle({ id: 'uncat', category: null }),
     ]);
     expect(groups.map((g) => g.category)).toEqual([
       'commercial',
-      'film',
-      'zebra',
-      'other',
+      'specialized',
     ]);
-    expect(groups[3]?.label).toBe('Other');
+    expect(groups[1]?.label).toBe('Specialized');
+    expect(groups[1]?.styles).toHaveLength(3);
   });
 
-  it('keeps every style in exactly one group', () => {
+  it('sorts styles within each group A–Z by name', () => {
     const groups = groupStylesByCategory([
-      makeStyle({ id: 'a', category: 'film' }),
-      makeStyle({ id: 'b', category: 'film' }),
-      makeStyle({ id: 'c', category: 'commercial' }),
+      makeStyle({ id: 'a', category: 'commercial', name: 'Banana' }),
+      makeStyle({ id: 'b', category: 'commercial', name: 'Apple' }),
+      makeStyle({ id: 'c', category: 'commercial', name: 'Cherry' }),
     ]);
-    const total = groups.reduce((n, g) => n + g.styles.length, 0);
-    expect(total).toBe(3);
+    expect(groups[0]?.styles.map((s) => s.name)).toEqual([
+      'Apple',
+      'Banana',
+      'Cherry',
+    ]);
   });
 });
