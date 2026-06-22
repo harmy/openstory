@@ -33,11 +33,14 @@ function dismissBillingPrompt() {
   localStorage.setItem(BILLING_PROMPT_KEY, String(expiry));
 }
 
-// `style` carries a sample style's id from the showcase/gallery "Try this
-// style" links (#956); the composer seeds its brief + style from it. Optional,
-// no default — a bare /sequences/new must stay a bare URL (no 307 rewrite).
+// `style` carries a sample style's slug from the showcase/gallery "Try this
+// style" links (#956); the composer seeds its brief + selects the style.
+// `prefill=style` narrows that to style-only — select the style but leave the
+// prompt blank (the styles page "Use this style" CTA). Optional, no default —
+// a bare /sequences/new must stay a bare URL (no 307 rewrite).
 const searchSchema = z.object({
   style: z.string().optional(),
+  prefill: z.enum(['style']).optional(),
 });
 
 export const Route = createFileRoute('/_app/sequences/new')({
@@ -53,7 +56,7 @@ export const Route = createFileRoute('/_app/sequences/new')({
 
 function NewSequencePage() {
   const navigate = useNavigate();
-  const { style: styleParam } = Route.useSearch();
+  const { style: styleParam, prefill } = Route.useSearch();
   // Session is prefetched in _app/route.tsx beforeLoad, so this is settled on
   // first render — no flash for signed-in users.
   const { data: user } = useUser();
@@ -70,8 +73,11 @@ function NewSequencePage() {
   const seedStyle = styleParam
     ? styles?.find((s) => styleSlug(s.name) === styleParam)
     : undefined;
+  // `prefill=style` ("Use this style") seeds ONLY the style; the default
+  // ("Try" / gallery) also seeds the style's sample brief as the prompt.
+  const styleOnly = prefill === 'style';
   let seedScript: string | undefined;
-  if (seedStyle) {
+  if (seedStyle && !styleOnly) {
     try {
       seedScript = briefForStyle({
         name: seedStyle.name,
@@ -82,7 +88,11 @@ function NewSequencePage() {
       seedScript = undefined;
     }
   }
-  const composerKey = seedStyle ? `seed:${seedStyle.id}` : 'blank';
+  // Distinguish the two seed modes in the key so switching between "Try" and
+  // "Use this style" for the same style still remounts + re-seeds the composer.
+  const composerKey = seedStyle
+    ? `seed:${seedStyle.id}:${styleOnly ? 'style' : 'full'}`
+    : 'blank';
 
   const { needsBillingSetup, hasFalKey, hasOpenRouterKey, stripeEnabled } =
     useBillingGate();

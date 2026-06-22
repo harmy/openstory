@@ -300,11 +300,12 @@ export const ScriptView: FC<{
   const recommendedAspectRatio = selectedStyle?.defaultAspectRatio ?? null;
 
   // Sync draft state when creating new sequences (not editing). An explicit
-  // sample-style seed (`initialScript`) is the user's just-now intent, so it
-  // wins — skip restoring the older saved draft over it.
+  // seed — a sample-style brief (`initialScript`) or just a chosen style
+  // (`initialStyleId`, the "Use this style" CTA) — is the user's just-now
+  // intent, so it wins; skip restoring the older saved draft over it.
   const hasSyncedDraftRef = React.useRef(false);
   useEffect(() => {
-    if (isEditing || loading || initialScript) {
+    if (isEditing || loading || initialScript || initialStyleId) {
       hasSyncedDraftRef.current = false;
       return;
     }
@@ -329,7 +330,7 @@ export const ScriptView: FC<{
       }
       hasSyncedDraftRef.current = true;
     }
-  }, [isEditing, loading, draftLoaded, draft, initialScript]);
+  }, [isEditing, loading, draftLoaded, draft, initialScript, initialStyleId]);
 
   // Sync state with savedSettings when creating new sequences (not when editing)
   // Use a ref to track if we've already synced to avoid loops

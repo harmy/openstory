@@ -1528,9 +1528,9 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     config: {
       mood: 'Clear, instructional, friendly',
       artStyle:
-        'Creator at a desk or vanity speaking directly to camera with a ring light visible in their eyes. Background tidy but personal -- a shelf, a piece of art, a houseplant. Occasional cut to overhead hands or insert of the product being demoed',
+        'Creator at a desk or vanity speaking directly to camera, lit by an off-camera ring light -- its signature circular catchlight shows in their eyes, but the ring light fixture itself is never in the shot. Background tidy but personal -- a shelf, a piece of art, a houseplant. Occasional cut to overhead hands or insert of the product being demoed',
       lighting:
-        'Single ring light as key (visible catchlight in eyes), soft ambient fill from the room. Even, frontal, flattering. No dramatic shadow',
+        'Off-camera ring light as key -- read it only through the circular catchlight in the eyes and an even, frontal, flattering wash; never show the ring light fixture or its stand in frame. Soft ambient fill from the room. No dramatic shadow',
       colorPalette: ['#F7EFE3', '#F0AAB7', '#1F1A14', '#8AA39B', '#FFFFFF'],
       cameraWork:
         'Locked-off tripod head-and-shoulders frame. Occasional re-zoom for emphasis. Insert cuts to overhead hand demos. Native vertical aspect',
