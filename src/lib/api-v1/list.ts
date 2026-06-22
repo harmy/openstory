@@ -11,27 +11,19 @@
 
 import type { ScopedDb } from '@/lib/db/scoped';
 import type { Frame } from '@/lib/db/schema/frames';
-import type { MusicStatus, SequenceStatus } from '@/lib/db/schema/sequences';
+import type { Style } from '@/lib/db/schema/libraries';
 import { ValidationError } from '@/lib/errors';
-import { toShareableUrl } from '@/lib/storage/buckets';
 import type { Sequence } from '@/types/database';
 import { createSequenceLink } from './discovery';
 import { API_V1_BASE, getLink, type HalResource, withLinks } from './hal';
-import { type SequenceCounts, summarizeFrameCounts } from './state';
+import {
+  buildSequenceSummary,
+  type SequenceSummary,
+  summarizeFrameCounts,
+} from './state';
 
-/** A compact list entry — status-document scalars without the frame array. */
-type SequenceListItem = {
-  id: string;
-  title: string;
-  status: SequenceStatus;
-  statusError: string | null;
-  aspectRatio: string;
-  createdAt: string;
-  updatedAt: string;
-  poster: { url: string } | null;
-  music: { status: MusicStatus; url: string | null };
-  counts: SequenceCounts;
-};
+/** A compact list entry — the status-document scalars without the frame array. */
+type SequenceListItem = SequenceSummary;
 
 export type SequenceListPage = HalResource<{
   sequences: HalResource<SequenceListItem>[];
@@ -86,28 +78,15 @@ export function decodeCursor(raw: string): SequenceCursor {
 function buildListItem(
   sequence: Sequence,
   frames: Frame[],
+  style: Style | null,
   origin: string
 ): HalResource<SequenceListItem> {
-  const item: SequenceListItem = {
-    id: sequence.id,
-    title: sequence.title,
-    status: sequence.status,
-    statusError: sequence.statusError ?? null,
-    aspectRatio: sequence.aspectRatio,
-    createdAt: sequence.createdAt.toISOString(),
-    updatedAt: sequence.updatedAt.toISOString(),
-    poster: sequence.posterUrl
-      ? { url: toShareableUrl(sequence.posterUrl, origin) }
-      : null,
-    music: {
-      status: sequence.musicStatus ?? 'pending',
-      url:
-        sequence.musicUrl == null
-          ? null
-          : toShareableUrl(sequence.musicUrl, origin),
-    },
+  const item = buildSequenceSummary({
+    sequence,
+    style,
     counts: summarizeFrameCounts(frames),
-  };
+    origin,
+  });
   return withLinks(item, {
     self: getLink(`${API_V1_BASE}/sequences/${item.id}`, 'Sequence status'),
   });
@@ -120,7 +99,10 @@ function buildListItem(
  * entry. `origin` absolutizes stored media URLs (see `buildSequenceState`).
  */
 export async function buildSequenceListPage(params: {
-  scopedDb: { sequences: Pick<ScopedDb['sequences'], 'listFramesByIds'> };
+  scopedDb: {
+    sequences: Pick<ScopedDb['sequences'], 'listFramesByIds'>;
+    styles: Pick<ScopedDb['styles'], 'listByIds'>;
+  };
   sequences: Sequence[];
   hasMore: boolean;
   limit: number;
@@ -128,18 +110,28 @@ export async function buildSequenceListPage(params: {
 }): Promise<SequenceListPage> {
   const { scopedDb, sequences, hasMore, limit, origin } = params;
 
+  // One batched frame fetch and one batched style fetch across the whole page,
+  // rather than N round-trips per sequence.
+  const [allFrames, allStyles] = await Promise.all([
+    scopedDb.sequences.listFramesByIds(sequences.map((s) => s.id)),
+    scopedDb.styles.listByIds(sequences.map((s) => s.styleId)),
+  ]);
+
   const framesById = new Map<string, Frame[]>();
-  const allFrames = await scopedDb.sequences.listFramesByIds(
-    sequences.map((s) => s.id)
-  );
   for (const frame of allFrames) {
     const bucket = framesById.get(frame.sequenceId);
     if (bucket) bucket.push(frame);
     else framesById.set(frame.sequenceId, [frame]);
   }
+  const styleById = new Map(allStyles.map((style) => [style.id, style]));
 
   const items = sequences.map((sequence) =>
-    buildListItem(sequence, framesById.get(sequence.id) ?? [], origin)
+    buildListItem(
+      sequence,
+      framesById.get(sequence.id) ?? [],
+      styleById.get(sequence.styleId) ?? null,
+      origin
+    )
   );
 
   const last = sequences.at(-1);

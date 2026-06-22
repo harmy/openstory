@@ -127,6 +127,25 @@ const posterObject: JsonObject = {
   required: ['url'],
   properties: { url: { type: 'string' } },
 };
+const styleObject: JsonObject = {
+  type: 'object',
+  description:
+    "The style the sequence was generated with — `id` is the UI's `styleId` filter value; `name` is what the UI search matches on (null only if the style row is gone).",
+  required: ['id', 'name'],
+  properties: { id: { type: 'string' }, name: nullableString },
+};
+const modelsObject: JsonObject = {
+  type: 'object',
+  description:
+    'The models the sequence was generated with — the raw ids the UI filters/sorts on.',
+  required: ['analysis', 'image', 'video', 'music'],
+  properties: {
+    analysis: { type: 'string', description: 'Script-analysis model id.' },
+    image: { type: 'string', description: 'Per-frame image model id.' },
+    video: { type: 'string', description: 'Per-frame video model id.' },
+    music: { ...nullableString, description: 'Music model id, if any.' },
+  },
+};
 
 /** Shared error-envelope reference for 4xx/5xx responses. */
 function errorResponse(description: string): JsonObject {
@@ -434,6 +453,8 @@ export function buildOpenApiDocument(): JsonObject {
             'status',
             'statusError',
             'aspectRatio',
+            'style',
+            'models',
             'createdAt',
             'updatedAt',
             'poster',
@@ -448,6 +469,8 @@ export function buildOpenApiDocument(): JsonObject {
             status: statusEnum(SEQUENCE_STATUSES),
             statusError: nullableString,
             aspectRatio: { type: 'string' },
+            style: styleObject,
+            models: modelsObject,
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
             poster: posterObject,
@@ -463,13 +486,15 @@ export function buildOpenApiDocument(): JsonObject {
         SequenceListItem: {
           type: 'object',
           description:
-            'A compact sequence summary (status-document scalars + counts, without the frame array) as returned in a list page.',
+            'A compact sequence summary (status-document scalars + style, models, and counts, without the frame array) as returned in a list page.',
           required: [
             'id',
             'title',
             'status',
             'statusError',
             'aspectRatio',
+            'style',
+            'models',
             'createdAt',
             'updatedAt',
             'poster',
@@ -483,6 +508,8 @@ export function buildOpenApiDocument(): JsonObject {
             status: statusEnum(SEQUENCE_STATUSES),
             statusError: nullableString,
             aspectRatio: { type: 'string' },
+            style: styleObject,
+            models: modelsObject,
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
             poster: posterObject,

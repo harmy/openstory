@@ -8,11 +8,15 @@ import type { NewStyle, Style } from '@/lib/db/schema';
 import { styles } from '@/lib/db/schema';
 import { ValidationError } from '@/lib/errors';
 import { styleSlug } from '@/lib/style/style-slug';
-import { and, asc, desc, eq, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'db', 'styles']);
+
+// D1 caps a single query at 100 bound parameters, so `listByIds` chunks its id
+// list to stay under that ceiling (mirrors sequences.listFramesByIds).
+const STYLES_BY_IDS_BATCH = 90;
 
 type StylesListOptions = {
   orderBy?: 'popular' | 'sortOrder';
@@ -76,6 +80,29 @@ function createStylesReadMethods(db: Database, teamId: string) {
         .where(eq(styles.id, styleId))
         .limit(1);
       return result[0] ?? null;
+    },
+
+    /**
+     * Batched style fetch by id — resolves the style rows referenced by a page
+     * of sequences in one round-trip (backs the `style` block in the public
+     * `GET /api/v1/sequences` list). Like `getById`, it resolves by id alone (no
+     * team scope): the ids come from the team's own sequences, which reference
+     * their team's styles plus public ones. Duplicate ids collapse and order is
+     * not guaranteed — callers index the result by id.
+     */
+    listByIds: async (styleIds: string[]): Promise<Style[]> => {
+      if (styleIds.length === 0) return [];
+      const unique = [...new Set(styleIds)];
+      const batches: string[][] = [];
+      for (let i = 0; i < unique.length; i += STYLES_BY_IDS_BATCH) {
+        batches.push(unique.slice(i, i + STYLES_BY_IDS_BATCH));
+      }
+      const results = await Promise.all(
+        batches.map((batch) =>
+          db.select().from(styles).where(inArray(styles.id, batch))
+        )
+      );
+      return results.flat();
     },
   };
 }

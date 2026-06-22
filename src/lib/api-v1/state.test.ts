@@ -1,4 +1,5 @@
 import type { Frame } from '@/lib/db/schema/frames';
+import type { Style } from '@/lib/db/schema/libraries';
 import type { Sequence } from '@/lib/db/schema/sequences';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -118,8 +119,46 @@ function makeSequence(overrides: Partial<Sequence> = {}): Sequence {
   };
 }
 
-function depsWithFrames(frames: Frame[]) {
-  return { frames: { listBySequence: async () => frames } };
+function makeStyle(overrides: Partial<Style> = {}): Style {
+  return {
+    id: 'style-1',
+    teamId: 'team-1',
+    name: 'Cinematic Noir',
+    description: null,
+    config: {
+      mood: 'tense',
+      artStyle: 'noir',
+      lighting: 'low-key',
+      colorPalette: ['#000'],
+      cameraWork: 'handheld',
+      referenceFilms: [],
+      colorGrading: 'desaturated',
+    },
+    category: null,
+    tags: [],
+    isPublic: false,
+    isTemplate: false,
+    version: 1,
+    previewUrl: null,
+    sampleVideos: [],
+    recommendedImageModel: null,
+    recommendedVideoModel: null,
+    defaultAspectRatio: null,
+    useCases: [],
+    sortOrder: 100,
+    usageCount: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    createdBy: null,
+    ...overrides,
+  };
+}
+
+function depsWithFrames(frames: Frame[], style: Style | null = makeStyle()) {
+  return {
+    frames: { listBySequence: async () => frames },
+    styles: { getById: async () => style },
+  };
 }
 
 describe('buildSequenceState', () => {
@@ -137,6 +176,13 @@ describe('buildSequenceState', () => {
       title: 'Test Sequence',
       status: 'processing',
       aspectRatio: '16:9',
+      style: { id: 'style-1', name: 'Cinematic Noir' },
+      models: {
+        analysis: 'anthropic/claude-haiku-4.5',
+        image: 'nano_banana_2',
+        video: 'wan_i2v',
+        music: null,
+      },
       poster: { url: 'https://cdn/poster.png' },
       music: { status: 'completed', url: 'https://cdn/music.mp3' },
     });
@@ -148,6 +194,15 @@ describe('buildSequenceState', () => {
       videosFailed: 0,
     });
     expect(state.poster).not.toBeNull();
+  });
+
+  it('surfaces the style id with a null name when the style row is gone', async () => {
+    const state = await build(
+      depsWithFrames([], null),
+      makeSequence({ styleId: 'style-deleted', musicModel: 'elevenlabs_music' })
+    );
+    expect(state.style).toEqual({ id: 'style-deleted', name: null });
+    expect(state.models.music).toBe('elevenlabs_music');
   });
 
   it('null poster and falls back to pending music status', async () => {

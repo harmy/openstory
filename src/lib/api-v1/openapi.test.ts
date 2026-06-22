@@ -95,4 +95,19 @@ describe('buildOpenApiDocument', () => {
     const counts = doc.components.schemas.SequenceState.properties.counts;
     expect(counts.required).toContain('videosFailed');
   });
+
+  it('exposes style and models on both the status document and list item', () => {
+    for (const name of ['SequenceState', 'SequenceListItem']) {
+      const schema = doc.components.schemas[name];
+      expect(schema.required, name).toEqual(
+        expect.arrayContaining(['style', 'models'])
+      );
+      expect(schema.properties.style.properties).toMatchObject({
+        id: { type: 'string' },
+      });
+      expect(schema.properties.models.required).toEqual(
+        expect.arrayContaining(['analysis', 'image', 'video', 'music'])
+      );
+    }
+  });
 });

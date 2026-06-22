@@ -1,4 +1,5 @@
 import type { Frame } from '@/lib/db/schema/frames';
+import type { Style } from '@/lib/db/schema/libraries';
 import type { Sequence } from '@/lib/db/schema/sequences';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -104,9 +105,50 @@ function makeFrame(overrides: Partial<Frame> = {}): Frame {
   };
 }
 
-/** A scopedDb stub exposing only the batched frame fetch the builder uses. */
-function depsWithFrames(frames: Frame[]) {
-  return { sequences: { listFramesByIds: async () => frames } };
+function makeStyle(overrides: Partial<Style> = {}): Style {
+  return {
+    id: 'style-1',
+    teamId: 'team-1',
+    name: 'Cinematic Noir',
+    description: null,
+    config: {
+      mood: 'tense',
+      artStyle: 'noir',
+      lighting: 'low-key',
+      colorPalette: ['#000'],
+      cameraWork: 'handheld',
+      referenceFilms: [],
+      colorGrading: 'desaturated',
+    },
+    category: null,
+    tags: [],
+    isPublic: false,
+    isTemplate: false,
+    version: 1,
+    previewUrl: null,
+    sampleVideos: [],
+    recommendedImageModel: null,
+    recommendedVideoModel: null,
+    defaultAspectRatio: null,
+    useCases: [],
+    sortOrder: 100,
+    usageCount: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    createdBy: null,
+    ...overrides,
+  };
+}
+
+/**
+ * A scopedDb stub exposing the batched frame + style fetches the builder uses.
+ * `styles` defaults to a single 'style-1' row matching the default sequence.
+ */
+function depsWithFrames(frames: Frame[], styles: Style[] = [makeStyle()]) {
+  return {
+    sequences: { listFramesByIds: async () => frames },
+    styles: { listByIds: async () => styles },
+  };
 }
 
 describe('cursor encode/decode', () => {
@@ -179,6 +221,13 @@ describe('buildSequenceListPage', () => {
       title: 'Test Sequence',
       status: 'processing',
       aspectRatio: '16:9',
+      style: { id: 'style-1', name: 'Cinematic Noir' },
+      models: {
+        analysis: 'anthropic/claude-haiku-4.5',
+        image: 'nano_banana_2',
+        video: 'wan_i2v',
+        music: null,
+      },
       poster: { url: 'https://cdn/poster.png' },
       music: { status: 'completed', url: 'https://cdn/music.mp3' },
       counts: { frames: 3, imagesReady: 1, videosReady: 1, videosFailed: 1 },
@@ -214,6 +263,38 @@ describe('buildSequenceListPage', () => {
       frames: 2,
       videosReady: 0,
     });
+  });
+
+  it('resolves each sequence to its own style and nulls the name when missing', async () => {
+    const a = makeSequence({ id: 'seq-a', styleId: 'style-1' });
+    const b = makeSequence({ id: 'seq-b', styleId: 'style-2' });
+    const c = makeSequence({ id: 'seq-c', styleId: 'style-gone' });
+
+    const page = await buildSequenceListPage({
+      scopedDb: depsWithFrames(
+        [],
+        [
+          makeStyle({ id: 'style-1', name: 'Cinematic Noir' }),
+          makeStyle({ id: 'style-2', name: 'Pixel Art Adventure' }),
+        ]
+      ),
+      sequences: [a, b, c],
+      hasMore: false,
+      limit: 20,
+      origin: TEST_ORIGIN,
+    });
+
+    const byId = new Map(page.sequences.map((s) => [s.id, s]));
+    expect(byId.get('seq-a')?.style).toEqual({
+      id: 'style-1',
+      name: 'Cinematic Noir',
+    });
+    expect(byId.get('seq-b')?.style).toEqual({
+      id: 'style-2',
+      name: 'Pixel Art Adventure',
+    });
+    // No style row for 'style-gone' → id preserved, name null.
+    expect(byId.get('seq-c')?.style).toEqual({ id: 'style-gone', name: null });
   });
 
   it('omits next when no further page, includes it (with a cursor) when hasMore', async () => {

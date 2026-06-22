@@ -231,6 +231,23 @@ describe("createStylesMethods.list({ orderBy: 'popular' })", () => {
   });
 });
 
+describe('createStylesMethods.listByIds', () => {
+  it('resolves a set of ids in one call, skipping unknown ids and de-duping', async () => {
+    const methods = createStylesMethods(db, team.id, userRow.id);
+    const a = await methods.create({ name: 'A', config: baseConfig });
+    const b = await methods.create({ name: 'B', config: baseConfig });
+
+    const rows = await methods.listByIds([a.id, b.id, a.id, 'missing']);
+    const ids = rows.map((s) => s.id).sort();
+    expect(ids).toEqual([a.id, b.id].sort());
+  });
+
+  it('returns an empty array for no ids without hitting the DB', async () => {
+    const methods = createStylesMethods(db, team.id, userRow.id);
+    expect(await methods.listByIds([])).toEqual([]);
+  });
+});
+
 describe('createPublicStylesReadMethods', () => {
   // Uses the REAL production read methods (not the inline mirror above):
   // this factory backs getPublicStylesFn, an endpoint with no auth
