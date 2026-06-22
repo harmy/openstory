@@ -92,16 +92,7 @@ const STYLE_CATEGORY_LABELS: Record<string, string> = {
   animation: 'Animation',
   animatic: 'Animatic & Previz',
   kids: 'Kids',
-  corporate: 'Corporate',
-  realestate: 'Real Estate',
-  photography: 'Photography',
-  food: 'Food & Beverage',
-  fitness: 'Fitness',
-  healthcare: 'Healthcare',
-  edtech: 'Education',
-  automotive: 'Automotive',
-  nonprofit: 'Nonprofit',
-  travel: 'Travel',
+  tech: 'Tech',
   specialized: 'Specialized',
 };
 

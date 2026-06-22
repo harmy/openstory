@@ -73,7 +73,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'Real Estate',
     description:
       'Prestige property cinematography with warm low-sun glow and aspirational lifestyle framing. Glamorous figures inhabit sun-drenched interiors, adding warmth and scale to luxury spaces. Designed for high-end real estate branding, lifestyle property films, and luxury development showcases.',
-    category: 'realestate',
+    category: 'commercial',
     tags: [
       'real-estate',
       'property',
@@ -151,7 +151,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'Corporate',
     description:
       'Clean, professional visuals with contemporary design sensibility. Ideal for company culture videos, SaaS product demos, training content, and corporate communications.',
-    category: 'corporate',
+    category: 'tech',
     tags: ['corporate', 'saas', 'business', 'professional', 'training', 'tech'],
     config: {
       mood: 'Professional, innovative, and trustworthy',
@@ -458,7 +458,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'Lo-Fi Retro',
     description:
       'Simulates the look of circa-2016 smartphone photography. Characterized by lower resolution, poor dynamic range, digital noise, and crunchy JPEG processing.',
-    category: 'photography',
+    category: 'film',
     tags: ['lo-fi', 'retro', 'amateur', '2010s', 'no-text', 'digital-noise'],
     config: {
       artStyle:
@@ -778,7 +778,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'Tech Keynote',
     description:
       'Clean, stage-ready technology presentation aesthetic with controlled gradients, sharp typography surfaces, and architectural precision. Built for product launches and conference reveals.',
-    category: 'commercial',
+    category: 'tech',
     tags: ['commercial', 'tech', 'keynote', 'launch', 'conference'],
     config: {
       mood: 'Precise, future-facing, confident',
@@ -813,7 +813,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'Fintech Explainer',
     description:
       'Trustworthy, motion-graphics-friendly fintech aesthetic. Clean dashboards, soft UI cards, and human moments of relief and clarity. Built for product explainer films and onboarding.',
-    category: 'commercial',
+    category: 'tech',
     tags: ['commercial', 'fintech', 'explainer', 'onboarding', 'saas'],
     config: {
       mood: 'Calm, trustworthy, modern',
@@ -2483,7 +2483,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'Real Estate Listing',
     description:
       'Bright, wide-angle real estate listing aesthetic with even daylight, level horizons, and architectural clarity. Built for residential PDPs, agent reels, and broker hero films.',
-    category: 'realestate',
+    category: 'commercial',
     tags: ['realestate', 'listing', 'residential', 'agent', 'tour'],
     config: {
       mood: 'Bright, welcoming, spacious',
@@ -2518,7 +2518,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'SaaS Product Demo',
     description:
       'Screen-recording-meets-narrator SaaS demo aesthetic with crisp UI capture, subtle motion, and confident narration cuts. Built for product launches, onboarding, and feature explainers.',
-    category: 'corporate',
+    category: 'tech',
     tags: ['saas', 'demo', 'product', 'ui', 'explainer'],
     config: {
       mood: 'Confident, clear, modern',
@@ -2553,7 +2553,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'Healthcare Patient Story',
     description:
       'Warm, documentary-style patient-story aesthetic with soft natural light, honest faces, and unhurried pace. Built for healthcare brand films, fundraising stories, and clinical case studies.',
-    category: 'healthcare',
+    category: 'commercial',
     tags: ['healthcare', 'patient', 'documentary', 'story', 'brand'],
     config: {
       mood: 'Warm, dignified, hopeful',
@@ -2588,7 +2588,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'Restaurant Menu Hero',
     description:
       'Appetizing restaurant menu and signature-dish cinematography. Built for restaurant brand films, delivery app menus, and seasonal menu launches.',
-    category: 'food',
+    category: 'commercial',
     tags: ['restaurant', 'menu', 'food', 'dish', 'hero'],
     config: {
       mood: 'Appetizing, crafted, inviting',
@@ -2623,7 +2623,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'Fitness Coaching',
     description:
       'Coach-led fitness instruction aesthetic with bright studio gym, clean form demos, and supportive piece-to-camera. Built for fitness brand films, training apps, and coaching content.',
-    category: 'fitness',
+    category: 'commercial',
     tags: ['fitness', 'coaching', 'gym', 'training', 'instruction'],
     config: {
       mood: 'Motivating, supportive, capable',
@@ -2658,7 +2658,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'Edtech Explainer',
     description:
       'Friendly edtech explainer aesthetic that combines learner moments with motion-graphic UI inserts and supportive narration. Built for course launches, learning apps, and education brand films.',
-    category: 'edtech',
+    category: 'tech',
     tags: ['edtech', 'education', 'explainer', 'course', 'learning'],
     config: {
       mood: 'Friendly, encouraging, clear',
@@ -2693,7 +2693,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'Automotive Showroom',
     description:
       'Dealership and showroom cinematography that lets the car shine in a controlled retail environment. Built for dealer reels, inventory videos, and certified pre-owned spots.',
-    category: 'automotive',
+    category: 'commercial',
     tags: ['automotive', 'showroom', 'dealer', 'inventory', 'retail'],
     config: {
       mood: 'Inviting, confident, retail-grade',
@@ -2728,7 +2728,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'B2B Keynote',
     description:
       'Conference-stage keynote aesthetic with executive on a clean stage, audience reverse-cuts, and brand-controlled stagecraft. Built for enterprise launches, summits, and CEO addresses.',
-    category: 'corporate',
+    category: 'tech',
     tags: ['b2b', 'keynote', 'conference', 'executive', 'summit'],
     config: {
       mood: 'Authoritative, polished, brand-controlled',
@@ -2763,7 +2763,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'Nonprofit Cause',
     description:
       'Cause-led nonprofit storytelling aesthetic with documentary intimacy, dignified portraits, and supportive context. Built for fundraising reels, impact reports, and campaign films.',
-    category: 'nonprofit',
+    category: 'commercial',
     tags: ['nonprofit', 'cause', 'fundraising', 'impact', 'documentary'],
     config: {
       mood: 'Hopeful, dignified, urgent',
@@ -2798,7 +2798,7 @@ export const DEFAULT_STYLE_TEMPLATES: StyleTemplateEntry[] = [
     name: 'Travel Destination',
     description:
       'Aspirational travel destination cinematography with sweeping landscapes, intimate cultural moments, and dawn-to-dusk magic. Built for tourism boards, hotel groups, and travel brand films.',
-    category: 'travel',
+    category: 'commercial',
     tags: ['travel', 'destination', 'tourism', 'landscape', 'culture'],
     config: {
       mood: 'Aspirational, romantic, expansive',
