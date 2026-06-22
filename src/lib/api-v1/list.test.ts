@@ -2,6 +2,19 @@ import type { Frame } from '@/lib/db/schema/frames';
 import type { Style } from '@/lib/db/schema/libraries';
 import type { Sequence } from '@/lib/db/schema/sequences';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+// Stub the logger so the deliberate missing-style case below doesn't print an
+// error line (buildSequenceSummary logs unresolved styles). Hoisted so the mock
+// lands before ./list → ./state captures its logger at import.
+vi.mock('@/lib/observability/logger', () => ({
+  getLogger: () => ({
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+  }),
+}));
+
 import {
   buildSequenceListPage,
   decodeCursor,

@@ -12,9 +12,12 @@ import type { Frame } from '@/lib/db/schema/frames';
 import { FRAME_GENERATION_STATUSES } from '@/lib/db/schema/frames';
 import type { Style } from '@/lib/db/schema/libraries';
 import type { MusicStatus, SequenceStatus } from '@/lib/db/schema/sequences';
+import { getLogger } from '@/lib/observability/logger';
 import { toShareableUrl } from '@/lib/storage/buckets';
 import type { Sequence } from '@/types/database';
 import { API_V1_BASE, type HalResource, waitLink, withLinks } from './hal';
+
+const logger = getLogger(['openstory', 'api-v1']);
 
 type FrameGenStatus = (typeof FRAME_GENERATION_STATUSES)[number];
 
@@ -48,7 +51,8 @@ export type SequenceCounts = {
 
 /** The style a sequence was generated with — the UI's `styleId` filter value
  * plus its human-readable name (what the UI search matches on). `name` is null
- * only if the referenced style row is somehow gone. */
+ * only when the style row fails to resolve — a data anomaly the notNull FK
+ * normally makes impossible, logged in `buildSequenceSummary`. */
 type SequenceStyle = {
   id: string;
   name: string | null;
@@ -128,6 +132,17 @@ export function buildSequenceSummary(params: {
   const { sequence, style, counts, origin } = params;
   const share = (url: string | null): string | null =>
     url === null ? null : toShareableUrl(url, origin);
+
+  if (style === null) {
+    // styleId is notNull behind an FK, so a sequence should always resolve to a
+    // style row. A miss means the FK was bypassed (manual edit, or a migration
+    // run with foreign_keys off) — surface it rather than silently shipping a
+    // nameless style to API consumers and the dashboard.
+    logger.error('api/v1 sequence style did not resolve: {styleId}', {
+      sequenceId: sequence.id,
+      styleId: sequence.styleId,
+    });
+  }
 
   return {
     id: sequence.id,

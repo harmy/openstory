@@ -130,7 +130,7 @@ const posterObject: JsonObject = {
 const styleObject: JsonObject = {
   type: 'object',
   description:
-    "The style the sequence was generated with — `id` is the UI's `styleId` filter value; `name` is what the UI search matches on (null only if the style row is gone).",
+    "The style the sequence was generated with — `id` is the UI's `styleId` filter value; `name` is what the UI search matches on (null only if the style row fails to resolve, which the FK normally makes impossible).",
   required: ['id', 'name'],
   properties: { id: { type: 'string' }, name: nullableString },
 };

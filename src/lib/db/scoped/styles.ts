@@ -14,8 +14,9 @@ import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'db', 'styles']);
 
-// D1 caps a single query at 100 bound parameters, so `listByIds` chunks its id
-// list to stay under that ceiling (mirrors sequences.listFramesByIds).
+// `listByIds` chunks its id list per query. It binds only id params (no team
+// filter), so it could go to D1's 100-bound-parameter ceiling; we hold it at 90
+// to match the sibling sequences.listFramesByIds batch size.
 const STYLES_BY_IDS_BATCH = 90;
 
 type StylesListOptions = {
@@ -84,11 +85,12 @@ function createStylesReadMethods(db: Database, teamId: string) {
 
     /**
      * Batched style fetch by id — resolves the style rows referenced by a page
-     * of sequences in one round-trip (backs the `style` block in the public
-     * `GET /api/v1/sequences` list). Like `getById`, it resolves by id alone (no
-     * team scope): the ids come from the team's own sequences, which reference
-     * their team's styles plus public ones. Duplicate ids collapse and order is
-     * not guaranteed — callers index the result by id.
+     * of sequences in one batched fetch (one query per ≤90-id chunk), backing
+     * the `style` block in the public `GET /api/v1/sequences` list. Like
+     * `getById`, it resolves by id alone (no team scope): the ids come from the
+     * team's own sequences, which reference their team's styles plus public
+     * ones. Duplicate ids collapse and order is not guaranteed — callers index
+     * the result by id, and an id that resolves to no row simply has no entry.
      */
     listByIds: async (styleIds: string[]): Promise<Style[]> => {
       if (styleIds.length === 0) return [];

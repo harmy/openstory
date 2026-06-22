@@ -89,9 +89,10 @@ status, the `style` and `models` it was generated with, aspect ratio, per-frame
 image/video status and URLs, music, poster, and ready/failed counts. Because it
 is derived from the database it is always correct, even if you reconnect later.
 
-`style` is `{ id, name }` (the name is `null` only if the style was deleted) and
-`models` is `{ analysis, image, video, music }` — the raw model ids. These are
-the same values the dashboard filters and searches sequences on.
+`style` is `{ id, name }` (the name is `null` only in the rare case the style
+row fails to resolve) and `models` is `{ analysis, image, video, music }` — the
+raw model ids. These are the same values the dashboard filters and searches
+sequences on.
 
 A terminal `completed` status can still carry `counts.videosFailed > 0` — a
 failed frame does not fail the whole run — so check the counts to confirm an

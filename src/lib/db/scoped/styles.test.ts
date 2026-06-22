@@ -246,6 +246,28 @@ describe('createStylesMethods.listByIds', () => {
     const methods = createStylesMethods(db, team.id, userRow.id);
     expect(await methods.listByIds([])).toEqual([]);
   });
+
+  it('resolves more ids than the 90-per-query batch in one call', async () => {
+    // The whole point of the method is to stay under D1's 100-bound-parameter
+    // ceiling by chunking. Insert 95 styles directly (bypassing the slug guard,
+    // which is irrelevant here) so the request spans two batches, and assert
+    // every id comes back across the Promise.all(...).flat() reassembly.
+    const ids = Array.from({ length: 95 }, () => generateId());
+    const rows: NewStyle[] = ids.map((id, i) => ({
+      id,
+      teamId: team.id,
+      name: `Batch Style ${i}`,
+      config: baseConfig,
+    }));
+    await db.insert(styles).values(rows);
+
+    const fetched = await createStylesMethods(
+      db,
+      team.id,
+      userRow.id
+    ).listByIds(ids);
+    expect(new Set(fetched.map((s) => s.id))).toEqual(new Set(ids));
+  });
 });
 
 describe('createPublicStylesReadMethods', () => {

@@ -2,6 +2,20 @@ import type { Frame } from '@/lib/db/schema/frames';
 import type { Style } from '@/lib/db/schema/libraries';
 import type { Sequence } from '@/lib/db/schema/sequences';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+// Stub the logger so the "style failed to resolve" anomaly path is observable
+// (and doesn't print an error line during the run). Hoisted so the mock is in
+// place before ./state captures its logger at import.
+const { loggerErrorMock } = vi.hoisted(() => ({ loggerErrorMock: vi.fn() }));
+vi.mock('@/lib/observability/logger', () => ({
+  getLogger: () => ({
+    error: loggerErrorMock,
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+  }),
+}));
+
 import {
   buildSequenceState as buildSequenceStateRaw,
   isTerminalSequenceState,
@@ -196,13 +210,19 @@ describe('buildSequenceState', () => {
     expect(state.poster).not.toBeNull();
   });
 
-  it('surfaces the style id with a null name when the style row is gone', async () => {
+  it('keeps the style id but nulls the name and logs when the style fails to resolve', async () => {
+    loggerErrorMock.mockClear();
     const state = await build(
       depsWithFrames([], null),
       makeSequence({ styleId: 'style-deleted', musicModel: 'elevenlabs_music' })
     );
     expect(state.style).toEqual({ id: 'style-deleted', name: null });
     expect(state.models.music).toBe('elevenlabs_music');
+    // The unresolved style is surfaced, not silently swallowed.
+    expect(loggerErrorMock).toHaveBeenCalledWith(expect.any(String), {
+      sequenceId: 'seq-1',
+      styleId: 'style-deleted',
+    });
   });
 
   it('null poster and falls back to pending music status', async () => {
