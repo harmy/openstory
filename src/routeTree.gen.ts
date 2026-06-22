@@ -77,6 +77,7 @@ import { Route as AppSequencesIdMusicRouteImport } from './routes/_app/sequences
 import { Route as AppSequencesIdElementsRouteImport } from './routes/_app/sequences/$id/elements'
 import { Route as AppSequencesIdLocationsIndexRouteImport } from './routes/_app/sequences/$id/locations/index'
 import { Route as AppSequencesIdCastIndexRouteImport } from './routes/_app/sequences/$id/cast/index'
+import { Route as ApiV1SequencesIdExportsRouteImport } from './routes/api/v1/sequences.$id.exports'
 import { Route as AppSequencesIdLocationsLocationIdRouteImport } from './routes/_app/sequences/$id/locations/$locationId'
 import { Route as AppSequencesIdCastCharacterIdRouteImport } from './routes/_app/sequences/$id/cast/$characterId'
 
@@ -418,6 +419,11 @@ const AppSequencesIdCastIndexRoute = AppSequencesIdCastIndexRouteImport.update({
   path: '/cast/',
   getParentRoute: () => AppSequencesIdRouteRoute,
 } as any)
+const ApiV1SequencesIdExportsRoute = ApiV1SequencesIdExportsRouteImport.update({
+  id: '/exports',
+  path: '/exports',
+  getParentRoute: () => ApiV1SequencesIdRoute,
+} as any)
 const AppSequencesIdLocationsLocationIdRoute =
   AppSequencesIdLocationsLocationIdRouteImport.update({
     id: '/locations/$locationId',
@@ -494,9 +500,10 @@ export interface FileRoutesByFullPath {
   '/sequences/$id/script': typeof AppSequencesIdScriptRoute
   '/sequences/$id/theatre': typeof AppSequencesIdTheatreRoute
   '/api/v1/scripts/enhance': typeof ApiV1ScriptsEnhanceRoute
-  '/api/v1/sequences/$id': typeof ApiV1SequencesIdRoute
+  '/api/v1/sequences/$id': typeof ApiV1SequencesIdRouteWithChildren
   '/sequences/$id/cast/$characterId': typeof AppSequencesIdCastCharacterIdRoute
   '/sequences/$id/locations/$locationId': typeof AppSequencesIdLocationsLocationIdRoute
+  '/api/v1/sequences/$id/exports': typeof ApiV1SequencesIdExportsRoute
   '/sequences/$id/cast/': typeof AppSequencesIdCastIndexRoute
   '/sequences/$id/locations/': typeof AppSequencesIdLocationsIndexRoute
 }
@@ -561,9 +568,10 @@ export interface FileRoutesByTo {
   '/sequences/$id/script': typeof AppSequencesIdScriptRoute
   '/sequences/$id/theatre': typeof AppSequencesIdTheatreRoute
   '/api/v1/scripts/enhance': typeof ApiV1ScriptsEnhanceRoute
-  '/api/v1/sequences/$id': typeof ApiV1SequencesIdRoute
+  '/api/v1/sequences/$id': typeof ApiV1SequencesIdRouteWithChildren
   '/sequences/$id/cast/$characterId': typeof AppSequencesIdCastCharacterIdRoute
   '/sequences/$id/locations/$locationId': typeof AppSequencesIdLocationsLocationIdRoute
+  '/api/v1/sequences/$id/exports': typeof ApiV1SequencesIdExportsRoute
   '/sequences/$id/cast': typeof AppSequencesIdCastIndexRoute
   '/sequences/$id/locations': typeof AppSequencesIdLocationsIndexRoute
 }
@@ -634,9 +642,10 @@ export interface FileRoutesById {
   '/_app/sequences/$id/script': typeof AppSequencesIdScriptRoute
   '/_app/sequences/$id/theatre': typeof AppSequencesIdTheatreRoute
   '/api/v1/scripts/enhance': typeof ApiV1ScriptsEnhanceRoute
-  '/api/v1/sequences/$id': typeof ApiV1SequencesIdRoute
+  '/api/v1/sequences/$id': typeof ApiV1SequencesIdRouteWithChildren
   '/_app/sequences/$id/cast/$characterId': typeof AppSequencesIdCastCharacterIdRoute
   '/_app/sequences/$id/locations/$locationId': typeof AppSequencesIdLocationsLocationIdRoute
+  '/api/v1/sequences/$id/exports': typeof ApiV1SequencesIdExportsRoute
   '/_app/sequences/$id/cast/': typeof AppSequencesIdCastIndexRoute
   '/_app/sequences/$id/locations/': typeof AppSequencesIdLocationsIndexRoute
 }
@@ -708,6 +717,7 @@ export interface FileRouteTypes {
     | '/api/v1/sequences/$id'
     | '/sequences/$id/cast/$characterId'
     | '/sequences/$id/locations/$locationId'
+    | '/api/v1/sequences/$id/exports'
     | '/sequences/$id/cast/'
     | '/sequences/$id/locations/'
   fileRoutesByTo: FileRoutesByTo
@@ -775,6 +785,7 @@ export interface FileRouteTypes {
     | '/api/v1/sequences/$id'
     | '/sequences/$id/cast/$characterId'
     | '/sequences/$id/locations/$locationId'
+    | '/api/v1/sequences/$id/exports'
     | '/sequences/$id/cast'
     | '/sequences/$id/locations'
   id:
@@ -847,6 +858,7 @@ export interface FileRouteTypes {
     | '/api/v1/sequences/$id'
     | '/_app/sequences/$id/cast/$characterId'
     | '/_app/sequences/$id/locations/$locationId'
+    | '/api/v1/sequences/$id/exports'
     | '/_app/sequences/$id/cast/'
     | '/_app/sequences/$id/locations/'
   fileRoutesById: FileRoutesById
@@ -1356,6 +1368,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSequencesIdCastIndexRouteImport
       parentRoute: typeof AppSequencesIdRouteRoute
     }
+    '/api/v1/sequences/$id/exports': {
+      id: '/api/v1/sequences/$id/exports'
+      path: '/exports'
+      fullPath: '/api/v1/sequences/$id/exports'
+      preLoaderRoute: typeof ApiV1SequencesIdExportsRouteImport
+      parentRoute: typeof ApiV1SequencesIdRoute
+    }
     '/_app/sequences/$id/locations/$locationId': {
       id: '/_app/sequences/$id/locations/$locationId'
       path: '/locations/$locationId'
@@ -1540,12 +1559,23 @@ const ApiTestRouteRouteWithChildren = ApiTestRouteRoute._addFileChildren(
   ApiTestRouteRouteChildren,
 )
 
+interface ApiV1SequencesIdRouteChildren {
+  ApiV1SequencesIdExportsRoute: typeof ApiV1SequencesIdExportsRoute
+}
+
+const ApiV1SequencesIdRouteChildren: ApiV1SequencesIdRouteChildren = {
+  ApiV1SequencesIdExportsRoute: ApiV1SequencesIdExportsRoute,
+}
+
+const ApiV1SequencesIdRouteWithChildren =
+  ApiV1SequencesIdRoute._addFileChildren(ApiV1SequencesIdRouteChildren)
+
 interface ApiV1SequencesRouteChildren {
-  ApiV1SequencesIdRoute: typeof ApiV1SequencesIdRoute
+  ApiV1SequencesIdRoute: typeof ApiV1SequencesIdRouteWithChildren
 }
 
 const ApiV1SequencesRouteChildren: ApiV1SequencesRouteChildren = {
-  ApiV1SequencesIdRoute: ApiV1SequencesIdRoute,
+  ApiV1SequencesIdRoute: ApiV1SequencesIdRouteWithChildren,
 }
 
 const ApiV1SequencesRouteWithChildren = ApiV1SequencesRoute._addFileChildren(

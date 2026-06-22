@@ -39,6 +39,7 @@ declare namespace Cloudflare {
 		VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: string;
 		VITE_R2_PUBLIC_ASSETS_DOMAIN: string;
 		REALTIME: DurableObjectNamespace<import("./src/server").RealtimeChannel>;
+		VIDEO_EXPORT_CONTAINER: DurableObjectNamespace<import("./src/server").VideoExportContainer>;
 		IMAGE_WORKFLOW: Workflow<Parameters<import("./src/server").ImageWorkflow['run']>[0]['payload']>;
 		ELEMENT_VISION_WORKFLOW: Workflow<Parameters<import("./src/server").ElementVisionWorkflow['run']>[0]['payload']>;
 		ELEMENT_SHEET_WORKFLOW: Workflow<Parameters<import("./src/server").ElementSheetWorkflow['run']>[0]['payload']>;
@@ -69,6 +70,7 @@ declare namespace Cloudflare {
 		SCENE_SPLIT_WORKFLOW: Workflow<Parameters<import("./src/server").SceneSplitWorkflow['run']>[0]['payload']>;
 		STORYBOARD_WORKFLOW: Workflow<Parameters<import("./src/server").StoryboardWorkflow['run']>[0]['payload']>;
 		ANALYZE_SCRIPT_WORKFLOW: Workflow<Parameters<import("./src/server").AnalyzeScriptWorkflow['run']>[0]['payload']>;
+		SEQUENCE_EXPORT_WORKFLOW: Workflow<Parameters<import("./src/server").SequenceExportWorkflow['run']>[0]['payload']>;
 	}
 	interface TestEnv {
 		R2_PUBLIC_ASSETS_BUCKET: R2Bucket;
@@ -134,6 +136,7 @@ declare namespace Cloudflare {
 		SCENE_SPLIT_WORKFLOW: Workflow<Parameters<import("./src/server").SceneSplitWorkflow['run']>[0]['payload']>;
 		STORYBOARD_WORKFLOW: Workflow<Parameters<import("./src/server").StoryboardWorkflow['run']>[0]['payload']>;
 		ANALYZE_SCRIPT_WORKFLOW: Workflow<Parameters<import("./src/server").AnalyzeScriptWorkflow['run']>[0]['payload']>;
+		SEQUENCE_EXPORT_WORKFLOW: Workflow<Parameters<import("./src/server").SequenceExportWorkflow['run']>[0]['payload']>;
 	}
 	interface Env {
 		R2_PUBLIC_ASSETS_BUCKET: R2Bucket;
@@ -168,6 +171,7 @@ declare namespace Cloudflare {
 		VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: string;
 		VITE_R2_PUBLIC_ASSETS_DOMAIN: string;
 		REALTIME: DurableObjectNamespace<import("./src/server").RealtimeChannel>;
+		VIDEO_EXPORT_CONTAINER?: DurableObjectNamespace<import("./src/server").VideoExportContainer>;
 		IMAGE_WORKFLOW: Workflow<Parameters<import("./src/server").ImageWorkflow['run']>[0]['payload']>;
 		ELEMENT_VISION_WORKFLOW: Workflow<Parameters<import("./src/server").ElementVisionWorkflow['run']>[0]['payload']>;
 		ELEMENT_SHEET_WORKFLOW: Workflow<Parameters<import("./src/server").ElementSheetWorkflow['run']>[0]['payload']>;
@@ -198,6 +202,7 @@ declare namespace Cloudflare {
 		SCENE_SPLIT_WORKFLOW: Workflow<Parameters<import("./src/server").SceneSplitWorkflow['run']>[0]['payload']>;
 		STORYBOARD_WORKFLOW: Workflow<Parameters<import("./src/server").StoryboardWorkflow['run']>[0]['payload']>;
 		ANALYZE_SCRIPT_WORKFLOW: Workflow<Parameters<import("./src/server").AnalyzeScriptWorkflow['run']>[0]['payload']>;
+		SEQUENCE_EXPORT_WORKFLOW: Workflow<Parameters<import("./src/server").SequenceExportWorkflow['run']>[0]['payload']>;
 		E2E_TEST?: "true";
 	}
 }

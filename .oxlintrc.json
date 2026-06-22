@@ -14,7 +14,8 @@
   "ignorePatterns": [
     "**/mockServiceWorker.js",
     "*.gen.ts",
-    "src/components/ui/**/*.tsx"
+    "src/components/ui/**/*.tsx",
+    "containers/**"
   ],
   "rules": {
     "typescript/no-explicit-any": "error",

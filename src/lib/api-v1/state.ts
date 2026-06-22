@@ -253,5 +253,17 @@ export function withSequenceStateLinks(
       href,
       'Long-poll until this sequence changes (e.g. ?wait=60s)'
     ),
+    exports: {
+      href: `${href}/exports`,
+      method: 'GET',
+      title: 'List server-side MP4 exports of this sequence',
+    },
+    'create-export': {
+      href: `${href}/exports`,
+      method: 'POST',
+      title: 'Start a server-side MP4 export of this sequence',
+      contentType: 'application/json',
+      examples: [{}],
+    },
   });
 }

@@ -34,6 +34,20 @@ export const sequenceExports = snakeCase.table(
     storagePath: text().notNull(),
     durationSeconds: integer(),
 
+    // Lifecycle. Browser exports commit a finished row directly, so they
+    // default to `ready`; the server-side (API) export creates a `processing`
+    // row up front and the export workflow flips it to `ready`/`failed`.
+    // The `ready` SQL default also backfills every pre-existing row on the
+    // ADD COLUMN migration.
+    status: text({ enum: ['processing', 'ready', 'failed'] })
+      .notNull()
+      .default('ready'),
+    // Populated only on `failed` — surfaced to the API caller.
+    error: text(),
+    // The server-side export workflow run that produced (or is producing) this
+    // row. Null for browser exports.
+    workflowRunId: text(),
+
     // Inputs that produced this snapshot (for staleness display)
     sourceShotsHash: text(),
     sourceMusicVariantId: text(),

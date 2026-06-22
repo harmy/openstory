@@ -254,6 +254,11 @@
       "binding": "ANALYZE_SCRIPT_WORKFLOW",
       "class_name": "AnalyzeScriptWorkflow",
     },
+    {
+      "name": "sequence-export-workflow",
+      "binding": "SEQUENCE_EXPORT_WORKFLOW",
+      "class_name": "SequenceExportWorkflow",
+    },
   ],
   // Realtime broker (#802): one SQLite-backed Durable Object per channel holds
   // SSE subscribers open and persists replayable history. The `RealtimeChannel`
@@ -481,15 +486,38 @@
           "binding": "ANALYZE_SCRIPT_WORKFLOW",
           "class_name": "AnalyzeScriptWorkflow",
         },
+        {
+          "name": "sequence-export-workflow",
+          "binding": "SEQUENCE_EXPORT_WORKFLOW",
+          "class_name": "SequenceExportWorkflow",
+        },
+      ],
+      // Server-side video export (#968). The `VideoExportContainer` Durable
+      // Object fronts a Cloudflare Container (Node + @mediabunny/server) that
+      // stitches a sequence's scene MP4s for the API. Declared in PRODUCTION
+      // ONLY (not the default/test blocks) so `bun dev` and hermetic e2e need
+      // no Docker — the image is built only on deploy. The
+      // SequenceExportWorkflow tolerates the binding's absence outside prod.
+      "containers": [
+        {
+          "class_name": "VideoExportContainer",
+          "image": "./containers/video-export/Dockerfile",
+          "instance_type": "standard",
+          "max_instances": 3,
+        },
       ],
       // Realtime broker DO — redeclared because durable_objects + migrations
       // are non-inheritable across env blocks. Keep the `v1` migration tag in
-      // sync with the top-level block.
+      // sync with the top-level block. The container DO is production-only.
       "durable_objects": {
         "bindings": [
           {
             "name": "REALTIME",
             "class_name": "RealtimeChannel",
+          },
+          {
+            "name": "VIDEO_EXPORT_CONTAINER",
+            "class_name": "VideoExportContainer",
           },
         ],
       },
@@ -497,6 +525,10 @@
         {
           "tag": "v1",
           "new_sqlite_classes": ["RealtimeChannel"],
+        },
+        {
+          "tag": "v2",
+          "new_sqlite_classes": ["VideoExportContainer"],
         },
       ],
       "triggers": {
@@ -726,10 +758,16 @@
           "binding": "ANALYZE_SCRIPT_WORKFLOW",
           "class_name": "AnalyzeScriptWorkflow",
         },
+        {
+          "name": "sequence-export-workflow",
+          "binding": "SEQUENCE_EXPORT_WORKFLOW",
+          "class_name": "SequenceExportWorkflow",
+        },
       ],
       // Realtime broker DO — redeclared because durable_objects + migrations
       // are non-inheritable across env blocks. Keep the `v1` migration tag in
-      // sync with the top-level block.
+      // sync with the top-level block. No container here: e2e stays hermetic
+      // (Docker-free); the SequenceExportWorkflow no-ops without the binding.
       "durable_objects": {
         "bindings": [
           {

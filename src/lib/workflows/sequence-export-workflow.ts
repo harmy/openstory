@@ -1,0 +1,190 @@
+/**
+ * Server-side sequence export (#968) — the API counterpart of the browser
+ * export in `src/lib/sequence-player/export.ts`.
+ *
+ * Flow:
+ *   1. `gather-export-inputs` — load the reserved export row + sequence +
+ *      frames via `scopedDb`, absolutize each scene/music URL, build the
+ *      container job. ALL database access lives here, in the Worker — the
+ *      container is a stateless renderer and never touches D1.
+ *   2. `render-and-upload` — POST the job to the `VideoExportContainer` (Node +
+ *      @mediabunny/server), stream the returned MP4 straight into R2.
+ *   3. `mark-export-ready` — flip the `sequence_exports` row to `ready`.
+ *
+ * The container binding is production-only (see wrangler.jsonc); outside prod
+ * the render step throws and the row is marked `failed` via `onFailure`.
+ */
+
+import { uploadFile } from '#storage';
+import type { ScopedDb } from '@/lib/db/scoped';
+import { STORAGE_BUCKETS, toShareableUrl } from '@/lib/storage/buckets';
+import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
+import type { CloudflareEnv, UserWorkflowContext } from '@/lib/workflow/types';
+import type { VideoExportContainer } from '@/lib/containers/video-export-container';
+import { getContainer } from '@cloudflare/containers';
+import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
+
+type SequenceExportWorkflowInput = UserWorkflowContext & {
+  sequenceId: string;
+  /** Pre-reserved `sequence_exports` row (status `processing`) to fill in. */
+  exportId: string;
+};
+
+/** Wire contract — keep in sync with `containers/video-export/src/types.ts`. */
+type ContainerExportJob = {
+  scenes: { orderIndex: number; videoUrl: string }[];
+  musicUrl: string | null;
+  musicLoudnessGainDb: number | null;
+};
+
+// The container binding only exists in [env.production]; CloudflareEnv (typed
+// from the default block) doesn't include it, so we narrow at the call site.
+// `VIDEO_EXPORT_DEV_URL` is a local-dev-only escape hatch (set in .dev.vars /
+// .env.local, never in prod): when present, the workflow POSTs to the host
+// `bun dev:bunny` service instead of the container binding.
+type ContainerEnv = {
+  VIDEO_EXPORT_CONTAINER?: DurableObjectNamespace<VideoExportContainer>;
+  VIDEO_EXPORT_DEV_URL?: string;
+};
+
+export class SequenceExportWorkflow extends OpenStoryWorkflowEntrypoint<SequenceExportWorkflowInput> {
+  protected override async runImpl(
+    event: Readonly<WorkflowEvent<SequenceExportWorkflowInput>>,
+    step: WorkflowStep,
+    scopedDb: ScopedDb
+  ): Promise<{ exportId: string; durationSeconds: number }> {
+    const { sequenceId, exportId } = event.payload;
+    const env = this.env as CloudflareEnv & ContainerEnv;
+
+    const { job, storagePath } = await step.do(
+      'gather-export-inputs',
+      async () => {
+        const exportRow = await scopedDb.sequenceExports.getById(exportId);
+        if (!exportRow) throw new Error(`Export ${exportId} not found`);
+
+        const sequence = await scopedDb.sequences.getById(sequenceId);
+        if (!sequence) throw new Error(`Sequence ${sequenceId} not found`);
+
+        const frames = await scopedDb.frames.listBySequence(sequenceId, {
+          orderBy: 'orderIndex',
+          ascending: true,
+        });
+        if (frames.length === 0) throw new Error('Sequence has no frames yet');
+
+        // Absolutize stored `/r2/...` URLs so the off-platform container can
+        // fetch them (CDN domain in prod, else the worker origin).
+        const origin = env.VITE_APP_URL;
+        const scenes = frames
+          .filter((f): f is typeof f & { videoUrl: string } =>
+            Boolean(f.videoUrl)
+          )
+          .map((f) => ({
+            orderIndex: f.orderIndex,
+            videoUrl: toShareableUrl(f.videoUrl, origin),
+          }));
+        if (scenes.length === 0) {
+          throw new Error('No scene videos are ready yet');
+        }
+        if (scenes.length !== frames.length) {
+          throw new Error(
+            `${frames.length - scenes.length} of ${frames.length} scenes are still generating`
+          );
+        }
+
+        const musicUrl =
+          sequence.includeMusic && sequence.musicUrl
+            ? toShareableUrl(sequence.musicUrl, origin)
+            : null;
+
+        const job: ContainerExportJob = {
+          scenes,
+          musicUrl,
+          musicLoudnessGainDb: null,
+        };
+        return { job, storagePath: exportRow.storagePath };
+      }
+    );
+
+    const { durationSeconds } = await step.do(
+      'render-and-upload',
+      {
+        retries: { limit: 1, delay: '10 seconds', backoff: 'constant' },
+        timeout: '15 minutes',
+      },
+      async () => {
+        const requestInit = {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(job),
+        };
+        // Local dev (set VIDEO_EXPORT_DEV_URL in .dev.vars): hit the host
+        // `bun dev:bunny` service directly. Prod has no such var → use the
+        // container binding.
+        let response: Response;
+        const devUrl = env.VIDEO_EXPORT_DEV_URL;
+        if (devUrl) {
+          response = await fetch(
+            `${devUrl.replace(/\/$/, '')}/export`,
+            requestInit
+          );
+        } else {
+          const ns = env.VIDEO_EXPORT_CONTAINER;
+          if (!ns) {
+            throw new Error(
+              'VIDEO_EXPORT_CONTAINER binding unavailable — server-side export runs in production only (set VIDEO_EXPORT_DEV_URL in .dev.vars to use the local `bun dev:bunny` service)'
+            );
+          }
+          response = await getContainer(ns, exportId).fetch(
+            new Request('http://video-export/export', requestInit)
+          );
+        }
+        if (!response.ok || !response.body) {
+          const detail = await response.text().catch(() => '');
+          throw new Error(
+            `Container export failed (${response.status}): ${detail.slice(0, 500)}`
+          );
+        }
+
+        // Narrow from `unknown` rather than asserting JSON.parse's `any`.
+        const metaHeader = response.headers.get('x-export-meta');
+        const parsed: unknown = metaHeader
+          ? JSON.parse(decodeURIComponent(metaHeader))
+          : null;
+        const durationSecondsFromMeta =
+          typeof parsed === 'object' &&
+          parsed !== null &&
+          'durationSeconds' in parsed &&
+          typeof parsed.durationSeconds === 'number'
+            ? parsed.durationSeconds
+            : 0;
+
+        // Stream the container's MP4 straight into R2 via the binding — no
+        // presigned URL, no full-buffer in the isolate.
+        await uploadFile(STORAGE_BUCKETS.VIDEOS, storagePath, response.body, {
+          contentType: 'video/mp4',
+          upsert: true,
+        });
+
+        return { durationSeconds: durationSecondsFromMeta };
+      }
+    );
+
+    await step.do('mark-export-ready', async () => {
+      await scopedDb.sequenceExports.markReady(exportId, { durationSeconds });
+    });
+
+    return { exportId, durationSeconds };
+  }
+
+  protected override async onFailure({
+    event,
+    error,
+    scopedDb,
+  }: {
+    event: Readonly<WorkflowEvent<SequenceExportWorkflowInput>>;
+    error: string;
+    scopedDb: ScopedDb;
+  }): Promise<void> {
+    await scopedDb.sequenceExports.markFailed(event.payload.exportId, error);
+  }
+}
