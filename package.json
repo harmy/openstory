@@ -45,7 +45,7 @@
     "upload:prompts": "bun scripts/upload-all-prompts.ts",
     "agent-harness": "bunx github:tombeckenham/agent-harness",
     "dev": "bun scripts/ensure-env.ts && bun run dev:app",
-    "dev:all": "bun scripts/ensure-env.ts && bun run --parallel dev:app stripe:dev dev:bunny",
+    "dev:all": "bun scripts/ensure-env.ts && CLOUDFLARE_INCLUDE_PROCESS_ENV=true VIDEO_EXPORT_DEV_URL=http://localhost:8080 bun run --parallel dev:app stripe:dev dev:bunny",
     "dev:app": "bun --sequential db:migrate:local db:seed:local dev:vite",
     "dev:vite": "bun scripts/build-content-collections.ts && vite dev",
     "dev:bunny": "cd containers/video-export && bun install && bun run dev",

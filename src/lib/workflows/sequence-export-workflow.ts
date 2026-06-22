@@ -131,7 +131,7 @@ export class SequenceExportWorkflow extends OpenStoryWorkflowEntrypoint<Sequence
           const ns = env.VIDEO_EXPORT_CONTAINER;
           if (!ns) {
             throw new Error(
-              'VIDEO_EXPORT_CONTAINER binding unavailable — server-side export runs in production only (set VIDEO_EXPORT_DEV_URL in .dev.vars to use the local `bun dev:bunny` service)'
+              'VIDEO_EXPORT_CONTAINER binding unavailable — server-side export runs in production only (use `bun dev:all`, or set VIDEO_EXPORT_DEV_URL in .env.local, to route to the local `bun dev:bunny` service)'
             );
           }
           response = await getContainer(ns, exportId).fetch(

@@ -67,11 +67,12 @@ curl -sX POST http://localhost:8080/export -H 'content-type: application/json' \
   -d '{"scenes":[{"orderIndex":0,"videoUrl":"https://media.w3.org/2010/05/sintel/trailer.mp4"},{"orderIndex":1,"videoUrl":"https://media.w3.org/2010/05/sintel/trailer.mp4"}],"musicUrl":null,"musicLoudnessGainDb":null}'
 ```
 
-Run it alongside `bun dev` (separate terminal), or use `bun dev:all` which
-starts it with the app + Stripe listener. By default the running app can't call
-this service (the container binding is production-only) — to wire the full
-local loop, set `VIDEO_EXPORT_DEV_URL=http://localhost:8080` in `.env.local` and
-the export workflow will POST here instead of the container binding.
+**`bun dev:all`** starts this service with the app + Stripe listener AND sets
+`VIDEO_EXPORT_DEV_URL=http://localhost:8080` for the worker, so the app's export
+workflow POSTs here instead of the (production-only) container binding — a full
+local export loop with zero config. If instead you run `bun dev` + `bun dev:bunny`
+in separate terminals, set `VIDEO_EXPORT_DEV_URL=http://localhost:8080` in
+`.env.local` yourself to wire the app to it.
 
 ## Build / smoke test the image (Docker)
 
