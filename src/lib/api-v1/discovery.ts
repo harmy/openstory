@@ -21,16 +21,17 @@ Workflow:
   1. POST /api/v1/sequences with a script (and optional style, cast, locations,
      elements, model choices). Generation is asynchronous: you get back 202 with
      the created sequence id(s), workflow run id(s), and a statusUrl to poll.
-  2. GET the statusUrl to watch progress: overall status, per-frame image/video
-     status + URLs, music, poster, and ready counts. Status is derived from the
-     database, so it is always correct even if you reconnect later.
+  2. GET the statusUrl to watch progress: overall status, the style and models
+     used, per-frame image/video status + URLs, music, poster, and ready counts.
+     Status is derived from the database, so it is always correct even if you
+     reconnect later.
 
 List your sequences:
   GET /api/v1/sequences returns your team's sequences, most recent first. Each
-  entry is a compact summary (status, aspect ratio, poster, music, and ready/
-  failed counts) with a 'self' link to its full status document. Page with
-  ?limit (default 20, max 100) and the opaque ?cursor from the response's
-  'next' link.
+  entry is a compact summary (status, aspect ratio, style, models, poster,
+  music, and ready/failed counts) with a 'self' link to its full status
+  document. Page with ?limit (default 20, max 100) and the opaque ?cursor from
+  the response's 'next' link.
 
 Enhance only (no sequence):
   POST /api/v1/scripts/enhance to expand/polish a script without generating a

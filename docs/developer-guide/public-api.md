@@ -85,13 +85,34 @@ Response (`202`):
 ## Poll for status
 
 `GET /api/v1/sequences/{id}` returns a database-derived status document: overall
-status, per-frame image/video status and URLs, music, poster, and ready/failed
-counts. Because it is derived from the database it is always correct, even if you
-reconnect later.
+status, the `style` and `models` it was generated with, aspect ratio, per-frame
+image/video status and URLs, music, poster, and ready/failed counts. Because it
+is derived from the database it is always correct, even if you reconnect later.
+
+`style` is `{ id, name }` (the name is `null` only in the rare case the style
+row fails to resolve) and `models` is `{ analysis, image, video, music }` — the
+raw model ids. These are the same values the dashboard filters and searches
+sequences on.
 
 A terminal `completed` status can still carry `counts.videosFailed > 0` — a
 failed frame does not fail the whole run — so check the counts to confirm an
 end-to-end success.
+
+## List your sequences
+
+`GET /api/v1/sequences` returns your team's sequences, most recent first. Each
+entry is a compact summary of the status document — `status`, `aspectRatio`,
+`style`, `models`, `poster`, `music`, and the ready/failed `counts`, but **not**
+the per-frame array — with a `self` link to its full status document.
+
+```bash
+curl "https://openstory.so/api/v1/sequences?limit=20" \
+  -H "x-api-key: $OPENSTORY_API_KEY"
+```
+
+Page with `?limit` (default 20, max 100) and the opaque `?cursor` returned in the
+response's `_links.next`. Follow that link to fetch the next page; its absence
+means you've reached the end. Archived sequences are excluded.
 
 ## Long-polling with `?wait`
 

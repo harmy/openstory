@@ -10,10 +10,14 @@
 import type { ScopedDb } from '@/lib/db/scoped';
 import type { Frame } from '@/lib/db/schema/frames';
 import { FRAME_GENERATION_STATUSES } from '@/lib/db/schema/frames';
+import type { Style } from '@/lib/db/schema/libraries';
 import type { MusicStatus, SequenceStatus } from '@/lib/db/schema/sequences';
+import { getLogger } from '@/lib/observability/logger';
 import { toShareableUrl } from '@/lib/storage/buckets';
 import type { Sequence } from '@/types/database';
 import { API_V1_BASE, type HalResource, waitLink, withLinks } from './hal';
+
+const logger = getLogger(['openstory', 'api-v1']);
 
 type FrameGenStatus = (typeof FRAME_GENERATION_STATUSES)[number];
 
@@ -45,18 +49,48 @@ export type SequenceCounts = {
   videosFailed: number;
 };
 
-export type SequenceState = {
+/** The style a sequence was generated with — the UI's `styleId` filter value
+ * plus its human-readable name (what the UI search matches on). `name` is null
+ * only when the style row fails to resolve — a data anomaly the notNull FK
+ * normally makes impossible, logged in `buildSequenceSummary`. */
+type SequenceStyle = {
+  id: string;
+  name: string | null;
+};
+
+/** The models a sequence was generated with — the raw ids the UI filters/sorts
+ * on (script analysis + per-frame image + per-frame video, and the optional
+ * music model). */
+type SequenceModels = {
+  analysis: string;
+  image: string;
+  video: string;
+  music: string | null;
+};
+
+/**
+ * The scalar fields shared by the single-sequence status document and each
+ * entry of the `GET /api/v1/sequences` list page — everything except the
+ * per-frame array. Built once in `buildSequenceSummary` so the two documents
+ * can't drift.
+ */
+export type SequenceSummary = {
   id: string;
   title: string;
   status: SequenceStatus;
   statusError: string | null;
   aspectRatio: string;
+  style: SequenceStyle;
+  models: SequenceModels;
   createdAt: string;
   updatedAt: string;
   poster: { url: string } | null;
   music: { status: MusicStatus; url: string | null };
-  frames: SequenceStateFrame[];
   counts: SequenceCounts;
+};
+
+export type SequenceState = SequenceSummary & {
+  frames: SequenceStateFrame[];
 };
 
 /** The image URL a frame exposes once its still is ready (else null). */
@@ -83,8 +117,64 @@ export function summarizeFrameCounts(frames: Frame[]): SequenceCounts {
   return { frames: frames.length, imagesReady, videosReady, videosFailed };
 }
 
+/**
+ * Build the scalar summary fields shared by the status document and each list
+ * entry. `style` is the sequence's resolved style row (null if it couldn't be
+ * loaded — the `id` is still surfaced). `origin` absolutizes stored media URLs
+ * (see `buildSequenceState`).
+ */
+export function buildSequenceSummary(params: {
+  sequence: Sequence;
+  style: Style | null;
+  counts: SequenceCounts;
+  origin: string;
+}): SequenceSummary {
+  const { sequence, style, counts, origin } = params;
+  const share = (url: string | null): string | null =>
+    url === null ? null : toShareableUrl(url, origin);
+
+  if (style === null) {
+    // styleId is notNull behind an FK, so a sequence should always resolve to a
+    // style row. A miss means the FK was bypassed (manual edit, or a migration
+    // run with foreign_keys off) — surface it rather than silently shipping a
+    // nameless style to API consumers and the dashboard.
+    logger.error('api/v1 sequence style did not resolve: {styleId}', {
+      sequenceId: sequence.id,
+      styleId: sequence.styleId,
+    });
+  }
+
+  return {
+    id: sequence.id,
+    title: sequence.title,
+    status: sequence.status,
+    statusError: sequence.statusError ?? null,
+    aspectRatio: sequence.aspectRatio,
+    style: { id: sequence.styleId, name: style?.name ?? null },
+    models: {
+      analysis: sequence.analysisModel,
+      image: sequence.imageModel,
+      video: sequence.videoModel,
+      music: sequence.musicModel ?? null,
+    },
+    createdAt: sequence.createdAt.toISOString(),
+    updatedAt: sequence.updatedAt.toISOString(),
+    poster: sequence.posterUrl
+      ? { url: toShareableUrl(sequence.posterUrl, origin) }
+      : null,
+    music: {
+      status: sequence.musicStatus ?? 'pending',
+      url: share(sequence.musicUrl ?? null),
+    },
+    counts,
+  };
+}
+
 export async function buildSequenceState(
-  scopedDb: { frames: Pick<ScopedDb['frames'], 'listBySequence'> },
+  scopedDb: {
+    frames: Pick<ScopedDb['frames'], 'listBySequence'>;
+    styles: Pick<ScopedDb['styles'], 'getById'>;
+  },
   sequence: Sequence,
   // Scheme+host the request arrived on. Stored media URLs are origin-relative
   // (#894); the API hands them to off-origin clients, so absolutize them to a
@@ -92,7 +182,10 @@ export async function buildSequenceState(
   // toShareableUrl.
   origin: string
 ): Promise<SequenceState> {
-  const frames = await scopedDb.frames.listBySequence(sequence.id);
+  const [frames, style] = await Promise.all([
+    scopedDb.frames.listBySequence(sequence.id),
+    scopedDb.styles.getById(sequence.styleId),
+  ]);
   const ordered = [...frames].sort((a, b) => a.orderIndex - b.orderIndex);
   const share = (url: string | null): string | null =>
     url === null ? null : toShareableUrl(url, origin);
@@ -115,22 +208,13 @@ export async function buildSequenceState(
   });
 
   return {
-    id: sequence.id,
-    title: sequence.title,
-    status: sequence.status,
-    statusError: sequence.statusError ?? null,
-    aspectRatio: sequence.aspectRatio,
-    createdAt: sequence.createdAt.toISOString(),
-    updatedAt: sequence.updatedAt.toISOString(),
-    poster: sequence.posterUrl
-      ? { url: toShareableUrl(sequence.posterUrl, origin) }
-      : null,
-    music: {
-      status: sequence.musicStatus ?? 'pending',
-      url: share(sequence.musicUrl ?? null),
-    },
+    ...buildSequenceSummary({
+      sequence,
+      style,
+      counts: summarizeFrameCounts(ordered),
+      origin,
+    }),
     frames: stateFrames,
-    counts: summarizeFrameCounts(ordered),
   };
 }
 
