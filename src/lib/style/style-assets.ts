@@ -47,6 +47,15 @@ export function styleCanonicalVideoUrl(style: Style): string | null {
 }
 
 /**
+ * The bespoke "showcase" sample video — present only for hero styles (those
+ * seeded with a curated bespoke entry). Null otherwise; unlike the canonical
+ * there's no derived fallback, since non-hero styles have no bespoke asset.
+ */
+export function styleBespokeVideoUrl(style: Style): string | null {
+  return style.sampleVideos?.find((v) => v.kind === 'bespoke')?.url ?? null;
+}
+
+/**
  * Categories whose preview stills are shot as products (hero/detail/context)
  * rather than people (character/environment/action). Mirrors the scene split in
  * `scripts/generate-style-previews.ts` so the URLs we derive here line up with
