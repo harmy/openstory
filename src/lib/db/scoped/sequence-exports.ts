@@ -20,6 +20,7 @@ import {
   type NewSequenceExport,
   type SequenceExport,
 } from '@/lib/db/schema';
+import { isUniqueConstraintError } from '@/lib/db/scoped/divergent-insert';
 import { and, desc, eq } from 'drizzle-orm';
 
 export function createSequenceExportsMethods(db: Database) {
@@ -79,19 +80,48 @@ export function createSequenceExportsMethods(db: Database) {
       return row;
     },
 
-    /** Reserve a `processing` row for a server-side export run. */
+    /**
+     * Reserve the (single) `processing` row for a server-side export run.
+     *
+     * Race-tolerant against concurrent POSTs: the `uq_sequence_exports_one_
+     * processing` partial unique index allows only one in-flight row per
+     * sequence, so a losing INSERT raises a unique-constraint error. We absorb
+     * it and return the winning row with `created: false` — the caller then
+     * coalesces onto it instead of triggering a second workflow. A pre-existing
+     * stale row must be transitioned out of `processing` (markFailed) before
+     * calling this, or the insert will always lose to it.
+     */
     createProcessing: async (input: {
       sequenceId: string;
       url: string;
       storagePath: string;
       workflowRunId?: string | null;
-    }): Promise<SequenceExport> => {
-      const [row] = await db
-        .insert(sequenceExports)
-        .values({ ...input, status: 'processing' })
-        .returning();
-      if (!row) throw new Error('Failed to create sequence export');
-      return row;
+    }): Promise<{ row: SequenceExport; created: boolean }> => {
+      try {
+        const [row] = await db
+          .insert(sequenceExports)
+          .values({ ...input, status: 'processing' })
+          .returning();
+        if (!row) throw new Error('Failed to create sequence export');
+        return { row, created: true };
+      } catch (err) {
+        if (!isUniqueConstraintError(err)) throw err;
+        const [existing] = await db
+          .select()
+          .from(sequenceExports)
+          .where(
+            and(
+              eq(sequenceExports.sequenceId, input.sequenceId),
+              eq(sequenceExports.status, 'processing')
+            )
+          )
+          .orderBy(desc(sequenceExports.createdAt))
+          .limit(1);
+        // Conflict on a different constraint than the one-processing index →
+        // genuine error, rethrow.
+        if (!existing) throw err;
+        return { row: existing, created: false };
+      }
     },
 
     markReady: async (

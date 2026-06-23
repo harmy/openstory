@@ -1,13 +1,16 @@
 /**
  * BS.1770-compliant integrated-LUFS measurement and gain normalization.
  *
- * ⚠️ SOURCE OF TRUTH: this is a verbatim copy of
- * `src/lib/browser-merge/loudness-normalize.ts`. The Cloudflare Container image
- * is built with its Dockerfile directory as the context, so it cannot import
- * across the repo — keeping a copy here is the trade-off. If you change the
- * loudness math, change it in BOTH places (the browser export and this server
- * export must stay loudness-identical). The pure logic is exercised by
- * `src/lib/browser-merge/loudness-normalize.test.ts`.
+ * ⚠️ SOURCE OF TRUTH: this is a logic-identical copy of
+ * `src/lib/browser-merge/loudness-normalize.ts` (that file carries a few extra
+ * explanatory comments). The Cloudflare Container image is built with its
+ * Dockerfile directory as the context, so it cannot import across the repo —
+ * keeping a copy here is the trade-off. If you change the loudness math, change
+ * it in BOTH places (the browser export and this server export must stay
+ * loudness-identical). NOTE: the browser copy's tests
+ * (`src/lib/browser-merge/loudness-normalize.test.ts`) do NOT import this file —
+ * the container is outside the root vitest/tsconfig — so this copy has no
+ * direct test. Re-verify parity by hand when editing either side.
  *
  * We target broadcast standard −24 LUFS so music sits 6–10 LU below dialogue.
  */

@@ -39,9 +39,10 @@ type ContainerExportJob = {
 
 // The container binding only exists in [env.production]; CloudflareEnv (typed
 // from the default block) doesn't include it, so we narrow at the call site.
-// `VIDEO_EXPORT_DEV_URL` is a local-dev-only escape hatch (set in .dev.vars /
-// .env.local, never in prod): when present, the workflow POSTs to the host
-// `bun dev:bunny` service instead of the container binding.
+// `VIDEO_EXPORT_DEV_URL` is a local-dev-only escape hatch (injected by
+// `bun dev:all`, or set in .env.local for a two-terminal setup; never in
+// prod): when present, the workflow POSTs to the host `bun dev:bunny` service
+// instead of the container binding.
 type ContainerEnv = {
   VIDEO_EXPORT_CONTAINER?: DurableObjectNamespace<VideoExportContainer>;
   VIDEO_EXPORT_DEV_URL?: string;
@@ -117,9 +118,9 @@ export class SequenceExportWorkflow extends OpenStoryWorkflowEntrypoint<Sequence
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(job),
         };
-        // Local dev (set VIDEO_EXPORT_DEV_URL in .dev.vars): hit the host
-        // `bun dev:bunny` service directly. Prod has no such var → use the
-        // container binding.
+        // Local dev (VIDEO_EXPORT_DEV_URL set via `bun dev:all` or .env.local):
+        // hit the host `bun dev:bunny` service directly. Prod has no such var →
+        // use the container binding.
         let response: Response;
         const devUrl = env.VIDEO_EXPORT_DEV_URL;
         if (devUrl) {
@@ -145,18 +146,36 @@ export class SequenceExportWorkflow extends OpenStoryWorkflowEntrypoint<Sequence
           );
         }
 
-        // Narrow from `unknown` rather than asserting JSON.parse's `any`.
+        // The container ALWAYS sets x-export-meta (see container server.ts) with
+        // a real durationSeconds. A missing/garbled header means the
+        // container↔worker contract broke — fail loudly rather than storing a
+        // `ready` export with a silently-wrong duration of 0.
         const metaHeader = response.headers.get('x-export-meta');
-        const parsed: unknown = metaHeader
-          ? JSON.parse(decodeURIComponent(metaHeader))
-          : null;
+        if (!metaHeader) {
+          throw new Error('Container response missing x-export-meta header');
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(decodeURIComponent(metaHeader));
+        } catch {
+          throw new Error(
+            `Container x-export-meta is not valid JSON: ${metaHeader.slice(0, 200)}`
+          );
+        }
+        // Narrow from `unknown` rather than asserting JSON.parse's `any`.
         const durationSecondsFromMeta =
           typeof parsed === 'object' &&
           parsed !== null &&
           'durationSeconds' in parsed &&
-          typeof parsed.durationSeconds === 'number'
+          typeof parsed.durationSeconds === 'number' &&
+          Number.isFinite(parsed.durationSeconds)
             ? parsed.durationSeconds
-            : 0;
+            : null;
+        if (durationSecondsFromMeta === null) {
+          throw new Error(
+            `Container x-export-meta lacks a finite durationSeconds: ${metaHeader.slice(0, 200)}`
+          );
+        }
 
         // Stream the container's MP4 straight into R2 via the binding — no
         // presigned URL, no full-buffer in the isolate.

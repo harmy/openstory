@@ -121,8 +121,9 @@ export function mixInto(
 
 /**
  * Interleave a stereo mix into chunked `Float32Array`s of `framesPerChunk`
- * frames, yielding `{ data, timestamp }` ready to wrap in an `AudioSample`.
- * `timestamp` is in seconds.
+ * frames, yielding `{ data, frameOffset }` ready to wrap in an `AudioSample`.
+ * `frameOffset` is the chunk's start frame index; the caller divides by the
+ * sample rate to get the `AudioSample` timestamp in seconds.
  */
 export function* interleaveChunks(
   mix: { left: Float32Array; right: Float32Array },

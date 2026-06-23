@@ -767,7 +767,8 @@
       // Realtime broker DO — redeclared because durable_objects + migrations
       // are non-inheritable across env blocks. Keep the `v1` migration tag in
       // sync with the top-level block. No container here: e2e stays hermetic
-      // (Docker-free); the SequenceExportWorkflow no-ops without the binding.
+      // (Docker-free); without the binding the SequenceExportWorkflow fails the
+      // export cleanly (marks the row `failed`) rather than rendering.
       "durable_objects": {
         "bindings": [
           {

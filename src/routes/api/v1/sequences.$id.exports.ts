@@ -35,10 +35,13 @@ import { createFileRoute } from '@tanstack/react-router';
 
 const EXPORT_FILENAME_SUFFIX = '_openstory.mp4';
 
-// A `processing` row older than the workflow's own render timeout is assumed
-// dead (the worker crashed before `onFailure` ran); don't let it block new
-// exports forever.
-const STALE_PROCESSING_MS = 20 * 60 * 1000;
+// A `processing` row older than the workflow's worst-case render time is
+// assumed dead (the worker crashed before `onFailure` ran). The render step is
+// `timeout: 15m` with one retry (+10s delay), so a live export can legitimately
+// run ~30m; pad past that so we only reconcile genuinely-orphaned rows. Such a
+// stale row is marked `failed` (freeing the one-processing-row slot) rather
+// than blocking new exports forever.
+const STALE_PROCESSING_MS = 35 * 60 * 1000;
 
 function buildExportPath(teamId: string, sequenceId: string): string {
   return `teams/${teamId}/sequences/${sequenceId}/exports/${generateId().slice(-8)}${EXPORT_FILENAME_SUFFIX}`;
@@ -101,33 +104,52 @@ export const Route = createFileRoute('/api/v1/sequences/$id/exports')({
 
           const origin = new URL(request.url).origin;
 
-          // Coalesce concurrent requests: reuse a still-fresh in-flight export
-          // instead of spawning a duplicate render.
+          // Coalesce: reuse the in-flight export instead of spawning a
+          // duplicate render. A stale row means the worker crashed before
+          // `onFailure` ran — mark it failed so it stops blocking new exports
+          // (and frees the one-processing-row unique slot).
           const existing =
             await context.scopedDb.sequenceExports.listAllBySequence(params.id);
-          const inFlight = existing.find(
-            (e) =>
-              e.status === 'processing' &&
-              Date.now() - e.createdAt.getTime() < STALE_PROCESSING_MS
-          );
+          const inFlight = existing.find((e) => e.status === 'processing');
           if (inFlight) {
+            if (
+              Date.now() - inFlight.createdAt.getTime() <
+              STALE_PROCESSING_MS
+            ) {
+              return Response.json(
+                withLinks(
+                  { export: formatExport(inFlight, origin) },
+                  exportsLinks(params.id)
+                ),
+                { status: 202 }
+              );
+            }
+            await context.scopedDb.sequenceExports.markFailed(
+              inFlight.id,
+              'Export timed out — no result from the render worker'
+            );
+          }
+
+          // Reserve the row BEFORE triggering so the workflow's first step can
+          // read it back (avoids a read-before-commit race). `created: false`
+          // means a concurrent POST won the one-processing-row race — coalesce
+          // onto its row rather than starting a second workflow.
+          const path = buildExportPath(context.teamId, params.id);
+          const { row, created } =
+            await context.scopedDb.sequenceExports.createProcessing({
+              sequenceId: params.id,
+              url: getPublicUrl(STORAGE_BUCKETS.VIDEOS, path),
+              storagePath: path,
+            });
+          if (!created) {
             return Response.json(
               withLinks(
-                { export: formatExport(inFlight, origin) },
+                { export: formatExport(row, origin) },
                 exportsLinks(params.id)
               ),
               { status: 202 }
             );
           }
-
-          // Reserve the row BEFORE triggering so the workflow's first step can
-          // read it back (avoids a read-before-commit race).
-          const path = buildExportPath(context.teamId, params.id);
-          const row = await context.scopedDb.sequenceExports.createProcessing({
-            sequenceId: params.id,
-            url: getPublicUrl(STORAGE_BUCKETS.VIDEOS, path),
-            storagePath: path,
-          });
 
           const workflowRunId = await triggerWorkflow('sequence-export', {
             userId: context.user.id,
