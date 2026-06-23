@@ -107,6 +107,23 @@ describe('filterStyles', () => {
       const result = filterStyles(mockStyles, 'vintage', '');
       expect(result.length).toBe(0);
     });
+
+    test('"specialized" matches every small (<3-style) category', () => {
+      // Every fixture category has a single style, so all collapse.
+      const result = filterStyles(mockStyles, 'specialized', '');
+      expect(result.length).toBe(mockStyles.length);
+    });
+
+    test('"specialized" excludes styles in a large category', () => {
+      const big = [
+        makeStyle({ id: 'b1', category: 'commercial' }),
+        makeStyle({ id: 'b2', category: 'commercial' }),
+        makeStyle({ id: 'b3', category: 'commercial' }),
+        makeStyle({ id: 's1', category: 'travel' }),
+      ];
+      const result = filterStyles(big, 'specialized', '');
+      expect(result.map((s) => s.id)).toEqual(['s1']);
+    });
   });
 
   describe('search query filtering', () => {

@@ -73,13 +73,10 @@ import {
 } from '@/lib/style/sample-videos';
 import { styleSlug } from '@/lib/style/style-slug';
 import { DEFAULT_STYLE_TEMPLATES } from '@/lib/style/style-templates';
-import { execFile } from 'node:child_process';
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { z } from 'zod';
-
-const execFileAsync = promisify(execFile);
+import { concatClips, downloadTo } from './sample-media';
 
 const OUTPUT_DIR = path.join(process.cwd(), 'sample-videos');
 
@@ -330,12 +327,6 @@ async function ensureSampleSequence(
   return id;
 }
 
-async function downloadTo(url: string, dest: string): Promise<void> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Download failed (${res.status}): ${url}`);
-  await writeFile(dest, Buffer.from(await res.arrayBuffer()));
-}
-
 /**
  * One sequence through the real OpenStory pipeline: create (or resume), wait
  * for every frame video, then download the per-frame clips for the local
@@ -395,47 +386,6 @@ async function renderJobViaPipeline(
       return clipPath;
     })
   );
-}
-
-/** Concatenate clips into one mp4. Stream-copy first, re-encode on failure. */
-async function concatClips(clipPaths: string[], outputPath: string) {
-  const listFile = path.join(
-    path.dirname(clipPaths[0] ?? outputPath),
-    'concat.txt'
-  );
-  const list = clipPaths
-    .map((p) => `file '${p.replace(/'/g, "'\\''")}'`)
-    .join('\n');
-  await writeFile(listFile, list);
-  try {
-    await execFileAsync('ffmpeg', [
-      '-y',
-      '-f',
-      'concat',
-      '-safe',
-      '0',
-      '-i',
-      listFile,
-      '-c',
-      'copy',
-      outputPath,
-    ]);
-  } catch {
-    // Codec/params differ across clips — re-encode through the concat filter.
-    const inputs = clipPaths.flatMap((p) => ['-i', p]);
-    const filter =
-      clipPaths.map((_, i) => `[${i}:v:0]`).join('') +
-      `concat=n=${clipPaths.length}:v=1:a=0[outv]`;
-    await execFileAsync('ffmpeg', [
-      '-y',
-      ...inputs,
-      '-filter_complex',
-      filter,
-      '-map',
-      '[outv]',
-      outputPath,
-    ]);
-  }
 }
 
 async function renderJob(job: RenderJob, submitOnly: boolean): Promise<void> {

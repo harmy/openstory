@@ -25,6 +25,10 @@ import {
   InputGroupInput,
 } from '@/components/ui/input-group';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+  groupStylesByCategory,
+  styleCategoryLabel,
+} from '@/lib/style/style-assets';
 import { filterStyles } from '@/lib/utils/style-filters';
 import type { Style } from '@/types/database';
 import { Search, X } from 'lucide-react';
@@ -59,28 +63,20 @@ const StyleSelectionDialogContent: FC<StyleSelectionDialogContentProps> = ({
   const [selectedCategory, setSelectedCategory] = useState('all');
 
   const isLoading = styles === undefined;
-  // List out all the categories
-  const categories = useMemo(() => {
-    return isLoading
-      ? undefined
-      : [
-          'all',
-          ...Object.keys(
-            styles.reduce(
-              (acc: Record<string, string>, style: Style) => {
-                if (style.category) {
-                  acc[style.category] = style.category;
-                }
-                return acc;
-              },
-              {} satisfies Record<string, string>
-            )
-          ),
-        ];
-  }, [styles, isLoading]);
+  // Category chips alphabetically (Specialized last), mirroring the styles page.
+  const categories = useMemo(
+    () =>
+      isLoading
+        ? undefined
+        : ['all', ...groupStylesByCategory(styles).map((g) => g.category)],
+    [styles, isLoading]
+  );
 
   const filteredStyles = useMemo(
-    () => filterStyles(styles ?? [], selectedCategory, searchQuery),
+    () =>
+      [...filterStyles(styles ?? [], selectedCategory, searchQuery)].sort(
+        (a, b) => a.name.localeCompare(b.name)
+      ),
     [styles, selectedCategory, searchQuery]
   );
 
@@ -148,7 +144,7 @@ const StyleSelectionDialogContent: FC<StyleSelectionDialogContentProps> = ({
                 value={category}
                 className="rounded-full"
               >
-                {category}
+                {category === 'all' ? 'All' : styleCategoryLabel(category)}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>

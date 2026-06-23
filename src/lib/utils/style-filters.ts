@@ -1,3 +1,7 @@
+import {
+  SPECIALIZED_CATEGORY,
+  smallCategoryKeys,
+} from '@/lib/style/style-assets';
 import type { Style } from '@/types/database';
 
 /**
@@ -5,7 +9,7 @@ import type { Style } from '@/types/database';
  * Pure function with no side effects - can be used in any context.
  *
  * @param styles - Array of Style objects to filter
- * @param category - Category ID to filter by ('all' for no category filter, 'new' for recent styles)
+ * @param category - Category ID to filter by ('all' for no filter, 'new' for recent styles, 'specialized' for the collapsed small-category bucket)
  * @param searchQuery - Search string to match against name, description, category, and tags
  * @returns Filtered array of styles
  */
@@ -18,6 +22,8 @@ export function filterStyles(
 
   // Filter by category
   if (category !== 'all') {
+    const small =
+      category === SPECIALIZED_CATEGORY ? smallCategoryKeys(styles) : null;
     filtered = filtered.filter((style) => {
       if (category === 'new') {
         // Show styles created within the last 7 days
@@ -26,6 +32,7 @@ export function filterStyles(
           (1000 * 60 * 60 * 24);
         return daysSinceCreation <= 7;
       }
+      if (small) return small.has(style.category ?? '__other__');
       return style.category === category;
     });
   }

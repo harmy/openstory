@@ -48,30 +48,46 @@ function getPublicAssetsDomain(): string {
   return domain;
 }
 
-/** A reachable URL responds 200/206 to a 1-byte ranged GET. */
-async function isUrlReachable(url: string): Promise<boolean> {
+/**
+ * Fetch a URL's content hash (the R2 object's ETag) with a 1-byte ranged GET,
+ * bypassing any stale edge cache so the hash reflects the origin object.
+ * Returns the bare hex hash, `''` when reachable but ETag-less (can't version),
+ * or `null` when unreachable.
+ */
+async function fetchContentHash(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url, { headers: { Range: 'bytes=0-0' } });
-    return res.ok; // 200 or 206
+    const bust = `${url.includes('?') ? '&' : '?'}_seedhash=${Date.now()}`;
+    const res = await fetch(`${url}${bust}`, {
+      headers: { Range: 'bytes=0-0' },
+    });
+    if (!res.ok) return null; // 200 or 206 expected
+    const etag = res.headers.get('etag');
+    return etag ? etag.replace(/^W\//, '').replace(/"/g, '') : '';
   } catch {
-    return false;
+    return null;
   }
 }
 
-async function validateAll(urls: string[]): Promise<string[]> {
-  const missing: string[] = [];
+/**
+ * Validate every URL is reachable AND capture its content hash, batched.
+ * Returns url → hash (`null` = unreachable). The hash cache-busts the
+ * un-purgeable `cdn-cgi/media` transform: seeding `…/canonical.mp4?v=<hash>`
+ * gives the transform a fresh cache key whenever the file's bytes change.
+ */
+async function hashAll(urls: string[]): Promise<Map<string, string | null>> {
+  const hashes = new Map<string, string | null>();
   for (let i = 0; i < urls.length; i += VALIDATION_CONCURRENCY) {
     const batch = urls.slice(i, i + VALIDATION_CONCURRENCY);
     const results = await Promise.all(
-      batch.map(async (url) => ({ url, ok: await isUrlReachable(url) }))
+      batch.map(async (url) => ({ url, hash: await fetchContentHash(url) }))
     );
-    for (const { url, ok } of results) {
-      process.stdout.write(ok ? '.' : 'x');
-      if (!ok) missing.push(url);
+    for (const { url, hash } of results) {
+      process.stdout.write(hash === null ? 'x' : '.');
+      hashes.set(url, hash);
     }
   }
   process.stdout.write('\n');
-  return missing;
+  return hashes;
 }
 
 type PlannedStyle = { name: string; entries: StyleSampleVideo[] };
@@ -144,8 +160,12 @@ async function run(
     `Validating ${allUrls.length} URLs across ${planned.length} styles…`
   );
 
-  // 2. Validate reachability — abort loudly on any miss.
-  const missing = await validateAll(allUrls);
+  // 2. Validate reachability + capture each file's content hash — abort loudly
+  //    on any miss.
+  const hashes = await hashAll(allUrls);
+  const missing = [...hashes.entries()]
+    .filter(([, hash]) => hash === null)
+    .map(([url]) => url);
   if (missing.length > 0) {
     console.error(`\n❌ ${missing.length} sample video URL(s) unreachable:`);
     for (const url of missing) console.error(`   - ${url}`);
@@ -155,6 +175,16 @@ async function run(
     process.exit(1);
   }
   console.log('✅ All sample video URLs reachable.\n');
+
+  // 2b. Cache-bust the un-purgeable cdn-cgi/media transform by versioning each
+  //     URL with its content hash. Content-addressed — an unchanged file keeps
+  //     the same `?v=`, so only transforms whose bytes changed are refreshed.
+  for (const plan of planned) {
+    for (const entry of plan.entries) {
+      const hash = hashes.get(entry.url);
+      if (hash) entry.url = `${entry.url}?v=${hash}`;
+    }
+  }
 
   // 3a. SQL mode: write a portable .sql file and stop (no DB connection).
   if (opts.sql) {

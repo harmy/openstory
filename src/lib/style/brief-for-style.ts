@@ -46,30 +46,12 @@ export const CATEGORY_BRIEFS: Record<string, string> = {
   animation:
     'a playful animated story: a small robot chases its runaway wheel downhill through a street market, bouncing off awnings, and catches it at the lip of a fountain',
   kids: 'a kids’ ad where a juice box rockets off the table, loops around the kitchen trailing rainbow fizz, and sticks the landing in a lunchbox just as it snaps shut',
-  corporate:
-    'a brand film following one package across the world in three cuts — a warehouse robot lifts it, a cargo drone carries it through a storm, and a man in a courier uniform hands it over at a sunlit door',
-  realestate:
-    'a luxury home tour at golden hour — an elegant woman in a flowing floor-length champagne gown walks through the property: across the terrace past the still infinity pool, in through the open glass doors, and into the living room as the pendant lights bloom on one by one',
+  tech: 'a tech product reveal in motion — a woman engineer with cropped dark hair in a fitted grey tee lifts a brushed-aluminium device off a glowing pedestal; it spins open to float its internal components in mid-air, then snaps back together as she turns it to the camera',
   // Narrative film genres get per-style briefs in STYLE_BRIEF_OVERRIDES (a
   // shared "cinematic scene" brief enhanced into the same figure-standing-in-
   // rain mood piece for every genre — action had no action). This entry is
   // the guarded fallback for a future film style without an override.
   film: 'a cinematic scene where something decisive happens — a chase, a confrontation, or an escape; never a person standing still',
-  photography:
-    'a photography showcase built on motion — a woman model with sharp features turns into a burst of strobe flashes, fabric mid-swirl, each flash freezing a different pose',
-  healthcare:
-    'a recovery story in three beats — an older man grips parallel bars in physical therapy, takes his first unassisted steps, then jogs the hospital corridor past applauding staff',
-  food: 'the making of a signature dish — a woman chef works a flaming pan, sauce pours in slow motion, and she cuts through the finished dish as steam escapes',
-  fitness:
-    'one rep at the limit — a broad-shouldered man chalks up, drives the barbell overhead in slow motion as chalk dust flies, and drops it with a floor-shaking bounce',
-  edtech:
-    'a learning montage — a young woman sketches an equation that lifts off the page into floating diagrams around her, then snaps back into the notebook as she nails the answer',
-  automotive:
-    'a car reveal in motion — the car drifts through a wet hangar in a controlled slide, headlights blazing through fog, and stops dead inches from the camera',
-  nonprofit:
-    'a hands-in-the-dirt story — a group of volunteers plant a treeline at dawn in quick cuts, a young girl waters the first sapling, and the camera lifts to reveal a whole green field',
-  travel:
-    'a getaway in three jumps — a man dives off a cliff into turquoise water, a woman weaves a scooter through a market at dusk, and a paper lantern rises from the beach into the night sky',
 };
 
 /**
