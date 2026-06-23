@@ -7,12 +7,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useSequenceCharacters } from '@/hooks/use-sequence-characters';
 import type { Character } from '@/lib/db/schema';
 import { matchCharactersToScene } from '@/lib/workflows/scene-matching';
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import { Link } from '@tanstack/react-router';
 import { Film, User } from 'lucide-react';
 
 type SceneCastTabProps = {
-  frame?: Frame;
+  frame?: Shot;
   sequenceId: string;
 };
 

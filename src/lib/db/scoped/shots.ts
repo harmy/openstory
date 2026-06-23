@@ -1,15 +1,15 @@
 /**
- * Scoped Frames Sub-module
- * Frame CRUD, bulk operations, reorder, and reconciliation.
+ * Scoped Shots Sub-module
+ * Shot CRUD, bulk operations, reorder, and reconciliation.
  */
 
 import type { Database } from '@/lib/db/client';
-import { frames } from '@/lib/db/schema';
-import type { Frame, NewFrame } from '@/lib/db/schema';
+import { shots } from '@/lib/db/schema';
+import type { Shot, NewShot } from '@/lib/db/schema';
 import type { Sequence } from '@/lib/db/schema/sequences';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
-type FrameWithSequence = Frame & {
+type ShotWithSequence = Shot & {
   sequence: Pick<
     Sequence,
     | 'id'
@@ -23,19 +23,19 @@ type FrameWithSequence = Frame & {
   >;
 };
 
-type FrameOrderBy = 'orderIndex' | 'createdAt' | 'updatedAt';
+type ShotOrderBy = 'orderIndex' | 'createdAt' | 'updatedAt';
 
-const FRAME_ARTIFACT_HASH_COLUMNS = {
+const SHOT_ARTIFACT_HASH_COLUMNS = {
   thumbnail: 'thumbnailInputHash',
   variantImage: 'variantImageInputHash',
   video: 'videoInputHash',
   audio: 'audioInputHash',
-} as const satisfies Record<string, keyof Frame>;
+} as const satisfies Record<string, keyof Shot>;
 
-export type FrameArtifact = keyof typeof FRAME_ARTIFACT_HASH_COLUMNS;
+export type ShotArtifact = keyof typeof SHOT_ARTIFACT_HASH_COLUMNS;
 
-type FrameFilters = {
-  orderBy?: FrameOrderBy;
+type ShotFilters = {
+  orderBy?: ShotOrderBy;
   ascending?: boolean;
   limit?: number;
   offset?: number;
@@ -43,20 +43,17 @@ type FrameFilters = {
   hasVideo?: boolean;
 };
 
-export function createFramesMethods(db: Database) {
+export function createShotsMethods(db: Database) {
   return {
-    getById: async (frameId: string): Promise<Frame | null> => {
-      const result = await db
-        .select()
-        .from(frames)
-        .where(eq(frames.id, frameId));
+    getById: async (shotId: string): Promise<Shot | null> => {
+      const result = await db.select().from(shots).where(eq(shots.id, shotId));
       return result[0] ?? null;
     },
 
     listBySequence: async (
       sequenceId: string,
-      options?: FrameFilters
-    ): Promise<Frame[]> => {
+      options?: ShotFilters
+    ): Promise<Shot[]> => {
       const {
         orderBy = 'orderIndex',
         ascending = true,
@@ -66,28 +63,28 @@ export function createFramesMethods(db: Database) {
         hasVideo,
       } = options ?? {};
 
-      const conditions = [eq(frames.sequenceId, sequenceId)];
+      const conditions = [eq(shots.sequenceId, sequenceId)];
 
       if (hasThumbnail !== undefined && hasThumbnail) {
-        conditions.push(isNull(frames.thumbnailUrl));
+        conditions.push(isNull(shots.thumbnailUrl));
       }
 
       if (hasVideo !== undefined && hasVideo) {
-        conditions.push(isNull(frames.videoUrl));
+        conditions.push(isNull(shots.videoUrl));
       }
 
       const orderColumn =
         orderBy === 'orderIndex'
-          ? frames.orderIndex
+          ? shots.orderIndex
           : orderBy === 'createdAt'
-            ? frames.createdAt
-            : frames.updatedAt;
+            ? shots.createdAt
+            : shots.updatedAt;
 
       const orderFn = ascending ? asc : desc;
 
       let query = db
         .select()
-        .from(frames)
+        .from(shots)
         .where(and(...conditions))
         .orderBy(orderFn(orderColumn))
         .$dynamic();
@@ -103,39 +100,39 @@ export function createFramesMethods(db: Database) {
       return await query;
     },
 
-    create: async (data: NewFrame): Promise<Frame> => {
-      const [frame] = await db.insert(frames).values(data).returning();
-      if (!frame) {
+    create: async (data: NewShot): Promise<Shot> => {
+      const [shot] = await db.insert(shots).values(data).returning();
+      if (!shot) {
         throw new Error(
-          `Failed to create frame for sequence ${data.sequenceId}`
+          `Failed to create shot for sequence ${data.sequenceId}`
         );
       }
-      return frame;
+      return shot;
     },
 
     update: async (
-      frameId: string,
-      data: Partial<NewFrame>,
+      shotId: string,
+      data: Partial<NewShot>,
       options?: { throwOnMissing?: boolean }
-    ): Promise<Frame | undefined> => {
-      const [frame] = await db
-        .update(frames)
+    ): Promise<Shot | undefined> => {
+      const [shot] = await db
+        .update(shots)
         .set({ ...data, updatedAt: new Date() })
-        .where(eq(frames.id, frameId))
+        .where(eq(shots.id, shotId))
         .returning();
 
-      if (!frame && options?.throwOnMissing !== false) {
-        throw new Error(`Frame ${frameId} not found`);
+      if (!shot && options?.throwOnMissing !== false) {
+        throw new Error(`Shot ${shotId} not found`);
       }
 
-      return frame;
+      return shot;
     },
-    upsert: async (data: NewFrame): Promise<Frame> => {
-      const [frame] = await db
-        .insert(frames)
+    upsert: async (data: NewShot): Promise<Shot> => {
+      const [shot] = await db
+        .insert(shots)
         .values(data)
         .onConflictDoUpdate({
-          target: [frames.sequenceId, frames.orderIndex],
+          target: [shots.sequenceId, shots.orderIndex],
           set: {
             description: sql.raw(`excluded."description"`),
             durationMs: sql.raw(`excluded."duration_ms"`),
@@ -144,51 +141,51 @@ export function createFramesMethods(db: Database) {
           },
         })
         .returning();
-      if (!frame) {
+      if (!shot) {
         throw new Error(
-          `Failed to upsert frame for sequence ${data.sequenceId} at orderIndex ${data.orderIndex}`
+          `Failed to upsert shot for sequence ${data.sequenceId} at orderIndex ${data.orderIndex}`
         );
       }
-      return frame;
+      return shot;
     },
-    delete: async (frameId: string): Promise<boolean> => {
-      const result = await db.delete(frames).where(eq(frames.id, frameId));
+    delete: async (shotId: string): Promise<boolean> => {
+      const result = await db.delete(shots).where(eq(shots.id, shotId));
       // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
       return (result.rowsAffected ?? 0) > 0;
     },
 
     deleteBySequence: async (sequenceId: string): Promise<number> => {
       const result = await db
-        .delete(frames)
-        .where(eq(frames.sequenceId, sequenceId));
+        .delete(shots)
+        .where(eq(shots.sequenceId, sequenceId));
       // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
       return result.rowsAffected ?? 0;
     },
 
-    createBulk: async (frameData: NewFrame[]): Promise<Frame[]> => {
+    createBulk: async (shotData: NewShot[]): Promise<Shot[]> => {
       const BATCH_SIZE = 5;
-      const results: Frame[] = [];
+      const results: Shot[] = [];
 
-      for (let i = 0; i < frameData.length; i += BATCH_SIZE) {
-        const batch = frameData.slice(i, i + BATCH_SIZE);
-        const batchResults = await db.insert(frames).values(batch).returning();
+      for (let i = 0; i < shotData.length; i += BATCH_SIZE) {
+        const batch = shotData.slice(i, i + BATCH_SIZE);
+        const batchResults = await db.insert(shots).values(batch).returning();
         results.push(...batchResults);
       }
 
       return results;
     },
 
-    bulkUpsert: async (frameInserts: NewFrame[]): Promise<Frame[]> => {
+    bulkUpsert: async (shotInserts: NewShot[]): Promise<Shot[]> => {
       const BATCH_SIZE = 5;
-      const results: Frame[] = [];
+      const results: Shot[] = [];
 
-      for (let i = 0; i < frameInserts.length; i += BATCH_SIZE) {
-        const batch = frameInserts.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < shotInserts.length; i += BATCH_SIZE) {
+        const batch = shotInserts.slice(i, i + BATCH_SIZE);
         const batchResults = await db
-          .insert(frames)
+          .insert(shots)
           .values(batch)
           .onConflictDoUpdate({
-            target: [frames.sequenceId, frames.orderIndex],
+            target: [shots.sequenceId, shots.orderIndex],
             set: {
               description: sql.raw(`excluded."description"`),
               durationMs: sql.raw(`excluded."duration_ms"`),
@@ -205,44 +202,44 @@ export function createFramesMethods(db: Database) {
 
     reorder: async (
       _sequenceId: string,
-      frameOrders: Array<{ id: string; order_index: number }>
+      shotOrders: Array<{ id: string; order_index: number }>
     ): Promise<void> => {
-      if (frameOrders.length === 0) return;
-      const [first, ...rest] = frameOrders.map((frameOrder) =>
+      if (shotOrders.length === 0) return;
+      const [first, ...rest] = shotOrders.map((shotOrder) =>
         db
-          .update(frames)
-          .set({ orderIndex: frameOrder.order_index, updatedAt: new Date() })
-          .where(eq(frames.id, frameOrder.id))
+          .update(shots)
+          .set({ orderIndex: shotOrder.order_index, updatedAt: new Date() })
+          .where(eq(shots.id, shotOrder.id))
       );
       if (!first) return;
       await db.batch([first, ...rest]);
     },
 
-    getByIds: async (frameIds: string[]): Promise<Frame[]> => {
-      if (frameIds.length === 0) return [];
-      return await db.select().from(frames).where(inArray(frames.id, frameIds));
+    getByIds: async (shotIds: string[]): Promise<Shot[]> => {
+      if (shotIds.length === 0) return [];
+      return await db.select().from(shots).where(inArray(shots.id, shotIds));
     },
 
     /**
      * Compares the stored input hash for an artifact against a caller-provided
      * fresh hash. Returns false when the stored hash is null — legacy artifacts
      * predating hash tracking are treated as "unknown, not stale" rather than
-     * forced into regeneration. Throws when the frame row does not exist.
+     * forced into regeneration. Throws when the shot row does not exist.
      */
     isStale: async (
-      frameId: string,
-      artifact: FrameArtifact,
+      shotId: string,
+      artifact: ShotArtifact,
       currentHash: string
     ): Promise<boolean> => {
       const result = await db
         .select({
-          hash: frames[FRAME_ARTIFACT_HASH_COLUMNS[artifact]],
+          hash: shots[SHOT_ARTIFACT_HASH_COLUMNS[artifact]],
         })
-        .from(frames)
-        .where(eq(frames.id, frameId));
+        .from(shots)
+        .where(eq(shots.id, shotId));
       const row = result[0];
       if (!row) {
-        throw new Error(`Frame ${frameId} not found`);
+        throw new Error(`Shot ${shotId} not found`);
       }
       const stored = row.hash;
       if (stored === null) return false;
@@ -250,10 +247,10 @@ export function createFramesMethods(db: Database) {
     },
 
     getWithSequence: async (
-      frameId: string
-    ): Promise<FrameWithSequence | null> => {
-      const result = await db.query.frames.findFirst({
-        where: { id: frameId },
+      shotId: string
+    ): Promise<ShotWithSequence | null> => {
+      const result = await db.query.shots.findFirst({
+        where: { id: shotId },
         with: {
           sequence: {
             columns: {

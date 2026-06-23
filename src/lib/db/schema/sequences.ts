@@ -3,7 +3,6 @@
  * Core content creation entities for video sequences
  */
 
-import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
 import {
   type AspectRatio,
   DEFAULT_ASPECT_RATIO,
@@ -81,7 +80,13 @@ export const sequences = snakeCase.table(
       .default('anthropic/claude-haiku-4.5')
       .notNull(),
     analysisDurationMs: integer().default(0).notNull(),
-    imageModel: text({ length: 100 }).default(DEFAULT_IMAGE_MODEL).notNull(),
+    // SQL default pinned to the literal 'nano_banana_2' to match every deployed
+    // DB's column default. DEFAULT_IMAGE_MODEL was bumped to 'gpt_image_2'
+    // WITHOUT a migration; SQLite can't ALTER a column default without a full
+    // table rebuild, which CASCADE-deletes child rows on D1 (#612). The scoped
+    // create (db/scoped/sequences.ts) substitutes DEFAULT_IMAGE_MODEL for an
+    // omitted imageModel, mirroring videoModel below.
+    imageModel: text({ length: 100 }).default('nano_banana_2').notNull(),
     // SQL default is pinned to 'kling_v3_pro' to match every deployed DB's
     // column default (#801 changed DEFAULT_VIDEO_MODEL to grok WITHOUT a
     // migration; SQLite can't ALTER a column default without a full table

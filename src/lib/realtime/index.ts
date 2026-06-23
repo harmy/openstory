@@ -38,7 +38,7 @@ export const realtimeSchema = {
   },
 
   // Per-frame prompt regeneration events. Lives on its own channel
-  // (`frame-prompt:${frameId}`) so a client only pays the realtime cost while
+  // (`frame-prompt:${shotId}`) so a client only pays the realtime cost while
   // it's actually viewing the frame, and history replay rebuilds the
   // streaming-text state for the active prompt type if the user navigates
   // away and back mid-generation. The `delta` carries the incremental visible
@@ -87,16 +87,16 @@ export const realtimeSchema = {
       durationSeconds: z.number(),
     }),
 
-    // Frame events (after DB write)
-    'frame:created': z.object({
-      frameId: z.string(),
+    // Shot events (after DB write)
+    'shot:created': z.object({
+      shotId: z.string(),
       sceneId: z.string(),
       orderIndex: z.number(),
     }),
 
-    // Frame updated with prompts (visual, motion, audio)
-    'frame:updated': z.object({
-      frameId: z.string(),
+    // Shot updated with prompts (visual, motion, audio)
+    'shot:updated': z.object({
+      shotId: z.string(),
       updateType: z.enum([
         'visual-prompt',
         'motion-prompt',
@@ -108,7 +108,7 @@ export const realtimeSchema = {
 
     // Image generation progress
     'image:progress': z.object({
-      frameId: z.string(),
+      shotId: z.string(),
       status: z
         .enum(['pending', 'generating', 'completed', 'failed'])
         .optional(),
@@ -142,14 +142,14 @@ export const realtimeSchema = {
 
     // Image generation progress
     'variant-image:progress': z.object({
-      frameId: z.string(),
+      shotId: z.string(),
       status: z.enum(['pending', 'generating', 'completed', 'failed']),
       variantImageUrl: z.string().optional(),
     }),
 
     // Video generation progress
     'video:progress': z.object({
-      frameId: z.string(),
+      shotId: z.string(),
       status: z.enum(['pending', 'generating', 'completed', 'failed']),
       videoUrl: z.string().optional(),
       // In-flight retry state (#882) — see `image:progress` above. Emitted
@@ -172,9 +172,9 @@ export const realtimeSchema = {
       error: z.string().optional(),
     }),
 
-    // Audio/music generation progress (frameId optional for sequence-level music)
+    // Audio/music generation progress (shotId optional for sequence-level music)
     'audio:progress': z.object({
-      frameId: z.string().optional(),
+      shotId: z.string().optional(),
       status: z.enum(['pending', 'generating', 'completed', 'failed']),
       audioUrl: z.string().optional(),
       // Which audio model produced this update. Optional for backward compat
@@ -294,13 +294,13 @@ export const realtimeSchema = {
     // Discriminated by `entityType` so consumers can narrow the artifact enum
     // per-branch and rely on `divergedVariantId` being present (every current
     // emitter parks its result and references the new variant row's id; the
-    // helpers in `sheet-divergence.ts` and `regenerate-frames-workflow.ts` are
+    // helpers in `sheet-divergence.ts` and `regenerate-shots-workflow.ts` are
     // the sole emit sites). A flat `z.object` here would let consumers redeclare
     // the payload locally with a wider `entityType: string`, which is what
     // masked the round-1 talent-channel routing bug.
     'stale:detected': z.discriminatedUnion('entityType', [
       z.object({
-        entityType: z.literal('frame'),
+        entityType: z.literal('shot'),
         entityId: z.string(),
         artifact: z.enum(['thumbnail', 'variant-image', 'video', 'audio']),
         snapshotInputHash: z.string(),
@@ -514,10 +514,10 @@ export function getLocationChannel(locationId?: string): RealtimeChannelApi {
 
 /**
  * Get a channel for per-frame prompt regeneration streaming.
- * @param frameId - The frame ID to use as the channel identifier
+ * @param shotId - The frame ID to use as the channel identifier
  */
-export function getFramePromptChannel(frameId?: string): RealtimeChannelApi {
-  return frameId
-    ? realtimeChannel(`frame-prompt:${frameId}`)
+export function getFramePromptChannel(shotId?: string): RealtimeChannelApi {
+  return shotId
+    ? realtimeChannel(`frame-prompt:${shotId}`)
     : noopChannel('frame-prompt');
 }

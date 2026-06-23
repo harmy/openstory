@@ -3,7 +3,7 @@
  * Analyzes frames + sequence to determine what failed and whether smart retry is possible.
  */
 
-import type { Frame } from '@/lib/db/schema/frames';
+import type { Shot } from '@/lib/db/schema/shots';
 import type { Sequence } from '@/lib/db/schema/sequences';
 
 type FailureCategory =
@@ -14,7 +14,7 @@ type FailureCategory =
   | 'music-prompt';
 
 type FrameFailure = {
-  frameId: string;
+  shotId: string;
   orderIndex: number;
   sceneTitle: string;
   error: string | null;
@@ -23,7 +23,7 @@ type FrameFailure = {
 type FailureGroup = {
   category: FailureCategory;
   label: string;
-  frames: FrameFailure[];
+  shots: FrameFailure[];
   error?: string | null;
 };
 
@@ -36,7 +36,7 @@ export type FailureSummary = {
   error?: string | null;
 };
 
-function getSceneTitle(frame: Frame): string {
+function getSceneTitle(frame: Shot): string {
   return frame.metadata?.metadata?.title || `Scene ${frame.orderIndex + 1}`;
 }
 
@@ -65,11 +65,11 @@ function buildHeadline(
   for (const group of groups) {
     if (group.category === 'image') {
       parts.push(
-        `${group.frames.length} image${group.frames.length !== 1 ? 's' : ''} failed`
+        `${group.shots.length} image${group.shots.length !== 1 ? 's' : ''} failed`
       );
     } else if (group.category === 'motion') {
       parts.push(
-        `${group.frames.length} motion video${group.frames.length !== 1 ? 's' : ''} failed`
+        `${group.shots.length} motion video${group.shots.length !== 1 ? 's' : ''} failed`
       );
     } else if (group.category === 'music') {
       parts.push('music generation failed');
@@ -82,7 +82,7 @@ function buildHeadline(
 }
 
 export function analyzeFailures(
-  frames: Frame[],
+  frames: Shot[],
   sequence: Sequence
 ): FailureSummary {
   const groups: FailureGroup[] = [];
@@ -108,8 +108,8 @@ export function analyzeFailures(
     groups.push({
       category: 'image',
       label: `${failedImageFrames.length} of ${frames.length} images failed`,
-      frames: failedImageFrames.map((f) => ({
-        frameId: f.id,
+      shots: failedImageFrames.map((f) => ({
+        shotId: f.id,
         orderIndex: f.orderIndex,
         sceneTitle: getSceneTitle(f),
         error: f.thumbnailError,
@@ -125,8 +125,8 @@ export function analyzeFailures(
     groups.push({
       category: 'motion',
       label: `${failedMotionFrames.length} of ${frames.length} motion videos failed`,
-      frames: failedMotionFrames.map((f) => ({
-        frameId: f.id,
+      shots: failedMotionFrames.map((f) => ({
+        shotId: f.id,
         orderIndex: f.orderIndex,
         sceneTitle: getSceneTitle(f),
         error: f.videoError,
@@ -146,8 +146,8 @@ export function analyzeFailures(
     groups.push({
       category: 'motion-prompts',
       label: 'Motion prompts were not generated',
-      frames: framesWithImageButNoMotionPrompt.map((f) => ({
-        frameId: f.id,
+      shots: framesWithImageButNoMotionPrompt.map((f) => ({
+        shotId: f.id,
         orderIndex: f.orderIndex,
         sceneTitle: getSceneTitle(f),
         error: null,
@@ -160,7 +160,7 @@ export function analyzeFailures(
     groups.push({
       category: 'music',
       label: 'Music generation failed',
-      frames: [],
+      shots: [],
       error: sequence.musicError,
     });
   }
@@ -172,7 +172,7 @@ export function analyzeFailures(
       groups.push({
         category: 'music-prompt',
         label: 'Music prompt was not generated',
-        frames: [],
+        shots: [],
       });
     }
   }
@@ -191,7 +191,7 @@ export function analyzeFailures(
   }
 
   const totalFailures = groups.reduce(
-    (sum, g) => sum + Math.max(g.frames.length, 1),
+    (sum, g) => sum + Math.max(g.shots.length, 1),
     0
   );
 

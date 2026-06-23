@@ -96,15 +96,15 @@ function reducer(
  * frame the whole time.
  */
 export function useFramePromptStream(
-  frameId: string | undefined,
+  shotId: string | undefined,
   enabled: boolean = true
 ) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const channelId = frameId ? `frame-prompt:${frameId}` : undefined;
+  const channelId = shotId ? `frame-prompt:${shotId}` : undefined;
   const active = enabled && Boolean(channelId);
 
   // Replay history on mount so a user who navigates back mid-regen sees the
-  // accumulated text and the right status. Re-keys on frameId so switching
+  // accumulated text and the right status. Re-keys on shotId so switching
   // frames clears and re-fetches.
   useEffect(() => {
     if (!active || !channelId) {

@@ -31,7 +31,7 @@ import type {
 import type {
   CharacterSheetWorkflowInput,
   FrameImageSceneSnapshot,
-  FrameImagesWorkflowInput,
+  ShotImagesWorkflowInput,
   LibraryTalentSheetWorkflowInput,
   LocationSheetWorkflowInput,
 } from '@/lib/workflow/types';
@@ -247,7 +247,7 @@ function sortedRefHashes(values: Array<string | null | undefined>): string[] {
  *
  * Single source of truth so the image-generation **stamp**
  * (`computeImageWorkflowHashCurrent`) and the staleness **verify**
- * (`buildRegenerateFrameSnapshot`) cannot drift — drift on the element /
+ * (`buildRegenerateShotSnapshot`) cannot drift — drift on the element /
  * location sets (verify hard-coded them to `[]` and used a different location
  * matcher) made every element- or location-bearing frame report permanently
  * "Inputs changed". See #867.
@@ -334,7 +334,7 @@ export function computeFrameImageSceneHash(
  * validation.
  */
 export async function computeFrameImagesHashFromDto(
-  input: FrameImagesWorkflowInput & {
+  input: ShotImagesWorkflowInput & {
     sceneSnapshots: FrameImageSceneSnapshot[];
   }
 ): Promise<string> {

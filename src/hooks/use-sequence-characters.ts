@@ -15,8 +15,8 @@ export const sequenceCharacterKeys = {
   all: ['sequence-characters'] as const,
   list: (sequenceId: string) =>
     [...sequenceCharacterKeys.all, 'list', sequenceId] as const,
-  framesForCharacter: (sequenceId: string, characterId: string) =>
-    [...sequenceCharacterKeys.all, 'frames', sequenceId, characterId] as const,
+  shotsForCharacter: (sequenceId: string, characterId: string) =>
+    [...sequenceCharacterKeys.all, 'shots', sequenceId, characterId] as const,
 };
 
 export function useSequenceCharacters(sequenceId: string) {
@@ -55,7 +55,7 @@ export function useFrameIdsForCharacter(
   characterId: string
 ) {
   return useQuery({
-    queryKey: sequenceCharacterKeys.framesForCharacter(sequenceId, characterId),
+    queryKey: sequenceCharacterKeys.shotsForCharacter(sequenceId, characterId),
     queryFn: () =>
       getFrameIdsForCharacterFn({ data: { sequenceId, characterId } }),
     enabled: !!sequenceId && !!characterId,
@@ -78,7 +78,7 @@ export function useRecastCharacter() {
         queryKey: sequenceCharacterKeys.all,
       });
       // Invalidate frames that contain this character
-      void queryClient.invalidateQueries({ queryKey: ['frames'] });
+      void queryClient.invalidateQueries({ queryKey: ['shots'] });
     },
   });
 }

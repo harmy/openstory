@@ -91,7 +91,7 @@ export const ReplaceElementPopover: React.FC<ReplaceElementPopoverProps> = ({
         onSuccess: (result) => {
           setOpen(false);
           setPendingFile(null);
-          const count = result.affectedFrameIds.length;
+          const count = result.affectedShotIds.length;
           toast.info(
             count > 0
               ? `Replacing ${token} — editing ${count} frame${count === 1 ? '' : 's'}…`

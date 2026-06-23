@@ -15,7 +15,7 @@ interface UploadImageOptions {
   imageUrl: string;
   teamId: string;
   sequenceId: string;
-  frameId: string;
+  shotId: string;
 }
 
 type StorageResult = {
@@ -30,7 +30,7 @@ type StorageResult = {
 export async function uploadImageToStorage(
   options: UploadImageOptions
 ): Promise<StorageResult> {
-  const { imageUrl, teamId, sequenceId, frameId } = options;
+  const { imageUrl, teamId, sequenceId, shotId } = options;
 
   // Download image from URL first to get content type
   const response = await fetch(imageUrl);
@@ -54,7 +54,7 @@ export async function uploadImageToStorage(
 
   // Generate ULID-based filename
   const ulid = generateId();
-  const storagePath = `teams/${teamId}/sequences/${sequenceId}/frames/${frameId}/${ulid}.${extension}`;
+  const storagePath = `teams/${teamId}/sequences/${sequenceId}/frames/${shotId}/${ulid}.${extension}`;
 
   // Get proper MIME type for the extension
   const contentType = getMimeTypeFromExtension(extension);

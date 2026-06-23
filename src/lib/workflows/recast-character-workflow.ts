@@ -17,7 +17,7 @@
  *   - The chained `character-sheet` and `regenerate-frames` child invocations
  *     are stubbed out pending Pattern 3 (fan-out helpers) — exercised in a
  *     later batch after all leaves are ported. The `build-regenerate-snapshot`
- *     step lives in `regenerateFramesIfNeeded` for diff parity with the
+ *     step lives in `regenerateShotsIfNeeded` for diff parity with the
  *     QStash original; it becomes reachable once the sheet stub is replaced
  *     with a real child spawn. */
 
@@ -31,12 +31,12 @@ import type {
   CharacterSheetWorkflowInput,
   CharacterSheetWorkflowResult,
   RecastCharacterWorkflowInput,
-  RegenerateFramesWorkflowInput,
+  RegenerateShotsWorkflowInput,
 } from '@/lib/workflow/types';
 import {
-  buildRegenerateFrameSnapshot,
-  computeRegenerateFramesBatchHash,
-} from '@/lib/workflows/regenerate-frames-snapshot';
+  buildRegenerateShotSnapshot,
+  computeRegenerateShotsBatchHash,
+} from '@/lib/workflows/regenerate-shots-snapshot';
 import {
   computeCharacterSheetHashFromDto,
   resolveTalentSheetHash,
@@ -49,8 +49,8 @@ const logger = getLogger(['openstory', 'workflow', 'recast-character']);
 
 type RecastCharacterWorkflowResult = {
   sheetImageUrl: string;
-  framesRegenerated: number;
-  framesFailed: number;
+  shotsRegenerated: number;
+  shotsFailed: number;
 };
 
 /**
@@ -61,15 +61,15 @@ type RecastCharacterWorkflowResult = {
  * Lives in its own helper to mirror the QStash original's flow: snapshot
  * building runs as its own step before the child kicks off.
  */
-async function regenerateFramesIfNeeded(
+async function regenerateShotsIfNeeded(
   step: WorkflowStep,
   env: CloudflareEnv,
   parentInstanceId: string,
   scopedDb: ScopedDb,
   input: RecastCharacterWorkflowInput
-): Promise<{ framesRegenerated: number; framesFailed: number }> {
-  if (input.affectedFrameIds.length === 0) {
-    return { framesRegenerated: 0, framesFailed: 0 };
+): Promise<{ shotsRegenerated: number; shotsFailed: number }> {
+  if (input.affectedShotIds.length === 0) {
+    return { shotsRegenerated: 0, shotsFailed: 0 };
   }
 
   // The actual payload is rebuilt inside the spawn step from the previous
@@ -77,8 +77,8 @@ async function regenerateFramesIfNeeded(
   // back from a separate step.do that wraps the snapshot construction —
   // but here we keep it inline because the `build-regenerate-snapshot`
   // step above already computed everything we need.
-  await spawnAndAwaitChild<RegenerateFramesWorkflowInput, unknown>(step, {
-    binding: env.REGENERATE_FRAMES_WORKFLOW,
+  await spawnAndAwaitChild<RegenerateShotsWorkflowInput, unknown>(step, {
+    binding: env.REGENERATE_SHOTS_WORKFLOW,
     parentBindingName: 'RECAST_CHARACTER_WORKFLOW',
     parentInstanceId,
     childId: `regenerate-frames:character:${input.characterDbId}`,
@@ -89,15 +89,15 @@ async function regenerateFramesIfNeeded(
     awaitStepName: 'await-regenerate-frames',
   });
   return {
-    framesRegenerated: input.affectedFrameIds.length,
-    framesFailed: 0,
+    shotsRegenerated: input.affectedShotIds.length,
+    shotsFailed: 0,
   };
 }
 
 async function buildRegeneratePayload(
   scopedDb: ScopedDb,
   input: RecastCharacterWorkflowInput
-): Promise<RegenerateFramesWorkflowInput> {
+): Promise<RegenerateShotsWorkflowInput> {
   const sequenceId = input.sequenceId;
   if (!sequenceId) {
     throw new NonRetryableError(
@@ -116,11 +116,11 @@ async function buildRegeneratePayload(
     scopedDb.characters.listWithSheets(sequenceId),
     scopedDb.sequenceLocations.listWithReferences(sequenceId),
     scopedDb.sequenceElements.list(sequenceId),
-    scopedDb.frames.getByIds(input.affectedFrameIds),
+    scopedDb.shots.getByIds(input.affectedShotIds),
   ]);
-  if (frames.length !== input.affectedFrameIds.length) {
+  if (frames.length !== input.affectedShotIds.length) {
     const found = new Set(frames.map((f) => f.id));
-    const missing = input.affectedFrameIds.filter((id) => !found.has(id));
+    const missing = input.affectedShotIds.filter((id) => !found.has(id));
     throw new Error(
       `[RecastCharacterWorkflow:cf] Missing frames for ${input.characterName}: ${missing.join(', ')}`
     );
@@ -128,7 +128,7 @@ async function buildRegeneratePayload(
   const aspectRatio = sequence.aspectRatio;
   const frameSnapshots = await Promise.all(
     frames.map((frame) =>
-      buildRegenerateFrameSnapshot({
+      buildRegenerateShotSnapshot({
         frame,
         characters,
         locations,
@@ -139,12 +139,12 @@ async function buildRegeneratePayload(
     )
   );
   const partial = { sequenceId, imageModel, aspectRatio, frameSnapshots };
-  const snapshotInputHash = await computeRegenerateFramesBatchHash(partial);
+  const snapshotInputHash = await computeRegenerateShotsBatchHash(partial);
   return {
     userId: input.userId,
     teamId: input.teamId,
     sequenceId,
-    frameIds: input.affectedFrameIds,
+    shotIds: input.affectedShotIds,
     triggerKind: 'character' as const,
     triggerId: input.characterDbId,
     imageModel,
@@ -169,7 +169,7 @@ export class RecastCharacterWorkflow extends OpenStoryWorkflowEntrypoint<RecastC
       'build-character-sheet-snapshot',
       async (): Promise<CharacterSheetWorkflowInput> => {
         logger.info(
-          `[RecastCharacterWorkflow:cf] Starting recast for ${input.characterName} with ${input.affectedFrameIds.length} affected frames`
+          `[RecastCharacterWorkflow:cf] Starting recast for ${input.characterName} with ${input.affectedShotIds.length} affected frames`
         );
         const talentSheetInputHash = await resolveTalentSheetHash(
           scopedDb,
@@ -209,7 +209,7 @@ export class RecastCharacterWorkflow extends OpenStoryWorkflowEntrypoint<RecastC
     });
 
     const sheetImageUrl = sheetResult.sheetImageUrl;
-    const { framesRegenerated, framesFailed } = await regenerateFramesIfNeeded(
+    const { shotsRegenerated, shotsFailed } = await regenerateShotsIfNeeded(
       step,
       this.env,
       event.instanceId,
@@ -217,7 +217,7 @@ export class RecastCharacterWorkflow extends OpenStoryWorkflowEntrypoint<RecastC
       input
     );
 
-    return { sheetImageUrl, framesRegenerated, framesFailed };
+    return { sheetImageUrl, shotsRegenerated, shotsFailed };
   }
 
   protected override async onFailure({

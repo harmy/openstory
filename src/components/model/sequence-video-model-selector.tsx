@@ -14,7 +14,7 @@ import { useActiveVideoModel } from '@/hooks/use-active-video-model';
 import {
   useSequenceVideoModels,
   useSequenceVideoVariants,
-} from '@/hooks/use-frames';
+} from '@/hooks/use-shots';
 import {
   IMAGE_TO_VIDEO_MODELS,
   isValidImageToVideoModel,

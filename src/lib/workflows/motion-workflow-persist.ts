@@ -14,8 +14,8 @@
  * own the write shapes and call sequence.
  */
 
-import type { NewFrame, NewFrameVariant } from '@/lib/db/schema';
-import type { VariantType } from '@/lib/db/schema/frame-variants';
+import type { NewShot, NewShotVariant } from '@/lib/db/schema';
+import type { VariantType } from '@/lib/db/schema/shot-variants';
 
 export type MotionStorageResult = { url: string; path: string };
 
@@ -26,21 +26,21 @@ export type MotionStorageResult = { url: string; path: string };
  * `PersistImageScopedDb`).
  */
 export type PersistMotionScopedDb = {
-  frames: {
+  shots: {
     update: (
       id: string,
-      data: Partial<NewFrame>,
+      data: Partial<NewShot>,
       opts?: { throwOnMissing?: boolean }
     ) => Promise<{ id: string } | undefined>;
   };
-  frameVariants: {
+  shotVariants: {
     updateByFrameAndModel: (
-      frameId: string,
+      shotId: string,
       type: VariantType,
       model: string,
-      data: Partial<NewFrameVariant>
+      data: Partial<NewShotVariant>
     ) => Promise<{ id: string } | null>;
-    upsert: (data: NewFrameVariant) => Promise<{ id: string }>;
+    upsert: (data: NewShotVariant) => Promise<{ id: string }>;
   };
 };
 
@@ -51,7 +51,7 @@ export type PersistMotionScopedDb = {
  */
 export type MotionVideoProgressPayload =
   | {
-      frameId: string;
+      shotId: string;
       status: 'completed';
       videoUrl: string;
       model: string;
@@ -60,7 +60,7 @@ export type MotionVideoProgressPayload =
       variantOnly?: boolean;
     }
   | {
-      frameId: string;
+      shotId: string;
       status: 'failed';
       model: string;
       variantOnly?: boolean;
@@ -75,8 +75,8 @@ export type MotionEmit = (
 ) => Promise<void>;
 
 type MotionWrites = {
-  frame: Partial<NewFrame>;
-  variant: Partial<NewFrameVariant>;
+  frame: Partial<NewShot>;
+  variant: Partial<NewShotVariant>;
 };
 
 /**
@@ -159,7 +159,7 @@ export type PersistMotionOutcome =
  */
 export async function persistMotionCompletion(opts: {
   scopedDb: PersistMotionScopedDb;
-  frameId: string;
+  shotId: string;
   model: string;
   upload: MotionStorageResult;
   durationMs: number;
@@ -175,7 +175,7 @@ export async function persistMotionCompletion(opts: {
 }): Promise<PersistMotionOutcome> {
   const {
     scopedDb,
-    frameId,
+    shotId,
     model,
     upload,
     durationMs,
@@ -195,8 +195,8 @@ export async function persistMotionCompletion(opts: {
   if (variantOnly) {
     // Only this model's variant row; the primary `frames.video*` are untouched.
     // A null update means the frame (and its cascade-deleted variant) is gone.
-    const updated = await scopedDb.frameVariants.updateByFrameAndModel(
-      frameId,
+    const updated = await scopedDb.shotVariants.updateByFrameAndModel(
+      shotId,
       'video',
       model,
       writes.variant
@@ -204,7 +204,7 @@ export async function persistMotionCompletion(opts: {
     if (!updated) return { status: 'frame-deleted' };
 
     await emit('generation.video:progress', {
-      frameId,
+      shotId,
       status: 'completed',
       videoUrl: upload.url,
       model,
@@ -215,20 +215,20 @@ export async function persistMotionCompletion(opts: {
     return { status: 'completed', videoUrl: upload.url };
   }
 
-  const updatedFrame = await scopedDb.frames.update(frameId, writes.frame, {
+  const updatedFrame = await scopedDb.shots.update(shotId, writes.frame, {
     throwOnMissing: false,
   });
   if (!updatedFrame) return { status: 'frame-deleted' };
 
-  await scopedDb.frameVariants.updateByFrameAndModel(
-    frameId,
+  await scopedDb.shotVariants.updateByFrameAndModel(
+    shotId,
     'video',
     model,
     writes.variant
   );
 
   await emit('generation.video:progress', {
-    frameId,
+    shotId,
     status: 'completed',
     videoUrl: upload.url,
     model,
@@ -253,7 +253,7 @@ export async function persistMotionCompletion(opts: {
  */
 export async function persistMotionFailure(opts: {
   scopedDb: PersistMotionScopedDb;
-  frameId: string;
+  shotId: string;
   sequenceId: string;
   model: string;
   error: string;
@@ -265,7 +265,7 @@ export async function persistMotionFailure(opts: {
 }): Promise<void> {
   const {
     scopedDb,
-    frameId,
+    shotId,
     sequenceId,
     model,
     error,
@@ -277,20 +277,20 @@ export async function persistMotionFailure(opts: {
   const writes = buildMotionFailedWrites({ error });
 
   if (!variantOnly) {
-    await scopedDb.frames.update(frameId, writes.frame, {
+    await scopedDb.shots.update(shotId, writes.frame, {
       throwOnMissing: false,
     });
   }
 
-  const updated = await scopedDb.frameVariants.updateByFrameAndModel(
-    frameId,
+  const updated = await scopedDb.shotVariants.updateByFrameAndModel(
+    shotId,
     'video',
     model,
     writes.variant
   );
   if (!updated) {
-    await scopedDb.frameVariants.upsert({
-      frameId,
+    await scopedDb.shotVariants.upsert({
+      shotId,
       sequenceId,
       variantType: 'video',
       model,
@@ -300,7 +300,7 @@ export async function persistMotionFailure(opts: {
   }
 
   await emit('generation.video:progress', {
-    frameId,
+    shotId,
     status: 'failed',
     model,
     // Carry the reason so the cache updater writes `videoError` live (skip for

@@ -17,7 +17,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { SequencePlayer } from '@/components/theatre/sequence-player';
 import { useSequenceExport } from '@/components/theatre/use-sequence-export';
-import { useFramesBySequence } from '@/hooks/use-frames';
+import { useShotsBySequence } from '@/hooks/use-shots';
 import { useSetSequenceMusic } from '@/hooks/use-sequences';
 import type { ExportProgress } from '@/lib/sequence-player/export';
 import type { Sequence } from '@/types/database';
@@ -32,7 +32,7 @@ type TheatreViewProps = {
 
 export const TheatreView: React.FC<TheatreViewProps> = ({ sequence }) => {
   const posthog = usePostHog();
-  const { data: frames } = useFramesBySequence(sequence.id);
+  const { data: frames } = useShotsBySequence(sequence.id);
   const sequenceExport = useSequenceExport(sequence);
   const setMusicEnabled = useSetSequenceMusic(sequence.id);
 

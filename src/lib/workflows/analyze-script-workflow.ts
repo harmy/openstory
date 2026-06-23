@@ -45,8 +45,8 @@ import type {
   CharacterBibleWorkflowInput,
   ElementSheetWorkflowInput,
   ElementSheetWorkflowResult,
-  FrameImagesWorkflowInput,
-  FrameImagesWorkflowResult,
+  ShotImagesWorkflowInput,
+  ShotImagesWorkflowResult,
   LocationBibleWorkflowInput,
   LocationMatchingWorkflowInput,
   LocationMatchingWorkflowOutput,
@@ -470,7 +470,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
         };
       });
 
-    const frameImagesPayload: FrameImagesWorkflowInput = {
+    const shotImagesPayload: ShotImagesWorkflowInput = {
       userId: input.userId,
       teamId: input.teamId,
       sequenceId,
@@ -484,8 +484,8 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
       aspectRatio,
       sceneSnapshots,
     };
-    frameImagesPayload.snapshotInputHash = await computeFrameImagesHashFromDto({
-      ...frameImagesPayload,
+    shotImagesPayload.snapshotInputHash = await computeFrameImagesHashFromDto({
+      ...shotImagesPayload,
       sceneSnapshots,
     });
 
@@ -501,14 +501,14 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
     // wrapped in `Promise.allSettled` so a rejection is captured (not thrown)
     // and surfaced together below after recording the analysis duration.
     const [frameImagesSettled] = await Promise.allSettled([
-      spawnAndAwaitChild<FrameImagesWorkflowInput, FrameImagesWorkflowResult>(
+      spawnAndAwaitChild<ShotImagesWorkflowInput, ShotImagesWorkflowResult>(
         step,
         {
-          binding: this.env.FRAME_IMAGES_WORKFLOW,
+          binding: this.env.SHOT_IMAGES_WORKFLOW,
           parentBindingName: PARENT_BINDING_NAME,
           parentInstanceId,
           childId: `frame-images:${sequenceId ?? 'no-seq'}`,
-          childPayload: frameImagesPayload,
+          childPayload: shotImagesPayload,
           spawnStepName: 'spawn-frame-images',
           awaitStepName: 'await-frame-images',
           // Must exceed the child's own budget — under a many-sequence burst
@@ -639,7 +639,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
         const characterTags = scene.continuity?.characterTags;
 
         return {
-          frameId: matchedFrame?.frameId ?? '',
+          shotId: matchedFrame?.shotId ?? '',
           imageUrl,
           // Primary-model prompt (fallback / single-model). `motion-batch`
           // re-assembles per model from `motionPrompt` for the alternates.
@@ -675,7 +675,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
           teamId: input.teamId,
           sequenceId,
           includeMusic: shouldGenerateMusic,
-          frames: batchFrames,
+          shots: batchFrames,
           videoModels,
           audioModels: shouldGenerateMusic ? audioModels : undefined,
           music: shouldGenerateMusic

@@ -67,26 +67,36 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
     step: WorkflowStep,
     scopedDb: ScopedDb
   ): Promise<UpscaleShotVariantWorkflowResult> {
-    const input = event.payload;
+    const rawInput = event.payload;
+    // Back-compat: accept shotId or frameId from in-flight instances serialized before #906
+    // TODO(#906): remove frameId shim one release after deploy
+    const input = {
+      ...rawInput,
+      shotId:
+        rawInput.shotId ??
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- back-compat shim for in-flight CF Workflow instances serialized before #906
+        (rawInput as { frameId?: string }).frameId ??
+        undefined,
+    };
     const workflowRunId = event.instanceId;
 
-    const { sequenceId, teamId, frameId } = input;
-    if (!sequenceId || !teamId || !frameId) {
+    const { sequenceId, teamId, shotId } = input;
+    if (!sequenceId || !teamId || !shotId) {
       throw new WorkflowValidationError('sequenceId and teamId are required');
     }
 
     logger.info(
-      `[UpscaleShotVariantWorkflow:cf] Starting upscale for frame ${frameId}`
+      `[UpscaleShotVariantWorkflow:cf] Starting upscale for frame ${shotId}`
     );
 
     const upscaleResult = await step.do('upscale-image', async () => {
       await getGenerationChannel(sequenceId).emit('generation.image:progress', {
-        frameId: frameId,
+        shotId: shotId,
         status: 'generating',
       });
 
-      const frame = await scopedDb.frames.update(
-        frameId,
+      const frame = await scopedDb.shots.update(
+        shotId,
         {
           thumbnailStatus: 'generating',
           thumbnailWorkflowRunId: workflowRunId,
@@ -96,7 +106,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
 
       if (!frame) {
         logger.info(
-          `[UpscaleShotVariantWorkflow:cf] Frame ${frameId} was deleted, skipping workflow`
+          `[UpscaleShotVariantWorkflow:cf] Frame ${shotId} was deleted, skipping workflow`
         );
         return null;
       }
@@ -154,7 +164,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
         usedOwnKey: upscaleResult.usedOwnKey,
         description: 'Variant upscale (nano_banana_2)',
         idempotencyKey: `${event.instanceId}:upscale`,
-        metadata: { frameId: input.frameId, sequenceId: input.sequenceId },
+        metadata: { shotId: input.shotId, sequenceId: input.sequenceId },
         workflowName: 'UpscaleShotVariantWorkflow',
       });
     });
@@ -167,7 +177,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
         imageUrl: upscaleResult.imageUrl,
         teamId: teamId,
         sequenceId: sequenceId,
-        frameId: input.frameId,
+        shotId: input.shotId,
       });
 
       if (!result.url) {
@@ -178,8 +188,8 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
     });
 
     await step.do('update-frame', async () => {
-      const updatedFrame = await scopedDb.frames.update(
-        input.frameId,
+      const updatedFrame = await scopedDb.shots.update(
+        input.shotId,
         {
           thumbnailUrl: storageResult.url,
           thumbnailPath: storageResult.path || null,
@@ -191,7 +201,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
 
       if (!updatedFrame) {
         logger.info(
-          `[UpscaleShotVariantWorkflow:cf] Frame ${input.frameId} was deleted, skipping final update`
+          `[UpscaleShotVariantWorkflow:cf] Frame ${input.shotId} was deleted, skipping final update`
         );
         return;
       }
@@ -199,14 +209,14 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
       await getGenerationChannel(input.sequenceId).emit(
         'generation.image:progress',
         {
-          frameId: input.frameId,
+          shotId: input.shotId,
           status: 'completed',
           thumbnailUrl: storageResult.url,
         }
       );
 
       logger.info(
-        `[UpscaleShotVariantWorkflow:cf] Upscale completed for frame ${input.frameId}`
+        `[UpscaleShotVariantWorkflow:cf] Upscale completed for frame ${input.shotId}`
       );
     });
 
@@ -228,12 +238,12 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
     const input = event.payload;
 
     logger.error(
-      `[UpscaleShotVariantWorkflow:cf] Upscale failed for frame ${input.frameId}: ${error}`
+      `[UpscaleShotVariantWorkflow:cf] Upscale failed for frame ${input.shotId}: ${error}`
     );
 
-    if (input.frameId && input.teamId) {
-      await scopedDb.frames.update(
-        input.frameId,
+    if (input.shotId && input.teamId) {
+      await scopedDb.shots.update(
+        input.shotId,
         {
           thumbnailStatus: 'completed',
           thumbnailGeneratedAt: new Date(),
@@ -243,7 +253,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
 
       await getGenerationChannel(input.sequenceId).emit(
         'generation.image:progress',
-        { frameId: input.frameId, status: 'completed' }
+        { shotId: input.shotId, status: 'completed' }
       );
     }
   }

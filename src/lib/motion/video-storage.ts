@@ -20,7 +20,7 @@ type UploadVideoOptions = {
   videoUrl: string;
   teamId: string;
   sequenceId: string;
-  frameId: string;
+  shotId: string;
   sequenceTitle: string;
   sceneTitle?: string;
 };
@@ -62,7 +62,7 @@ export async function uploadVideoToStorage(
   options: UploadVideoOptions
 ): Promise<StorageResult> {
   try {
-    const { videoUrl, teamId, sequenceId, frameId, sequenceTitle, sceneTitle } =
+    const { videoUrl, teamId, sequenceId, shotId, sequenceTitle, sceneTitle } =
       options;
 
     // Download video from URL first
@@ -98,12 +98,12 @@ export async function uploadVideoToStorage(
     const sequenceSlug = slugify(sequenceTitle) || 'video';
     const sceneSlug = sceneTitle ? slugify(sceneTitle) : 'scene';
     const filename = `${sequenceSlug}_${sceneSlug}_${shortHash}_openstory.${extension}`;
-    const storagePath = `teams/${teamId}/sequences/${sequenceId}/frames/${frameId}/${filename}`;
+    const storagePath = `teams/${teamId}/sequences/${sequenceId}/frames/${shotId}/${filename}`;
 
     logger.info(`Generated filename with hash: ${shortHash}`, {
       ulid,
       filename,
-      frameId,
+      shotId,
     });
 
     // Get proper MIME type for the extension

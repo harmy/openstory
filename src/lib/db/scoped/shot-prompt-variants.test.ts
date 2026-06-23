@@ -16,8 +16,8 @@
 import type { Database } from '@/lib/db/client';
 import { generateId } from '@/lib/db/id';
 import {
-  framePromptVariants,
-  frames,
+  shotPromptVariants,
+  shots,
   sequenceMusicPromptVariants,
   sequences,
   styles,
@@ -30,19 +30,19 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
-import { createFramePromptVariantsMethods } from './frame-prompt-variants';
+import { createShotPromptVariantsMethods } from './shot-prompt-variants';
 import { createSequenceMusicPromptVariantsMethods } from './sequence-music-prompt-variants';
 
 let client: Client;
 let db: Database;
 let teamId = '';
 let sequenceId = '';
-let frameId = '';
+let shotId = '';
 
 async function seed() {
-  await db.delete(framePromptVariants);
+  await db.delete(shotPromptVariants);
   await db.delete(sequenceMusicPromptVariants);
-  await db.delete(frames);
+  await db.delete(shots);
   await db.delete(sequences);
   await db.delete(styles);
   await db.delete(teams);
@@ -75,12 +75,12 @@ async function seed() {
     title: 'S',
     styleId: style.id,
   });
-  const [frame] = await db
-    .insert(frames)
+  const [shot] = await db
+    .insert(shots)
     .values({ sequenceId, orderIndex: 0 })
     .returning();
-  if (!frame) throw new Error('test setup: frame insert returned nothing');
-  frameId = frame.id;
+  if (!shot) throw new Error('test setup: shot insert returned nothing');
+  shotId = shot.id;
 }
 
 beforeAll(async () => {
@@ -99,21 +99,21 @@ beforeEach(async () => {
 
 describe('frame_prompt_variants helper', () => {
   it('user-edit with null inputHash appends a row and clears the cached hash', async () => {
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     // Seed the cached column to mimic an existing AI-generated prompt.
     await db
-      .update(frames)
+      .update(shots)
       .set({
         imagePrompt: 'AI-generated prompt v1',
         visualPromptInputHash: 'hash-v1',
       })
-      .where(eq(frames.id, frameId));
+      .where(eq(shots.id, shotId));
 
     // A user-edit recorded without an upstream hash (e.g., context was
     // uncomputable at write time) writes null to both the row and the cache.
     const variant = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'User edited prompt',
       source: 'user-edit',
@@ -127,26 +127,26 @@ describe('frame_prompt_variants helper', () => {
 
     const [refreshed] = await db
       .select()
-      .from(frames)
-      .where(eq(frames.id, frameId));
+      .from(shots)
+      .where(eq(shots.id, shotId));
     if (!refreshed) throw new Error('test setup: refresh failed');
     expect(refreshed.imagePrompt).toBe('User edited prompt');
     expect(refreshed.visualPromptInputHash).toBeNull();
   });
 
   it('user-edit with a real inputHash stamps both the row and the cached column', async () => {
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     await db
-      .update(frames)
+      .update(shots)
       .set({
         imagePrompt: 'AI-generated prompt v1',
         visualPromptInputHash: 'hash-v1',
       })
-      .where(eq(frames.id, frameId));
+      .where(eq(shots.id, shotId));
 
     const variant = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'User edited prompt',
       source: 'user-edit',
@@ -159,18 +159,18 @@ describe('frame_prompt_variants helper', () => {
 
     const [refreshed] = await db
       .select()
-      .from(frames)
-      .where(eq(frames.id, frameId));
+      .from(shots)
+      .where(eq(shots.id, shotId));
     if (!refreshed) throw new Error('test setup: refresh failed');
     expect(refreshed.imagePrompt).toBe('User edited prompt');
     expect(refreshed.visualPromptInputHash).toBe('hash-at-edit-time');
   });
 
   it('regenerated prompt populates input_hash on both the row and the cached column', async () => {
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     const variant = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI prompt v2',
       source: 'regenerated',
@@ -183,18 +183,18 @@ describe('frame_prompt_variants helper', () => {
 
     const [refreshed] = await db
       .select()
-      .from(frames)
-      .where(eq(frames.id, frameId));
+      .from(shots)
+      .where(eq(shots.id, shotId));
     if (!refreshed) throw new Error('test setup: refresh failed');
     expect(refreshed.imagePrompt).toBe('AI prompt v2');
     expect(refreshed.visualPromptInputHash).toBe('context-hash-abc');
   });
 
   it('preserves prior AI text in the variant chain after a user edit (recoverable history)', async () => {
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI prompt v1',
       source: 'ai-generated',
@@ -202,7 +202,7 @@ describe('frame_prompt_variants helper', () => {
       analysisModel: 'anthropic/claude-haiku-4.5',
     });
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'User edited prompt',
       source: 'user-edit',
@@ -210,7 +210,7 @@ describe('frame_prompt_variants helper', () => {
       analysisModel: null,
     });
 
-    const history = await methods.listByFrame(frameId, 'visual');
+    const history = await methods.listByFrame(shotId, 'visual');
     expect(history).toHaveLength(2);
     // Newest first.
     const [latest, prior] = history;
@@ -226,14 +226,14 @@ describe('frame_prompt_variants helper', () => {
     // 'regenerated' : 'ai-generated'. A regression that swaps the two would
     // mislabel every regeneration as a first generation (or vice versa) and
     // corrupt prompt history.
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
-    const previousBeforeFirst = await methods.getLatest(frameId, 'visual');
+    const previousBeforeFirst = await methods.getLatest(shotId, 'visual');
     expect(previousBeforeFirst).toBeNull();
     const firstSource = previousBeforeFirst ? 'regenerated' : 'ai-generated';
 
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI prompt v1',
       source: firstSource,
@@ -241,12 +241,12 @@ describe('frame_prompt_variants helper', () => {
       analysisModel: 'anthropic/claude-haiku-4.5',
     });
 
-    const previousBeforeSecond = await methods.getLatest(frameId, 'visual');
+    const previousBeforeSecond = await methods.getLatest(shotId, 'visual');
     expect(previousBeforeSecond?.source).toBe('ai-generated');
     const secondSource = previousBeforeSecond ? 'regenerated' : 'ai-generated';
 
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI prompt v2',
       source: secondSource,
@@ -255,7 +255,7 @@ describe('frame_prompt_variants helper', () => {
     });
 
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'User polished it',
       source: 'user-edit',
@@ -263,7 +263,7 @@ describe('frame_prompt_variants helper', () => {
       analysisModel: null,
     });
 
-    const history = await methods.listByFrame(frameId, 'visual');
+    const history = await methods.listByFrame(shotId, 'visual');
     expect(history.map((r) => r.source)).toEqual([
       'user-edit',
       'regenerated',
@@ -272,8 +272,8 @@ describe('frame_prompt_variants helper', () => {
 
     const [refreshed] = await db
       .select()
-      .from(frames)
-      .where(eq(frames.id, frameId));
+      .from(shots)
+      .where(eq(shots.id, shotId));
     if (!refreshed) throw new Error('test setup: refresh failed');
     // Cached column reflects the latest write (user-edit) and the hash is
     // cleared since the cached value is no longer derived from upstream.
@@ -282,10 +282,10 @@ describe('frame_prompt_variants helper', () => {
   });
 
   it('AI write is idempotent on (frame, type, input_hash) — a retry returns the existing row', async () => {
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     const first = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI prompt v1',
       source: 'ai-generated',
@@ -294,7 +294,7 @@ describe('frame_prompt_variants helper', () => {
     });
 
     const retried = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI prompt v1',
       source: 'ai-generated',
@@ -304,7 +304,7 @@ describe('frame_prompt_variants helper', () => {
 
     expect(retried.id).toBe(first.id);
 
-    const history = await methods.listByFrame(frameId, 'visual');
+    const history = await methods.listByFrame(shotId, 'visual');
     expect(history).toHaveLength(1);
   });
 
@@ -315,10 +315,10 @@ describe('frame_prompt_variants helper', () => {
     // text in history (otherwise the user's regenerated prompt would be
     // silently lost) while keeping the cached `*_prompt_input_hash` column
     // tracking the real upstream hash so staleness detection stays correct.
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     const first = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI prompt v1',
       source: 'ai-generated',
@@ -327,7 +327,7 @@ describe('frame_prompt_variants helper', () => {
     });
 
     const forced = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'Fresh LLM completion against same inputs',
       source: 'regenerated',
@@ -342,7 +342,7 @@ describe('frame_prompt_variants helper', () => {
     expect(forced.source).toBe('regenerated');
     expect(forced.text).toBe('Fresh LLM completion against same inputs');
 
-    const history = await methods.listByFrame(frameId, 'visual');
+    const history = await methods.listByFrame(shotId, 'visual');
     expect(history).toHaveLength(2);
     const [latest, prior] = history;
     if (!latest || !prior) throw new Error('test setup: history missing rows');
@@ -351,8 +351,8 @@ describe('frame_prompt_variants helper', () => {
 
     const [refreshed] = await db
       .select()
-      .from(frames)
-      .where(eq(frames.id, frameId));
+      .from(shots)
+      .where(eq(shots.id, shotId));
     if (!refreshed) throw new Error('test setup: refresh failed');
     expect(refreshed.imagePrompt).toBe(
       'Fresh LLM completion against same inputs'
@@ -366,10 +366,10 @@ describe('frame_prompt_variants helper', () => {
     // Regression guard for the force-regen branch: it must only fire when
     // `existing.text !== input.text`. A genuine workflow step retry submits
     // the same text + same hash and should still collapse to one row.
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI prompt v1',
       source: 'ai-generated',
@@ -378,7 +378,7 @@ describe('frame_prompt_variants helper', () => {
     });
 
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI prompt v1',
       source: 'regenerated',
@@ -386,15 +386,15 @@ describe('frame_prompt_variants helper', () => {
       analysisModel: 'anthropic/claude-haiku-4.5',
     });
 
-    const history = await methods.listByFrame(frameId, 'visual');
+    const history = await methods.listByFrame(shotId, 'visual');
     expect(history).toHaveLength(1);
   });
 
   it('a different input_hash produces a new row for the same frame+type', async () => {
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI v1',
       source: 'ai-generated',
@@ -402,7 +402,7 @@ describe('frame_prompt_variants helper', () => {
       analysisModel: 'anthropic/claude-haiku-4.5',
     });
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI v2',
       source: 'regenerated',
@@ -410,15 +410,15 @@ describe('frame_prompt_variants helper', () => {
       analysisModel: 'anthropic/claude-haiku-4.5',
     });
 
-    const history = await methods.listByFrame(frameId, 'visual');
+    const history = await methods.listByFrame(shotId, 'visual');
     expect(history).toHaveLength(2);
   });
 
   it('motion prompts use the motionPrompt cached column independently of visual', async () => {
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'visual',
       source: 'ai-generated',
@@ -426,7 +426,7 @@ describe('frame_prompt_variants helper', () => {
       analysisModel: 'anthropic/claude-haiku-4.5',
     });
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'motion',
       text: 'motion',
       source: 'ai-generated',
@@ -436,8 +436,8 @@ describe('frame_prompt_variants helper', () => {
 
     const [refreshed] = await db
       .select()
-      .from(frames)
-      .where(eq(frames.id, frameId));
+      .from(shots)
+      .where(eq(shots.id, shotId));
     if (!refreshed) throw new Error('test setup: refresh failed');
     expect(refreshed.imagePrompt).toBe('visual');
     expect(refreshed.motionPrompt).toBe('motion');
@@ -450,17 +450,17 @@ describe('frame_prompt_variants helper', () => {
     // belongs to a different frame in the same sequence — without it, a
     // user could restore frame A's prompt onto frame B by passing the wrong
     // variantId. The frame-access middleware only checks the parent frame.
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     const [siblingFrame] = await db
-      .insert(frames)
+      .insert(shots)
       .values({ sequenceId, orderIndex: 1 })
       .returning();
     if (!siblingFrame)
-      throw new Error('test setup: sibling frame insert returned nothing');
+      throw new Error('test setup: sibling shot insert returned nothing');
 
     const ownVariant = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'belongs to frame A',
       source: 'ai-generated',
@@ -476,16 +476,16 @@ describe('frame_prompt_variants helper', () => {
     expect(wrongFrame).toBeNull();
 
     // Sanity: the same lookup with the owning frame's id does return it.
-    const rightFrame = await methods.getByIdForFrame(ownVariant.id, frameId);
+    const rightFrame = await methods.getByIdForFrame(ownVariant.id, shotId);
     expect(rightFrame?.id).toBe(ownVariant.id);
   });
 
   it('restored row carries the source variant input_hash so staleness keeps tracking the original upstream context', async () => {
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     // Original AI-generated prompt with a stored hash.
     const original = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI prompt v1',
       source: 'ai-generated',
@@ -498,7 +498,7 @@ describe('frame_prompt_variants helper', () => {
     // null. The restore-from-AI flow below must still re-populate the
     // cached hash from the source row.
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'User edited prompt',
       source: 'user-edit',
@@ -510,7 +510,7 @@ describe('frame_prompt_variants helper', () => {
     // the staleness check resumes detecting upstream drift. A regression
     // that drops the hash here silently disables staleness forever.
     const restored = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: original.text,
       components: original.components,
@@ -527,7 +527,7 @@ describe('frame_prompt_variants helper', () => {
     expect(restored.id).not.toBe(original.id);
     expect(restored.source).toBe('restored');
 
-    const history = await methods.listByFrame(frameId, 'visual');
+    const history = await methods.listByFrame(shotId, 'visual');
     expect(history).toHaveLength(3);
     expect(history.map((r) => r.source)).toEqual([
       'restored',
@@ -537,8 +537,8 @@ describe('frame_prompt_variants helper', () => {
 
     const [refreshed] = await db
       .select()
-      .from(frames)
-      .where(eq(frames.id, frameId));
+      .from(shots)
+      .where(eq(shots.id, shotId));
     if (!refreshed) throw new Error('test setup: refresh failed');
     expect(refreshed.imagePrompt).toBe('AI prompt v1');
     expect(refreshed.visualPromptInputHash).toBe('context-hash-1');
@@ -547,10 +547,10 @@ describe('frame_prompt_variants helper', () => {
   it('restoring an AI prompt that is currently live still appends a restored row (audit trail)', async () => {
     // Without the partial-index `source != 'restored'` exclusion, this case
     // hit onConflictDoNothing and silently returned the original AI row.
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     const original = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI prompt v1',
       source: 'ai-generated',
@@ -559,7 +559,7 @@ describe('frame_prompt_variants helper', () => {
     });
 
     const restored = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: original.text,
       components: original.components,
@@ -573,15 +573,15 @@ describe('frame_prompt_variants helper', () => {
     expect(restored.source).toBe('restored');
     expect(restored.inputHash).toBe('context-hash-1');
 
-    const history = await methods.listByFrame(frameId, 'visual');
+    const history = await methods.listByFrame(shotId, 'visual');
     expect(history).toHaveLength(2);
   });
 
   it('restored row from a user-edit source carries null hash (no staleness opinion to forward)', async () => {
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     const userEdit = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'Hand-written prompt',
       source: 'user-edit',
@@ -592,7 +592,7 @@ describe('frame_prompt_variants helper', () => {
     // Restoring a user-edit must not synthesize a hash out of nothing —
     // the source had none, so the restored row keeps null.
     const restored = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: userEdit.text,
       components: userEdit.components,
@@ -606,11 +606,11 @@ describe('frame_prompt_variants helper', () => {
   });
 
   it('getLatestWithInputHash skips null-hash user-edits and returns the most recent hashed row', async () => {
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     // 1) An AI prompt with a real hash.
     const ai = await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'AI prompt',
       source: 'ai-generated',
@@ -619,7 +619,7 @@ describe('frame_prompt_variants helper', () => {
     });
     // 2) A later user-edit with no upstream context (null hash).
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'Hand-typed prompt',
       source: 'user-edit',
@@ -628,23 +628,20 @@ describe('frame_prompt_variants helper', () => {
     });
 
     // getLatest returns the most recent row regardless of hash.
-    const latest = await methods.getLatest(frameId, 'visual');
+    const latest = await methods.getLatest(shotId, 'visual');
     expect(latest?.inputHash).toBeNull();
 
     // getLatestWithInputHash skips the user-edit and returns the AI row.
-    const latestHashed = await methods.getLatestWithInputHash(
-      frameId,
-      'visual'
-    );
+    const latestHashed = await methods.getLatestWithInputHash(shotId, 'visual');
     expect(latestHashed?.id).toBe(ai.id);
     expect(latestHashed?.inputHash).toBe('ai-hash-1');
   });
 
   it('getLatestWithInputHash isolates by promptType (visual vs motion)', async () => {
-    const methods = createFramePromptVariantsMethods(db);
+    const methods = createShotPromptVariantsMethods(db);
 
     await methods.write({
-      frameId,
+      shotId,
       promptType: 'visual',
       text: 'Visual prompt',
       source: 'ai-generated',
@@ -652,7 +649,7 @@ describe('frame_prompt_variants helper', () => {
       analysisModel: 'anthropic/claude-haiku-4.5',
     });
 
-    const motionMatch = await methods.getLatestWithInputHash(frameId, 'motion');
+    const motionMatch = await methods.getLatestWithInputHash(shotId, 'motion');
     expect(motionMatch).toBeNull();
   });
 });

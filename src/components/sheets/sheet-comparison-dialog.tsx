@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
 
 type SheetAspectRatio = 'square' | 'video' | 'portrait';
 
-type SheetEntityType = Exclude<StalenessEntityType, 'frame' | 'sequence'>;
+type SheetEntityType = Exclude<StalenessEntityType, 'shot' | 'sequence'>;
 
 type SheetComparisonDialogProps = {
   open: boolean;

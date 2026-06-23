@@ -1,10 +1,10 @@
-import type { Frame, Style } from '@/types/database';
+import type { Shot, Style } from '@/types/database';
 import { faker } from '@faker-js/faker';
 
 // Set consistent seed for reproducible mock data
 faker.seed(123);
 
-const generateMockFrame = (overrides?: Partial<Frame>): Frame => {
+const generateMockFrame = (overrides?: Partial<Shot>): Shot => {
   const settings = [
     'City Street',
     'Forest',
@@ -316,7 +316,7 @@ const generateMockStyle = (overrides?: Partial<Style>): Style => {
 export const generateMockFrames = (
   count: number = 6,
   sequenceId?: string
-): Frame[] => {
+): Shot[] => {
   return Array.from({ length: count }, (_, index) =>
     generateMockFrame({
       orderIndex: index + 1,

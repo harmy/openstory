@@ -11,8 +11,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { NewFrame, NewFrameVariant } from '@/lib/db/schema';
-import type { VariantType } from '@/lib/db/schema/frame-variants';
+import type { NewShot, NewShotVariant } from '@/lib/db/schema';
+import type { VariantType } from '@/lib/db/schema/shot-variants';
 import type {
   FrameImageSceneSnapshot,
   ImageWorkflowInput,
@@ -33,7 +33,7 @@ import {
 type EmittedImageProgress = {
   event: string;
   payload: {
-    frameId: string;
+    shotId: string;
     status: 'pending' | 'completed';
     model: string;
     thumbnailUrl?: string;
@@ -53,7 +53,7 @@ const baseInput: ImageWorkflowInput = {
   userId: 'u1',
   teamId: 't1',
   sequenceId: 'seq1',
-  frameId: 'f1',
+  shotId: 'f1',
   prompt: baseScene.visualPrompt,
   model: 'nano_banana_2',
   aspectRatio: '16:9',
@@ -80,7 +80,7 @@ function buildHashScopedDb(opts: {
   const metadata =
     'frameMetadata' in opts ? (opts.frameMetadata ?? null) : DEFAULT_SCENE;
   return {
-    frames: {
+    shots: {
       getById: async () => ({ metadata }),
     },
     characters: {
@@ -135,7 +135,7 @@ function buildHashScopedDb(opts: {
 }
 
 const unreachableHashScopedDb: ImageHashScopedDb = {
-  frames: {
+  shots: {
     getById: async () => {
       throw new Error('frames.getById should not be called in this test');
     },
@@ -405,16 +405,16 @@ describe('persistImageResult — orchestration', () => {
   const NOW = new Date('2026-05-04T00:00:00Z');
 
   type FrameUpdateCall = {
-    frameId: string;
-    data: Partial<NewFrame>;
+    shotId: string;
+    data: Partial<NewShot>;
   };
   type VariantUpdateCall = {
-    frameId: string;
+    shotId: string;
     variantType: VariantType;
     model: string;
-    data: Partial<NewFrameVariant>;
+    data: Partial<NewShotVariant>;
   };
-  type InsertDivergentCall = NewFrameVariant & {
+  type InsertDivergentCall = NewShotVariant & {
     inputHash: string;
     divergedAt: Date;
   };
@@ -435,17 +435,17 @@ describe('persistImageResult — orchestration', () => {
     const variantsInserts: InsertDivergentCall[] = [];
     const callOrder: CallOrder[] = [];
     const scopedDb: PersistImageScopedDb = {
-      frames: {
-        update: async (frameId, data) => {
-          framesUpdates.push({ frameId, data });
+      shots: {
+        update: async (shotId, data) => {
+          framesUpdates.push({ shotId, data });
           callOrder.push('frames.update');
           if (opts.frameMissing) return undefined;
-          return { id: frameId };
+          return { id: shotId };
         },
       },
-      frameVariants: {
-        updateByFrameAndModel: async (frameId, variantType, model, data) => {
-          variantsUpdates.push({ frameId, variantType, model, data });
+      shotVariants: {
+        updateByFrameAndModel: async (shotId, variantType, model, data) => {
+          variantsUpdates.push({ shotId, variantType, model, data });
           callOrder.push('frameVariants.updateByFrameAndModel');
           return { id: 'v1' };
         },
@@ -477,7 +477,7 @@ describe('persistImageResult — orchestration', () => {
 
     const outcome = await persistImageResult({
       scopedDb,
-      frameId: 'f1',
+      shotId: 'f1',
       sequenceId: 'seq1',
       model: 'nano_banana_2',
       upload,
@@ -522,7 +522,7 @@ describe('persistImageResult — orchestration', () => {
 
     const [divergentRow] = variantsInserts;
     if (!divergentRow) throw new Error('test setup: expected divergent row');
-    expect(divergentRow.frameId).toBe('f1');
+    expect(divergentRow.shotId).toBe('f1');
     expect(divergentRow.sequenceId).toBe('seq1');
     expect(divergentRow.variantType).toBe('image');
     expect(divergentRow.model).toBe('nano_banana_2');
@@ -534,7 +534,7 @@ describe('persistImageResult — orchestration', () => {
     expect(emits).toEqual([
       {
         event: 'generation.image:progress',
-        payload: { frameId: 'f1', status: 'pending', model: 'nano_banana_2' },
+        payload: { shotId: 'f1', status: 'pending', model: 'nano_banana_2' },
       },
     ]);
   });
@@ -551,7 +551,7 @@ describe('persistImageResult — orchestration', () => {
 
     const outcome = await persistImageResult({
       scopedDb,
-      frameId: 'f1',
+      shotId: 'f1',
       sequenceId: 'seq1',
       model: 'nano_banana_2',
       upload,
@@ -594,7 +594,7 @@ describe('persistImageResult — orchestration', () => {
       {
         event: 'generation.image:progress',
         payload: {
-          frameId: 'f1',
+          shotId: 'f1',
           status: 'completed',
           thumbnailUrl: upload.url,
           model: 'nano_banana_2',
@@ -610,7 +610,7 @@ describe('persistImageResult — orchestration', () => {
 
     const outcome = await persistImageResult({
       scopedDb,
-      frameId: 'f1',
+      shotId: 'f1',
       sequenceId: 'seq1',
       model: 'nano_banana_2',
       upload,
@@ -641,7 +641,7 @@ describe('persistImageResult — orchestration', () => {
 
     const outcome = await persistImageResult({
       scopedDb,
-      frameId: 'f1',
+      shotId: 'f1',
       sequenceId: 'seq1',
       model: 'nano_banana_2',
       upload,
@@ -670,7 +670,7 @@ describe('persistImageResult — orchestration', () => {
 
     const outcome = await persistImageResult({
       scopedDb,
-      frameId: 'f1',
+      shotId: 'f1',
       sequenceId: 'seq1',
       model: 'nano_banana_2',
       upload,
@@ -704,7 +704,7 @@ describe('persistImageResult — orchestration', () => {
       {
         event: 'generation.image:progress',
         payload: {
-          frameId: 'f1',
+          shotId: 'f1',
           status: 'completed',
           thumbnailUrl: upload.url,
           model: 'nano_banana_2',

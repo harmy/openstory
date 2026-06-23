@@ -20,7 +20,7 @@ import { IMAGE_TO_VIDEO_MODELS, type ImageToVideoModel } from '@/lib/ai/models';
 import { MOTION_JSON_SCHEMAS } from '@/lib/motion/endpoint-map';
 import { snapDuration } from '@/lib/motion/motion-generation';
 import { getDurationValues, numericOf } from '@/lib/motion/motion-transform';
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import { useMutation } from '@tanstack/react-query';
 import { CopyIcon, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -31,7 +31,7 @@ type SceneScriptTabSavePayload = {
 };
 
 type SceneScriptTabProps = {
-  frame: Frame | undefined;
+  frame: Shot | undefined;
   sequenceId: string;
   scriptText: string | undefined;
   motionModel: ImageToVideoModel;
@@ -96,7 +96,7 @@ export const SceneScriptTab: React.FC<SceneScriptTabProps> = ({
       return estimateSceneDurationFn({
         data: {
           sequenceId,
-          frameId: frame.id,
+          shotId: frame.id,
           extract: currentScript,
         },
       });

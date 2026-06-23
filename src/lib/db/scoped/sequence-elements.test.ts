@@ -20,9 +20,9 @@ import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import type { Database } from '@/lib/db/client';
 import { generateId } from '@/lib/db/id';
-import type { Frame } from '@/lib/db/schema';
+import type { Shot } from '@/lib/db/schema';
 import {
-  frames,
+  shots,
   sequenceElements,
   sequences,
   styles,
@@ -37,7 +37,7 @@ let teamId = '';
 let sequenceId = '';
 
 async function seed() {
-  await db.delete(frames);
+  await db.delete(shots);
   await db.delete(sequenceElements);
   await db.delete(sequences);
   await db.delete(styles);
@@ -89,7 +89,7 @@ function frameMetadata(args: {
   sceneId: string;
   elementTags: string[];
   extract: string;
-}): NonNullable<Frame['metadata']> {
+}): NonNullable<Shot['metadata']> {
   return {
     sceneId: args.sceneId,
     sceneNumber: 1,
@@ -170,7 +170,7 @@ describe('getFrameCountsByElement', () => {
     }
 
     // Frame referencing both LOGO and BOTTLE via continuity.elementTags.
-    await db.insert(frames).values({
+    await db.insert(shots).values({
       sequenceId,
       orderIndex: 0,
       metadata: frameMetadata({
@@ -181,7 +181,7 @@ describe('getFrameCountsByElement', () => {
     });
 
     // Frame referencing only LOGO via script-text fallback (no elementTags).
-    await db.insert(frames).values({
+    await db.insert(shots).values({
       sequenceId,
       orderIndex: 1,
       metadata: frameMetadata({
@@ -249,7 +249,7 @@ describe('cascadeRename', () => {
       .set({ script: 'The LOGO appears. Pan across the LOGO.' })
       .where(eq(sequences.id, sequenceId));
 
-    await db.insert(frames).values({
+    await db.insert(shots).values({
       sequenceId,
       orderIndex: 0,
       metadata: frameMetadata({
@@ -258,7 +258,7 @@ describe('cascadeRename', () => {
         extract: 'The LOGO appears on screen.',
       }),
     });
-    await db.insert(frames).values({
+    await db.insert(shots).values({
       sequenceId,
       orderIndex: 1,
       metadata: frameMetadata({

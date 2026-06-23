@@ -1,10 +1,10 @@
 import { characterSheetVariantKeys } from '@/hooks/use-character-sheet-variants';
-import { frameKeys } from '@/hooks/use-frames';
+import { shotKeys } from '@/hooks/use-shots';
 import { locationSheetVariantKeys } from '@/hooks/use-location-sheet-variants';
 import { sequenceCharacterKeys } from '@/hooks/use-sequence-characters';
 import { sequenceLocationKeys } from '@/hooks/use-sequence-locations';
 import { sequenceKeys } from '@/hooks/use-sequences';
-import type { Frame, Sequence } from '@/types/database';
+import type { Shot, Sequence } from '@/types/database';
 import type { QueryClient } from '@tanstack/react-query';
 
 /**
@@ -28,7 +28,7 @@ function getOptionalString(
  * Type guard for Scene metadata from realtime events.
  * Performs minimal runtime validation since data is already Zod-validated upstream.
  */
-function isSceneMetadata(value: unknown): value is Frame['metadata'] {
+function isSceneMetadata(value: unknown): value is Shot['metadata'] {
   if (value === null || value === undefined) return true;
   if (typeof value !== 'object') return false;
   // Check for required Scene fields using 'in' operator for type narrowing
@@ -79,7 +79,7 @@ function isValidMusicStatus(
 
 function isValidFrameStatus(
   status: unknown
-): status is Frame['thumbnailStatus'] {
+): status is Shot['thumbnailStatus'] {
   return (
     status === 'pending' ||
     status === 'generating' ||
@@ -98,25 +98,25 @@ export function updateQueryCacheFromEvent(
   eventName: string,
   data: Record<string, unknown>
 ) {
-  const frameId = getString(data, 'frameId');
+  const shotId = getString(data, 'shotId');
 
   switch (eventName) {
-    case 'generation.frame:created':
+    case 'generation.shot:created':
       // Debounced invalidation - multiple rapid events = one refetch
       debouncedInvalidate(
         queryClient,
-        frameKeys.list(sequenceId),
+        shotKeys.list(sequenceId),
         `frames:${sequenceId}`
       );
       break;
 
-    case 'generation.frame:updated': {
+    case 'generation.shot:updated': {
       // Update frame metadata with prompts
       // The metadata is validated by the realtime schema before reaching here
       const metadata = data.metadata;
       if (isSceneMetadata(metadata)) {
-        queryClient.setQueryData<Frame[]>(frameKeys.list(sequenceId), (old) =>
-          old?.map((f) => (f.id === frameId ? { ...f, metadata } : f))
+        queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
+          old?.map((f) => (f.id === shotId ? { ...f, metadata } : f))
         );
       }
       break;
@@ -137,9 +137,9 @@ export function updateQueryCacheFromEvent(
       // queries below so the new model appears in the dropdown.
       const variantOnly = data.variantOnly === true;
       if (!variantOnly) {
-        queryClient.setQueryData<Frame[]>(frameKeys.list(sequenceId), (old) =>
+        queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
           old?.map((f) =>
-            f.id === frameId
+            f.id === shotId
               ? {
                   ...f,
                   thumbnailUrl: thumbnailUrl ?? f.thumbnailUrl,
@@ -193,9 +193,9 @@ export function updateQueryCacheFromEvent(
       // below so the new model appears in the dropdown.
       const variantOnly = data.variantOnly === true;
       if (!variantOnly) {
-        queryClient.setQueryData<Frame[]>(frameKeys.list(sequenceId), (old) =>
+        queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
           old?.map((f) =>
-            f.id === frameId
+            f.id === shotId
               ? {
                   ...f,
                   videoUrl: videoUrl ?? f.videoUrl,
@@ -237,9 +237,9 @@ export function updateQueryCacheFromEvent(
     case 'generation.variant-image:progress': {
       const variantImageUrl = getOptionalString(data, 'variantImageUrl');
       const status = data.status;
-      queryClient.setQueryData<Frame[]>(frameKeys.list(sequenceId), (old) =>
+      queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
         old?.map((f) =>
-          f.id === frameId
+          f.id === shotId
             ? {
                 ...f,
                 variantImageUrl: variantImageUrl ?? f.variantImageUrl,
@@ -332,7 +332,7 @@ export function updateQueryCacheFromEvent(
           );
           debouncedInvalidate(
             queryClient,
-            frameKeys.list(sequenceId),
+            shotKeys.list(sequenceId),
             `frames:${sequenceId}`
           );
           debouncedInvalidate(
@@ -424,7 +424,7 @@ export function updateQueryCacheFromEvent(
     case 'generation.preview:replaced':
       // Preview frames replaced by AI-analyzed frames — refetch frame list
       void queryClient.invalidateQueries({
-        queryKey: frameKeys.list(sequenceId),
+        queryKey: shotKeys.list(sequenceId),
       });
       break;
 
@@ -443,11 +443,11 @@ export function updateQueryCacheFromEvent(
       break;
 
     case 'generation.error':
-      // Update frame status if frameId present
-      if (frameId) {
-        queryClient.setQueryData<Frame[]>(frameKeys.list(sequenceId), (old) =>
+      // Update frame status if shotId present
+      if (shotId) {
+        queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
           old?.map((f) =>
-            f.id === frameId
+            f.id === shotId
               ? { ...f, thumbnailStatus: 'failed', videoStatus: 'failed' }
               : f
           )
@@ -460,7 +460,7 @@ export function updateQueryCacheFromEvent(
       const sceneId = getString(data, 'sceneId');
       const title = getString(data, 'title');
       if (sceneId && title) {
-        queryClient.setQueryData<Frame[]>(frameKeys.list(sequenceId), (old) =>
+        queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
           old?.map((f) => {
             if (f.metadata?.sceneId !== sceneId || !f.metadata.metadata)
               return f;

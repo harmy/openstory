@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Storybook mock data uses intentional type assertions */
 import { ScenesView } from '@/components/scenes/scenes-view';
-import type { Frame, Sequence } from '@/types/database';
+import type { Shot, Sequence } from '@/types/database';
 import type { Meta, StoryObj } from '@storybook/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -13,7 +13,7 @@ import {
 // Extend the component props to include frames for story mocking
 // Frames are passed through parameters, not args, so make them optional
 type ScenesViewStoryProps = React.ComponentProps<typeof ScenesView> & {
-  frames?: Frame[];
+  frames?: Shot[];
 };
 
 const mockSequence: Sequence = {
@@ -61,7 +61,7 @@ const meta = {
   decorators: [
     (Story, context) => {
       // Get frames from story parameters (not args since ScenesView doesn't accept them)
-      const frames = context.parameters.frames as Frame[];
+      const shots = context.parameters.frames as Shot[];
       const sequenceId = context.args.sequenceId || 'mock-sequence';
       const sequenceOverrides = context.parameters
         .sequenceOverrides as Partial<Sequence>;
@@ -76,7 +76,7 @@ const meta = {
       });
 
       // Pre-populate the cache with mock data using the correct query keys
-      queryClient.setQueryData(['frames', 'list', sequenceId], frames);
+      queryClient.setQueryData(['shots', 'list', sequenceId], shots);
       queryClient.setQueryData(['sequences', 'detail', sequenceId], {
         ...mockSequence,
         id: sequenceId,
@@ -104,7 +104,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-// Mock frame base — all Frame fields included
+// Mock frame base — all Shot fields included
 const mockFrameBase = {
   sequenceId: 'seq-1',
   orderIndex: 0,
@@ -210,7 +210,7 @@ export const MixedStates: Story = {
     sequenceId: 'demo-sequence-123',
   },
   parameters: {
-    frames: [
+    shots: [
       {
         ...mockFrameBase,
         id: '1',
@@ -229,7 +229,7 @@ export const MixedStates: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Opening Scene',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -249,7 +249,7 @@ export const MixedStates: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'The Journey',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -265,7 +265,7 @@ export const MixedStates: Story = {
           ...mockFrameBase.metadata,
           sceneNumber: 3,
           metadata: { ...mockFrameBase.metadata.metadata, title: 'Climax' },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -284,7 +284,7 @@ export const MixedStates: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Resolution',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -303,7 +303,7 @@ export const MixedStates: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Epilogue',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
     docs: {
@@ -320,7 +320,7 @@ export const AllCompleted: Story = {
     sequenceId: 'all-completed',
   },
   parameters: {
-    frames: [
+    shots: [
       {
         ...mockFrameBase,
         id: '1',
@@ -336,7 +336,7 @@ export const AllCompleted: Story = {
           ...mockFrameBase.metadata,
           sceneNumber: 1,
           metadata: { ...mockFrameBase.metadata.metadata, title: 'Scene 1' },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -353,7 +353,7 @@ export const AllCompleted: Story = {
           ...mockFrameBase.metadata,
           sceneNumber: 2,
           metadata: { ...mockFrameBase.metadata.metadata, title: 'Scene 2' },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -370,7 +370,7 @@ export const AllCompleted: Story = {
           ...mockFrameBase.metadata,
           sceneNumber: 3,
           metadata: { ...mockFrameBase.metadata.metadata, title: 'Scene 3' },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
     docs: {
@@ -387,7 +387,7 @@ export const AllPending: Story = {
     sequenceId: 'all-pending',
   },
   parameters: {
-    frames: [
+    shots: [
       {
         ...mockFrameBase,
         id: '1',
@@ -405,7 +405,7 @@ export const AllPending: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Waiting for Video 1',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -424,7 +424,7 @@ export const AllPending: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Waiting for Video 2',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -443,7 +443,7 @@ export const AllPending: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Waiting for Video 3',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
     docs: {
@@ -460,7 +460,7 @@ export const FramesGenerating: Story = {
     sequenceId: 'frames-generating',
   },
   parameters: {
-    frames: [
+    shots: [
       {
         ...mockFrameBase,
         id: '1',
@@ -479,7 +479,7 @@ export const FramesGenerating: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Scene 1 - Ready',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -496,9 +496,9 @@ export const FramesGenerating: Story = {
           sceneNumber: 2,
           metadata: {
             ...mockFrameBase.metadata.metadata,
-            title: 'Scene 2 - Frame Ready',
+            title: 'Scene 2 - Shot Ready',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -517,7 +517,7 @@ export const FramesGenerating: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Scene 3 - Generating Frame',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -534,9 +534,9 @@ export const FramesGenerating: Story = {
           sceneNumber: 4,
           metadata: {
             ...mockFrameBase.metadata.metadata,
-            title: 'Scene 4 - Frame Pending',
+            title: 'Scene 4 - Shot Pending',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
     docs: {
@@ -553,7 +553,7 @@ export const GenerationInProgress: Story = {
     sequenceId: 'generating',
   },
   parameters: {
-    frames: [
+    shots: [
       {
         ...mockFrameBase,
         id: '1',
@@ -571,7 +571,7 @@ export const GenerationInProgress: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Video Generating',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -590,7 +590,7 @@ export const GenerationInProgress: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Frame Generating',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -609,7 +609,7 @@ export const GenerationInProgress: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Frame Pending',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
     docs: {
@@ -626,7 +626,7 @@ export const PreviewMode: Story = {
     sequenceId: 'preview-mode',
   },
   parameters: {
-    frames: [
+    shots: [
       {
         ...mockFrameBase,
         id: '1',
@@ -645,7 +645,7 @@ export const PreviewMode: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Preview - Generating Full Image',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -665,7 +665,7 @@ export const PreviewMode: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Preview - Still Processing',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -685,7 +685,7 @@ export const PreviewMode: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Final Image Ready',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
     docs: {
@@ -703,7 +703,7 @@ export const PreviewModePortrait: Story = {
   },
   parameters: {
     sequenceOverrides: { aspectRatio: '9:16' },
-    frames: [
+    shots: [
       {
         ...mockFrameBase,
         id: '1',
@@ -722,7 +722,7 @@ export const PreviewModePortrait: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Preview - Generating Full Image',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -742,7 +742,7 @@ export const PreviewModePortrait: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Preview - Still Processing',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -762,7 +762,7 @@ export const PreviewModePortrait: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Final Image Ready',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
     docs: {
@@ -779,7 +779,7 @@ export const WithFailures: Story = {
     sequenceId: 'with-failures',
   },
   parameters: {
-    frames: [
+    shots: [
       {
         ...mockFrameBase,
         id: '1',
@@ -798,7 +798,7 @@ export const WithFailures: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Successful Scene',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -817,7 +817,7 @@ export const WithFailures: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Failed Generation',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -836,7 +836,7 @@ export const WithFailures: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Pending Scene',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
     docs: {
@@ -853,7 +853,7 @@ export const EmptySequence: Story = {
     sequenceId: 'empty-sequence',
   },
   parameters: {
-    frames: [],
+    shots: [],
     docs: {
       description: {
         story:

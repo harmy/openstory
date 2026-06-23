@@ -14,7 +14,7 @@ type StreamingScene = {
 };
 
 type StreamingFrame = {
-  frameId: string;
+  shotId: string;
   sceneId: string;
   orderIndex: number;
   imageStatus: FrameStatus;
@@ -93,7 +93,7 @@ export type GenerationStreamState = {
   locationMatches: LocationMatch[];
   /** Talent that weren't matched to any character */
   unusedTalent: UnusedTalent | null;
-  /** Per-frame in-flight retry state (#882), keyed by frameId */
+  /** Per-frame in-flight retry state (#882), keyed by shotId */
   frameRetries: Map<string, FrameRetryState>;
 };
 
@@ -107,12 +107,12 @@ export type GenerationStreamAction =
   | { type: 'SCENE_UPDATED'; payload: StreamingScene }
   | {
       type: 'FRAME_CREATED';
-      payload: { frameId: string; sceneId: string; orderIndex: number };
+      payload: { shotId: string; sceneId: string; orderIndex: number };
     }
   | {
       type: 'IMAGE_PROGRESS';
       payload: {
-        frameId: string;
+        shotId: string;
         status?: FrameStatus;
         thumbnailUrl?: string;
         previewThumbnailUrl?: string;
@@ -123,7 +123,7 @@ export type GenerationStreamAction =
   | {
       type: 'VIDEO_PROGRESS';
       payload: {
-        frameId: string;
+        shotId: string;
         status?: FrameStatus;
         videoUrl?: string;
         /** Set while a retry attempt is starting (#882); cleared otherwise. */
@@ -179,15 +179,15 @@ function getPhase5Label(config: GenerationPhaseConfig): {
  */
 function updateFrameRetries(
   map: Map<string, FrameRetryState>,
-  frameId: string,
+  shotId: string,
   artifact: 'image' | 'video',
   retry: FrameRetryInfo | undefined
 ): Map<string, FrameRetryState> {
-  const current = map.get(frameId);
+  const current = map.get(shotId);
 
   if (retry) {
     const next = new Map(map);
-    next.set(frameId, { ...current, [artifact]: retry });
+    next.set(shotId, { ...current, [artifact]: retry });
     return next;
   }
 
@@ -197,9 +197,9 @@ function updateFrameRetries(
   const updated: FrameRetryState = { ...current };
   delete updated[artifact];
   if (updated.image || updated.video) {
-    next.set(frameId, updated);
+    next.set(shotId, updated);
   } else {
-    next.delete(frameId);
+    next.delete(shotId);
   }
   return next;
 }
@@ -313,10 +313,10 @@ export function generationStreamReducer(
     }
 
     case 'FRAME_CREATED': {
-      const { frameId, sceneId, orderIndex } = action.payload;
+      const { shotId, sceneId, orderIndex } = action.payload;
       const newFrames = new Map(state.frames);
-      newFrames.set(frameId, {
-        frameId,
+      newFrames.set(shotId, {
+        shotId,
         sceneId,
         orderIndex,
         imageStatus: 'pending',
@@ -329,17 +329,17 @@ export function generationStreamReducer(
     }
 
     case 'IMAGE_PROGRESS': {
-      const { frameId, status, thumbnailUrl, previewThumbnailUrl, retry } =
+      const { shotId, status, thumbnailUrl, previewThumbnailUrl, retry } =
         action.payload;
       // Retry state is tracked independently of the frames map so it surfaces
       // even when regenerating an existing frame (no preceding FRAME_CREATED).
       const frameRetries = updateFrameRetries(
         state.frameRetries,
-        frameId,
+        shotId,
         'image',
         retry
       );
-      const frame = state.frames.get(frameId);
+      const frame = state.frames.get(shotId);
       if (!frame) {
         return frameRetries === state.frameRetries
           ? state
@@ -347,7 +347,7 @@ export function generationStreamReducer(
       }
 
       const newFrames = new Map(state.frames);
-      newFrames.set(frameId, {
+      newFrames.set(shotId, {
         ...frame,
         imageStatus: status ?? frame.imageStatus,
         thumbnailUrl: thumbnailUrl ?? frame.thumbnailUrl,
@@ -361,14 +361,14 @@ export function generationStreamReducer(
     }
 
     case 'VIDEO_PROGRESS': {
-      const { frameId, status, videoUrl, retry } = action.payload;
+      const { shotId, status, videoUrl, retry } = action.payload;
       const frameRetries = updateFrameRetries(
         state.frameRetries,
-        frameId,
+        shotId,
         'video',
         retry
       );
-      const frame = state.frames.get(frameId);
+      const frame = state.frames.get(shotId);
       if (!frame) {
         return frameRetries === state.frameRetries
           ? state
@@ -376,7 +376,7 @@ export function generationStreamReducer(
       }
 
       const newFrames = new Map(state.frames);
-      newFrames.set(frameId, {
+      newFrames.set(shotId, {
         ...frame,
         ...(status !== undefined && { videoStatus: status }),
         videoUrl: videoUrl ?? frame.videoUrl,

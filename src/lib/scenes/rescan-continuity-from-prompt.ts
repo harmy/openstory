@@ -3,9 +3,9 @@
  * character / element / location tags and additively merge them into a
  * frame's `metadata.continuity`.
  *
- * Lives here — not inline in `updateFrameFn` — because the auto-link feature
+ * Lives here — not inline in `updateShotFn` — because the auto-link feature
  * (#683) needs to fire from both the explicit save path AND the regenerate
- * paths (`generateFrameImageFn`, `generateFrameMotionFn`). In practice the
+ * paths (`generateShotImageFn`, `generateShotMotionFn`). In practice the
  * regenerate paths are the only ones the UI actually calls today, so without
  * this helper the auto-link is dead code.
  *

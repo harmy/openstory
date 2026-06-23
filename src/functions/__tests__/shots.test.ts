@@ -16,22 +16,22 @@ import { migrate } from 'drizzle-orm/libsql/migrator';
 import { eq } from 'drizzle-orm';
 import { generateId } from '@/lib/db/id';
 import {
-  frameVariants,
-  frames,
+  shotVariants,
+  shots,
   sequences,
   styles,
   teams,
   user,
 } from '@/lib/db/schema';
-import type { FrameVariant } from '@/lib/db/schema';
+import type { ShotVariant } from '@/lib/db/schema';
 import { relations } from '@/lib/db/schema/relations';
 import type { Database } from '@/lib/db/client';
-import { createFrameVariantsMethods } from '@/lib/db/scoped/frame-variants';
-import { buildPromoteUpdate } from '@/functions/frames';
+import { createShotVariantsMethods } from '@/lib/db/scoped/shot-variants';
+import { buildPromoteUpdate } from '@/functions/shots';
 
-const baseVariant = (overrides: Partial<FrameVariant> = {}): FrameVariant => ({
+const baseVariant = (overrides: Partial<ShotVariant> = {}): ShotVariant => ({
   id: 'v1',
-  frameId: 'f1',
+  shotId: 'f1',
   sequenceId: 's1',
   variantType: 'image',
   model: 'flux',
@@ -124,11 +124,11 @@ let db: Database;
 const team = { id: '', name: 'T', slug: 't' };
 const userRow = { id: '', name: 'U', email: 'u@example.com' };
 let sequenceId = '';
-let frameId = '';
+let shotId = '';
 
 async function seed() {
-  await db.delete(frameVariants);
-  await db.delete(frames);
+  await db.delete(shotVariants);
+  await db.delete(shots);
   await db.delete(sequences);
   await db.delete(styles);
   await db.delete(teams);
@@ -162,12 +162,12 @@ async function seed() {
     .values([
       { id: sequenceId, teamId: team.id, title: 'S', styleId: style.id },
     ]);
-  const [frame] = await db
-    .insert(frames)
+  const [shot] = await db
+    .insert(shots)
     .values({ sequenceId, orderIndex: 0, thumbnailUrl: 'https://live/old.png' })
     .returning();
-  if (!frame) throw new Error('test setup: frame insert returned nothing');
-  frameId = frame.id;
+  if (!shot) throw new Error('test setup: shot insert returned nothing');
+  shotId = shot.id;
 }
 
 beforeAll(async () => {
@@ -184,16 +184,16 @@ beforeEach(async () => {
   await seed();
 });
 
-describe('frameVariants.promoteAtomically', () => {
+describe('shotVariants.promoteAtomically', () => {
   async function insertDivergent(opts: {
     inputHash: string;
     url: string;
     variantType?: 'image' | 'video' | 'audio';
   }) {
     const [variant] = await db
-      .insert(frameVariants)
+      .insert(shotVariants)
       .values({
-        frameId,
+        shotId,
         sequenceId,
         variantType: opts.variantType ?? 'image',
         model: 'm1',
@@ -213,10 +213,10 @@ describe('frameVariants.promoteAtomically', () => {
       inputHash: 'h1',
       url: 'https://alt/v1.png',
     });
-    const methods = createFrameVariantsMethods(db);
+    const methods = createShotVariantsMethods(db);
 
     const { update } = buildPromoteUpdate(variant);
-    const result = await methods.promoteAtomically(frameId, update, variant.id);
+    const result = await methods.promoteAtomically(shotId, update, variant.id);
 
     expect(result.frame.thumbnailUrl).toBe('https://alt/v1.png');
     expect(result.frame.videoStatus).toBe('pending');
@@ -225,7 +225,7 @@ describe('frameVariants.promoteAtomically', () => {
     const after = await methods.getById(variant.id);
     expect(after?.discardedAt).toBeInstanceOf(Date);
     // Variant falls out of the divergent listing once discardedAt is set.
-    const stillDivergent = await methods.listDivergentByFrame(frameId, 'image');
+    const stillDivergent = await methods.listDivergentByFrame(shotId, 'image');
     expect(stillDivergent.map((r) => r.id)).not.toContain(variant.id);
   });
 
@@ -234,7 +234,7 @@ describe('frameVariants.promoteAtomically', () => {
       inputHash: 'h2',
       url: 'https://alt/v2.png',
     });
-    const methods = createFrameVariantsMethods(db);
+    const methods = createShotVariantsMethods(db);
 
     expect(
       methods.promoteAtomically(generateId(), { thumbnailUrl: 'x' }, variant.id)
@@ -247,11 +247,11 @@ describe('frameVariants.promoteAtomically', () => {
   });
 
   it('throws when variant does not exist; frame is not updated', async () => {
-    const methods = createFrameVariantsMethods(db);
+    const methods = createShotVariantsMethods(db);
 
     expect(
       methods.promoteAtomically(
-        frameId,
+        shotId,
         { thumbnailUrl: 'should-not-stick' },
         generateId()
       )
@@ -259,8 +259,8 @@ describe('frameVariants.promoteAtomically', () => {
 
     const [frameAfter] = await db
       .select()
-      .from(frames)
-      .where(eq(frames.id, frameId));
+      .from(shots)
+      .where(eq(shots.id, shotId));
     if (!frameAfter)
       throw new Error('test setup: frame lookup returned nothing');
     expect(frameAfter.thumbnailUrl).toBe('https://live/old.png');

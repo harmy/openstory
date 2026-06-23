@@ -11,7 +11,7 @@
  */
 
 import type { Scene } from '@/lib/ai/scene-analysis.schema';
-import type { Frame } from '@/lib/db/schema';
+import type { Shot } from '@/lib/db/schema';
 
 /** Whole-token regex. Boundaries are anything that isn't `[A-Za-z0-9_]`. */
 function tokenRegex(token: string): RegExp {
@@ -114,7 +114,7 @@ function renameTokenInScene(
 }
 
 export type FrameRenameDelta = {
-  frameId: string;
+  shotId: string;
   metadata?: Scene;
   imagePrompt?: string;
   motionPrompt?: string;
@@ -122,7 +122,7 @@ export type FrameRenameDelta = {
 
 /** Compute per-frame deltas for a token rename. Frames with no references return null. */
 export function buildFrameRenameDeltas(
-  frames: Frame[],
+  frames: Shot[],
   oldToken: string,
   newToken: string
 ): FrameRenameDelta[] {
@@ -130,7 +130,7 @@ export function buildFrameRenameDeltas(
 
   const deltas: FrameRenameDelta[] = [];
   for (const frame of frames) {
-    const delta: FrameRenameDelta = { frameId: frame.id };
+    const delta: FrameRenameDelta = { shotId: frame.id };
     let touched = false;
 
     if (frame.metadata) {

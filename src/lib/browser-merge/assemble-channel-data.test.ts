@@ -30,7 +30,10 @@ function makeFrame(framesPerChannel: number, channelFill: number[]): MockFrame {
   return {
     numberOfFrames: framesPerChannel,
     numberOfChannels: channelFill.length,
-    copyTo: (dest, opts) => {
+    copyTo: (
+      dest: Float32Array,
+      opts: { planeIndex: number; format: 'f32-planar' }
+    ) => {
       const value = channelFill[opts.planeIndex] ?? 0;
       for (let i = 0; i < framesPerChannel; i++) dest[i] = value;
     },

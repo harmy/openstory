@@ -1,6 +1,6 @@
 import type { ModelGenerationStatus } from '@/components/model/base-model-selector';
-import type { FrameVariant } from '@/lib/db/schema';
-import type { VariantType } from '@/lib/db/schema/frame-variants';
+import type { ShotVariant } from '@/lib/db/schema';
+import type { VariantType } from '@/lib/db/schema/shot-variants';
 
 /**
  * Sequence-wide generation coverage for one model (#547). Drives the header
@@ -34,7 +34,7 @@ export type ModelCoverage = {
  * show e.g. "8/10" while an added model is still filling in.
  */
 export function computeSequenceModelCoverage(opts: {
-  variants: readonly FrameVariant[] | undefined;
+  variants: readonly ShotVariant[] | undefined;
   variantType: VariantType;
   /** The live primary model (marked `set`), if any. */
   primaryModel?: string | null;
@@ -57,8 +57,8 @@ export function computeSequenceModelCoverage(opts: {
         frames = new Set();
         completedFramesByModel.set(v.model, frames);
       }
-      frames.add(v.frameId);
-      allCompletedFrames.add(v.frameId);
+      frames.add(v.shotId);
+      allCompletedFrames.add(v.shotId);
     } else if (v.status === 'generating' || v.status === 'pending') {
       generating.add(v.model);
     } else if (v.status === 'failed') {

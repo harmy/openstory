@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import type { Frame, FrameVariant } from '@/lib/db/schema';
+import type { Shot, ShotVariant } from '@/lib/db/schema';
 import { DivergenceCompareDialog } from './divergence-compare-dialog';
 
 const NOW = new Date('2026-04-29T00:00:00Z');
 
-const baseFrame: Frame = {
+const baseFrame: Shot = {
   id: 'frame-1',
   sequenceId: 'seq-1',
   orderIndex: 0,
@@ -51,13 +51,13 @@ const baseFrame: Frame = {
 };
 
 function makeVariant(
-  overrides: Partial<FrameVariant> & {
-    variantType: FrameVariant['variantType'];
+  overrides: Partial<ShotVariant> & {
+    variantType: ShotVariant['variantType'];
   }
-): FrameVariant {
+): ShotVariant {
   return {
     id: 'variant-1',
-    frameId: 'frame-1',
+    shotId: 'frame-1',
     sequenceId: 'seq-1',
     model: 'nano_banana_2',
     url: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee',

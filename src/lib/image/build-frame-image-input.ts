@@ -1,7 +1,7 @@
 /**
  * Builds the per-frame `ImageWorkflowInput` for an image generation — the
  * reference-image attachment + per-scene snapshot hash that both the
- * single-frame regenerate (`generateFrameImageFn`) and the bulk add-model
+ * single-frame regenerate (`generateShotImageFn`) and the bulk add-model
  * (`addModelToSequenceFn`, #547) paths need. Extracted so the two callers stay
  * consistent: same prompt fallback chain, same character/location/element
  * matching, same snapshot hash.
@@ -12,7 +12,7 @@ import type { Scene } from '@/lib/ai/scene-analysis.schema';
 import { aspectRatioToImageSize } from '@/lib/constants/aspect-ratios';
 import type {
   CharacterMinimal,
-  Frame,
+  Shot,
   SequenceElement,
   SequenceLocation,
 } from '@/lib/db/schema';
@@ -56,7 +56,7 @@ function getSceneLocationReferenceImages(
 }
 
 export async function buildFrameImageWorkflowInput(opts: {
-  frame: Frame;
+  frame: Shot;
   model: TextToImageModel;
   userId: string;
   teamId: string;
@@ -153,7 +153,7 @@ export async function buildFrameImageWorkflowInput(opts: {
     model,
     imageSize: aspectRatioToImageSize(aspectRatio),
     numImages: 1,
-    frameId: frame.id,
+    shotId: frame.id,
     sequenceId,
     aspectRatio,
     sceneSnapshot,

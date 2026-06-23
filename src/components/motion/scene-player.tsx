@@ -9,14 +9,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFrameDownloadUrl } from '@/hooks/use-frame-download-url';
+import { useShotDownloadUrl } from '@/hooks/use-shot-download-url';
 import {
   type AspectRatio,
   aspectRatioToDimensions,
   getAspectRatioClassName,
 } from '@/lib/constants/aspect-ratios';
 import { cn } from '@/lib/utils';
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import { AppImage } from '@/components/ui/app-image';
 import {
   AlertCircle,
@@ -32,7 +32,7 @@ import { VideoPlayer } from './video-player';
 import { VideoStateOverlay } from './video-state-overlay';
 
 type ScenePlayerProps = {
-  frames?: Frame[];
+  shots?: Shot[];
   selectedFrameId?: string;
   aspectRatio: AspectRatio;
   /**
@@ -40,7 +40,7 @@ type ScenePlayerProps = {
    * (single-scene review shouldn't roll into the next clip — use Theatre for
    * continuous playback). Frame selection is driven by the scene list.
    */
-  onSelectFrame?: (frameId: string) => void;
+  onSelectShot?: (shotId: string) => void;
   className?: string;
   wrapperClassName?: string;
   selectedTab?: TabValue;
@@ -70,7 +70,7 @@ type ScenePlayerProps = {
 };
 
 export const ScenePlayer: React.FC<ScenePlayerProps> = ({
-  frames,
+  shots,
   className,
   wrapperClassName,
   selectedFrameId,
@@ -91,20 +91,20 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
   const imageDimensions = aspectRatioToDimensions(aspectRatio);
   // Get current frame and next frame
   const [currentFrameIndex, setCurrentFrameIndex] = useState(
-    frames?.findIndex((frame) => frame.id === selectedFrameId) ?? -1
+    shots?.findIndex((frame) => frame.id === selectedFrameId) ?? -1
   );
   useEffect(() => {
     // We could use a useMemo here, but we want to support not having to have a callback to set the selected frame id
     setCurrentFrameIndex(
-      frames?.findIndex((frame) => frame.id === selectedFrameId) ?? -1
+      shots?.findIndex((frame) => frame.id === selectedFrameId) ?? -1
     );
-  }, [selectedFrameId, frames]);
+  }, [selectedFrameId, shots]);
 
   const currentFrame =
-    frames && currentFrameIndex >= 0 ? frames[currentFrameIndex] : undefined;
+    shots && currentFrameIndex >= 0 ? shots[currentFrameIndex] : undefined;
   const nextFrame =
-    frames && currentFrameIndex < frames.length - 1
-      ? frames.find(
+    shots && currentFrameIndex < shots.length - 1
+      ? shots.find(
           (frame, index) =>
             frame.videoStatus === 'completed' &&
             frame.videoUrl &&
@@ -150,8 +150,8 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
   const hasFailedVideo = currentFrame && currentFrame.videoStatus === 'failed';
 
   // Fetch signed download URL with Content-Disposition header (forces browser download)
-  const { data: downloadData } = useFrameDownloadUrl(
-    { frameId: currentFrame?.id, sequenceId: currentFrame?.sequenceId },
+  const { data: downloadData } = useShotDownloadUrl(
+    { shotId: currentFrame?.id, sequenceId: currentFrame?.sequenceId },
     !!hasCompletedVideo
   );
 
@@ -181,7 +181,7 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
   }, [onEnded]);
 
   // Show blob loader during generation, skeleton otherwise
-  if (!frames || frames.length === 0) {
+  if (!shots || shots.length === 0) {
     if (progressMessage) {
       return (
         <div className={cn('flex w-full flex-col', wrapperClassName)}>

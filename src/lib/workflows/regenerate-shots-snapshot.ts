@@ -18,9 +18,9 @@ import type { TextToImageModel } from '@/lib/ai/models';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import type {
   Character,
-  Frame,
-  NewFrame,
-  NewFrameVariant,
+  Shot,
+  NewShot,
+  NewShotVariant,
   SequenceElement,
   SequenceLocation,
 } from '@/lib/db/schema';
@@ -29,8 +29,8 @@ import { buildCharacterReferenceImages } from '@/lib/prompts/character-prompt';
 import { buildLocationReferenceImages } from '@/lib/prompts/location-prompt';
 import { getGenerationChannel } from '@/lib/realtime';
 import type {
-  RegenerateFrameSnapshot,
-  RegenerateFramesWorkflowInput,
+  RegenerateShotSnapshot,
+  RegenerateShotsWorkflowInput,
 } from '@/lib/workflow/types';
 import { resolveSceneFrameImageReferences } from './sheet-snapshots';
 
@@ -38,14 +38,14 @@ import { resolveSceneFrameImageReferences } from './sheet-snapshots';
  * Build one frame's snapshot DTO from the live scoped state. Used at trigger
  * time and (with current-state inputs) at write time for divergence checks.
  */
-export async function buildRegenerateFrameSnapshot(params: {
-  frame: Pick<Frame, 'id' | 'imagePrompt' | 'metadata'>;
+export async function buildRegenerateShotSnapshot(params: {
+  frame: Pick<Shot, 'id' | 'imagePrompt' | 'metadata'>;
   characters: Character[];
   locations: SequenceLocation[];
   elements: SequenceElement[];
   imageModel: TextToImageModel;
   aspectRatio: AspectRatio;
-}): Promise<RegenerateFrameSnapshot> {
+}): Promise<RegenerateShotSnapshot> {
   const { frame, characters, locations, elements, imageModel, aspectRatio } =
     params;
 
@@ -92,7 +92,7 @@ export async function buildRegenerateFrameSnapshot(params: {
   const snapshotInputHash = await computeFrameImageInputHash(hashInput);
 
   return {
-    frameId: frame.id,
+    shotId: frame.id,
     imagePrompt: effectivePrompt,
     characterSheetHashes: refs.characterSheetHashes,
     locationSheetHashes: refs.locationSheetHashes,
@@ -109,9 +109,9 @@ export async function buildRegenerateFrameSnapshot(params: {
  * and `locationRefs` URLs — so a payload that preserves only `snapshotInputHash`
  * cannot smuggle replaced reference images past validation.
  */
-export async function computeRegenerateFramesBatchHash(
+export async function computeRegenerateShotsBatchHash(
   input: Pick<
-    RegenerateFramesWorkflowInput,
+    RegenerateShotsWorkflowInput,
     'aspectRatio' | 'imageModel' | 'frameSnapshots' | 'sequenceId'
   >
 ): Promise<string> {
@@ -120,8 +120,8 @@ export async function computeRegenerateFramesBatchHash(
     sequenceId: input.sequenceId ?? null,
     imageModel: input.imageModel ?? null,
     aspectRatio: input.aspectRatio,
-    frames: [...input.frameSnapshots].sort((a, b) =>
-      a.frameId < b.frameId ? -1 : 1
+    shots: [...input.frameSnapshots].sort((a, b) =>
+      a.shotId < b.shotId ? -1 : 1
     ),
   });
 }
@@ -199,8 +199,8 @@ export async function emitRecastEvent(
  * both rows so downstream staleness reads compare against this snapshot.
  */
 export function buildConvergentWrites(snapshotInputHash: string): {
-  frame: Partial<NewFrame>;
-  variant: Partial<NewFrameVariant>;
+  frame: Partial<NewShot>;
+  variant: Partial<NewShotVariant>;
 } {
   return {
     frame: { thumbnailInputHash: snapshotInputHash },
@@ -210,7 +210,7 @@ export function buildConvergentWrites(snapshotInputHash: string): {
 
 /**
  * `divergentRow` is a partial payload for an INSERT that preserves the
- * diverged result as an alternate. The workflow supplies frameId, sequenceId,
+ * diverged result as an alternate. The workflow supplies shotId, sequenceId,
  * variantType, model, and the speculative url; this helper supplies the
  * divergence-specific fields so the alternate is identifiable in the
  * divergent partial unique index.
@@ -219,9 +219,9 @@ export function buildDivergentWrites(
   snapshotInputHash: string,
   divergedAt: Date
 ): {
-  frame: Partial<NewFrame>;
-  primaryRevert: Partial<NewFrameVariant>;
-  divergentRow: Partial<NewFrameVariant> & {
+  frame: Partial<NewShot>;
+  primaryRevert: Partial<NewShotVariant>;
+  divergentRow: Partial<NewShotVariant> & {
     inputHash: string;
     divergedAt: Date;
   };

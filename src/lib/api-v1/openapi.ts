@@ -12,7 +12,7 @@
  * value sets are identical); the sequence status set is declared locally.
  */
 
-import { FRAME_GENERATION_STATUSES } from '@/lib/db/schema/frames';
+import { FRAME_GENERATION_STATUSES } from '@/lib/db/schema/shots';
 import { apiEnhanceScriptSchema } from './enhance-input-schema';
 import { API_V1_BASE } from './hal';
 import { apiCreateSequenceSchema } from './input-schema';

@@ -1,8 +1,8 @@
 /**
- * Scoped Frame Prompt Variants Sub-module
+ * Scoped Shot Prompt Variants Sub-module
  *
- * Appends a new revision row to `frame_prompt_variants` and updates the
- * cached pointer column on `frames` (`imagePrompt` for visual prompts,
+ * Appends a new revision row to `shot_prompt_variants` and updates the
+ * cached pointer column on `shots` (`imagePrompt` for visual prompts,
  * `motionPrompt` for motion prompts) plus the matching
  * `*_prompt_input_hash` column. The two writes are sequential, not
  * transactional — see `write` for the durability story.
@@ -17,19 +17,19 @@
 
 import type { MotionPromptParameters } from '@/lib/ai/scene-analysis.schema';
 import type { Database } from '@/lib/db/client';
-import { framePromptVariants, frames, user } from '@/lib/db/schema';
+import { shotPromptVariants, shots, user } from '@/lib/db/schema';
 import type {
   FramePromptType,
-  FramePromptVariant,
-  FramePromptVariantComponents,
+  ShotPromptVariant,
+  ShotPromptVariantComponents,
 } from '@/lib/db/schema';
 import { and, desc, eq, isNotNull, lte } from 'drizzle-orm';
 
-type WriteFramePromptVariantBase = {
-  frameId: string;
+type WriteShotPromptVariantBase = {
+  shotId: string;
   promptType: FramePromptType;
   text: string;
-  components?: FramePromptVariantComponents | null;
+  components?: ShotPromptVariantComponents | null;
   parameters?: MotionPromptParameters | null;
   createdBy?: string | null;
 };
@@ -39,7 +39,7 @@ type WriteFramePromptVariantBase = {
  * bibles + aspectRatio + analysisModel) that this prompt is aligned with,
  * regardless of who authored the text. AI-generated and regenerated rows
  * carry a real hash at the call site so the partial unique index can dedupe
- * QStash retries; the helper may downgrade the persisted hash to null on
+ * retries; the helper may downgrade the persisted hash to null on
  * the force-regen fallback path (see `write` for details). User-edits also
  * carry the live hash captured at edit time so staleness detection keeps
  * working after a hand-typed prompt; null is permitted only when the
@@ -53,7 +53,7 @@ type WriteFramePromptVariantBase = {
  * rows to accommodate legacy user-edit variants written before this contract
  * landed (they have null hashes that we can't retroactively recompute).
  */
-export type WriteFramePromptVariantInput = WriteFramePromptVariantBase &
+export type WriteShotPromptVariantInput = WriteShotPromptVariantBase &
   (
     | {
         source: 'ai-generated' | 'regenerated';
@@ -75,29 +75,29 @@ export type WriteFramePromptVariantInput = WriteFramePromptVariantBase &
 const cachedColumnsForType = (promptType: FramePromptType) =>
   promptType === 'visual'
     ? {
-        text: frames.imagePrompt,
-        hash: frames.visualPromptInputHash,
+        text: shots.imagePrompt,
+        hash: shots.visualPromptInputHash,
         textKey: 'imagePrompt' as const,
         hashKey: 'visualPromptInputHash' as const,
       }
     : {
-        text: frames.motionPrompt,
-        hash: frames.motionPromptInputHash,
+        text: shots.motionPrompt,
+        hash: shots.motionPromptInputHash,
         textKey: 'motionPrompt' as const,
         hashKey: 'motionPromptInputHash' as const,
       };
 
-export function createFramePromptVariantsMethods(db: Database) {
+export function createShotPromptVariantsMethods(db: Database) {
   return {
     /**
      * Append a new prompt variant row and update the cached pointer on
-     * `frames`. Returns the inserted (or pre-existing matching) row.
+     * `shots`. Returns the inserted (or pre-existing matching) row.
      *
      * Durability: the insert + update pair is sequential, not transactional.
-     * The variant row is the source of truth; the cached column on `frames`
-     * is a read-path optimization. To make QStash retries safe, AI-generated
+     * The variant row is the source of truth; the cached column on `shots`
+     * is a read-path optimization. To make retries safe, AI-generated
      * rows are deduped by the unique partial index on
-     * `(frame_id, prompt_type, input_hash) WHERE input_hash IS NOT NULL`:
+     * `(shot_id, prompt_type, input_hash) WHERE input_hash IS NOT NULL`:
      * an insert that conflicts with an existing row no-ops, the existing row
      * is fetched, and the cached pointer is updated as normal.
      *
@@ -110,8 +110,8 @@ export function createFramePromptVariantsMethods(db: Database) {
      * `liveHash` so staleness detection stays correct.
      */
     write: async (
-      input: WriteFramePromptVariantInput
-    ): Promise<FramePromptVariant> => {
+      input: WriteShotPromptVariantInput
+    ): Promise<ShotPromptVariant> => {
       const cached = cachedColumnsForType(input.promptType);
 
       const nextHash = input.inputHash;
@@ -120,9 +120,9 @@ export function createFramePromptVariantsMethods(db: Database) {
       // Append first so a crash can't leave a stale pointer with no row
       // behind it. The reverse order would be unrecoverable.
       const [inserted] = await db
-        .insert(framePromptVariants)
+        .insert(shotPromptVariants)
         .values({
-          frameId: input.frameId,
+          shotId: input.shotId,
           promptType: input.promptType,
           text: input.text,
           components: input.components,
@@ -135,16 +135,16 @@ export function createFramePromptVariantsMethods(db: Database) {
         .onConflictDoNothing()
         .returning();
 
-      let variant: FramePromptVariant | undefined = inserted;
+      let variant: ShotPromptVariant | undefined = inserted;
       if (!variant && nextHash !== null) {
         const [existing] = await db
           .select()
-          .from(framePromptVariants)
+          .from(shotPromptVariants)
           .where(
             and(
-              eq(framePromptVariants.frameId, input.frameId),
-              eq(framePromptVariants.promptType, input.promptType),
-              eq(framePromptVariants.inputHash, nextHash)
+              eq(shotPromptVariants.shotId, input.shotId),
+              eq(shotPromptVariants.promptType, input.promptType),
+              eq(shotPromptVariants.inputHash, nextHash)
             )
           )
           .limit(1);
@@ -159,9 +159,9 @@ export function createFramePromptVariantsMethods(db: Database) {
           // new text lands in history. Restore/user-edit paths never reach
           // this branch — they don't carry a non-null `inputHash` here.
           const [forced] = await db
-            .insert(framePromptVariants)
+            .insert(shotPromptVariants)
             .values({
-              frameId: input.frameId,
+              shotId: input.shotId,
               promptType: input.promptType,
               text: input.text,
               components: input.components,
@@ -179,76 +179,74 @@ export function createFramePromptVariantsMethods(db: Database) {
       }
 
       if (!variant) {
-        throw new Error('Failed to insert frame prompt variant');
+        throw new Error('Failed to insert shot prompt variant');
       }
 
       await db
-        .update(frames)
+        .update(shots)
         .set({
           [cached.textKey]: input.text,
           [cached.hashKey]: nextHash,
           updatedAt: new Date(),
         })
-        .where(eq(frames.id, input.frameId));
+        .where(eq(shots.id, input.shotId));
 
       return variant;
     },
 
-    /** List the revision history for a frame's prompt, newest first. */
+    /** List the revision history for a shot's prompt, newest first. */
     listByFrame: async (
-      frameId: string,
+      shotId: string,
       promptType: FramePromptType
-    ): Promise<FramePromptVariant[]> => {
+    ): Promise<ShotPromptVariant[]> => {
       return await db
         .select()
-        .from(framePromptVariants)
+        .from(shotPromptVariants)
         .where(
           and(
-            eq(framePromptVariants.frameId, frameId),
-            eq(framePromptVariants.promptType, promptType)
+            eq(shotPromptVariants.shotId, shotId),
+            eq(shotPromptVariants.promptType, promptType)
           )
         )
-        .orderBy(desc(framePromptVariants.createdAt));
+        .orderBy(desc(shotPromptVariants.createdAt));
     },
 
     /**
      * History list for the UI — joins author name. Newest first.
      */
     listByFrameWithAuthor: async (
-      frameId: string,
+      shotId: string,
       promptType: FramePromptType
-    ): Promise<
-      Array<FramePromptVariant & { createdByName: string | null }>
-    > => {
+    ): Promise<Array<ShotPromptVariant & { createdByName: string | null }>> => {
       const rows = await db
-        .select({ variant: framePromptVariants, createdByName: user.name })
-        .from(framePromptVariants)
-        .leftJoin(user, eq(framePromptVariants.createdBy, user.id))
+        .select({ variant: shotPromptVariants, createdByName: user.name })
+        .from(shotPromptVariants)
+        .leftJoin(user, eq(shotPromptVariants.createdBy, user.id))
         .where(
           and(
-            eq(framePromptVariants.frameId, frameId),
-            eq(framePromptVariants.promptType, promptType)
+            eq(shotPromptVariants.shotId, shotId),
+            eq(shotPromptVariants.promptType, promptType)
           )
         )
-        .orderBy(desc(framePromptVariants.createdAt));
+        .orderBy(desc(shotPromptVariants.createdAt));
       return rows.map((r) => ({
         ...r.variant,
         createdByName: r.createdByName,
       }));
     },
 
-    /** Fetch a single variant scoped to its frame. */
+    /** Fetch a single variant scoped to its shot. */
     getByIdForFrame: async (
       variantId: string,
-      frameId: string
-    ): Promise<FramePromptVariant | null> => {
+      shotId: string
+    ): Promise<ShotPromptVariant | null> => {
       const [row] = await db
         .select()
-        .from(framePromptVariants)
+        .from(shotPromptVariants)
         .where(
           and(
-            eq(framePromptVariants.id, variantId),
-            eq(framePromptVariants.frameId, frameId)
+            eq(shotPromptVariants.id, variantId),
+            eq(shotPromptVariants.shotId, shotId)
           )
         )
         .limit(1);
@@ -256,71 +254,71 @@ export function createFramePromptVariantsMethods(db: Database) {
     },
 
     /**
-     * Candidates for matching a `frame_variants.promptHash` (`simpleHash` of
+     * Candidates for matching a `shot_variants.promptHash` (`simpleHash` of
      * the prompt text) — pulls prompt variants of the right type that existed
      * at or before `cutoff`, newest first. Caller filters by simpleHash.
      */
     listCandidatesAtOrBefore: async (
-      frameId: string,
+      shotId: string,
       promptType: FramePromptType,
       cutoff: Date,
       limit = 50
-    ): Promise<FramePromptVariant[]> => {
+    ): Promise<ShotPromptVariant[]> => {
       return await db
         .select()
-        .from(framePromptVariants)
+        .from(shotPromptVariants)
         .where(
           and(
-            eq(framePromptVariants.frameId, frameId),
-            eq(framePromptVariants.promptType, promptType),
-            lte(framePromptVariants.createdAt, cutoff)
+            eq(shotPromptVariants.shotId, shotId),
+            eq(shotPromptVariants.promptType, promptType),
+            lte(shotPromptVariants.createdAt, cutoff)
           )
         )
-        .orderBy(desc(framePromptVariants.createdAt))
+        .orderBy(desc(shotPromptVariants.createdAt))
         .limit(limit);
     },
 
     /** Most recent variant of a given type, or null if none exists. */
     getLatest: async (
-      frameId: string,
+      shotId: string,
       promptType: FramePromptType
-    ): Promise<FramePromptVariant | null> => {
+    ): Promise<ShotPromptVariant | null> => {
       const [row] = await db
         .select()
-        .from(framePromptVariants)
+        .from(shotPromptVariants)
         .where(
           and(
-            eq(framePromptVariants.frameId, frameId),
-            eq(framePromptVariants.promptType, promptType)
+            eq(shotPromptVariants.shotId, shotId),
+            eq(shotPromptVariants.promptType, promptType)
           )
         )
-        .orderBy(desc(framePromptVariants.createdAt))
+        .orderBy(desc(shotPromptVariants.createdAt))
         .limit(1);
       return row ?? null;
     },
 
     /**
      * Most recent variant of a given type whose `inputHash` is non-null.
-     * Used by the staleness path to find a reference hash for legacy frames
+     * Used by the staleness path to find a reference hash for legacy shots
      * whose cached `*_prompt_input_hash` column was nulled out by a
      * pre-fix user-edit. Skips user-edit rows that fell back to null when
      * context was uncomputable.
      */
     getLatestWithInputHash: async (
-      frameId: string,
+      shotId: string,
       promptType: FramePromptType
-    ): Promise<FramePromptVariant | null> => {
+    ): Promise<ShotPromptVariant | null> => {
       const [row] = await db
         .select()
-        .from(framePromptVariants)
+        .from(shotPromptVariants)
         .where(
           and(
-            eq(framePromptVariants.frameId, frameId),
-            eq(framePromptVariants.promptType, promptType),
-            isNotNull(framePromptVariants.inputHash)
+            eq(shotPromptVariants.shotId, shotId),
+            eq(shotPromptVariants.promptType, promptType),
+            isNotNull(shotPromptVariants.inputHash)
           )
         )
-        .orderBy(desc(framePromptVariants.createdAt))
+        .orderBy(desc(shotPromptVariants.createdAt))
         .limit(1);
       return row ?? null;
     },

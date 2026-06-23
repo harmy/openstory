@@ -1,4 +1,4 @@
-import { frameKeys } from '@/hooks/use-frames';
+import { shotKeys } from '@/hooks/use-shots';
 import type { StaleDetectedPayload } from '@/lib/realtime';
 import { useRealtime } from '@/lib/realtime/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -64,10 +64,10 @@ export function useStaleDetected(sequenceId: string | undefined) {
       const scheduledFor = sequenceId;
 
       void queryClient.invalidateQueries({
-        queryKey: frameKeys.list(sequenceId),
+        queryKey: shotKeys.list(sequenceId),
       });
       void queryClient.invalidateQueries({
-        queryKey: frameKeys.divergentVariants(sequenceId),
+        queryKey: shotKeys.divergentVariants(sequenceId),
       });
 
       const state = debounceRef.current;

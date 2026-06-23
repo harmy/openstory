@@ -201,7 +201,7 @@ const clampDuration = (n: number) =>
 
 const estimateSceneDurationInputSchema = z.object({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
   extract: z
     .string()
     .min(1, 'Scene script is empty')
@@ -222,10 +222,10 @@ export const estimateSceneDurationFn = createServerFn({ method: 'POST' })
     const { llmKey, deduct } = await prepareBilling(
       context.scopedDb,
       `Scene duration estimate (${analysisModel})`,
-      { model: analysisModel, frameId: context.frame.id }
+      { model: analysisModel, shotId: context.shot.id }
     );
 
-    const sceneMetadata = context.frame.metadata?.metadata;
+    const sceneMetadata = context.shot.metadata?.metadata;
     const userPrompt = [
       sceneMetadata?.title && `Title: ${sceneMetadata.title}`,
       sceneMetadata?.location && `Location: ${sceneMetadata.location}`,

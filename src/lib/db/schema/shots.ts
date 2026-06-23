@@ -1,9 +1,8 @@
 /**
- * Frames Schema
- * Individual frames/shots within a sequence
+ * Shots Schema
+ * Individual shots within a sequence
  */
 
-import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
 import type { Scene } from '@/lib/ai/scene-analysis.schema';
 import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import {
@@ -25,18 +24,18 @@ export const FRAME_GENERATION_STATUSES = [
 type FrameGenerationStatus = (typeof FRAME_GENERATION_STATUSES)[number];
 
 /**
- * Frames table
- * Individual frames/shots within a sequence
+ * Shots table
+ * Individual shots within a sequence
  *
- * Each frame represents one scene from script analysis and stores:
+ * Each shot represents one scene from script analysis and stores:
  * - Visual content (thumbnailUrl for image, videoUrl for motion)
  * - Scene data in metadata field (populated progressively across 5 phases)
  * - Generation tracking information
  *
  * @see src/lib/ai/scene-analysis.schema.ts for Scene structure
  */
-export const frames = snakeCase.table(
-  'frames',
+export const shots = snakeCase.table(
+  'shots',
   {
     id: text()
       .$defaultFn(() => generateId())
@@ -69,7 +68,13 @@ export const frames = snakeCase.table(
       mode: 'timestamp',
     }),
     thumbnailError: text(),
-    imageModel: text({ length: 100 }).default(DEFAULT_IMAGE_MODEL).notNull(), // Model used for image generation
+    // SQL default pinned to the literal 'nano_banana_2' to match every deployed
+    // DB's column default. DEFAULT_IMAGE_MODEL was bumped to 'gpt_image_2'
+    // WITHOUT a migration; SQLite can't ALTER (or DROP) a column default without
+    // a full table rebuild, which CASCADE-deletes child rows on D1 (the #612
+    // trap). The shot-create path resolves the real default in app code; this
+    // literal is just a never-relied-on fallback.
+    imageModel: text({ length: 100 }).default('nano_banana_2').notNull(),
     imagePrompt: text(), // User-updated image prompt (overrides AI-generated prompt from metadata)
     // Video/motion generation status tracking
     videoStatus: text().$type<FrameGenerationStatus>().default('pending'),
@@ -122,7 +127,7 @@ export const frames = snakeCase.table(
     // Compound index for efficient ordering queries
     index('idx_frames_order').on(table.sequenceId, table.orderIndex),
     index('idx_frames_sequence_id').on(table.sequenceId),
-    // Unique constraint: one frame per sequence/order combination
+    // Unique constraint: one shot per sequence/order combination
     uniqueIndex('frames_sequence_id_order_index_key').on(
       table.sequenceId,
       table.orderIndex
@@ -130,13 +135,13 @@ export const frames = snakeCase.table(
   ]
 );
 
-// Override the inferred Frame type to use Scene for metadata
-type InferredFrame = InferSelectModel<typeof frames>;
-export type Frame = Omit<InferredFrame, 'metadata'> & {
+// Override the inferred Shot type to use Scene for metadata
+type InferredShot = InferSelectModel<typeof shots>;
+export type Shot = Omit<InferredShot, 'metadata'> & {
   metadata: Scene | null; // Nullable until script analysis completes, fields populate progressively
 };
 
-type InferredNewFrame = InferInsertModel<typeof frames>;
-export type NewFrame = Omit<InferredNewFrame, 'metadata'> & {
+type InferredNewShot = InferInsertModel<typeof shots>;
+export type NewShot = Omit<InferredNewShot, 'metadata'> & {
   metadata?: Scene | null; // Optional - can be null initially, populated during script analysis
 };

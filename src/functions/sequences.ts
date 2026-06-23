@@ -16,14 +16,11 @@ import {
 import { multiplyMicros } from '@/lib/billing/money';
 import { requireCredits } from '@/lib/billing/preflight';
 import { DEFAULT_ASPECT_RATIO } from '@/lib/constants/aspect-ratios';
-import type { Frame, FrameVariant, NewFrame } from '@/lib/db/schema';
-import { buildPromoteUpdate } from '@/functions/frames';
+import type { Shot, ShotVariant, NewShot } from '@/lib/db/schema';
+import { buildPromoteUpdate } from '@/functions/shots';
 import { buildFrameImageWorkflowInput } from '@/lib/image/build-frame-image-input';
 import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
-import {
-  VARIANT_TYPES,
-  type VariantType,
-} from '@/lib/db/schema/frame-variants';
+import { VARIANT_TYPES, type VariantType } from '@/lib/db/schema/shot-variants';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import {
   createSequenceSchema,
@@ -284,7 +281,7 @@ export const archiveSequenceFn = createServerFn({ method: 'POST' })
   });
 
 /** Build compact scene summaries from frames for music prompt generation */
-export function buildSceneSummaries(frames: Frame[]): MusicSceneSummary[] {
+export function buildSceneSummaries(frames: Shot[]): MusicSceneSummary[] {
   return frames.map((frame) => {
     const md = frame.metadata?.musicDesign;
     const prompts = frame.metadata?.prompts;
@@ -353,7 +350,7 @@ export function assertModelNotAlreadyAdded(
  * primary image to animate. A frame with no usable image is skipped — there is
  * nothing to feed image-to-video.
  */
-export function selectEligibleVideoFrames(frames: readonly Frame[]): Frame[] {
+export function selectEligibleVideoFrames(frames: readonly Shot[]): Shot[] {
   return frames.filter(
     (f) => f.thumbnailStatus === 'completed' && Boolean(f.thumbnailUrl)
   );
@@ -365,7 +362,7 @@ export function selectEligibleVideoFrames(frames: readonly Frame[]): Frame[] {
  * paths; callers apply their own empty-sequence floor (`|| 30`).
  */
 export function sumFrameDurationsSeconds(
-  frames: ReadonlyArray<Pick<Frame, 'durationMs' | 'metadata'>>
+  frames: ReadonlyArray<Pick<Shot, 'durationMs' | 'metadata'>>
 ): number {
   return frames.reduce((sum, frame) => {
     const seconds = frame.durationMs
@@ -443,7 +440,7 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
           'Generate music once before adding another audio model'
         );
       }
-      const allFrames = await scopedDb.frames.listBySequence(sequence.id);
+      const allFrames = await scopedDb.shots.listBySequence(sequence.id);
       const totalDuration = sumFrameDurationsSeconds(allFrames) || 30;
 
       await requireCredits(scopedDb, estimateAudioCost(model, totalDuration), {
@@ -512,12 +509,12 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       if (!isValidImageToVideoModel(model)) {
         throw new Error('Invalid video model');
       }
-      const existing = await scopedDb.frameVariants.listBySequence(
+      const existing = await scopedDb.shotVariants.listBySequence(
         sequence.id,
         'video'
       );
       assertModelNotAlreadyAdded(existing, model, 'video');
-      const allFrames = await scopedDb.frames.listBySequence(sequence.id);
+      const allFrames = await scopedDb.shots.listBySequence(sequence.id);
       const eligible = selectEligibleVideoFrames(allFrames);
       if (eligible.length === 0) {
         throw new Error('No frames have a completed image to animate yet');
@@ -530,8 +527,8 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       );
 
       for (const f of eligible) {
-        await scopedDb.frameVariants.upsert({
-          frameId: f.id,
+        await scopedDb.shotVariants.upsert({
+          shotId: f.id,
           sequenceId: sequence.id,
           variantType: 'video',
           model,
@@ -546,8 +543,8 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
         // Adding a video model lands as an alternate only — never the primary
         // video. Promote later with "Set". (#547)
         variantOnly: true,
-        frames: eligible.map((f) => ({
-          frameId: f.id,
+        shots: eligible.map((f) => ({
+          shotId: f.id,
           imageUrl: f.thumbnailUrl ?? '',
           prompt: resolveMotionPrompt(f, model),
           model,
@@ -588,7 +585,7 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
         try {
           await Promise.all(
             eligible.map((f) =>
-              scopedDb.frameVariants.updateByFrameAndModel(
+              scopedDb.shotVariants.updateByFrameAndModel(
                 f.id,
                 'video',
                 model,
@@ -614,12 +611,12 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
     if (!isValidTextToImageModel(model)) {
       throw new Error('Invalid image model');
     }
-    const existingImage = await scopedDb.frameVariants.listBySequence(
+    const existingImage = await scopedDb.shotVariants.listBySequence(
       sequence.id,
       'image'
     );
     assertModelNotAlreadyAdded(existingImage, model, 'image');
-    const allFrames = await scopedDb.frames.listBySequence(sequence.id);
+    const allFrames = await scopedDb.shots.listBySequence(sequence.id);
     const [characters, locations, elements] = await Promise.all([
       scopedDb.characters.listWithSheets(sequence.id),
       scopedDb.sequenceLocations.listWithReferences(sequence.id),
@@ -666,9 +663,9 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
     let workflowRunId = '';
     let triggered = 0;
     for (const input of inputs) {
-      if (input.frameId) {
-        await scopedDb.frameVariants.upsert({
-          frameId: input.frameId,
+      if (input.shotId) {
+        await scopedDb.shotVariants.upsert({
+          shotId: input.shotId,
           sequenceId: sequence.id,
           variantType: 'image',
           model,
@@ -677,7 +674,7 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       }
       try {
         workflowRunId = await triggerWorkflow('/image', input, {
-          deduplicationId: `add-image-${input.frameId}-${model}-${Date.now()}`,
+          deduplicationId: `add-image-${input.shotId}-${model}-${Date.now()}`,
           label: buildWorkflowLabel(sequence.id),
         });
         triggered++;
@@ -688,12 +685,12 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
         logger.error('add-model: failed to trigger image workflow for frame', {
           err: error,
           sequenceId: sequence.id,
-          frameId: input.frameId,
+          shotId: input.shotId,
           model,
         });
-        if (input.frameId) {
-          await scopedDb.frameVariants.updateByFrameAndModel(
-            input.frameId,
+        if (input.shotId) {
+          await scopedDb.shotVariants.updateByFrameAndModel(
+            input.shotId,
             'image',
             model,
             {
@@ -728,9 +725,9 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
  * the user explicitly rejected onto the primary across the whole sequence.
  */
 export function selectPromotableVariants(
-  variants: readonly FrameVariant[],
+  variants: readonly ShotVariant[],
   model: string
-): FrameVariant[] {
+): ShotVariant[] {
   return variants.filter(
     (v) =>
       v.model === model &&
@@ -750,11 +747,11 @@ export function selectPromotableVariants(
  * parity. `now` is injectable for deterministic tests.
  */
 export function buildSequencePromoteUpdate(
-  variant: FrameVariant,
+  variant: ShotVariant,
   variantType: 'image' | 'video',
   model: string,
   now: () => Date = () => new Date()
-): Partial<NewFrame> {
+): Partial<NewShot> {
   const { update } = buildPromoteUpdate(variant);
   if (variantType === 'video') {
     return {
@@ -799,7 +796,7 @@ export const setSequenceModelFn = createServerFn({ method: 'POST' })
       throw new Error('Invalid video model');
     }
 
-    const variants = await scopedDb.frameVariants.listBySequence(
+    const variants = await scopedDb.shotVariants.listBySequence(
       sequence.id,
       variantType
     );
@@ -815,13 +812,9 @@ export const setSequenceModelFn = createServerFn({ method: 'POST' })
         variantType,
         model
       );
-      const updated = await scopedDb.frames.update(
-        variant.frameId,
-        frameUpdate,
-        {
-          throwOnMissing: false,
-        }
-      );
+      const updated = await scopedDb.shots.update(variant.shotId, frameUpdate, {
+        throwOnMissing: false,
+      });
       if (updated) count++;
     }
 
@@ -888,7 +881,7 @@ export const generateMusicFn = createServerFn({ method: 'POST' })
       });
     }
 
-    const allFrames = await context.scopedDb.frames.listBySequence(
+    const allFrames = await context.scopedDb.shots.listBySequence(
       data.sequenceId
     );
 

@@ -1,4 +1,4 @@
-import type { Frame } from '@/lib/db/schema/frames';
+import type { Shot } from '@/lib/db/schema/shots';
 import type { Style } from '@/lib/db/schema/libraries';
 import type { Sequence } from '@/lib/db/schema/sequences';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -69,7 +69,7 @@ function makeSequence(overrides: Partial<Sequence> = {}): Sequence {
   };
 }
 
-function makeFrame(overrides: Partial<Frame> = {}): Frame {
+function makeFrame(overrides: Partial<Shot> = {}): Shot {
   return {
     id: 'frame-1',
     sequenceId: 'seq-1',
@@ -157,7 +157,7 @@ function makeStyle(overrides: Partial<Style> = {}): Style {
  * A scopedDb stub exposing the batched frame + style fetches the builder uses.
  * `styles` defaults to a single 'style-1' row matching the default sequence.
  */
-function depsWithFrames(frames: Frame[], styles: Style[] = [makeStyle()]) {
+function depsWithFrames(frames: Shot[], styles: Style[] = [makeStyle()]) {
   return {
     sequences: { listFramesByIds: async () => frames },
     styles: { listByIds: async () => styles },

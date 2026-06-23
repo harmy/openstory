@@ -45,7 +45,7 @@ export const ElementCard: React.FC<ElementCardProps> = ({
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/70 backdrop-blur-sm">
               <Loader2 className="size-6 animate-spin text-muted-foreground" />
               <p className="text-xs text-muted-foreground">
-                {isAnalyzing ? 'Analyzing…' : 'Editing frames…'}
+                {isAnalyzing ? 'Analyzing…' : 'Editing shots…'}
               </p>
             </div>
           ) : null}
@@ -130,7 +130,7 @@ export const ElementCard: React.FC<ElementCardProps> = ({
         </div>
         {affectedFrameCount > 0 ? (
           <p className="text-xs text-muted-foreground/70">
-            Used in {affectedFrameCount} frame
+            Used in {affectedFrameCount} shot
             {affectedFrameCount === 1 ? '' : 's'}
             {affectedVideoCount > 0
               ? ` (${affectedVideoCount} with video)`

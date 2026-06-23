@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { analyzeFailures } from './failure-analysis';
-import type { Frame } from '@/lib/db/schema/frames';
+import type { Shot } from '@/lib/db/schema/shots';
 import type { Sequence } from '@/lib/db/schema/sequences';
 
-function makeFrame(overrides: Partial<Frame> = {}): Frame {
+function makeFrame(overrides: Partial<Shot> = {}): Shot {
   return {
     id: 'frame-1',
     sequenceId: 'seq-1',
@@ -133,8 +133,8 @@ describe('analyzeFailures', () => {
     const [imageGroup] = result.groups;
     if (!imageGroup) throw new Error('test setup: image group missing');
     expect(imageGroup.category).toBe('image');
-    expect(imageGroup.frames).toHaveLength(1);
-    const [imageFrame] = imageGroup.frames;
+    expect(imageGroup.shots).toHaveLength(1);
+    const [imageFrame] = imageGroup.shots;
     if (!imageFrame) throw new Error('test setup: image frame missing');
     expect(imageFrame.error).toBe('Model timeout');
     expect(result.headline).toContain('1 image failed');
@@ -157,7 +157,7 @@ describe('analyzeFailures', () => {
     expect(result.requiresFullRetry).toBe(false);
     const motionGroup = result.groups.find((g) => g.category === 'motion');
     expect(motionGroup).toBeDefined();
-    expect(motionGroup?.frames).toHaveLength(1);
+    expect(motionGroup?.shots).toHaveLength(1);
     expect(result.headline).toContain('1 motion video failed');
   });
 

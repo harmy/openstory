@@ -102,8 +102,8 @@ export class MotionPromptWorkflow extends OpenStoryWorkflowEntrypoint<MotionProm
           teamId: input.teamId,
           userId: input.userId,
           sequenceId,
-          frameId: frameMapping?.find((f) => f.sceneId === scene.sceneId)
-            ?.frameId,
+          shotId: frameMapping?.find((f) => f.sceneId === scene.sceneId)
+            ?.shotId,
           // Pass the rendered still per scene, snapshotted upstream (#929) —
           // never looked up inside the child workflow.
           startingFrameImageUrl:

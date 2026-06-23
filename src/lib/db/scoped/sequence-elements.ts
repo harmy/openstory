@@ -6,11 +6,11 @@
 import type { Database } from '@/lib/db/client';
 import type {
   ElementVisionStatus,
-  Frame,
+  Shot,
   NewSequenceElement,
   SequenceElement,
 } from '@/lib/db/schema';
-import { frames, sequenceElements, sequences } from '@/lib/db/schema';
+import { shots, sequenceElements, sequences } from '@/lib/db/schema';
 import {
   buildFrameRenameDeltas,
   replaceTokenInText,
@@ -268,8 +268,8 @@ export function createSequenceElementsMethods(db: Database) {
 
       const allFrames = (await db
         .select()
-        .from(frames)
-        .where(eq(frames.sequenceId, sequenceId))) as Frame[];
+        .from(shots)
+        .where(eq(shots.sequenceId, sequenceId))) as Shot[];
       const deltas = buildFrameRenameDeltas(allFrames, oldToken, newToken);
       const frameStatements = deltas.map((delta) => {
         const set: Record<string, unknown> = { updatedAt: now };
@@ -278,7 +278,7 @@ export function createSequenceElementsMethods(db: Database) {
           set.imagePrompt = delta.imagePrompt;
         if (delta.motionPrompt !== undefined)
           set.motionPrompt = delta.motionPrompt;
-        return db.update(frames).set(set).where(eq(frames.id, delta.frameId));
+        return db.update(shots).set(set).where(eq(shots.id, delta.shotId));
       });
 
       const [elementRows] = await db.batch([
@@ -318,10 +318,10 @@ export function createSequenceElementsMethods(db: Database) {
 
       const allFrames = await db
         .select()
-        .from(frames)
-        .where(eq(frames.sequenceId, sequenceId));
+        .from(shots)
+        .where(eq(shots.sequenceId, sequenceId));
 
-      return (allFrames as Frame[])
+      return (allFrames as Shot[])
         .filter((frame) => {
           const elementTags = frame.metadata?.continuity?.elementTags ?? [];
           const sceneScript = frame.metadata?.originalScript?.extract ?? '';
@@ -356,10 +356,10 @@ export function createSequenceElementsMethods(db: Database) {
 
       const allFrames = await db
         .select()
-        .from(frames)
-        .where(eq(frames.sequenceId, sequenceId));
+        .from(shots)
+        .where(eq(shots.sequenceId, sequenceId));
 
-      for (const frame of allFrames as Frame[]) {
+      for (const frame of allFrames as Shot[]) {
         const elementTags = frame.metadata?.continuity?.elementTags ?? [];
         const sceneScript = frame.metadata?.originalScript.extract ?? '';
         const matched = matchElementsToScene(

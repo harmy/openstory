@@ -1,8 +1,8 @@
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import type { Meta, StoryObj } from '@storybook/react';
 import { SceneListItem } from './scene-list-item';
 
-const mockFrame: Frame = {
+const mockFrame: Shot = {
   id: 'frame-1',
   sequenceId: 'seq-1',
   orderIndex: 0,
@@ -289,7 +289,7 @@ export const LongTitle: Story = {
           styleTag: '',
         },
         sourceImageUrl: mockFrame.metadata?.sourceImageUrl ?? '',
-      } satisfies Frame['metadata'],
+      } satisfies Shot['metadata'],
     },
     isActive: false,
     isCompleted: false,
@@ -373,7 +373,7 @@ export const LongScript: Story = {
           styleTag: '',
         },
         sourceImageUrl: mockFrame.metadata?.sourceImageUrl ?? '',
-      } satisfies Frame['metadata'],
+      } satisfies Shot['metadata'],
     },
     isActive: false,
     isCompleted: false,

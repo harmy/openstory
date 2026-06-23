@@ -3,7 +3,7 @@ import { AppImage } from '@/components/ui/app-image';
 import { EvalSequenceMetadata } from './eval-sequence-metadata';
 import { EvalSceneCell } from './eval-scene-cell';
 import type { DialogTab } from './eval-cell-dialog';
-import type { SequenceWithFrames } from '@/hooks/use-sequences-with-frames';
+import type { SequenceWithShots } from '@/hooks/use-sequences-with-shots';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { DEFAULT_ASPECT_RATIO } from '@/lib/constants/aspect-ratios';
 import type { ViewMode } from './eval-view';
@@ -19,7 +19,7 @@ type OpenDialogState = {
 } | null;
 
 type EvalSequenceRowProps = {
-  sequence: SequenceWithFrames;
+  sequence: SequenceWithShots;
   viewMode: ViewMode;
   maxSceneCount: number;
   sequenceIndex: number;
@@ -46,7 +46,7 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
   const aspectRatio: AspectRatio =
     (sequence.aspectRatio as AspectRatio | null) ?? DEFAULT_ASPECT_RATIO;
 
-  const previewUrl = sequence.frames[0]?.thumbnailUrl ?? sequence.posterUrl;
+  const previewUrl = sequence.shots[0]?.thumbnailUrl ?? sequence.posterUrl;
 
   return (
     <>
@@ -83,7 +83,7 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
         )}
       </div>
       {Array.from({ length: maxSceneCount }, (_, i) => {
-        const frame = sequence.frames[i];
+        const frame = sequence.shots[i];
         const sceneIndex = i;
         const isDialogOpen =
           openDialog?.sequenceIndex === sequenceIndex &&

@@ -18,7 +18,7 @@ function apply(
 function withCreatedFrame(): GenerationStreamState {
   return apply(createInitialState(), {
     type: 'FRAME_CREATED',
-    payload: { frameId: FRAME_ID, sceneId: 'scene-1', orderIndex: 0 },
+    payload: { shotId: FRAME_ID, sceneId: 'scene-1', orderIndex: 0 },
   });
 }
 
@@ -27,7 +27,7 @@ describe('generationStreamReducer — frame retry tracking (#882)', () => {
     const state = apply(withCreatedFrame(), {
       type: 'IMAGE_PROGRESS',
       payload: {
-        frameId: FRAME_ID,
+        shotId: FRAME_ID,
         status: 'generating',
         retry: { attempt: 2, maxAttempts: 3 },
       },
@@ -42,13 +42,13 @@ describe('generationStreamReducer — frame retry tracking (#882)', () => {
     const state = apply(createInitialState(), {
       type: 'IMAGE_PROGRESS',
       payload: {
-        frameId: FRAME_ID,
+        shotId: FRAME_ID,
         status: 'generating',
         retry: { attempt: 2, maxAttempts: 3 },
       },
     });
 
-    // Frame isn't in the frames map, but its retry state is still surfaced.
+    // Shot isn't in the frames map, but its retry state is still surfaced.
     expect(state.frames.has(FRAME_ID)).toBe(false);
     expect(state.frameRetries.get(FRAME_ID)).toEqual({
       image: { attempt: 2, maxAttempts: 3 },
@@ -61,7 +61,7 @@ describe('generationStreamReducer — frame retry tracking (#882)', () => {
       {
         type: 'IMAGE_PROGRESS',
         payload: {
-          frameId: FRAME_ID,
+          shotId: FRAME_ID,
           status: 'generating',
           retry: { attempt: 2, maxAttempts: 3 },
         },
@@ -69,7 +69,7 @@ describe('generationStreamReducer — frame retry tracking (#882)', () => {
       {
         type: 'IMAGE_PROGRESS',
         payload: {
-          frameId: FRAME_ID,
+          shotId: FRAME_ID,
           status: 'completed',
           thumbnailUrl: 'https://example.com/i.jpg',
         },
@@ -86,7 +86,7 @@ describe('generationStreamReducer — frame retry tracking (#882)', () => {
       {
         type: 'IMAGE_PROGRESS',
         payload: {
-          frameId: FRAME_ID,
+          shotId: FRAME_ID,
           status: 'generating',
           retry: { attempt: 2, maxAttempts: 3 },
         },
@@ -94,7 +94,7 @@ describe('generationStreamReducer — frame retry tracking (#882)', () => {
       {
         type: 'VIDEO_PROGRESS',
         payload: {
-          frameId: FRAME_ID,
+          shotId: FRAME_ID,
           status: 'generating',
           retry: { attempt: 3, maxAttempts: 3 },
         },
@@ -109,7 +109,7 @@ describe('generationStreamReducer — frame retry tracking (#882)', () => {
     // Clearing the video retry leaves the image retry intact.
     const next = apply(state, {
       type: 'VIDEO_PROGRESS',
-      payload: { frameId: FRAME_ID, status: 'completed' },
+      payload: { shotId: FRAME_ID, status: 'completed' },
     });
     expect(next.frameRetries.get(FRAME_ID)).toEqual({
       image: { attempt: 2, maxAttempts: 3 },
@@ -120,7 +120,7 @@ describe('generationStreamReducer — frame retry tracking (#882)', () => {
     const base = withCreatedFrame();
     const next = apply(base, {
       type: 'IMAGE_PROGRESS',
-      payload: { frameId: FRAME_ID, status: 'generating' },
+      payload: { shotId: FRAME_ID, status: 'generating' },
     });
     // frames map updates, but frameRetries reference is unchanged.
     expect(next.frameRetries).toBe(base.frameRetries);
@@ -130,7 +130,7 @@ describe('generationStreamReducer — frame retry tracking (#882)', () => {
     const state = apply(withCreatedFrame(), {
       type: 'IMAGE_PROGRESS',
       payload: {
-        frameId: FRAME_ID,
+        shotId: FRAME_ID,
         status: 'generating',
         retry: { attempt: 2 },
       },
@@ -145,7 +145,7 @@ describe('generationStreamReducer — frame retry tracking (#882)', () => {
     const state = apply(withCreatedFrame(), {
       type: 'IMAGE_PROGRESS',
       payload: {
-        frameId: FRAME_ID,
+        shotId: FRAME_ID,
         status: 'generating',
         retry: { attempt: 2, maxAttempts: 3 },
       },

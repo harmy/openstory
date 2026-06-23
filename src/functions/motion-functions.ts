@@ -32,14 +32,14 @@ import { frameAccessMiddleware, sequenceAccessMiddleware } from './middleware';
 
 const generateMotionInputSchema = generateMotionSchema.extend({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
 });
 
-export const generateFrameMotionFn = createServerFn({ method: 'POST' })
+export const generateShotMotionFn = createServerFn({ method: 'POST' })
   .middleware([frameAccessMiddleware])
   .inputValidator(zodValidator(generateMotionInputSchema))
   .handler(async ({ data, context }) => {
-    const { frame, sequence, teamId } = context;
+    const { shot: frame, sequence, teamId } = context;
 
     if (!frame.thumbnailUrl) {
       throw new Error('Frame has no thumbnail to generate motion from');
@@ -66,7 +66,7 @@ export const generateFrameMotionFn = createServerFn({ method: 'POST' })
         promptText: prompt,
       });
       if (rescan.changed) {
-        await context.scopedDb.frames.update(frame.id, {
+        await context.scopedDb.shots.update(frame.id, {
           metadata: { ...frame.metadata, continuity: rescan.continuity },
         });
       }
@@ -93,9 +93,9 @@ export const generateFrameMotionFn = createServerFn({ method: 'POST' })
       teamId,
       sequenceId: sequence.id,
       includeMusic: false,
-      frames: [
+      shots: [
         {
-          frameId: frame.id,
+          shotId: frame.id,
           imageUrl: frame.thumbnailUrl,
           prompt,
           model,
@@ -118,7 +118,7 @@ export const generateFrameMotionFn = createServerFn({ method: 'POST' })
       }
     );
 
-    return { workflowRunId, frameId: frame.id };
+    return { workflowRunId, shotId: frame.id };
   });
 
 // -- Batch Generate Motion for Sequence ----------------------------------
@@ -145,7 +145,7 @@ export const batchGenerateMotionFn = createServerFn({ method: 'POST' })
   .handler(async ({ data, context }) => {
     const { sequence, teamId, user } = context;
 
-    const allFrames = await context.scopedDb.frames.listBySequence(sequence.id);
+    const allFrames = await context.scopedDb.shots.listBySequence(sequence.id);
     // Server determines eligible frames: thumbnail done, video pending/failed
     const eligibleFrames = allFrames.filter(
       (f) =>
@@ -217,13 +217,13 @@ export const batchGenerateMotionFn = createServerFn({ method: 'POST' })
       teamId,
       sequenceId: sequence.id,
       includeMusic,
-      frames: eligibleFrames.map((frame) => {
+      shots: eligibleFrames.map((frame) => {
         const frameModel = safeImageToVideoModel(
           data.model || frame.motionModel || sequence.videoModel,
           DEFAULT_VIDEO_MODEL
         );
         return {
-          frameId: frame.id,
+          shotId: frame.id,
           imageUrl: frame.thumbnailUrl ?? '',
           prompt: resolveMotionPrompt(frame, frameModel),
           model: frameModel,

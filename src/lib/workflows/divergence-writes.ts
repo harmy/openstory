@@ -1,4 +1,4 @@
-import type { NewFrame, NewFrameVariant } from '@/lib/db/schema';
+import type { NewShot, NewShotVariant } from '@/lib/db/schema';
 
 /**
  * Reverts to apply when a snapshot-pattern image workflow detects divergence
@@ -7,8 +7,8 @@ import type { NewFrame, NewFrameVariant } from '@/lib/db/schema';
  * INSERT payload.
  */
 export function buildDivergentRevertWrites(): {
-  frame: Partial<NewFrame>;
-  primaryRevert: Partial<NewFrameVariant>;
+  frame: Partial<NewShot>;
+  primaryRevert: Partial<NewShotVariant>;
 } {
   return {
     frame: {

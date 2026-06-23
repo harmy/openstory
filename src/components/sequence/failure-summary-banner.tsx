@@ -39,8 +39,8 @@ export const FailureSummaryBanner: React.FC<FailureSummaryBannerProps> = ({
             {summary.groups.map((group) => (
               <div key={group.category}>
                 <span className="font-semibold">{group.category}:</span>
-                {group.frames.map((f) => (
-                  <div key={f.frameId} className="ml-2">
+                {group.shots.map((f) => (
+                  <div key={f.shotId} className="ml-2">
                     Scene {f.orderIndex + 1}
                     {f.sceneTitle !== `Scene ${f.orderIndex + 1}` &&
                       ` (${f.sceneTitle})`}

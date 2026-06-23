@@ -14,9 +14,9 @@ import { createApiKeysMethods } from '@/lib/db/scoped/api-keys';
 import { createBillingMethods } from '@/lib/db/scoped/billing';
 import { createCharacterSheetVariantsMethods } from '@/lib/db/scoped/character-sheet-variants';
 import { createCharactersMethods } from '@/lib/db/scoped/characters';
-import { createFramePromptVariantsMethods } from '@/lib/db/scoped/frame-prompt-variants';
-import { createFrameVariantsMethods } from '@/lib/db/scoped/frame-variants';
-import { createFramesMethods } from '@/lib/db/scoped/frames';
+import { createShotPromptVariantsMethods } from '@/lib/db/scoped/shot-prompt-variants';
+import { createShotVariantsMethods } from '@/lib/db/scoped/shot-variants';
+import { createShotsMethods } from '@/lib/db/scoped/shots';
 import { createLibraryMethods } from '@/lib/db/scoped/library';
 import {
   createLocationSheetsMethods,
@@ -284,9 +284,9 @@ export function createScopedDb(teamId: string, userId: string) {
     locationSheets: createLocationSheetsMethods(db),
     library: createLibraryMethods(db, teamId),
 
-    frames: createFramesMethods(db),
-    frameVariants: createFrameVariantsMethods(db),
-    framePromptVariants: createFramePromptVariantsMethods(db),
+    shots: createShotsMethods(db),
+    shotVariants: createShotVariantsMethods(db),
+    shotPromptVariants: createShotPromptVariantsMethods(db),
     characterSheetVariants: createCharacterSheetVariantsMethods(db),
     locationSheetVariants: createLocationSheetVariantsMethods(db),
     talentSheetVariants: createTalentSheetVariantsMethods(db),

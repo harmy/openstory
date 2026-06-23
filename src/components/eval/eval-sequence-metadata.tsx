@@ -2,7 +2,7 @@ import type React from 'react';
 import { AspectRatioIcon } from '@/components/icons/aspect-ratio-icon';
 import { ModelBadge } from '@/components/model/model-badge';
 import { StyleBadge } from '@/components/style/style-badge';
-import type { SequenceWithFrames } from '@/hooks/use-sequences-with-frames';
+import type { SequenceWithShots } from '@/hooks/use-sequences-with-shots';
 import { getImageModelById } from '@/lib/ai/models';
 import { getAspectRatioData } from '@/lib/constants/aspect-ratios';
 import { formatDistanceToNow } from '@/lib/format-date';
@@ -12,7 +12,7 @@ import { AlertTriangle, Calendar, ImageIcon, Mail, User } from 'lucide-react';
 import { getCreatorIdentity } from './creator-identity';
 
 type EvalSequenceMetadataProps = {
-  sequence: SequenceWithFrames;
+  sequence: SequenceWithShots;
   divergence?: { hasMusic: boolean };
 };
 
@@ -78,7 +78,7 @@ export const EvalSequenceMetadata: React.FC<EvalSequenceMetadataProps> = ({
       </div>
 
       <div className="text-xs text-muted-foreground">
-        {sequence.frames.length} scene{sequence.frames.length !== 1 ? 's' : ''}
+        {sequence.shots.length} scene{sequence.shots.length !== 1 ? 's' : ''}
       </div>
 
       <SequenceErrors sequence={sequence} />
@@ -86,7 +86,7 @@ export const EvalSequenceMetadata: React.FC<EvalSequenceMetadataProps> = ({
   );
 };
 
-const CreatorIdentity: React.FC<{ sequence: SequenceWithFrames }> = ({
+const CreatorIdentity: React.FC<{ sequence: SequenceWithShots }> = ({
   sequence,
 }) => {
   const { name, email } = getCreatorIdentity(sequence);
@@ -116,7 +116,7 @@ const CreatorIdentity: React.FC<{ sequence: SequenceWithFrames }> = ({
   );
 };
 
-const SequenceErrors: React.FC<{ sequence: SequenceWithFrames }> = ({
+const SequenceErrors: React.FC<{ sequence: SequenceWithShots }> = ({
   sequence,
 }) => {
   let errorCount = 0;
@@ -124,12 +124,10 @@ const SequenceErrors: React.FC<{ sequence: SequenceWithFrames }> = ({
   if (sequence.status === 'failed') errorCount++;
   if (sequence.musicError) errorCount++;
 
-  errorCount += sequence.frames.filter(
+  errorCount += sequence.shots.filter(
     (f) => f.thumbnailStatus === 'failed'
   ).length;
-  errorCount += sequence.frames.filter(
-    (f) => f.videoStatus === 'failed'
-  ).length;
+  errorCount += sequence.shots.filter((f) => f.videoStatus === 'failed').length;
 
   if (errorCount === 0) return null;
 

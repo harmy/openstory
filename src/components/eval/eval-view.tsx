@@ -4,9 +4,9 @@ import { EvalToolbar } from './eval-toolbar';
 import { EvalMatrix } from './eval-matrix';
 import { EvalSequencesMobile } from './eval-sequences-mobile';
 import {
-  useSequencesWithFrames,
-  type SequenceWithFrames,
-} from '@/hooks/use-sequences-with-frames';
+  useSequencesWithShots,
+  type SequenceWithShots,
+} from '@/hooks/use-sequences-with-shots';
 import { useAdminAllSequencesWithFrames } from '@/hooks/use-admin-support';
 import { useTeamDivergentSequenceVariants } from '@/hooks/use-sequence-variants';
 import { useStyles } from '@/hooks/use-styles';
@@ -98,7 +98,7 @@ export const EvalView: React.FC<EvalViewProps> = ({ initialUserFilter }) => {
     [adminStatus?.internalDomains]
   );
 
-  const ownData = useSequencesWithFrames();
+  const ownData = useSequencesWithShots();
   const adminData = useAdminAllSequencesWithFrames(
     supportMode,
     supportMode ? filters.search : undefined
@@ -115,13 +115,13 @@ export const EvalView: React.FC<EvalViewProps> = ({ initialUserFilter }) => {
     return map;
   }, [styles]);
 
-  const sequences: SequenceWithFrames[] = supportMode
+  const sequences: SequenceWithShots[] = supportMode
     ? adminData.data
     : ownData.data;
   const isLoading = supportMode ? adminData.isLoading : ownData.isLoading;
-  const framesLoadingMap = supportMode
-    ? adminData.framesLoadingMap
-    : ownData.framesLoadingMap;
+  const shotsLoadingMap = supportMode
+    ? adminData.shotsLoadingMap
+    : ownData.shotsLoadingMap;
   const error = supportMode ? adminData.error : ownData.error;
 
   // Only offer styles that actually appear in the loaded sequences — listing
@@ -258,7 +258,7 @@ export const EvalView: React.FC<EvalViewProps> = ({ initialUserFilter }) => {
             <EvalSequencesMobile
               sequences={filteredAndSorted}
               viewMode={viewMode}
-              framesLoadingMap={framesLoadingMap}
+              shotsLoadingMap={shotsLoadingMap}
               divergenceMap={divergenceMap}
               onLoadMore={handleLoadMore}
               hasMore={supportMode ? adminData.hasNextPage : false}
@@ -268,7 +268,7 @@ export const EvalView: React.FC<EvalViewProps> = ({ initialUserFilter }) => {
             <EvalMatrix
               sequences={filteredAndSorted}
               viewMode={viewMode}
-              framesLoadingMap={framesLoadingMap}
+              shotsLoadingMap={shotsLoadingMap}
               divergenceMap={divergenceMap}
               onLoadMore={handleLoadMore}
               hasMore={supportMode ? adminData.hasNextPage : false}
@@ -281,12 +281,12 @@ export const EvalView: React.FC<EvalViewProps> = ({ initialUserFilter }) => {
 };
 
 function applyFiltersAndSort(
-  sequences: SequenceWithFrames[],
+  sequences: SequenceWithShots[],
   filters: FilterState,
   sortCriteria: SortCriteria[],
   hideDomains: string[],
   styleNameById: Map<string, string>
-): SequenceWithFrames[] {
+): SequenceWithShots[] {
   let result = [...sequences];
 
   if (hideDomains.length > 0) {

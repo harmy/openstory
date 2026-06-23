@@ -12,15 +12,15 @@
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
-  frameVariants,
-  frames,
+  shotVariants,
+  shots,
   sequenceElements,
   sequences,
 } from '@/lib/db/schema';
 
 type SchemaTable =
-  | typeof frames
-  | typeof frameVariants
+  | typeof shots
+  | typeof shotVariants
   | typeof sequences
   | typeof sequenceElements;
 type SetPayload = Record<string, Date | string>;
@@ -163,7 +163,7 @@ describe('reconcileAllStuckJobs — run-id-verified passes', () => {
 
     await reconcileAllStuckJobs();
 
-    const verifiedTables: SchemaTable[] = [frames, frameVariants, sequences];
+    const verifiedTables: SchemaTable[] = [shots, shotVariants, sequences];
     const verifiedUpdates = updateCalls.filter(
       (c) => verifiedTables.includes(c.table) && !('musicStatus' in c.payload) // sequences.music is blind-fail, not verified
     );
@@ -177,7 +177,7 @@ describe('reconcileAllStuckJobs — run-id-verified passes', () => {
 
     await reconcileAllStuckJobs();
 
-    const verifiedTables: SchemaTable[] = [frames, frameVariants, sequences];
+    const verifiedTables: SchemaTable[] = [shots, shotVariants, sequences];
     const verifiedUpdates = updateCalls.filter(
       (c) => verifiedTables.includes(c.table) && !('musicStatus' in c.payload) // sequences.music is blind-fail, not verified
     );

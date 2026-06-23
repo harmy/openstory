@@ -8,8 +8,8 @@
  */
 
 import type { ScopedDb } from '@/lib/db/scoped';
-import type { Frame } from '@/lib/db/schema/frames';
-import { FRAME_GENERATION_STATUSES } from '@/lib/db/schema/frames';
+import type { Shot } from '@/lib/db/schema/shots';
+import { FRAME_GENERATION_STATUSES } from '@/lib/db/schema/shots';
 import type { Style } from '@/lib/db/schema/libraries';
 import type { MusicStatus, SequenceStatus } from '@/lib/db/schema/sequences';
 import { getLogger } from '@/lib/observability/logger';
@@ -94,7 +94,7 @@ export type SequenceState = SequenceSummary & {
 };
 
 /** The image URL a frame exposes once its still is ready (else null). */
-function frameImageUrl(frame: Frame): string | null {
+function frameImageUrl(frame: Shot): string | null {
   // Frames track video status explicitly; image readiness is signalled by the
   // presence of a thumbnail URL (the stored R2 url, else the fast preview CDN
   // url).
@@ -105,7 +105,7 @@ function frameImageUrl(frame: Frame): string | null {
  * Readiness tallies over a sequence's frames — the single source of truth for
  * the `counts` block shared by the status document and the list summary.
  */
-export function summarizeFrameCounts(frames: Frame[]): SequenceCounts {
+export function summarizeFrameCounts(frames: Shot[]): SequenceCounts {
   let imagesReady = 0;
   let videosReady = 0;
   let videosFailed = 0;
@@ -172,7 +172,7 @@ export function buildSequenceSummary(params: {
 
 export async function buildSequenceState(
   scopedDb: {
-    frames: Pick<ScopedDb['frames'], 'listBySequence'>;
+    shots: Pick<ScopedDb['shots'], 'listBySequence'>;
     styles: Pick<ScopedDb['styles'], 'getById'>;
   },
   sequence: Sequence,
@@ -183,7 +183,7 @@ export async function buildSequenceState(
   origin: string
 ): Promise<SequenceState> {
   const [frames, style] = await Promise.all([
-    scopedDb.frames.listBySequence(sequence.id),
+    scopedDb.shots.listBySequence(sequence.id),
     scopedDb.styles.getById(sequence.styleId),
   ]);
   const ordered = [...frames].sort((a, b) => a.orderIndex - b.orderIndex);

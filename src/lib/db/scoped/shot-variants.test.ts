@@ -1,5 +1,5 @@
 /**
- * Schema-level acceptance tests for the partial-index split on `frame_variants`.
+ * Schema-level acceptance tests for the partial-index split on `shot_variants`.
  *
  * The schema lays down two unique indexes keyed on `divergedAt IS NULL` vs.
  * `divergedAt IS NOT NULL`, so:
@@ -17,8 +17,8 @@ import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import { generateId } from '@/lib/db/id';
 import {
-  frameVariants,
-  frames,
+  shotVariants,
+  shots,
   sequences,
   styles,
   teams,
@@ -26,7 +26,7 @@ import {
 } from '@/lib/db/schema';
 import { relations } from '@/lib/db/schema/relations';
 import type { Database } from '@/lib/db/client';
-import { createFrameVariantsMethods } from './frame-variants';
+import { createShotVariantsMethods } from './shot-variants';
 
 let client: Client;
 let db: Database;
@@ -34,11 +34,11 @@ let db: Database;
 const team = { id: '', name: 'T', slug: 't' };
 const userRow = { id: '', name: 'U', email: 'u@example.com' };
 let sequenceId = '';
-let frameId = '';
+let shotId = '';
 
 async function seed() {
-  await db.delete(frameVariants);
-  await db.delete(frames);
+  await db.delete(shotVariants);
+  await db.delete(shots);
   await db.delete(sequences);
   await db.delete(styles);
   await db.delete(teams);
@@ -72,12 +72,12 @@ async function seed() {
     .values([
       { id: sequenceId, teamId: team.id, title: 'S', styleId: style.id },
     ]);
-  const [frame] = await db
-    .insert(frames)
+  const [shot] = await db
+    .insert(shots)
     .values({ sequenceId, orderIndex: 0 })
     .returning();
-  if (!frame) throw new Error('test setup: frame insert returned nothing');
-  frameId = frame.id;
+  if (!shot) throw new Error('test setup: shot insert returned nothing');
+  shotId = shot.id;
 }
 
 beforeAll(async () => {
@@ -97,8 +97,8 @@ beforeEach(async () => {
 describe('frame_variants partial-index uniqueness', () => {
   it('allows one primary plus N divergent alternates for the same (frame, type, model)', async () => {
     // Primary: divergedAt IS NULL.
-    await db.insert(frameVariants).values({
-      frameId,
+    await db.insert(shotVariants).values({
+      shotId,
       sequenceId,
       variantType: 'image',
       model: 'nano_banana_2',
@@ -109,9 +109,9 @@ describe('frame_variants partial-index uniqueness', () => {
 
     // Two divergent alternates with distinct input hashes — both legal under
     // the divergent partial unique index because the index keys on
-    // (frameId, variantType, model, inputHash) WHERE divergedAt IS NOT NULL.
-    await db.insert(frameVariants).values({
-      frameId,
+    // (shotId, variantType, model, inputHash) WHERE divergedAt IS NOT NULL.
+    await db.insert(shotVariants).values({
+      shotId,
       sequenceId,
       variantType: 'image',
       model: 'nano_banana_2',
@@ -120,8 +120,8 @@ describe('frame_variants partial-index uniqueness', () => {
       inputHash: 'divergent-hash-a',
       divergedAt: new Date('2026-04-29T00:00:00Z'),
     });
-    await db.insert(frameVariants).values({
-      frameId,
+    await db.insert(shotVariants).values({
+      shotId,
       sequenceId,
       variantType: 'image',
       model: 'nano_banana_2',
@@ -131,15 +131,15 @@ describe('frame_variants partial-index uniqueness', () => {
       divergedAt: new Date('2026-04-30T00:00:00Z'),
     });
 
-    const rows = await db.select().from(frameVariants);
+    const rows = await db.select().from(shotVariants);
     expect(rows).toHaveLength(3);
     expect(rows.filter((r) => r.divergedAt === null)).toHaveLength(1);
     expect(rows.filter((r) => r.divergedAt !== null)).toHaveLength(2);
   });
 
   it('rejects a second primary row for the same (frame, type, model)', async () => {
-    await db.insert(frameVariants).values({
-      frameId,
+    await db.insert(shotVariants).values({
+      shotId,
       sequenceId,
       variantType: 'image',
       model: 'nano_banana_2',
@@ -149,8 +149,8 @@ describe('frame_variants partial-index uniqueness', () => {
 
     let threw = false;
     try {
-      await db.insert(frameVariants).values({
-        frameId,
+      await db.insert(shotVariants).values({
+        shotId,
         sequenceId,
         variantType: 'image',
         model: 'nano_banana_2',
@@ -165,8 +165,8 @@ describe('frame_variants partial-index uniqueness', () => {
 
   it('rejects a second divergent row with the same (frame, type, model, inputHash)', async () => {
     const divergedAt = new Date('2026-04-29T00:00:00Z');
-    await db.insert(frameVariants).values({
-      frameId,
+    await db.insert(shotVariants).values({
+      shotId,
       sequenceId,
       variantType: 'image',
       model: 'nano_banana_2',
@@ -178,8 +178,8 @@ describe('frame_variants partial-index uniqueness', () => {
 
     let threw = false;
     try {
-      await db.insert(frameVariants).values({
-        frameId,
+      await db.insert(shotVariants).values({
+        shotId,
         sequenceId,
         variantType: 'image',
         model: 'nano_banana_2',
@@ -195,20 +195,20 @@ describe('frame_variants partial-index uniqueness', () => {
   });
 });
 
-describe('createFrameVariantsMethods', () => {
+describe('createShotVariantsMethods', () => {
   it('getByFrameAndModel returns the primary row even when divergent alternates exist', async () => {
-    const methods = createFrameVariantsMethods(db);
+    const methods = createShotVariantsMethods(db);
 
-    await db.insert(frameVariants).values({
-      frameId,
+    await db.insert(shotVariants).values({
+      shotId,
       sequenceId,
       variantType: 'image',
       model: 'nano_banana_2',
       url: 'https://example.com/primary.png',
       status: 'completed',
     });
-    await db.insert(frameVariants).values({
-      frameId,
+    await db.insert(shotVariants).values({
+      shotId,
       sequenceId,
       variantType: 'image',
       model: 'nano_banana_2',
@@ -219,7 +219,7 @@ describe('createFrameVariantsMethods', () => {
     });
 
     const result = await methods.getByFrameAndModel(
-      frameId,
+      shotId,
       'image',
       'nano_banana_2'
     );
@@ -230,11 +230,11 @@ describe('createFrameVariantsMethods', () => {
   });
 
   it('insertDivergent is idempotent on the same (frame, type, model, inputHash)', async () => {
-    const methods = createFrameVariantsMethods(db);
+    const methods = createShotVariantsMethods(db);
 
     // Primary must exist first — image-workflow's dual-write writes it.
-    await db.insert(frameVariants).values({
-      frameId,
+    await db.insert(shotVariants).values({
+      shotId,
       sequenceId,
       variantType: 'image',
       model: 'nano_banana_2',
@@ -245,7 +245,7 @@ describe('createFrameVariantsMethods', () => {
     const divergedAt = new Date('2026-04-29T00:00:00Z');
 
     const first = await methods.insertDivergent({
-      frameId,
+      shotId,
       sequenceId,
       variantType: 'image',
       model: 'nano_banana_2',
@@ -260,7 +260,7 @@ describe('createFrameVariantsMethods', () => {
     // throw and must not create a second row, and must return the existing
     // row so callers (e.g. realtime emitters) can reference its id.
     const second = await methods.insertDivergent({
-      frameId,
+      shotId,
       sequenceId,
       variantType: 'image',
       model: 'nano_banana_2',
@@ -271,7 +271,7 @@ describe('createFrameVariantsMethods', () => {
     });
     expect(second.id).toBe(first.id);
 
-    const rows = await db.select().from(frameVariants);
+    const rows = await db.select().from(shotVariants);
     expect(rows.filter((r) => r.divergedAt !== null)).toHaveLength(1);
   });
 });
@@ -283,9 +283,9 @@ describe('frame_variants discard / undiscard / listDivergent', () => {
     discardedAt?: Date;
   }) {
     const [variant] = await db
-      .insert(frameVariants)
+      .insert(shotVariants)
       .values({
-        frameId,
+        shotId,
         sequenceId,
         variantType: 'image',
         model: 'm1',
@@ -297,7 +297,7 @@ describe('frame_variants discard / undiscard / listDivergent', () => {
       })
       .returning();
     if (!variant) {
-      throw new Error('test setup: frameVariants insert returned nothing');
+      throw new Error('test setup: shotVariants insert returned nothing');
     }
     return variant;
   }
@@ -307,7 +307,7 @@ describe('frame_variants discard / undiscard / listDivergent', () => {
       inputHash: 'h1',
       divergedAt: new Date('2026-04-29T00:00:00Z'),
     });
-    const methods = createFrameVariantsMethods(db);
+    const methods = createShotVariantsMethods(db);
 
     const ts = await methods.discard(v.id);
     expect(ts).toBeInstanceOf(Date);
@@ -337,8 +337,8 @@ describe('frame_variants discard / undiscard / listDivergent', () => {
       discardedAt: new Date('2026-05-02T00:00:00Z'),
     });
 
-    const methods = createFrameVariantsMethods(db);
-    const rows = await methods.listDivergentByFrame(frameId, 'image');
+    const methods = createShotVariantsMethods(db);
+    const rows = await methods.listDivergentByFrame(shotId, 'image');
     const ids = rows.map((r) => r.id);
     expect(ids).toEqual([a.id, b.id]);
     expect(ids).not.toContain(c.id);

@@ -1,69 +1,69 @@
 /**
- * Scoped Frame Variants Sub-module
- * CRUD operations for per-model generation outputs on frames.
+ * Scoped Shot Variants Sub-module
+ * CRUD operations for per-model generation outputs on shots.
  */
 
 import type { Database } from '@/lib/db/client';
 import type {
-  Frame,
-  FrameVariant,
-  NewFrame,
-  NewFrameVariant,
+  Shot,
+  ShotVariant,
+  NewShot,
+  NewShotVariant,
 } from '@/lib/db/schema';
-import { frameVariants, frames } from '@/lib/db/schema';
-import type { VariantType } from '@/lib/db/schema/frame-variants';
+import { shotVariants, shots } from '@/lib/db/schema';
+import type { VariantType } from '@/lib/db/schema/shot-variants';
 import { and, eq, sql } from 'drizzle-orm';
 
-export function createFrameVariantsMethods(db: Database) {
+export function createShotVariantsMethods(db: Database) {
   return {
     getByFrameAndModel: async (
-      frameId: string,
+      shotId: string,
       variantType: VariantType,
       model: string
-    ): Promise<FrameVariant | null> => {
+    ): Promise<ShotVariant | null> => {
       // Scoped to the primary row (divergedAt IS NULL). Without this filter the
-      // partial-index split lets divergent alternates share the (frame, type,
+      // partial-index split lets divergent alternates share the (shot, type,
       // model) triple, so a bare select would non-deterministically return
       // either the primary or one of the alternates.
       const result = await db
         .select()
-        .from(frameVariants)
+        .from(shotVariants)
         .where(
           and(
-            eq(frameVariants.frameId, frameId),
-            eq(frameVariants.variantType, variantType),
-            eq(frameVariants.model, model),
-            sql`${frameVariants.divergedAt} IS NULL`
+            eq(shotVariants.shotId, shotId),
+            eq(shotVariants.variantType, variantType),
+            eq(shotVariants.model, model),
+            sql`${shotVariants.divergedAt} IS NULL`
           )
         );
       return result[0] ?? null;
     },
 
     listByFrame: async (
-      frameId: string,
+      shotId: string,
       variantType?: VariantType
-    ): Promise<FrameVariant[]> => {
-      const conditions = [eq(frameVariants.frameId, frameId)];
+    ): Promise<ShotVariant[]> => {
+      const conditions = [eq(shotVariants.shotId, shotId)];
       if (variantType) {
-        conditions.push(eq(frameVariants.variantType, variantType));
+        conditions.push(eq(shotVariants.variantType, variantType));
       }
       return db
         .select()
-        .from(frameVariants)
+        .from(shotVariants)
         .where(and(...conditions));
     },
 
     listBySequence: async (
       sequenceId: string,
       variantType: VariantType
-    ): Promise<FrameVariant[]> => {
+    ): Promise<ShotVariant[]> => {
       return db
         .select()
-        .from(frameVariants)
+        .from(shotVariants)
         .where(
           and(
-            eq(frameVariants.sequenceId, sequenceId),
-            eq(frameVariants.variantType, variantType)
+            eq(shotVariants.sequenceId, sequenceId),
+            eq(shotVariants.variantType, variantType)
           )
         );
     },
@@ -73,31 +73,31 @@ export function createFrameVariantsMethods(db: Database) {
       variantType: VariantType
     ): Promise<string[]> => {
       const result = await db
-        .selectDistinct({ model: frameVariants.model })
-        .from(frameVariants)
+        .selectDistinct({ model: shotVariants.model })
+        .from(shotVariants)
         .where(
           and(
-            eq(frameVariants.sequenceId, sequenceId),
-            eq(frameVariants.variantType, variantType)
+            eq(shotVariants.sequenceId, sequenceId),
+            eq(shotVariants.variantType, variantType)
           )
         );
       return result.map((r) => r.model);
     },
 
-    upsert: async (data: NewFrameVariant): Promise<FrameVariant> => {
+    upsert: async (data: NewShotVariant): Promise<ShotVariant> => {
       const [variant] = await db
-        .insert(frameVariants)
+        .insert(shotVariants)
         .values(data)
         .onConflictDoUpdate({
           target: [
-            frameVariants.frameId,
-            frameVariants.variantType,
-            frameVariants.model,
+            shotVariants.shotId,
+            shotVariants.variantType,
+            shotVariants.model,
           ],
           // Targets the primary partial unique index; divergent alternates
           // (divergedAt IS NOT NULL) sit in a separate index and are never
           // touched by upsert.
-          targetWhere: sql`${frameVariants.divergedAt} IS NULL`,
+          targetWhere: sql`${shotVariants.divergedAt} IS NULL`,
           set: {
             url: sql.raw(`excluded."url"`),
             storagePath: sql.raw(`excluded."storage_path"`),
@@ -114,7 +114,7 @@ export function createFrameVariantsMethods(db: Database) {
         .returning();
       if (!variant) {
         throw new Error(
-          `Failed to upsert FrameVariant for frame ${data.frameId} (${data.variantType}/${data.model})`
+          `Failed to upsert ShotVariant for shot ${data.shotId} (${data.variantType}/${data.model})`
         );
       }
       return variant;
@@ -122,37 +122,37 @@ export function createFrameVariantsMethods(db: Database) {
 
     update: async (
       variantId: string,
-      data: Partial<NewFrameVariant>
-    ): Promise<FrameVariant> => {
+      data: Partial<NewShotVariant>
+    ): Promise<ShotVariant> => {
       const result = await db
-        .update(frameVariants)
+        .update(shotVariants)
         .set({ ...data, updatedAt: new Date() })
-        .where(eq(frameVariants.id, variantId))
+        .where(eq(shotVariants.id, variantId))
         .returning();
       const variant = result.at(0);
       if (!variant) {
-        throw new Error(`FrameVariant ${variantId} not found`);
+        throw new Error(`ShotVariant ${variantId} not found`);
       }
       return variant;
     },
 
     updateByFrameAndModel: async (
-      frameId: string,
+      shotId: string,
       variantType: VariantType,
       model: string,
-      data: Partial<NewFrameVariant>
-    ): Promise<FrameVariant | null> => {
+      data: Partial<NewShotVariant>
+    ): Promise<ShotVariant | null> => {
       // Scoped to the primary row (divergedAt IS NULL) so divergent alternates
-      // sharing the same (frame, type, model) triple are never overwritten.
+      // sharing the same (shot, type, model) triple are never overwritten.
       const result = await db
-        .update(frameVariants)
+        .update(shotVariants)
         .set({ ...data, updatedAt: new Date() })
         .where(
           and(
-            eq(frameVariants.frameId, frameId),
-            eq(frameVariants.variantType, variantType),
-            eq(frameVariants.model, model),
-            sql`${frameVariants.divergedAt} IS NULL`
+            eq(shotVariants.shotId, shotId),
+            eq(shotVariants.variantType, variantType),
+            eq(shotVariants.model, model),
+            sql`${shotVariants.divergedAt} IS NULL`
           )
         )
         .returning();
@@ -160,12 +160,11 @@ export function createFrameVariantsMethods(db: Database) {
     },
 
     /**
-     * Insert a divergent alternate row. Idempotent on (frame, type, model,
-     * inputHash) within the divergent partial unique index so QStash retries
+     * Insert a divergent alternate row. Idempotent on (shot, type, model,
+     * inputHash) within the divergent partial unique index so retries
      * of the same reconcile step don't collide on a row already inserted on a
      * previous attempt. Returns the existing row on retry so callers can
-     * reference its id (e.g. when re-emitting the realtime `stale:detected`
-     * event after a step retry).
+     * reference its id.
      *
      * Pre-checks existence rather than `onConflictDoNothing` because drizzle's
      * SQLite `onConflictDoNothing` does not emit the partial-index `WHERE`
@@ -174,28 +173,28 @@ export function createFrameVariantsMethods(db: Database) {
      * being absorbed.
      */
     insertDivergent: async (
-      data: NewFrameVariant & { inputHash: string; divergedAt: Date }
-    ): Promise<FrameVariant> => {
+      data: NewShotVariant & { inputHash: string; divergedAt: Date }
+    ): Promise<ShotVariant> => {
       const existing = await db
         .select()
-        .from(frameVariants)
+        .from(shotVariants)
         .where(
           and(
-            eq(frameVariants.frameId, data.frameId),
-            eq(frameVariants.variantType, data.variantType),
-            eq(frameVariants.model, data.model),
-            eq(frameVariants.inputHash, data.inputHash),
-            sql`${frameVariants.divergedAt} IS NOT NULL`
+            eq(shotVariants.shotId, data.shotId),
+            eq(shotVariants.variantType, data.variantType),
+            eq(shotVariants.model, data.model),
+            eq(shotVariants.inputHash, data.inputHash),
+            sql`${shotVariants.divergedAt} IS NOT NULL`
           )
         );
       const existingRow = existing[0];
       if (existingRow) {
         return existingRow;
       }
-      const [variant] = await db.insert(frameVariants).values(data).returning();
+      const [variant] = await db.insert(shotVariants).values(data).returning();
       if (!variant) {
         throw new Error(
-          `Failed to insert divergent FrameVariant for frame ${data.frameId} (${data.variantType}/${data.model})`
+          `Failed to insert divergent ShotVariant for shot ${data.shotId} (${data.variantType}/${data.model})`
         );
       }
       return variant;
@@ -206,12 +205,12 @@ export function createFrameVariantsMethods(db: Database) {
       currentHash: string
     ): Promise<boolean> => {
       const result = await db
-        .select({ hash: frameVariants.inputHash })
-        .from(frameVariants)
-        .where(eq(frameVariants.id, variantId));
+        .select({ hash: shotVariants.inputHash })
+        .from(shotVariants)
+        .where(eq(shotVariants.id, variantId));
       const row = result[0];
       if (!row) {
-        throw new Error(`FrameVariant ${variantId} not found`);
+        throw new Error(`ShotVariant ${variantId} not found`);
       }
       const stored = row.hash;
       if (stored === null) return false;
@@ -219,43 +218,43 @@ export function createFrameVariantsMethods(db: Database) {
     },
 
     /**
-     * List divergent alternates for a frame (or all frames in a sequence) that
+     * List divergent alternates for a shot (or all shots in a sequence) that
      * have not been discarded. Ordered oldest-first by divergedAt so the UI
      * surfaces the longest-pending alternate consistently.
      */
     listDivergentByFrame: async (
-      frameId: string,
+      shotId: string,
       variantType?: VariantType
-    ): Promise<FrameVariant[]> => {
+    ): Promise<ShotVariant[]> => {
       const conditions = [
-        eq(frameVariants.frameId, frameId),
-        sql`${frameVariants.divergedAt} IS NOT NULL`,
-        sql`${frameVariants.discardedAt} IS NULL`,
+        eq(shotVariants.shotId, shotId),
+        sql`${shotVariants.divergedAt} IS NOT NULL`,
+        sql`${shotVariants.discardedAt} IS NULL`,
       ];
       if (variantType) {
-        conditions.push(eq(frameVariants.variantType, variantType));
+        conditions.push(eq(shotVariants.variantType, variantType));
       }
       return db
         .select()
-        .from(frameVariants)
+        .from(shotVariants)
         .where(and(...conditions))
-        .orderBy(frameVariants.divergedAt);
+        .orderBy(shotVariants.divergedAt);
     },
 
     listDivergentBySequence: async (
       sequenceId: string
-    ): Promise<FrameVariant[]> => {
+    ): Promise<ShotVariant[]> => {
       return db
         .select()
-        .from(frameVariants)
+        .from(shotVariants)
         .where(
           and(
-            eq(frameVariants.sequenceId, sequenceId),
-            sql`${frameVariants.divergedAt} IS NOT NULL`,
-            sql`${frameVariants.discardedAt} IS NULL`
+            eq(shotVariants.sequenceId, sequenceId),
+            sql`${shotVariants.divergedAt} IS NOT NULL`,
+            sql`${shotVariants.discardedAt} IS NULL`
           )
         )
-        .orderBy(frameVariants.divergedAt);
+        .orderBy(shotVariants.divergedAt);
     },
 
     /**
@@ -265,74 +264,74 @@ export function createFrameVariantsMethods(db: Database) {
     discard: async (variantId: string): Promise<Date> => {
       const discardedAt = new Date();
       const result = await db
-        .update(frameVariants)
+        .update(shotVariants)
         .set({ discardedAt, updatedAt: discardedAt })
-        .where(eq(frameVariants.id, variantId))
+        .where(eq(shotVariants.id, variantId))
         .returning();
       if (result.length === 0) {
-        throw new Error(`FrameVariant ${variantId} not found`);
+        throw new Error(`ShotVariant ${variantId} not found`);
       }
       return discardedAt;
     },
 
     /**
-     * Atomically replace the live primary on `frames` with the variant's
+     * Atomically replace the live primary on `shots` with the variant's
      * fields and soft-delete the variant. Both writes run in a single
      * `db.batch()` (one libSQL transaction) so partial failure isn't
      * possible at the SQL layer.
      *
-     * Pre-checks existence so a missing frame or variant fails fast with a
+     * Pre-checks existence so a missing shot or variant fails fast with a
      * specific error before the batch runs. Without the pre-check, a
      * zero-row UPDATE silently succeeds inside the batch, forcing ambiguous
      * post-batch reasoning about which side was missing.
      */
     promoteAtomically: async (
-      frameId: string,
-      frameUpdate: Partial<NewFrame>,
+      shotId: string,
+      frameUpdate: Partial<NewShot>,
       variantId: string
-    ): Promise<{ frame: Frame; discardedAt: Date }> => {
-      const [existingFrame] = await db
-        .select({ id: frames.id })
-        .from(frames)
-        .where(eq(frames.id, frameId));
-      if (!existingFrame) {
-        throw new Error(`Frame ${frameId} not found`);
+    ): Promise<{ frame: Shot; discardedAt: Date }> => {
+      const [existingShot] = await db
+        .select({ id: shots.id })
+        .from(shots)
+        .where(eq(shots.id, shotId));
+      if (!existingShot) {
+        throw new Error(`Shot ${shotId} not found`);
       }
       const [existingVariant] = await db
-        .select({ id: frameVariants.id })
-        .from(frameVariants)
-        .where(eq(frameVariants.id, variantId));
+        .select({ id: shotVariants.id })
+        .from(shotVariants)
+        .where(eq(shotVariants.id, variantId));
       if (!existingVariant) {
-        throw new Error(`FrameVariant ${variantId} not found`);
+        throw new Error(`ShotVariant ${variantId} not found`);
       }
 
       const now = new Date();
-      const updateFrame = db
-        .update(frames)
+      const updateShot = db
+        .update(shots)
         .set({ ...frameUpdate, updatedAt: now })
-        .where(eq(frames.id, frameId))
+        .where(eq(shots.id, shotId))
         .returning();
       const discardVariant = db
-        .update(frameVariants)
+        .update(shotVariants)
         .set({ discardedAt: now, updatedAt: now })
-        .where(eq(frameVariants.id, variantId))
+        .where(eq(shotVariants.id, variantId))
         .returning();
-      const [frameRows, variantRows] = await db.batch([
-        updateFrame,
+      const [shotRows, variantRows] = await db.batch([
+        updateShot,
         discardVariant,
       ]);
       // Existence was checked above. A zero-row result on either side means
       // the row was deleted between the pre-check and the batch — surface
       // it so the caller sees the inconsistency rather than silently
-      // discarding a nonexistent variant or "promoting" with no live frame.
-      const promotedFrame = frameRows[0];
-      if (!promotedFrame) {
-        throw new Error(`Frame ${frameId} disappeared during promote`);
+      // discarding a nonexistent variant or "promoting" with no live shot.
+      const promotedShot = shotRows[0];
+      if (!promotedShot) {
+        throw new Error(`Shot ${shotId} disappeared during promote`);
       }
       if (variantRows.length === 0) {
-        throw new Error(`FrameVariant ${variantId} disappeared during promote`);
+        throw new Error(`ShotVariant ${variantId} disappeared during promote`);
       }
-      return { frame: promotedFrame, discardedAt: now };
+      return { frame: promotedShot, discardedAt: now };
     },
 
     /**
@@ -341,12 +340,12 @@ export function createFrameVariantsMethods(db: Database) {
      */
     undiscard: async (variantId: string): Promise<void> => {
       const result = await db
-        .update(frameVariants)
+        .update(shotVariants)
         .set({ discardedAt: null, updatedAt: new Date() })
-        .where(eq(frameVariants.id, variantId))
+        .where(eq(shotVariants.id, variantId))
         .returning();
       if (result.length === 0) {
-        throw new Error(`FrameVariant ${variantId} not found`);
+        throw new Error(`ShotVariant ${variantId} not found`);
       }
     },
 
@@ -355,25 +354,25 @@ export function createFrameVariantsMethods(db: Database) {
      * functions to confirm the row exists and is still divergent before
      * acting.
      */
-    getById: async (variantId: string): Promise<FrameVariant | null> => {
+    getById: async (variantId: string): Promise<ShotVariant | null> => {
       const result = await db
         .select()
-        .from(frameVariants)
-        .where(eq(frameVariants.id, variantId));
+        .from(shotVariants)
+        .where(eq(shotVariants.id, variantId));
       return result[0] ?? null;
     },
 
-    deleteByFrame: async (frameId: string): Promise<number> => {
+    deleteByFrame: async (shotId: string): Promise<number> => {
       const result = await db
-        .delete(frameVariants)
-        .where(eq(frameVariants.frameId, frameId));
+        .delete(shotVariants)
+        .where(eq(shotVariants.shotId, shotId));
       return result.rowsAffected;
     },
 
     deleteBySequence: async (sequenceId: string): Promise<number> => {
       const result = await db
-        .delete(frameVariants)
-        .where(eq(frameVariants.sequenceId, sequenceId));
+        .delete(shotVariants)
+        .where(eq(shotVariants.sequenceId, sequenceId));
       return result.rowsAffected;
     },
   };

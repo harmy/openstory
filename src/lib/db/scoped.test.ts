@@ -887,13 +887,13 @@ describe('createScopedDb', () => {
     });
   });
 
-  describe('frames', () => {
+  describe('shots', () => {
     it('getById() queries db directly', async () => {
       const sentinel = { id: 'frame_01' };
       mockWhere.mockResolvedValue([sentinel]);
 
       const db = createScopedDb(TEAM_ID, USER_ID);
-      const result = await db.frames.getById('frame_01');
+      const result = await db.shots.getById('frame_01');
 
       expect(result).toEqual(sentinel);
     });
@@ -902,7 +902,7 @@ describe('createScopedDb', () => {
       mockWhere.mockResolvedValue([]);
 
       const db = createScopedDb(TEAM_ID, USER_ID);
-      const result = await db.frames.getById('frame_99');
+      const result = await db.shots.getById('frame_99');
 
       expect(result).toBeNull();
     });

@@ -15,7 +15,7 @@ import {
   listSequenceExportsFn,
   requestSequenceExportUploadUrlFn,
 } from '@/functions/sequence-exports';
-import { useFramesBySequence } from '@/hooks/use-frames';
+import { useShotsBySequence } from '@/hooks/use-shots';
 import { putToR2 } from '@/lib/utils/upload';
 import {
   exportSequence,
@@ -46,7 +46,7 @@ export type SequenceExportState = {
 export function useSequenceExport(sequence: Sequence): SequenceExportState {
   const posthog = usePostHog();
   const queryClient = useQueryClient();
-  const { data: frames } = useFramesBySequence(sequence.id);
+  const { data: frames } = useShotsBySequence(sequence.id);
 
   const { data: exports } = useQuery({
     queryKey: sequenceExportKeys.list(sequence.id),

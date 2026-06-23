@@ -19,7 +19,7 @@ import {
 } from '@/lib/ai/models';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { cn } from '@/lib/utils';
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import { ChevronUp, Loader2, Video } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import type { BatchGenerateMotionArgs } from './scene-list';
@@ -27,10 +27,10 @@ import { SceneListItem } from './scene-list-item';
 import { SceneThumbnail } from './scene-thumbnail';
 
 type MobileSceneDrawerProps = {
-  frames?: Frame[];
+  shots?: Shot[];
   selectedFrameId?: string;
   aspectRatio: AspectRatio;
-  onSelectFrame: (frameId: string) => void;
+  onSelectShot: (shotId: string) => void;
   regeneratingImages: Set<string>;
   regeneratingMotion: Set<string>;
   onBatchGenerateMotion?: (args: BatchGenerateMotionArgs) => Promise<void>;
@@ -45,17 +45,17 @@ type MobileSceneDrawerProps = {
   styleCategory?: string;
 };
 
-const isCompleted = (frame: Frame) => {
+const isCompleted = (frame: Shot) => {
   return (
     frame.thumbnailStatus === 'completed' && frame.videoStatus === 'completed'
   );
 };
 
 export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
-  frames,
+  shots,
   selectedFrameId,
   aspectRatio,
-  onSelectFrame,
+  onSelectShot,
   regeneratingImages,
   regeneratingMotion,
   onBatchGenerateMotion,
@@ -92,29 +92,29 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
     setMusicModel(initialMusicModel);
   }
 
-  const totalFrames = frames?.length ?? 0;
+  const totalShots = shots?.length ?? 0;
 
   // Get the currently selected frame
   const selectedFrame = useMemo(
-    () => frames?.find((f) => f.id === selectedFrameId),
-    [frames, selectedFrameId]
+    () => shots?.find((f) => f.id === selectedFrameId),
+    [shots, selectedFrameId]
   );
 
   // Calculate eligible frames for motion generation
   // Include 'generating' status to allow retrying stuck jobs
   const eligibleFrames = useMemo(() => {
-    if (!frames) return [];
-    return frames.filter(
+    if (!shots) return [];
+    return shots.filter(
       (f) =>
         (f.videoStatus === 'pending' ||
           f.videoStatus === 'failed' ||
           f.videoStatus === 'generating') &&
         f.thumbnailStatus === 'completed'
     );
-  }, [frames]);
+  }, [shots]);
 
-  const handleSelectFrame = (frameId: string) => {
-    onSelectFrame(frameId);
+  const handleSelectFrame = (shotId: string) => {
+    onSelectShot(shotId);
     setIsOpen(false);
   };
 
@@ -194,13 +194,13 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
         >
           <SheetHeader>
             <SheetTitle>
-              {frames?.length ?? 0} {frames?.length === 1 ? 'Scene' : 'Scenes'}
+              {shots?.length ?? 0} {shots?.length === 1 ? 'Scene' : 'Scenes'}
             </SheetTitle>
           </SheetHeader>
 
           <ScrollArea className="flex-1 min-h-0 -mx-4">
             <div className="flex flex-col gap-3 px-4 py-2">
-              {(frames === undefined || frames.length === 0) &&
+              {(shots === undefined || shots.length === 0) &&
                 [1, 2, 3].map((i) => (
                   <SceneListItem
                     key={`frame-skeleton-${i}`}
@@ -212,7 +212,7 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
                   />
                 ))}
 
-              {frames?.map((frame) => (
+              {shots?.map((frame) => (
                 <SceneListItem
                   key={frame.id}
                   frame={frame}
@@ -276,8 +276,8 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
                 ) : (
                   <>
                     <Video className="mr-2 h-4 w-4" />
-                    Generate {eligibleFrames.length} / {totalFrames}{' '}
-                    {totalFrames === 1 ? 'frame' : 'frames'}
+                    Generate {eligibleFrames.length} / {totalShots}{' '}
+                    {totalShots === 1 ? 'shot' : 'shots'}
                   </>
                 )}
               </Button>

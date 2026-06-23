@@ -12,12 +12,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
 import type { Scene } from '@/lib/ai/scene-analysis.schema';
-import type { CharacterMinimal, Frame } from '@/lib/db/schema';
+import type { CharacterMinimal, Shot } from '@/lib/db/schema';
 import { buildFrameImageWorkflowInput } from '@/lib/image/build-frame-image-input';
 
 const NOW = new Date('2026-06-03T00:00:00.000Z');
 
-function makeFrame(overrides: Partial<Frame> = {}): Frame {
+function makeFrame(overrides: Partial<Shot> = {}): Shot {
   return {
     id: 'frame-1',
     sequenceId: 'seq-1',
@@ -202,10 +202,10 @@ describe('buildFrameImageWorkflowInput — sceneId + core shape', () => {
     expect(input?.sceneSnapshot?.sceneId).toBe('frame-99');
   });
 
-  it('sets the workflow fields (frameId, sequenceId, numImages, userEditedPrompt default, hash)', async () => {
+  it('sets the workflow fields (shotId, sequenceId, numImages, userEditedPrompt default, hash)', async () => {
     const frame = makeFrame({ id: 'frame-7', description: 'DESC' });
     const input = await buildFrameImageWorkflowInput({ ...baseOpts, frame });
-    expect(input?.frameId).toBe('frame-7');
+    expect(input?.shotId).toBe('frame-7');
     expect(input?.sequenceId).toBe('seq-1');
     expect(input?.numImages).toBe(1);
     expect(input?.model).toBe(DEFAULT_IMAGE_MODEL);

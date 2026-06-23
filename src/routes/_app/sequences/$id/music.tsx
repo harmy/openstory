@@ -6,7 +6,7 @@ import {
 } from '@/functions/prompt-variants';
 import { generateMusicFn } from '@/functions/sequences';
 import { useActiveAudioModel } from '@/hooks/use-active-audio-model';
-import { useFramesBySequence } from '@/hooks/use-frames';
+import { useShotsBySequence } from '@/hooks/use-shots';
 import {
   useSequence,
   useSequenceAudioVariants,
@@ -45,7 +45,7 @@ function MusicPage() {
   const { id: sequenceId } = Route.useParams();
 
   const { data: sequence, isLoading } = useSequence(sequenceId);
-  const { data: frames } = useFramesBySequence(sequenceId, {
+  const { data: frames } = useShotsBySequence(sequenceId, {
     refetchInterval: false,
   });
   // Resolve the music tab through the viewer's active audio model (#546). When

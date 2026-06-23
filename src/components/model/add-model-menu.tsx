@@ -4,7 +4,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { useAddModelToSequence, useSequence } from '@/hooks/use-sequences';
-import { useFramesBySequence } from '@/hooks/use-frames';
+import { useShotsBySequence } from '@/hooks/use-shots';
 import { useStyle } from '@/hooks/use-styles';
 import {
   AUDIO_MODELS,
@@ -15,7 +15,7 @@ import {
   isValidImageToVideoModel,
   isValidTextToImageModel,
 } from '@/lib/ai/models';
-import type { VariantType } from '@/lib/db/schema/frame-variants';
+import type { VariantType } from '@/lib/db/schema/shot-variants';
 import {
   estimateAudioCost,
   estimateImageCost,
@@ -57,7 +57,7 @@ export const AddModelMenuSection = ({
   usedModels: string[];
 }) => {
   const addModel = useAddModelToSequence();
-  const { data: frames } = useFramesBySequence(sequenceId);
+  const { data: frames } = useShotsBySequence(sequenceId);
   const { data: sequence } = useSequence(sequenceId);
   const { data: style } = useStyle(sequence?.styleId ?? '');
   const aspectRatio = sequence?.aspectRatio ?? DEFAULT_ASPECT_RATIO;

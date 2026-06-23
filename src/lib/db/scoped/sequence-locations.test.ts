@@ -7,7 +7,7 @@ import {
   matchLocationsToFrame,
   locationMatchesTag,
 } from '@/lib/db/scoped/sequence-locations';
-import type { Frame, SequenceLocation } from '@/lib/db/schema';
+import type { Shot, SequenceLocation } from '@/lib/db/schema';
 
 // Mock location data - using full SequenceLocation type
 const mockLocations: [SequenceLocation, SequenceLocation, SequenceLocation] = [
@@ -98,9 +98,9 @@ const mockLocations: [SequenceLocation, SequenceLocation, SequenceLocation] = [
 function createMockFrame(
   environmentTag: string,
   location: string
-): Pick<Frame, 'metadata'> {
+): Pick<Shot, 'metadata'> {
   // Create a complete Scene object with all required fields
-  const metadata: NonNullable<Frame['metadata']> = {
+  const metadata: NonNullable<Shot['metadata']> = {
     sceneId: 'test-scene',
     sceneNumber: 1,
     originalScript: { extract: '', dialogue: [] },

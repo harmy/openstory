@@ -14,7 +14,7 @@ import { useActiveImageModel } from '@/hooks/use-active-image-model';
 import {
   useSequenceImageModels,
   useSequenceImageVariants,
-} from '@/hooks/use-frames';
+} from '@/hooks/use-shots';
 import { IMAGE_MODELS, isValidTextToImageModel } from '@/lib/ai/models';
 import { computeSequenceModelCoverage } from '@/lib/model/sequence-model-coverage';
 import { ChevronDown } from 'lucide-react';

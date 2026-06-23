@@ -18,8 +18,8 @@ import { migrate } from 'drizzle-orm/libsql/migrator';
 import { generateId } from '@/lib/db/id';
 import {
   characters,
-  frameVariants,
-  frames,
+  shotVariants,
+  shots,
   locationLibrary,
   locationSheets,
   sequenceLocations,
@@ -32,8 +32,8 @@ import {
 } from '@/lib/db/schema';
 import { relations } from '@/lib/db/schema/relations';
 import type { Database } from '@/lib/db/client';
-import { createFramesMethods, type FrameArtifact } from './frames';
-import { createFrameVariantsMethods } from './frame-variants';
+import { createShotsMethods, type ShotArtifact } from './shots';
+import { createShotVariantsMethods } from './shot-variants';
 
 let client: Client;
 let db: Database;
@@ -43,8 +43,8 @@ const userRow = { id: '', name: 'U', email: 'u@example.com' };
 let sequenceId = '';
 
 async function seed() {
-  await db.delete(frameVariants);
-  await db.delete(frames);
+  await db.delete(shotVariants);
+  await db.delete(shots);
   await db.delete(characters);
   await db.delete(sequenceLocations);
   await db.delete(locationSheets);
@@ -103,7 +103,7 @@ beforeEach(async () => {
 describe('frames input-hash columns', () => {
   it('default to null and persist when set', async () => {
     const [frame] = await db
-      .insert(frames)
+      .insert(shots)
       .values({ sequenceId, orderIndex: 0 })
       .returning();
     if (!frame) throw new Error('test setup: frame insert returned nothing');
@@ -113,18 +113,18 @@ describe('frames input-hash columns', () => {
     expect(frame.audioInputHash).toBeNull();
 
     await db
-      .update(frames)
+      .update(shots)
       .set({
         thumbnailInputHash: 't',
         variantImageInputHash: 'v',
         videoInputHash: 'm',
         audioInputHash: 'a',
       })
-      .where(eq(frames.id, frame.id));
+      .where(eq(shots.id, frame.id));
     const [refreshed] = await db
       .select()
-      .from(frames)
-      .where(eq(frames.id, frame.id));
+      .from(shots)
+      .where(eq(shots.id, frame.id));
     if (!refreshed) throw new Error('test setup: refresh failed');
     expect(refreshed.thumbnailInputHash).toBe('t');
     expect(refreshed.variantImageInputHash).toBe('v');
@@ -136,14 +136,14 @@ describe('frames input-hash columns', () => {
 describe('frame_variants input-hash + diverged_at columns', () => {
   it('default to null and persist when set', async () => {
     const [frame] = await db
-      .insert(frames)
+      .insert(shots)
       .values({ sequenceId, orderIndex: 0 })
       .returning();
     if (!frame) throw new Error('test setup: frame insert returned nothing');
     const [variant] = await db
-      .insert(frameVariants)
+      .insert(shotVariants)
       .values({
-        frameId: frame.id,
+        shotId: frame.id,
         sequenceId,
         variantType: 'image',
         model: 'm1',
@@ -156,13 +156,13 @@ describe('frame_variants input-hash + diverged_at columns', () => {
 
     const divergedAt = new Date('2026-04-29T00:00:00Z');
     await db
-      .update(frameVariants)
+      .update(shotVariants)
       .set({ inputHash: 'h', divergedAt })
-      .where(eq(frameVariants.id, variant.id));
+      .where(eq(shotVariants.id, variant.id));
     const [refreshed] = await db
       .select()
-      .from(frameVariants)
-      .where(eq(frameVariants.id, variant.id));
+      .from(shotVariants)
+      .where(eq(shotVariants.id, variant.id));
     if (!refreshed) throw new Error('test setup: refresh failed');
     expect(refreshed.inputHash).toBe('h');
     expect(refreshed.divergedAt?.getTime()).toBe(divergedAt.getTime());
@@ -269,7 +269,7 @@ describe('talent_sheets.input_hash', () => {
 
 describe('frames.isStale', () => {
   const ARTIFACTS: Array<{
-    artifact: FrameArtifact;
+    artifact: ShotArtifact;
     column:
       | 'thumbnailInputHash'
       | 'variantImageInputHash'
@@ -283,7 +283,7 @@ describe('frames.isStale', () => {
   ];
 
   it('throws when the frame does not exist', () => {
-    const m = createFramesMethods(db);
+    const m = createShotsMethods(db);
     expect(m.isStale(generateId(), 'thumbnail', 'h')).rejects.toThrow(
       /not found/
     );
@@ -293,11 +293,11 @@ describe('frames.isStale', () => {
     '$artifact: returns false when stored hash is null (legacy artifact)',
     async ({ artifact }) => {
       const [frame] = await db
-        .insert(frames)
+        .insert(shots)
         .values({ sequenceId, orderIndex: 0 })
         .returning();
       if (!frame) throw new Error('test setup: frame insert returned nothing');
-      const m = createFramesMethods(db);
+      const m = createShotsMethods(db);
       expect(await m.isStale(frame.id, artifact, 'anything')).toBe(false);
     }
   );
@@ -306,11 +306,11 @@ describe('frames.isStale', () => {
     '$artifact: returns false when stored hash matches the current hash',
     async ({ artifact, column }) => {
       const [frame] = await db
-        .insert(frames)
+        .insert(shots)
         .values({ sequenceId, orderIndex: 0, [column]: 'h-match' })
         .returning();
       if (!frame) throw new Error('test setup: frame insert returned nothing');
-      const m = createFramesMethods(db);
+      const m = createShotsMethods(db);
       expect(await m.isStale(frame.id, artifact, 'h-match')).toBe(false);
     }
   );
@@ -319,18 +319,18 @@ describe('frames.isStale', () => {
     '$artifact: returns true when stored hash differs from the current hash',
     async ({ artifact, column }) => {
       const [frame] = await db
-        .insert(frames)
+        .insert(shots)
         .values({ sequenceId, orderIndex: 0, [column]: 'h-old' })
         .returning();
       if (!frame) throw new Error('test setup: frame insert returned nothing');
-      const m = createFramesMethods(db);
+      const m = createShotsMethods(db);
       expect(await m.isStale(frame.id, artifact, 'h-new')).toBe(true);
     }
   );
 
   it('reads from the column matching the requested artifact (no cross-talk)', async () => {
     const [frame] = await db
-      .insert(frames)
+      .insert(shots)
       .values({
         sequenceId,
         orderIndex: 0,
@@ -341,7 +341,7 @@ describe('frames.isStale', () => {
       })
       .returning();
     if (!frame) throw new Error('test setup: frame insert returned nothing');
-    const m = createFramesMethods(db);
+    const m = createShotsMethods(db);
     // Each artifact key compares against ONLY its own column.
     expect(await m.isStale(frame.id, 'thumbnail', 't-hash')).toBe(false);
     expect(await m.isStale(frame.id, 'thumbnail', 'v-hash')).toBe(true);
@@ -419,14 +419,14 @@ describe('sequenceLocations.reference_input_hash', () => {
 describe('frameVariants.isStale', () => {
   async function insertVariant(inputHash: string | null) {
     const [frame] = await db
-      .insert(frames)
+      .insert(shots)
       .values({ sequenceId, orderIndex: 0 })
       .returning();
     if (!frame) throw new Error('test setup: frame insert returned nothing');
     const [variant] = await db
-      .insert(frameVariants)
+      .insert(shotVariants)
       .values({
-        frameId: frame.id,
+        shotId: frame.id,
         sequenceId,
         variantType: 'image',
         model: 'm1',
@@ -439,25 +439,25 @@ describe('frameVariants.isStale', () => {
   }
 
   it('throws when the variant does not exist', () => {
-    const m = createFrameVariantsMethods(db);
+    const m = createShotVariantsMethods(db);
     expect(m.isStale(generateId(), 'h')).rejects.toThrow(/not found/);
   });
 
   it('returns false when stored hash is null', async () => {
     const variant = await insertVariant(null);
-    const m = createFrameVariantsMethods(db);
+    const m = createShotVariantsMethods(db);
     expect(await m.isStale(variant.id, 'anything')).toBe(false);
   });
 
   it('returns false when stored hash matches', async () => {
     const variant = await insertVariant('h-match');
-    const m = createFrameVariantsMethods(db);
+    const m = createShotVariantsMethods(db);
     expect(await m.isStale(variant.id, 'h-match')).toBe(false);
   });
 
   it('returns true when stored hash differs', async () => {
     const variant = await insertVariant('h-old');
-    const m = createFrameVariantsMethods(db);
+    const m = createShotVariantsMethods(db);
     expect(await m.isStale(variant.id, 'h-new')).toBe(true);
   });
 });

@@ -9,13 +9,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { cn } from '@/lib/utils';
 import { stripMarkdown } from '@/lib/utils/markdown-plain';
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import { Check, Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { SceneThumbnail } from './scene-thumbnail';
 
 type SceneListItemProps = {
-  frame?: Frame | undefined;
+  frame?: Shot | undefined;
   aspectRatio: AspectRatio;
   isActive?: boolean;
   isCompleted?: boolean;
@@ -101,7 +101,7 @@ const SceneListItemComponent: React.FC<SceneListItemProps> = ({
             density="corner-dot"
             variantId={divergentVariantId}
             artifact="thumbnail"
-            entityType="frame"
+            entityType="shot"
             onCompare={() => onCompareDivergent?.()}
             // Compare-only entry from the corner; promote/discard live in the dialog.
             onPromote={() => onCompareDivergent?.()}

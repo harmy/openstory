@@ -8,11 +8,11 @@ import type { Database } from '@/lib/db/client';
 import type {
   Character,
   CharacterWithTalent,
-  Frame,
+  Shot,
   NewCharacter,
   SheetStatus,
 } from '@/lib/db/schema';
-import { characters, frames, talent } from '@/lib/db/schema';
+import { characters, shots, talent } from '@/lib/db/schema';
 import { matchCharacterToFrameTags } from '@/lib/workflows/scene-matching';
 
 export function createCharactersMethods(db: Database) {
@@ -250,7 +250,7 @@ export function createCharactersMethods(db: Database) {
     getFramesForCharacter: async (
       sequenceId: string,
       characterId: string
-    ): Promise<Frame[]> => {
+    ): Promise<Shot[]> => {
       // Get the character to extract matching patterns
       const charResult = await db
         .select()
@@ -264,11 +264,11 @@ export function createCharactersMethods(db: Database) {
       // Get all frames for the sequence
       const allFrames = await db
         .select()
-        .from(frames)
-        .where(eq(frames.sequenceId, sequenceId));
+        .from(shots)
+        .where(eq(shots.sequenceId, sequenceId));
 
       // Filter frames that contain this character
-      return (allFrames as Frame[]).filter((frame) => {
+      return (allFrames as Shot[]).filter((frame) => {
         const characterTags = frame.metadata?.continuity?.characterTags ?? [];
         return matchCharacterToFrameTags(character, characterTags);
       });
@@ -291,11 +291,11 @@ export function createCharactersMethods(db: Database) {
       // Get all frames for the sequence
       const allFrames = await db
         .select()
-        .from(frames)
-        .where(eq(frames.sequenceId, sequenceId));
+        .from(shots)
+        .where(eq(shots.sequenceId, sequenceId));
 
       // Filter frames that contain this character and return IDs
-      return (allFrames as Frame[])
+      return (allFrames as Shot[])
         .filter((frame) => {
           const characterTags = frame.metadata?.continuity?.characterTags ?? [];
           return matchCharacterToFrameTags(character, characterTags);

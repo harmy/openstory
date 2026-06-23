@@ -10,7 +10,7 @@
  */
 
 import type { ScopedDb } from '@/lib/db/scoped';
-import type { Frame } from '@/lib/db/schema/frames';
+import type { Shot } from '@/lib/db/schema/shots';
 import type { Style } from '@/lib/db/schema/libraries';
 import { ValidationError } from '@/lib/errors';
 import type { Sequence } from '@/types/database';
@@ -77,7 +77,7 @@ export function decodeCursor(raw: string): SequenceCursor {
 
 function buildListItem(
   sequence: Sequence,
-  frames: Frame[],
+  frames: Shot[],
   style: Style | null,
   origin: string
 ): HalResource<SequenceListItem> {
@@ -117,7 +117,7 @@ export async function buildSequenceListPage(params: {
     scopedDb.styles.listByIds(sequences.map((s) => s.styleId)),
   ]);
 
-  const framesById = new Map<string, Frame[]>();
+  const framesById = new Map<string, Shot[]>();
   for (const frame of allFrames) {
     const bucket = framesById.get(frame.sequenceId);
     if (bucket) bucket.push(frame);

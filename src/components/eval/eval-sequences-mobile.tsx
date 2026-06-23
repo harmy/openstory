@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EvalSceneCell } from './eval-scene-cell';
 import type { DialogTab } from './eval-cell-dialog';
-import type { SequenceWithFrames } from '@/hooks/use-sequences-with-frames';
+import type { SequenceWithShots } from '@/hooks/use-sequences-with-shots';
 import type { ViewMode } from './eval-view';
 import { getAspectRatioData } from '@/lib/constants/aspect-ratios';
 import { getAnalysisModelById } from '@/lib/ai/models.config';
@@ -31,9 +31,9 @@ type OpenDialogState = {
 } | null;
 
 type EvalSequencesMobileProps = {
-  sequences: SequenceWithFrames[];
+  sequences: SequenceWithShots[];
   viewMode: ViewMode;
-  framesLoadingMap: Record<string, boolean>;
+  shotsLoadingMap: Record<string, boolean>;
   divergenceMap?: Map<string, { hasMusic: boolean }>;
   onLoadMore?: () => void;
   hasMore?: boolean;
@@ -42,7 +42,7 @@ type EvalSequencesMobileProps = {
 export const EvalSequencesMobile: React.FC<EvalSequencesMobileProps> = ({
   sequences,
   viewMode,
-  framesLoadingMap,
+  shotsLoadingMap,
   divergenceMap,
   onLoadMore,
   hasMore,
@@ -51,7 +51,7 @@ export const EvalSequencesMobile: React.FC<EvalSequencesMobileProps> = ({
   const parentRef = useRef<HTMLDivElement>(null);
 
   const maxSceneCount = useMemo(
-    () => Math.max(1, ...sequences.map((s) => s.frames.length)),
+    () => Math.max(1, ...sequences.map((s) => s.shots.length)),
     [sequences]
   );
 
@@ -118,7 +118,7 @@ export const EvalSequencesMobile: React.FC<EvalSequencesMobileProps> = ({
                 sequenceIndex={virtualRow.index}
                 sequenceCount={sequences.length}
                 viewMode={viewMode}
-                framesLoading={framesLoadingMap[sequence.id] ?? false}
+                framesLoading={shotsLoadingMap[sequence.id] ?? false}
                 divergence={divergenceMap?.get(sequence.id)}
                 openDialog={openDialog}
                 onOpenDialogChange={setOpenDialog}
@@ -133,7 +133,7 @@ export const EvalSequencesMobile: React.FC<EvalSequencesMobileProps> = ({
 };
 
 type MobileReelRowProps = {
-  sequence: SequenceWithFrames;
+  sequence: SequenceWithShots;
   sequenceIndex: number;
   sequenceCount: number;
   viewMode: ViewMode;
@@ -160,7 +160,7 @@ const MobileReelRow: React.FC<MobileReelRowProps> = ({
   const cellWidth = ratioData
     ? (STRIP_HEIGHT * ratioData.width) / ratioData.height
     : STRIP_HEIGHT;
-  const frameCount = sequence.frames.length;
+  const frameCount = sequence.shots.length;
   const hasVariants = Boolean(divergence?.hasMusic);
 
   return (
@@ -227,7 +227,7 @@ const MobileReelRow: React.FC<MobileReelRowProps> = ({
               </div>
             )
           ) : (
-            sequence.frames.map((frame, sceneIndex) => {
+            sequence.shots.map((frame, sceneIndex) => {
               const isDialogOpen =
                 openDialog?.sequenceIndex === sequenceIndex &&
                 openDialog.sceneIndex === sceneIndex;
@@ -286,7 +286,7 @@ const MobileReelRow: React.FC<MobileReelRowProps> = ({
   );
 };
 
-const CreatorIdentity: React.FC<{ sequence: SequenceWithFrames }> = ({
+const CreatorIdentity: React.FC<{ sequence: SequenceWithShots }> = ({
   sequence,
 }) => {
   const { name, email } = getCreatorIdentity(sequence);
@@ -305,7 +305,7 @@ const CreatorIdentity: React.FC<{ sequence: SequenceWithFrames }> = ({
 };
 
 type SequencePosterCellProps = {
-  sequence: SequenceWithFrames;
+  sequence: SequenceWithShots;
   width: number;
   height: number;
 };
@@ -335,7 +335,7 @@ const SequencePosterCell: React.FC<SequencePosterCellProps> = ({
     'aria-label': `Open ${sequence.title || 'sequence'}`,
   } as const;
 
-  const previewUrl = sequence.frames[0]?.thumbnailUrl ?? sequence.posterUrl;
+  const previewUrl = sequence.shots[0]?.thumbnailUrl ?? sequence.posterUrl;
 
   if (previewUrl) {
     return (

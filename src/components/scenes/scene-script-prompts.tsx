@@ -23,28 +23,28 @@ import { useSequenceCharacters } from '@/hooks/use-sequence-characters';
 import { useSequenceElements } from '@/hooks/use-sequence-elements';
 import { useSequenceLocations } from '@/hooks/use-sequence-locations';
 import { shortenPromptFn } from '@/functions/ai';
-import { updateFrameFn } from '@/functions/frames';
-import { generateFrameImageFn } from '@/functions/frame-image';
-import { generateFrameMotionFn } from '@/functions/motion-functions';
+import { updateShotFn } from '@/functions/shots';
+import { generateShotImageFn } from '@/functions/shot-image';
+import { generateShotMotionFn } from '@/functions/motion-functions';
 import { regenerateFramePromptFn } from '@/functions/prompt-variants';
 import { useActiveImageModel } from '@/hooks/use-active-image-model';
 import { useActiveVideoModel } from '@/hooks/use-active-video-model';
 import { BILLING_BALANCE_KEY } from '@/hooks/use-billing-balance';
 import { useFalBillingGate } from '@/hooks/use-billing-gate';
 import {
-  frameKeys,
+  shotKeys,
   useGenerateVariants,
   useSelectVariant,
   useSetImageFromVariant,
   useSetVideoFromVariant,
-} from '@/hooks/use-frames';
+} from '@/hooks/use-shots';
 import {
-  type FrameStaleness,
-  frameStalenessKey,
-  useFrameStaleness,
-} from '@/hooks/use-frame-staleness';
+  type ShotStaleness,
+  shotStalenessKey,
+  useShotStaleness,
+} from '@/hooks/use-shot-staleness';
 import { sequenceKeys } from '@/hooks/use-sequences';
-import type { FrameVariant } from '@/lib/db/schema';
+import type { ShotVariant } from '@/lib/db/schema';
 import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_VIDEO_MODEL,
@@ -59,12 +59,12 @@ import {
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
 import { useFramePromptStream } from '@/lib/realtime/use-frame-prompt-stream';
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CopyIcon, History, Loader2, Minimize2, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { FrameStalenessBanners } from './frame-staleness-banners';
+import { ShotStalenessBanners } from './shot-staleness-banners';
 import { SceneCastTab } from './scene-cast-tab';
 import { SceneElementsTab } from './scene-elements-tab';
 import { SceneLocationTab } from './scene-location-tab';
@@ -107,7 +107,7 @@ function isValidTabValue(value: string): value is TabValue {
 }
 
 type SceneScriptPromptsProps = {
-  frame?: Frame | undefined;
+  frame?: Shot | undefined;
   sequenceId: string;
   selectedTab: TabValue;
   onTabChange: (tab: TabValue) => void;
@@ -115,13 +115,13 @@ type SceneScriptPromptsProps = {
   regeneratingMotion: Set<string>;
   regeneratingSceneVariants: Set<string>;
   onRegenerateStart: (
-    frameId: string,
+    shotId: string,
     type: 'image' | 'motion' | 'scene-variants'
   ) => void;
   aspectRatio?: AspectRatio;
-  variantForSelectedModel?: FrameVariant;
+  variantForSelectedModel?: ShotVariant;
   /** The selected scene's video variant for the effective video model (#545). */
-  videoVariantForSelectedModel?: FrameVariant;
+  videoVariantForSelectedModel?: ShotVariant;
   /** Per-scene generation status by model — drives the ✓/⟳/! dropdown markers (#545). */
   imageModelStatuses?: Map<string, ModelGenerationStatus>;
   videoModelStatuses?: Map<string, ModelGenerationStatus>;
@@ -137,8 +137,8 @@ type SceneScriptPromptsProps = {
   /** Style-recommended video model — drives the "Recommended" badge */
   recommendedVideoModel?: string | null;
   /** Live divergent alternates for the current frame across variant types. */
-  frameDivergentVariants?: FrameVariant[];
-  onCompareDivergent?: (variant: FrameVariant) => void;
+  frameDivergentVariants?: ShotVariant[];
+  onCompareDivergent?: (variant: ShotVariant) => void;
   /**
    * Sequence-level motion model. Used as the display fallback when the user
    * hasn't picked one in the dropdown and the frame has no completed motion.
@@ -262,9 +262,9 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     stripeEnabled,
   } = useFalBillingGate();
 
-  const { data: staleness } = useFrameStaleness({
+  const { data: staleness } = useShotStaleness({
     sequenceId,
-    frameId: frame?.id,
+    shotId: frame?.id,
   });
 
   // Sequence-scoped lists power the @-mention autocomplete in both prompt
@@ -296,7 +296,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
       return regenerateFramePromptFn({
         data: {
           sequenceId,
-          frameId: frame.id,
+          shotId: frame.id,
           promptType: vars.promptType,
           force: vars.force,
         },
@@ -308,13 +308,13 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     // which is what drives the button's `Regenerating…` label.
     onMutate: async (vars) => {
       if (!frame?.id) return { previous: undefined };
-      const key = frameStalenessKey(frame.id);
+      const key = shotStalenessKey(frame.id);
       await queryClient.cancelQueries({ queryKey: key });
-      const previous = queryClient.getQueryData<FrameStaleness>(key);
+      const previous = queryClient.getQueryData<ShotStaleness>(key);
       if (previous) {
         const promptKey =
           vars.promptType === 'visual' ? 'visualPrompt' : 'motionPrompt';
-        queryClient.setQueryData<FrameStaleness>(key, {
+        queryClient.setQueryData<ShotStaleness>(key, {
           ...previous,
           [promptKey]: 'fresh',
         });
@@ -337,13 +337,13 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
       }
       if (frame?.id) {
         await queryClient.invalidateQueries({
-          queryKey: frameStalenessKey(frame.id),
+          queryKey: shotStalenessKey(frame.id),
         });
       }
     },
     onError: (error, _vars, context) => {
       if (context?.previous && frame?.id) {
-        queryClient.setQueryData(frameStalenessKey(frame.id), context.previous);
+        queryClient.setQueryData(shotStalenessKey(frame.id), context.previous);
       }
       toast.error('Prompt regenerate failed', {
         description: error instanceof Error ? error.message : 'Unknown error',
@@ -382,39 +382,39 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   }, [framePromptStream.motion.status, motionError]);
 
   // When a streamed regen lands, the workflow has already written the new
-  // variant to the DB and emitted `generation.frame:updated` — refetch so
+  // variant to the DB and emitted `generation.shot:updated` — refetch so
   // the textarea swaps from the live-streamed text to the persisted prompt
   // without a flicker.
-  const frameId = frame?.id;
+  const shotId = frame?.id;
   useEffect(() => {
-    if (!frameId) return;
+    if (!shotId) return;
     if (framePromptStream.visual.status !== 'completed') return;
     void queryClient.invalidateQueries({
-      queryKey: frameKeys.detail(frameId),
+      queryKey: shotKeys.detail(shotId),
     });
     void queryClient.invalidateQueries({
-      queryKey: frameKeys.list(sequenceId),
+      queryKey: shotKeys.list(sequenceId),
     });
     void queryClient.invalidateQueries({
-      queryKey: frameStalenessKey(frameId),
+      queryKey: shotStalenessKey(shotId),
     });
-  }, [framePromptStream.visual.status, frameId, sequenceId, queryClient]);
+  }, [framePromptStream.visual.status, shotId, sequenceId, queryClient]);
   useEffect(() => {
-    if (!frameId) return;
+    if (!shotId) return;
     if (framePromptStream.motion.status !== 'completed') return;
     void queryClient.invalidateQueries({
-      queryKey: frameKeys.detail(frameId),
+      queryKey: shotKeys.detail(shotId),
     });
     void queryClient.invalidateQueries({
-      queryKey: frameKeys.list(sequenceId),
+      queryKey: shotKeys.list(sequenceId),
     });
     void queryClient.invalidateQueries({
-      queryKey: frameStalenessKey(frameId),
+      queryKey: shotStalenessKey(shotId),
     });
-  }, [framePromptStream.motion.status, frameId, sequenceId, queryClient]);
+  }, [framePromptStream.motion.status, shotId, sequenceId, queryClient]);
 
   // Persist a scene-script and/or duration edit. Sends the patched scene via
-  // `metadata`; `updateFrameFn` (server) clears stale dialogue (when extract
+  // `metadata`; `updateShotFn` (server) clears stale dialogue (when extract
   // changes) and mirrors the new extract into `sequences.script`. Existing
   // prompt-input-hash staleness lights up the Image/Motion banners
   // automatically once the new scene metadata lands.
@@ -427,10 +427,10 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
         throw new Error('frame metadata required');
       }
       const { nextExtract, nextDurationSeconds } = input;
-      const updated = await updateFrameFn({
+      const updated = await updateShotFn({
         data: {
           sequenceId,
-          frameId: frame.id,
+          shotId: frame.id,
           ...(nextDurationSeconds !== undefined
             ? { durationMs: Math.round(nextDurationSeconds * 1000) }
             : {}),
@@ -464,13 +464,13 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     onSuccess: async (updated) => {
       setEditedScript(undefined);
       setEditedDurationSeconds(undefined);
-      queryClient.setQueryData(frameKeys.detail(updated.id), updated);
+      queryClient.setQueryData(shotKeys.detail(updated.id), updated);
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: frameKeys.list(sequenceId),
+          queryKey: shotKeys.list(sequenceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: frameStalenessKey(updated.id),
+          queryKey: shotStalenessKey(updated.id),
         }),
         queryClient.invalidateQueries({
           queryKey: sequenceKeys.detail(sequenceId),
@@ -585,7 +585,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     try {
       await setImageFromVariant.mutateAsync({
         sequenceId: frame.sequenceId,
-        frameId: frame.id,
+        shotId: frame.id,
         model: effectiveImageModel,
       });
     } catch (error) {
@@ -612,7 +612,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     try {
       await setVideoFromVariant.mutateAsync({
         sequenceId: frame.sequenceId,
-        frameId: frame.id,
+        shotId: frame.id,
         model: effectiveMotionModel,
       });
     } catch (error) {
@@ -661,8 +661,8 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     onRegenerateStart(frame.id, 'image');
 
     // Optimistic update for frame list query
-    queryClient.setQueryData<Frame[]>(
-      frameKeys.list(frame.sequenceId),
+    queryClient.setQueryData<Shot[]>(
+      shotKeys.list(frame.sequenceId),
       (oldFrames) => {
         if (!oldFrames) return oldFrames;
         return oldFrames.map((f) =>
@@ -679,7 +679,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     );
 
     // Optimistic update for individual frame query
-    queryClient.setQueryData<Frame>(frameKeys.detail(frame.id), (oldFrame) => {
+    queryClient.setQueryData<Shot>(shotKeys.detail(frame.id), (oldFrame) => {
       if (!oldFrame) return oldFrame;
       return {
         ...oldFrame,
@@ -690,10 +690,10 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     });
 
     try {
-      await generateFrameImageFn({
+      await generateShotImageFn({
         data: {
           sequenceId: frame.sequenceId,
-          frameId: frame.id,
+          shotId: frame.id,
           model: regenImageModel,
           prompt: editedImagePrompt || undefined,
         },
@@ -716,10 +716,10 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
 
       // Rollback on error - set status to failed
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.list(frame.sequenceId),
+        queryKey: shotKeys.list(frame.sequenceId),
       });
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.detail(frame.id),
+        queryKey: shotKeys.detail(frame.id),
       });
     }
   }, [
@@ -737,8 +737,8 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     onRegenerateStart(frame.id, 'motion');
 
     // Optimistic update for frame list query
-    queryClient.setQueryData<Frame[]>(
-      frameKeys.list(frame.sequenceId),
+    queryClient.setQueryData<Shot[]>(
+      shotKeys.list(frame.sequenceId),
       (oldFrames) => {
         if (!oldFrames) return oldFrames;
         return oldFrames.map((f) =>
@@ -755,7 +755,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     );
 
     // Optimistic update for individual frame query
-    queryClient.setQueryData<Frame>(frameKeys.detail(frame.id), (oldFrame) => {
+    queryClient.setQueryData<Shot>(shotKeys.detail(frame.id), (oldFrame) => {
       if (!oldFrame) return oldFrame;
       return {
         ...oldFrame,
@@ -769,10 +769,10 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     const supportsAudio = videoModelSupportsAudio(motionModelForCall);
 
     try {
-      await generateFrameMotionFn({
+      await generateShotMotionFn({
         data: {
           sequenceId: frame.sequenceId,
-          frameId: frame.id,
+          shotId: frame.id,
           model: regenMotionModel,
           prompt: editedMotionPrompt || undefined,
           generateAudio: supportsAudio ? generateAudio : undefined,
@@ -794,10 +794,10 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
 
       // Rollback on error
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.list(frame.sequenceId),
+        queryKey: shotKeys.list(frame.sequenceId),
       });
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.detail(frame.id),
+        queryKey: shotKeys.detail(frame.id),
       });
     }
   }, [
@@ -818,7 +818,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     try {
       await generateVariants.mutateAsync({
         sequenceId: frame.sequenceId,
-        frameId: frame.id,
+        shotId: frame.id,
         model: regenImageModel,
       });
     } catch (error) {
@@ -834,7 +834,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
       try {
         await selectVariant.mutateAsync({
           sequenceId: frame.sequenceId,
-          frameId: frame.id,
+          shotId: frame.id,
           variantIndex: index,
         });
       } catch (error) {
@@ -933,8 +933,8 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
       }}
       className="w-full"
     >
-      <FrameStalenessBanners
-        frameId={frame?.id}
+      <ShotStalenessBanners
+        shotId={frame?.id}
         sequenceId={sequenceId}
         onRegenerate={() => {
           onTabChange('image-prompt');
@@ -983,7 +983,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
           {staleness?.visualPrompt === 'stale' && (
             <StalenessIndicator
               artifact="visual-prompt"
-              entityType="frame"
+              entityType="shot"
               density="corner-dot"
               isRegenerating={isRegeneratingVisualPrompt}
             />
@@ -994,7 +994,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
           {staleness?.motionPrompt === 'stale' && (
             <StalenessIndicator
               artifact="motion-prompt"
-              entityType="frame"
+              entityType="shot"
               density="corner-dot"
               isRegenerating={isRegeneratingMotionPrompt}
             />
@@ -1121,7 +1121,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
           {staleness?.visualPrompt === 'stale' && (
             <StalenessIndicator
               artifact="visual-prompt"
-              entityType="frame"
+              entityType="shot"
               density="inline"
               onRegenerate={() =>
                 regeneratePromptMutation.mutate({ promptType: 'visual' })
@@ -1161,7 +1161,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
             <DivergentAlternateBanner
               variantId={divergentImageVariant.id}
               artifact="thumbnail"
-              entityType="frame"
+              entityType="shot"
               onCompare={() => onCompareDivergent?.(divergentImageVariant)}
             />
           )}
@@ -1323,7 +1323,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
           {staleness?.motionPrompt === 'stale' && (
             <StalenessIndicator
               artifact="motion-prompt"
-              entityType="frame"
+              entityType="shot"
               density="inline"
               onRegenerate={() =>
                 regeneratePromptMutation.mutate({ promptType: 'motion' })
@@ -1360,7 +1360,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
             <DivergentAlternateBanner
               variantId={divergentVideoVariant.id}
               artifact="video"
-              entityType="frame"
+              entityType="shot"
               onCompare={() => onCompareDivergent?.(divergentVideoVariant)}
             />
           )}
@@ -1525,7 +1525,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
           onOpenChange={(open) => !open && setHistoryOpen(null)}
           mode={historyOpen}
           sequenceId={sequenceId}
-          frameId={frame.id}
+          shotId={frame.id}
           currentText={
             historyOpen === 'visual' ? imagePrompt || '' : rawMotionPrompt || ''
           }

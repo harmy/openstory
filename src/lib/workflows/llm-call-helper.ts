@@ -165,7 +165,7 @@ export type DurableLLMCallContext = {
 
 export type DurableStreamingLLMCallContext = DurableLLMCallContext & {
   framePromptStream?: {
-    frameId: string;
+    shotId: string;
     promptType: 'visual' | 'motion';
     flushIntervalMs?: number;
   };
@@ -367,7 +367,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
   const hasImageInput = (config.visionImageUrls?.length ?? 0) > 0;
   const modelId = resolveVisionModel(config.modelId, hasImageInput);
   const {
-    frameId,
+    shotId,
     promptType,
     flushIntervalMs = 80,
   } = callContext.framePromptStream;
@@ -404,7 +404,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
         keySource: llmKeyInfo.source,
         keyVia: llmKeyInfo.via,
         messageCount: messages.length,
-        frameId,
+        shotId,
         promptType,
       });
 
@@ -427,7 +427,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
       const abortController = new AbortController();
       const timeout = setTimeout(() => abortController.abort(), 300_000);
 
-      const channel = getFramePromptChannel(frameId);
+      const channel = getFramePromptChannel(shotId);
       let accumulated = '';
       let lastExtracted = '';
       let pendingDelta = '';

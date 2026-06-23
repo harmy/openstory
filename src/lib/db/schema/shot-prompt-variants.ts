@@ -1,8 +1,8 @@
 /**
- * Frame Prompt Variants Schema
+ * Shot Prompt Variants Schema
  *
- * One row per revision of a frame's visual or motion prompt. The current
- * "active" prompt is mirrored on `frames.imagePrompt` / `frames.motionPrompt`
+ * One row per revision of a shot's visual or motion prompt. The current
+ * "active" prompt is mirrored on `shots.imagePrompt` / `shots.motionPrompt`
  * for read-path simplicity; this table stores the full revision history.
  *
  * See docs/architecture/workflow-snapshots-and-content-hash-staleness.md
@@ -24,17 +24,17 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { generateId } from '../id';
 import { user } from './auth';
-import { frames } from './frames';
+import { shots } from './shots';
 
 /**
  * The shape of `components` depends on `promptType`:
  *   - `'visual'` rows store `VisualPromptComponents` (sceneDescription /
- *     subject / lighting / …)
+ *     subject / lighting / ...)
  *   - `'motion'` rows store `MotionPromptComponents` (cameraMovement /
- *     speed / …)
+ *     speed / ...)
  * User-edits without structured components persist `null`.
  */
-export type FramePromptVariantComponents =
+export type ShotPromptVariantComponents =
   | VisualPromptComponents
   | MotionPromptComponents;
 
@@ -49,25 +49,25 @@ const PROMPT_VARIANT_SOURCES = [
 ] as const;
 export type PromptVariantSource = (typeof PROMPT_VARIANT_SOURCES)[number];
 
-export const framePromptVariants = snakeCase.table(
-  'frame_prompt_variants',
+export const shotPromptVariants = snakeCase.table(
+  'shot_prompt_variants',
   {
     id: text()
       .$defaultFn(() => generateId())
       .primaryKey()
       .notNull(),
-    frameId: text()
+    shotId: text()
       .notNull()
-      .references(() => frames.id, { onDelete: 'cascade' }),
+      .references(() => shots.id, { onDelete: 'cascade' }),
     promptType: text().$type<FramePromptType>().notNull(),
 
-    // Full prompt text (mirrors the cached column on `frames`).
+    // Full prompt text (mirrors the cached column on `shots`).
     text: text().notNull(),
     // Structured prompt components (when available — visual prompts split into
     // composition / lighting / etc.; user-edits may not have components).
     components: text({
       mode: 'json',
-    }).$type<FramePromptVariantComponents>(),
+    }).$type<ShotPromptVariantComponents>(),
     // Motion-only: timing / speed / camera parameters. Visual rows store null.
     parameters: text({
       mode: 'json',
@@ -91,7 +91,7 @@ export const framePromptVariants = snakeCase.table(
   },
   (table) => [
     index('idx_frame_prompt_variants_frame_type_created').on(
-      table.frameId,
+      table.shotId,
       table.promptType,
       table.createdAt
     ),
@@ -101,11 +101,11 @@ export const framePromptVariants = snakeCase.table(
     // is also excluded so a restore that carries forward an existing AI hash
     // still appends an audit row to history.
     uniqueIndex('uq_frame_prompt_variants_frame_type_hash_ai')
-      .on(table.frameId, table.promptType, table.inputHash)
+      .on(table.shotId, table.promptType, table.inputHash)
       .where(
         sql`${table.inputHash} IS NOT NULL AND ${table.source} != 'restored'`
       ),
   ]
 );
 
-export type FramePromptVariant = InferSelectModel<typeof framePromptVariants>;
+export type ShotPromptVariant = InferSelectModel<typeof shotPromptVariants>;

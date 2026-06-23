@@ -8,12 +8,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useSequenceElements } from '@/hooks/use-sequence-elements';
 import type { SequenceElement } from '@/lib/db/schema';
 import { matchElementsToScene } from '@/lib/workflows/scene-matching';
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import { Link } from '@tanstack/react-router';
 import { ImagePlus, Loader2 } from 'lucide-react';
 
 type SceneElementsTabProps = {
-  frame?: Frame;
+  frame?: Shot;
   sequenceId: string;
 };
 

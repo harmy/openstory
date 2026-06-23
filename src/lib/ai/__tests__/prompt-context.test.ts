@@ -394,7 +394,7 @@ describe('casting round-trip — stamp matches verify (#867)', () => {
   });
 
   // Simulate the row the character-bible workflow persists, then read it back
-  // the way `getFrameStalenessFn` does at verify time.
+  // the way `getShotStalenessFn` does at verify time.
   const makeCharacterRow = (b: CharacterBibleEntry): Character => ({
     id: `row_${b.characterId}`,
     sequenceId: 'seq_1',

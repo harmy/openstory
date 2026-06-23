@@ -20,7 +20,7 @@ export type StalenessArtifact =
   | 'music';
 
 export type StalenessEntityType =
-  | 'frame'
+  | 'shot'
   | 'character'
   | 'location'
   | 'library-location'

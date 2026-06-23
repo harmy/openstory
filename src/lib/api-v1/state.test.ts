@@ -1,4 +1,4 @@
-import type { Frame } from '@/lib/db/schema/frames';
+import type { Shot } from '@/lib/db/schema/shots';
 import type { Style } from '@/lib/db/schema/libraries';
 import type { Sequence } from '@/lib/db/schema/sequences';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -45,7 +45,7 @@ const build = (
   origin = TEST_ORIGIN
 ) => buildSequenceStateRaw(deps, sequence, origin);
 
-function makeFrame(overrides: Partial<Frame> = {}): Frame {
+function makeFrame(overrides: Partial<Shot> = {}): Shot {
   return {
     id: 'frame-1',
     sequenceId: 'seq-1',
@@ -168,9 +168,9 @@ function makeStyle(overrides: Partial<Style> = {}): Style {
   };
 }
 
-function depsWithFrames(frames: Frame[], style: Style | null = makeStyle()) {
+function depsWithShots(frames: Shot[], style: Style | null = makeStyle()) {
   return {
-    frames: { listBySequence: async () => frames },
+    shots: { listBySequence: async () => frames },
     styles: { getById: async () => style },
   };
 }
@@ -183,7 +183,7 @@ describe('buildSequenceState', () => {
       musicUrl: 'https://cdn/music.mp3',
       statusError: null,
     });
-    const state = await build(depsWithFrames([]), sequence);
+    const state = await build(depsWithShots([]), sequence);
 
     expect(state).toMatchObject({
       id: 'seq-1',
@@ -213,7 +213,7 @@ describe('buildSequenceState', () => {
   it('keeps the style id but nulls the name and logs when the style fails to resolve', async () => {
     loggerErrorMock.mockClear();
     const state = await build(
-      depsWithFrames([], null),
+      depsWithShots([], null),
       makeSequence({ styleId: 'style-deleted', musicModel: 'elevenlabs_music' })
     );
     expect(state.style).toEqual({ id: 'style-deleted', name: null });
@@ -227,7 +227,7 @@ describe('buildSequenceState', () => {
 
   it('null poster and falls back to pending music status', async () => {
     const state = await build(
-      depsWithFrames([]),
+      depsWithShots([]),
       makeSequence({ posterUrl: null, musicStatus: null })
     );
     expect(state.poster).toBeNull();
@@ -248,7 +248,7 @@ describe('buildSequenceState', () => {
         thumbnailUrl: 'https://cdn/t1.png',
       }),
     ];
-    const state = await build(depsWithFrames(frames), makeSequence());
+    const state = await build(depsWithShots(frames), makeSequence());
 
     // ordered by orderIndex
     expect(state.frames.map((f) => f.id)).toEqual(['f1', 'f2']);
@@ -277,7 +277,7 @@ describe('buildSequenceState', () => {
 
   it('treats a preview thumbnail as an available image', async () => {
     const state = await build(
-      depsWithFrames([
+      depsWithShots([
         makeFrame({
           thumbnailUrl: null,
           previewThumbnailUrl: 'https://cdn/p.png',
@@ -293,7 +293,7 @@ describe('buildSequenceState', () => {
 
   it('counts failed videos so a terminal-but-partial result is legible', async () => {
     const state = await build(
-      depsWithFrames([
+      depsWithShots([
         makeFrame({ id: 'f1', videoStatus: 'failed' }),
         makeFrame({
           id: 'f2',
@@ -317,7 +317,7 @@ describe('buildSequenceState', () => {
     // request origin. Stored rows are `/r2/...` (#894); the API must hand
     // off-origin clients a usable absolute URL.
     const state = await build(
-      depsWithFrames([
+      depsWithShots([
         makeFrame({
           id: 'f1',
           thumbnailUrl: '/r2/thumbnails/team/t1.png',
@@ -348,7 +348,7 @@ describe('buildSequenceState', () => {
 
   it('passes through already-absolute (external / legacy) media URLs', async () => {
     const state = await build(
-      depsWithFrames([
+      depsWithShots([
         makeFrame({
           videoStatus: 'completed',
           videoUrl: 'https://v3.fal.media/files/b/abc/out.mp4',
@@ -368,14 +368,14 @@ describe('buildSequenceState', () => {
 describe('isTerminalSequenceState', () => {
   it('treats completed / failed / archived as terminal', async () => {
     for (const status of ['completed', 'failed', 'archived'] as const) {
-      const state = await build(depsWithFrames([]), makeSequence({ status }));
+      const state = await build(depsWithShots([]), makeSequence({ status }));
       expect(isTerminalSequenceState(state)).toBe(true);
     }
   });
 
   it('treats draft / processing as non-terminal', async () => {
     for (const status of ['draft', 'processing'] as const) {
-      const state = await build(depsWithFrames([]), makeSequence({ status }));
+      const state = await build(depsWithShots([]), makeSequence({ status }));
       expect(isTerminalSequenceState(state)).toBe(false);
     }
   });
@@ -391,23 +391,23 @@ describe('sequenceStateCursor', () => {
 
   it('is stable for identical state', async () => {
     const seq = makeSequence({ updatedAt });
-    const a = await build(depsWithFrames([]), seq);
-    const b = await build(depsWithFrames([]), seq);
+    const a = await build(depsWithShots([]), seq);
+    const b = await build(depsWithShots([]), seq);
     expect(sequenceStateCursor(a)).toBe(sequenceStateCursor(b));
   });
 
   it('changes when each polled field advances independently', async () => {
     const baseline = sequenceStateCursor(
-      await build(depsWithFrames([]), makeSequence({ updatedAt }))
+      await build(depsWithShots([]), makeSequence({ updatedAt }))
     );
 
     const cursorFor = async (
-      frames: Parameters<typeof depsWithFrames>[0],
+      frames: Parameters<typeof depsWithShots>[0],
       seqOverrides: Parameters<typeof makeSequence>[0]
     ) =>
       sequenceStateCursor(
         await build(
-          depsWithFrames(frames),
+          depsWithShots(frames),
           makeSequence({ updatedAt, ...seqOverrides })
         )
       );

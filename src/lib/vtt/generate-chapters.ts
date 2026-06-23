@@ -1,4 +1,4 @@
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 
 /**
  * Formats a time in seconds to WebVTT timestamp format (HH:MM:SS.mmm)
@@ -29,12 +29,12 @@ function escapeVTTText(text: string): string {
  * Generates a WebVTT chapters file from an array of frames.
  * Each frame becomes a chapter with its scene number and title.
  */
-export function generateChaptersVTT(frames: Frame[]): string {
+export function generateChaptersVTT(frames: Shot[]): string {
   // Start with WebVTT header
   const lines: string[] = [
     'WEBVTT',
     '',
-    'NOTE Generated chapters from frames',
+    'NOTE Generated chapters from shots',
     '',
   ];
 

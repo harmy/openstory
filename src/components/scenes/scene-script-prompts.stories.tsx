@@ -1,4 +1,4 @@
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { SceneScriptPrompts, type TabValue } from './scene-script-prompts';
@@ -125,7 +125,7 @@ const mockFrame = {
   },
   createdAt: new Date(),
   updatedAt: new Date(),
-} satisfies Frame;
+} satisfies Shot;
 
 const meta: Meta<typeof SceneScriptPrompts> = {
   title: 'Scenes/SceneScriptPrompts',

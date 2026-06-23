@@ -5,13 +5,13 @@
  * All types use camelCase field names thanks to Drizzle's casing configuration.
  */
 
-import type { Frame, Sequence, Style, User } from '@/lib/db/schema';
+import type { Shot, Sequence, Style, User } from '@/lib/db/schema';
 
 // JSON type for metadata fields (compatible with Supabase Json type)
 export type Json = Record<string, unknown> | unknown[];
 
 // Table row types (SELECT results - use camelCase field names)
-export type { Frame, Sequence, Style };
+export type { Shot, Sequence, Style };
 
 // User profile alias (for backward compatibility)
 export type UserProfile = User;

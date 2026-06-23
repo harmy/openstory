@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Storybook mock data uses intentional type assertions */
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import type { Meta, StoryObj } from '@storybook/react';
 import { ScenePlayer } from './scene-player';
 
@@ -121,7 +121,7 @@ const mockFrameBase = {
 };
 
 // Mock frames with scene metadata
-const mockFrames: Frame[] = [
+const mockFrames: Shot[] = [
   {
     ...mockFrameBase,
     id: '1',
@@ -139,7 +139,7 @@ const mockFrames: Frame[] = [
       ...mockFrameBase.metadata,
       sceneNumber: 1,
       metadata: { ...mockFrameBase.metadata.metadata, title: 'Opening Scene' },
-    } as unknown as Frame['metadata'],
+    } as unknown as Shot['metadata'],
   },
   {
     ...mockFrameBase,
@@ -158,7 +158,7 @@ const mockFrames: Frame[] = [
       ...mockFrameBase.metadata,
       sceneNumber: 2,
       metadata: { ...mockFrameBase.metadata.metadata, title: 'The Journey' },
-    } as unknown as Frame['metadata'],
+    } as unknown as Shot['metadata'],
   },
   {
     ...mockFrameBase,
@@ -176,7 +176,7 @@ const mockFrames: Frame[] = [
       ...mockFrameBase.metadata,
       sceneNumber: 3,
       metadata: { ...mockFrameBase.metadata.metadata, title: 'Climax' },
-    } as unknown as Frame['metadata'],
+    } as unknown as Shot['metadata'],
   },
 ];
 
@@ -186,9 +186,9 @@ const mockFrames: Frame[] = [
 export const WithMockSequence: Story = {
   args: {
     selectedFrameId: '1',
-    frames: mockFrames,
+    shots: mockFrames,
     aspectRatio: '16:9',
-    onSelectFrame: () => {},
+    onSelectShot: () => {},
   },
   parameters: {
     docs: {
@@ -204,8 +204,8 @@ export const AllVideoStates: Story = {
   args: {
     selectedFrameId: '1',
     aspectRatio: '16:9',
-    onSelectFrame: () => {},
-    frames: [
+    onSelectShot: () => {},
+    shots: [
       {
         ...mockFrameBase,
         id: '1',
@@ -226,7 +226,7 @@ export const AllVideoStates: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Completed Video',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -247,7 +247,7 @@ export const AllVideoStates: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Pending Video',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -268,7 +268,7 @@ export const AllVideoStates: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Generating Video',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -289,7 +289,7 @@ export const AllVideoStates: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Failed Video',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
   },
@@ -307,8 +307,8 @@ export const OnlyPendingVideos: Story = {
   args: {
     selectedFrameId: '1',
     aspectRatio: '16:9',
-    onSelectFrame: () => {},
-    frames: [
+    onSelectShot: () => {},
+    shots: [
       {
         ...mockFrameBase,
         id: '1',
@@ -329,7 +329,7 @@ export const OnlyPendingVideos: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Pending Scene 1',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -351,7 +351,7 @@ export const OnlyPendingVideos: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Pending Scene 2',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
   },
@@ -369,8 +369,8 @@ export const FailedVideoWithThumbnail: Story = {
   args: {
     selectedFrameId: '1',
     aspectRatio: '16:9',
-    onSelectFrame: () => {},
-    frames: [
+    onSelectShot: () => {},
+    shots: [
       {
         ...mockFrameBase,
         id: '1',
@@ -391,7 +391,7 @@ export const FailedVideoWithThumbnail: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Failed Video Generation',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
   },
@@ -409,8 +409,8 @@ export const PreviewMode: Story = {
   args: {
     selectedFrameId: '1',
     aspectRatio: '16:9',
-    onSelectFrame: () => {},
-    frames: [
+    onSelectShot: () => {},
+    shots: [
       {
         ...mockFrameBase,
         id: '1',
@@ -430,7 +430,7 @@ export const PreviewMode: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Preview - Generating Full Image',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -451,7 +451,7 @@ export const PreviewMode: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Preview - Still Processing',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
         ...mockFrameBase,
@@ -472,7 +472,7 @@ export const PreviewMode: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Final Image Ready',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
   },
@@ -490,8 +490,8 @@ export const FailedVideoWithoutThumbnail: Story = {
   args: {
     selectedFrameId: '1',
     aspectRatio: '16:9',
-    onSelectFrame: () => {},
-    frames: [
+    onSelectShot: () => {},
+    shots: [
       {
         ...mockFrameBase,
         id: '1',
@@ -513,7 +513,7 @@ export const FailedVideoWithoutThumbnail: Story = {
             ...mockFrameBase.metadata.metadata,
             title: 'Complete Failure',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
   },

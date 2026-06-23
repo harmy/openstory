@@ -1,7 +1,7 @@
 /**
  * Cloudflare Workflows port of `frameImagesWorkflow`.
  *
- * Mirrors the QStash version (`src/lib/workflows/frame-images-workflow.ts`)
+ * Mirrors the QStash version (`src/lib/workflows/shot-images-workflow.ts`)
  * step for step — same step names, same control flow, same side effects.
  * Differences (all infrastructure-level, not behavioural):
  *
@@ -36,8 +36,8 @@ import { WorkflowValidationError } from '@/lib/workflow/errors';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import { NonRetryableError } from 'cloudflare:workflows';
 import type {
-  FrameImagesWorkflowInput,
-  FrameImagesWorkflowResult,
+  ShotImagesWorkflowInput,
+  ShotImagesWorkflowResult,
   ImageWorkflowInput,
   ShotVariantWorkflowInput,
 } from '@/lib/workflow/types';
@@ -58,16 +58,16 @@ const logger = getLogger(['openstory', 'workflow', 'frame-images']);
 
 type ImageChildResult = {
   imageUrl: string;
-  frameId?: string;
+  shotId?: string;
   sequenceId?: string;
 };
 
-export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImagesWorkflowInput> {
+export class ShotImagesWorkflow extends OpenStoryWorkflowEntrypoint<ShotImagesWorkflowInput> {
   protected override async runImpl(
-    event: Readonly<WorkflowEvent<FrameImagesWorkflowInput>>,
+    event: Readonly<WorkflowEvent<ShotImagesWorkflowInput>>,
     step: WorkflowStep,
     scopedDb: ScopedDb
-  ): Promise<FrameImagesWorkflowResult> {
+  ): Promise<ShotImagesWorkflowResult> {
     const input = event.payload;
     const parentInstanceId = event.instanceId;
 
@@ -245,7 +245,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
               imageSize,
               aspectRatio,
               numImages: 1,
-              frameId: matchedFrame?.frameId,
+              shotId: matchedFrame?.shotId,
               sequenceId,
               referenceImages:
                 allReferences.length > 0 ? allReferences : undefined,
@@ -255,10 +255,10 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
 
             // Per-spawn unique IDs. Include the model so the per-(scene,
             // model) fan-out gets distinct CF instance IDs — siblings
-            // would otherwise collide on `image:${sequenceId}:${frameId}`
+            // would otherwise collide on `image:${sequenceId}:${shotId}`
             // (CF instance IDs are global per Worker script).
-            const childIdSuffix = matchedFrame?.frameId
-              ? `image:${sequenceId ?? 'no-seq'}:${matchedFrame.frameId}:${model}`
+            const childIdSuffix = matchedFrame?.shotId
+              ? `image:${sequenceId ?? 'no-seq'}:${matchedFrame.shotId}:${model}`
               : `image:${sequenceId ?? 'no-seq'}:${scene.sceneId}:${model}`;
 
             const childOutput = await spawnAndAwaitChild<
@@ -266,7 +266,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
               ImageChildResult
             >(step, {
               binding: imageBinding,
-              parentBindingName: 'FRAME_IMAGES_WORKFLOW',
+              parentBindingName: 'SHOT_IMAGES_WORKFLOW',
               parentInstanceId,
               childId: childIdSuffix,
               childPayload: childBody,
@@ -295,7 +295,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
                     userId: input.userId,
                     teamId: input.teamId,
                     sequenceId,
-                    frameId: matchedFrame?.frameId,
+                    shotId: matchedFrame?.shotId,
                     thumbnailUrl: childOutput.imageUrl,
                     scenePrompt: scene.prompts?.visual?.fullPrompt,
                     characterReferences:
@@ -316,7 +316,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
                     // paid job (see dedup-ids.ts).
                     deduplicationId: shotVariantDedupId(
                       parentInstanceId,
-                      matchedFrame?.frameId ?? scene.sceneId,
+                      matchedFrame?.shotId ?? scene.sceneId,
                       model
                     ),
                   }
@@ -348,7 +348,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
           const r = modelResults[i];
           if (r?.status === 'rejected') {
             logger.warn(
-              `[FrameImagesWorkflow:cf] Alternate model ${imageModels[i]} failed for scene ${scene.sceneId}:`,
+              `[ShotImagesWorkflow:cf] Alternate model ${imageModels[i]} failed for scene ${scene.sceneId}:`,
               {
                 err: r.reason,
               }
@@ -372,7 +372,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
       if (r.status === 'fulfilled') return r.value;
       const scene = scenesWithVisualPrompts[i];
       logger.error(
-        `[FrameImagesWorkflow:cf] Scene ${scene?.sceneId ?? '(unknown)'} failed: ${String(r.reason)}`,
+        `[ShotImagesWorkflow:cf] Scene ${scene?.sceneId ?? '(unknown)'} failed: ${String(r.reason)}`,
         {
           err: r.reason,
         }
@@ -387,13 +387,13 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
     event,
     error,
   }: {
-    event: Readonly<WorkflowEvent<FrameImagesWorkflowInput>>;
+    event: Readonly<WorkflowEvent<ShotImagesWorkflowInput>>;
     error: string;
     scopedDb: ScopedDb;
   }): void {
     const input = event.payload;
     logger.error(
-      `[FrameImagesWorkflow:cf] Frame image generation failed for sequence ${input.sequenceId}: ${error}`
+      `[ShotImagesWorkflow:cf] Frame image generation failed for sequence ${input.sequenceId}: ${error}`
     );
   }
 }

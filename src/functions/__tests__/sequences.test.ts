@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { Frame, FrameVariant } from '@/lib/db/schema';
+import type { Shot, ShotVariant } from '@/lib/db/schema';
 import {
   assertModelNotAlreadyAdded,
   buildAddAudioMusicInput,
@@ -25,10 +25,10 @@ import {
 
 const NOW = new Date('2026-06-03T00:00:00.000Z');
 
-function makeVariant(overrides: Partial<FrameVariant> = {}): FrameVariant {
+function makeVariant(overrides: Partial<ShotVariant> = {}): ShotVariant {
   return {
     id: 'variant-1',
-    frameId: 'frame-1',
+    shotId: 'frame-1',
     sequenceId: 'seq-1',
     variantType: 'image',
     model: 'flux_pro',
@@ -54,7 +54,7 @@ function makeVariant(overrides: Partial<FrameVariant> = {}): FrameVariant {
   };
 }
 
-function makeFrame(overrides: Partial<Frame> = {}): Frame {
+function makeFrame(overrides: Partial<Shot> = {}): Shot {
   return {
     id: 'frame-1',
     sequenceId: 'seq-1',
@@ -143,11 +143,11 @@ describe('selectPromotableVariants (#547)', () => {
 
   it('returns only the matching live rows from a mixed set', () => {
     const variants = [
-      makeVariant({ id: 'keep-1', frameId: 'f1' }),
-      makeVariant({ id: 'keep-2', frameId: 'f2' }),
+      makeVariant({ id: 'keep-1', shotId: 'f1' }),
+      makeVariant({ id: 'keep-2', shotId: 'f2' }),
       makeVariant({ id: 'drop-model', model: 'other' }),
-      makeVariant({ id: 'drop-diverged', frameId: 'f3', divergedAt: NOW }),
-      makeVariant({ id: 'drop-pending', frameId: 'f4', status: 'pending' }),
+      makeVariant({ id: 'drop-diverged', shotId: 'f3', divergedAt: NOW }),
+      makeVariant({ id: 'drop-pending', shotId: 'f4', status: 'pending' }),
     ];
     const result = selectPromotableVariants(variants, 'flux_pro');
     expect(result.map((v) => v.id)).toEqual(['keep-1', 'keep-2']);

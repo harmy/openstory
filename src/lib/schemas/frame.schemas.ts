@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-orm/zod';
-import { frames, FRAME_GENERATION_STATUSES } from '@/lib/db/schema/frames';
+import { shots, FRAME_GENERATION_STATUSES } from '@/lib/db/schema/shots';
 import { IMAGE_MODELS, IMAGE_TO_VIDEO_MODELS } from '@/lib/ai/models';
 import { sceneSchema } from '@/lib/ai/scene-analysis.schema';
 
@@ -13,7 +13,7 @@ import { sceneSchema } from '@/lib/ai/scene-analysis.schema';
  * but do not enforce FrameMetadata typing to maintain flexibility.
  */
 
-const createFrameSchema = createInsertSchema(frames, {
+const createFrameSchema = createInsertSchema(shots, {
   description: (schema) => schema.min(1).max(5000),
   durationMs: (schema) => schema.min(1),
   metadata: () => sceneSchema.nullable().optional(),
@@ -29,7 +29,7 @@ const createFrameSchema = createInsertSchema(frames, {
   updatedAt: true,
 });
 
-export const updateFrameSchema = createUpdateSchema(frames, {
+export const updateFrameSchema = createUpdateSchema(shots, {
   description: (schema) => schema.min(1).max(5000),
   durationMs: (schema) => schema.min(1),
   metadata: () => sceneSchema.nullable().optional(),

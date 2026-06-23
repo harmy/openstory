@@ -14,14 +14,14 @@ import { batchGenerateMotionFn } from '@/functions/motion-functions';
 import { smartRetryFn } from '@/functions/smart-retry';
 import { BILLING_BALANCE_KEY } from '@/hooks/use-billing-balance';
 import {
-  frameKeys,
+  shotKeys,
   useDiscardVariant,
   useDivergentVariants,
-  useFramesBySequence,
+  useShotsBySequence,
   usePromoteVariantToPrimary,
   useSequenceVideoVariants,
   useUndiscardVariant,
-} from '@/hooks/use-frames';
+} from '@/hooks/use-shots';
 import { useActiveImageModel } from '@/hooks/use-active-image-model';
 import { useActiveVideoModel } from '@/hooks/use-active-video-model';
 import { type ModelGenerationStatus } from '@/components/model/base-model-selector';
@@ -47,8 +47,8 @@ import {
 import { analyzeFailures } from '@/lib/failures/failure-analysis';
 import type { GenerationPhaseConfig } from '@/lib/realtime/generation-stream.reducer';
 import { useGenerationStream } from '@/lib/realtime/use-generation-stream';
-import { getSequenceImageVariantsFn } from '@/functions/frames';
-import type { Frame, FrameVariant } from '@/lib/db/schema';
+import { getSequenceImageVariantsFn } from '@/functions/shots';
+import type { Shot, ShotVariant } from '@/lib/db/schema';
 import type { Sequence } from '@/types/database';
 import { usePostHog } from '@posthog/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -62,8 +62,8 @@ type ScenesViewProps = {
 
 const CompareWithPromptDiff: React.FC<{
   sequenceId: string;
-  frame: Frame;
-  variant: FrameVariant;
+  frame: Shot;
+  variant: ShotVariant;
   onClose: () => void;
   onPromote: () => void;
   onDiscard: () => void;
@@ -184,8 +184,8 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     refetchInterval: (query) => {
       const seq = query.state.data;
       if (!seq) return false;
-      const cachedFrames = queryClient.getQueryData<Frame[]>(
-        frameKeys.list(sequenceId)
+      const cachedFrames = queryClient.getQueryData<Shot[]>(
+        shotKeys.list(sequenceId)
       );
       return cachedFrames?.some((f) => f.videoStatus === 'generating')
         ? 2000
@@ -237,13 +237,13 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
 
   // Fetch frames — only poll when processing AND realtime has failed.
   // Otherwise realtime events keep the cache fresh via updateQueryCacheFromEvent.
-  const { data: frames } = useFramesBySequence(
+  const { data: frames } = useShotsBySequence(
     sequenceId,
     shouldPoll ? { refetchInterval: 2000 } : undefined
   );
 
   // Fetch image variants for this sequence
-  const { data: imageVariants } = useQuery<FrameVariant[]>({
+  const { data: imageVariants } = useQuery<ShotVariant[]>({
     queryKey: ['sequence-image-variants', sequenceId],
     queryFn: () => getSequenceImageVariantsFn({ data: { sequenceId } }),
     staleTime: 30_000,
@@ -258,13 +258,13 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   const { activeVideoModel } = useActiveVideoModel(sequenceId);
 
   const videoVariantsByFrame = useMemo(() => {
-    const map = new Map<string, FrameVariant[]>();
+    const map = new Map<string, ShotVariant[]>();
     if (!videoVariants) return map;
     for (const v of videoVariants) {
       if (v.variantType !== 'video') continue;
-      const list = map.get(v.frameId) ?? [];
+      const list = map.get(v.shotId) ?? [];
       list.push(v);
-      map.set(v.frameId, list);
+      map.set(v.shotId, list);
     }
     return map;
   }, [videoVariants]);
@@ -274,13 +274,13 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   // model has no completed image for a frame).
   const { activeImageModel } = useActiveImageModel(sequenceId);
   const imageVariantsByFrame = useMemo(() => {
-    const map = new Map<string, FrameVariant[]>();
+    const map = new Map<string, ShotVariant[]>();
     if (!imageVariants) return map;
     for (const v of imageVariants) {
       if (v.variantType !== 'image') continue;
-      const list = map.get(v.frameId) ?? [];
+      const list = map.get(v.shotId) ?? [];
       list.push(v);
-      map.set(v.frameId, list);
+      map.set(v.shotId, list);
     }
     return map;
   }, [imageVariants]);
@@ -322,17 +322,17 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   const promoteVariant = usePromoteVariantToPrimary();
   const discardVariant = useDiscardVariant();
   const undiscardVariant = useUndiscardVariant();
-  const [compareVariant, setCompareVariant] = useState<FrameVariant | null>(
+  const [compareVariant, setCompareVariant] = useState<ShotVariant | null>(
     null
   );
 
   const handleDiscardWithUndo = useCallback(
-    (variant: FrameVariant) => {
+    (variant: ShotVariant) => {
       const restore = () => {
         undiscardVariant.mutate(
           {
             sequenceId,
-            frameId: variant.frameId,
+            shotId: variant.shotId,
             variantId: variant.id,
           },
           {
@@ -346,7 +346,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         );
       };
       discardVariant.mutate(
-        { sequenceId, frameId: variant.frameId, variantId: variant.id },
+        { sequenceId, shotId: variant.shotId, variantId: variant.id },
         {
           onSuccess: () => {
             // Only close the dialog after the mutation succeeds — on failure
@@ -373,7 +373,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   // than silently null-rendering it.
   useEffect(() => {
     if (!compareVariant || !frames) return;
-    const stillExists = frames.some((f) => f.id === compareVariant.frameId);
+    const stillExists = frames.some((f) => f.id === compareVariant.shotId);
     if (!stillExists) {
       toast.info('Scene was removed.');
       setCompareVariant(null);
@@ -381,9 +381,9 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   }, [compareVariant, frames]);
 
   const handlePromote = useCallback(
-    (variant: FrameVariant) => {
+    (variant: ShotVariant) => {
       promoteVariant.mutate(
-        { sequenceId, frameId: variant.frameId, variantId: variant.id },
+        { sequenceId, shotId: variant.shotId, variantId: variant.id },
         {
           onSuccess: () => {
             setCompareVariant(null);
@@ -417,10 +417,10 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   }, [generationState.frameRetries, curSelectedFrameId]);
 
   // Filter variants for the currently selected frame
-  const selectedFrameVariants = useMemo(() => {
+  const selectedShotVariants = useMemo(() => {
     if (!imageVariants || !curSelectedFrameId) return undefined;
     return imageVariants.filter(
-      (v) => v.frameId === curSelectedFrameId && v.variantType === 'image'
+      (v) => v.shotId === curSelectedFrameId && v.variantType === 'image'
     );
   }, [imageVariants, curSelectedFrameId]);
 
@@ -440,9 +440,9 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     safeTextToImageModel(selectedFrame?.imageModel, DEFAULT_IMAGE_MODEL);
 
   const variantForSelectedModel = useMemo(() => {
-    if (!selectedFrameVariants) return undefined;
-    return selectedFrameVariants.find((v) => v.model === effectiveImageModel);
-  }, [selectedFrameVariants, effectiveImageModel]);
+    if (!selectedShotVariants) return undefined;
+    return selectedShotVariants.find((v) => v.model === effectiveImageModel);
+  }, [selectedShotVariants, effectiveImageModel]);
 
   // Video equivalent (#545): the selected scene's video variant for the
   // effective video model (override → frame's own model). Excludes divergent /
@@ -478,7 +478,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   // completed models show a plain ✓ (selectable, then "Set" to promote).
   const imageModelStatuses = useMemo(() => {
     const map = new Map<string, ModelGenerationStatus>();
-    const variants = (selectedFrameVariants ?? []).filter(
+    const variants = (selectedShotVariants ?? []).filter(
       (v) => v.divergedAt === null && v.discardedAt === null
     );
     const primaryUrl = selectedFrame?.thumbnailUrl ?? null;
@@ -493,7 +493,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     if (setModel && !map.has(setModel)) map.set(setModel, 'set');
     return map;
   }, [
-    selectedFrameVariants,
+    selectedShotVariants,
     selectedFrame?.thumbnailUrl,
     selectedFrame?.imageModel,
   ]);
@@ -679,15 +679,15 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   }, []);
 
   const handleRegenerateStart = useCallback(
-    (frameId: string, type: RegenerationType) => {
-      setterForType(type)((prev) => addToSet(prev, frameId));
+    (shotId: string, type: RegenerationType) => {
+      setterForType(type)((prev) => addToSet(prev, shotId));
     },
     [setterForType]
   );
 
   const handleRegenerateEnd = useCallback(
-    (frameId: string, type: RegenerationType) => {
-      setterForType(type)((prev) => removeFromSet(prev, frameId));
+    (shotId: string, type: RegenerationType) => {
+      setterForType(type)((prev) => removeFromSet(prev, shotId));
     },
     [setterForType]
   );
@@ -758,7 +758,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
       void queryClient.invalidateQueries({
         queryKey: ['sequence', sequenceId],
       });
-      void queryClient.invalidateQueries({ queryKey: ['frames', sequenceId] });
+      void queryClient.invalidateQueries({ queryKey: ['shots', sequenceId] });
     } catch (error) {
       if (isInsufficientCreditsError(error)) {
         toast.error('Insufficient credits', {
@@ -806,7 +806,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
       // derived banner state shows the banner immediately — no separate state.
       const eligibleSet = new Set(eligibleFrameIds);
       const now = new Date();
-      queryClient.setQueryData<Frame[]>(frameKeys.list(sequenceId), (old) =>
+      queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
         old?.map((f) =>
           eligibleSet.has(f.id)
             ? { ...f, videoStatus: 'generating', updatedAt: now }
@@ -850,7 +850,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
           removeAllFromSet(prev, eligibleFrameIds)
         );
         // Roll back optimistic cache updates
-        queryClient.setQueryData<Frame[]>(frameKeys.list(sequenceId), (old) =>
+        queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
           old?.map((f) =>
             eligibleSet.has(f.id) ? { ...f, videoStatus: 'pending' } : f
           )
@@ -913,7 +913,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         frames && (
           <div className="pl-4 pr-4 pt-4 md:pr-8">
             <MotionProgressBanner
-              frames={frames}
+              shots={frames}
               sequence={sequence}
               includeMusic={motionBannerState.includeMusic}
               startedAt={motionBannerState.startedAt}
@@ -936,10 +936,10 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         {/* Desktop: Scene List sidebar */}
         <div className="hidden md:block pl-4 py-4">
           <SceneList
-            frames={frames}
+            shots={frames}
             selectedFrameId={curSelectedFrameId}
             aspectRatio={aspectRatio}
-            onSelectFrame={setSelectedFrameId}
+            onSelectShot={setSelectedFrameId}
             regeneratingImages={regeneratingImages}
             regeneratingMotion={regeneratingMotion}
             onBatchGenerateMotion={handleBatchMotionGeneration}
@@ -960,10 +960,10 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         {/* Mobile: Bottom drawer */}
         <div className="md:hidden">
           <MobileSceneDrawer
-            frames={frames}
+            shots={frames}
             selectedFrameId={curSelectedFrameId}
             aspectRatio={aspectRatio}
-            onSelectFrame={setSelectedFrameId}
+            onSelectShot={setSelectedFrameId}
             regeneratingImages={regeneratingImages}
             regeneratingMotion={regeneratingMotion}
             onBatchGenerateMotion={handleBatchMotionGeneration}
@@ -981,10 +981,10 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         <ScrollArea className="flex-1 px-4 md:px-8 gap-8 flex flex-col pb-20 md:pb-0 pt-4">
           <div className="flex flex-1 min-h-0 justify-center pb-8">
             <ScenePlayer
-              frames={playerFrames}
+              shots={playerFrames}
               selectedFrameId={curSelectedFrameId}
               aspectRatio={aspectRatio}
-              onSelectFrame={setSelectedFrameId}
+              onSelectShot={setSelectedFrameId}
               selectedTab={selectedTab}
               overrideImageUrl={previewVariantUrl}
               overrideVideoUrl={previewVariantVideoUrl}
@@ -1029,7 +1029,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
             recommendedImageModel={recommendedImageModel}
             recommendedVideoModel={recommendedVideoModel}
             frameDivergentVariants={divergentVariants?.filter(
-              (v) => v.frameId === curSelectedFrameId
+              (v) => v.shotId === curSelectedFrameId
             )}
             onCompareDivergent={(variant) => setCompareVariant(variant)}
           />
@@ -1039,7 +1039,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
       {compareVariant &&
         (() => {
           const targetFrame = frames?.find(
-            (f) => f.id === compareVariant.frameId
+            (f) => f.id === compareVariant.shotId
           );
           if (!targetFrame) return null;
           return (

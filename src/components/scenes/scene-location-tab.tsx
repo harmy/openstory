@@ -6,12 +6,12 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSequenceLocations } from '@/hooks/use-sequence-locations';
 import type { SequenceLocation } from '@/lib/db/schema';
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import { Link } from '@tanstack/react-router';
 import { ExternalLink, MapPin } from 'lucide-react';
 
 type SceneLocationTabProps = {
-  frame?: Frame;
+  frame?: Shot;
   sequenceId: string;
 };
 
@@ -46,7 +46,7 @@ function locationMatchesTag(
  */
 function matchLocationToFrame(
   locations: SequenceLocation[],
-  frame: Frame
+  frame: Shot
 ): SequenceLocation | null {
   const environmentTag = frame.metadata?.continuity?.environmentTag ?? '';
   const sceneLocation = frame.metadata?.metadata?.location ?? '';

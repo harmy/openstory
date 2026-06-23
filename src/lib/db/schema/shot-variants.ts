@@ -1,7 +1,7 @@
 /**
- * Frame Variants Schema
- * Stores per-model generation outputs for frames.
- * Each frame can have multiple variants (one per model per type),
+ * Shot Variants Schema
+ * Stores per-model generation outputs for shots.
+ * Each shot can have multiple variants (one per model per type),
  * enabling users to compare outputs from different AI models.
  */
 
@@ -14,8 +14,8 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 import { generateId } from '../id';
-import { FRAME_GENERATION_STATUSES } from './frames';
-import { frames } from './frames';
+import { FRAME_GENERATION_STATUSES } from './shots';
+import { shots } from './shots';
 import { sequences } from './sequences';
 
 type FrameGenerationStatus = (typeof FRAME_GENERATION_STATUSES)[number];
@@ -23,16 +23,16 @@ type FrameGenerationStatus = (typeof FRAME_GENERATION_STATUSES)[number];
 export const VARIANT_TYPES = ['image', 'video', 'audio'] as const;
 export type VariantType = (typeof VARIANT_TYPES)[number];
 
-export const frameVariants = snakeCase.table(
-  'frame_variants',
+export const shotVariants = snakeCase.table(
+  'shot_variants',
   {
     id: text()
       .$defaultFn(() => generateId())
       .primaryKey()
       .notNull(),
-    frameId: text()
+    shotId: text()
       .notNull()
-      .references(() => frames.id, { onDelete: 'cascade' }),
+      .references(() => shots.id, { onDelete: 'cascade' }),
     sequenceId: text()
       .notNull()
       .references(() => sequences.id, { onDelete: 'cascade' }),
@@ -82,15 +82,15 @@ export const frameVariants = snakeCase.table(
       .notNull(),
   },
   (table) => [
-    index('idx_frame_variants_frame_type').on(table.frameId, table.variantType),
+    index('idx_frame_variants_frame_type').on(table.shotId, table.variantType),
     index('idx_frame_variants_sequence_type').on(
       table.sequenceId,
       table.variantType
     ),
-    // Primary slot: at most one non-divergent row per (frame, type, model).
+    // Primary slot: at most one non-divergent row per (shot, type, model).
     // image-workflow's speculative upsert and convergent reconcile both write here.
     uniqueIndex('frame_variants_primary_key')
-      .on(table.frameId, table.variantType, table.model)
+      .on(table.shotId, table.variantType, table.model)
       .where(sql`${table.divergedAt} IS NULL`),
     // Divergent alternates: distinguished by input_hash, so multiple
     // divergences of the same model can coexist without overwriting each other.
@@ -98,10 +98,10 @@ export const frameVariants = snakeCase.table(
     // divergedAt IS NULL — must never have discardedAt set; discardedAt is
     // the user-dismissal marker for divergent alternates only.
     uniqueIndex('frame_variants_divergent_key')
-      .on(table.frameId, table.variantType, table.model, table.inputHash)
+      .on(table.shotId, table.variantType, table.model, table.inputHash)
       .where(sql`${table.divergedAt} IS NOT NULL`),
   ]
 );
 
-export type FrameVariant = InferSelectModel<typeof frameVariants>;
-export type NewFrameVariant = InferInsertModel<typeof frameVariants>;
+export type ShotVariant = InferSelectModel<typeof shotVariants>;
+export type NewShotVariant = InferInsertModel<typeof shotVariants>;

@@ -19,7 +19,7 @@ type UploadAudioOptions = {
   audioUrl: string;
   teamId: string;
   sequenceId: string;
-  frameId?: string;
+  shotId?: string;
   sequenceTitle: string;
   sceneTitle?: string;
 };
@@ -56,7 +56,7 @@ export async function uploadAudioToStorage(
   options: UploadAudioOptions
 ): Promise<StorageResult> {
   try {
-    const { audioUrl, teamId, sequenceId, frameId, sequenceTitle, sceneTitle } =
+    const { audioUrl, teamId, sequenceId, shotId, sequenceTitle, sceneTitle } =
       options;
 
     const response = await fetch(audioUrl);
@@ -88,13 +88,13 @@ export async function uploadAudioToStorage(
     const filename = `${sequenceSlug}_${sceneSlug}_${shortHash}_openstory.${extension}`;
 
     // Store under frame path if per-scene, otherwise under sequence
-    const storagePath = frameId
-      ? `teams/${teamId}/sequences/${sequenceId}/frames/${frameId}/${filename}`
+    const storagePath = shotId
+      ? `teams/${teamId}/sequences/${sequenceId}/frames/${shotId}/${filename}`
       : `teams/${teamId}/sequences/${sequenceId}/music/${filename}`;
 
     logger.info(`Generated filename: ${filename}`, {
       ulid,
-      frameId,
+      shotId,
       storagePath,
     });
 

@@ -39,8 +39,8 @@ const sequenceElementKeys = {
   all: ['sequence-elements'] as const,
   bySequence: (sequenceId: string) =>
     ['sequence-elements', sequenceId] as const,
-  framesForElement: (sequenceId: string, elementId: string) =>
-    ['sequence-elements', sequenceId, 'frames', elementId] as const,
+  shotsForElement: (sequenceId: string, elementId: string) =>
+    ['sequence-elements', sequenceId, 'shots', elementId] as const,
   frameCountsBySequence: (sequenceId: string) =>
     ['sequence-elements', sequenceId, 'frame-counts'] as const,
 };
@@ -202,7 +202,7 @@ export function useRenameSequenceElementToken() {
       // Frames now contain the new token in metadata / prompts. Refresh
       // anything that renders frame text or counts.
       if (result.framesUpdated > 0) {
-        void queryClient.invalidateQueries({ queryKey: ['frames'] });
+        void queryClient.invalidateQueries({ queryKey: ['shots'] });
         void queryClient.invalidateQueries({
           queryKey: sequenceElementKeys.frameCountsBySequence(
             variables.sequenceId
@@ -295,7 +295,7 @@ export function useReplaceElementProgress(
             queryKey: sequenceElementKeys.bySequence(sequenceId),
           });
         }
-        void queryClient.invalidateQueries({ queryKey: ['frames'] });
+        void queryClient.invalidateQueries({ queryKey: ['shots'] });
         return;
       }
 
@@ -363,7 +363,7 @@ export function useReplaceSequenceElement() {
         queryKey: sequenceElementKeys.bySequence(variables.sequenceId),
       });
       void queryClient.invalidateQueries({
-        queryKey: sequenceElementKeys.framesForElement(
+        queryKey: sequenceElementKeys.shotsForElement(
           variables.sequenceId,
           variables.elementId
         ),
@@ -373,7 +373,7 @@ export function useReplaceSequenceElement() {
           variables.sequenceId
         ),
       });
-      void queryClient.invalidateQueries({ queryKey: ['frames'] });
+      void queryClient.invalidateQueries({ queryKey: ['shots'] });
     },
   });
 }

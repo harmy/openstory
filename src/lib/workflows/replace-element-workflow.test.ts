@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildEditPrompt,
   decideBatchOutcome,
-  type FrameResult,
+  type ShotResult,
   rejectionReasonMessage,
   settledToResult,
   shouldDowngradeVisionOnFailure,
@@ -54,9 +54,9 @@ describe('decideBatchOutcome', () => {
   });
 
   it('throws-via-fail-kind when every attempted frame failed', () => {
-    const results: FrameResult[] = [
-      { frameId: 'f1', success: false, error: 'edit timeout' },
-      { frameId: 'f2', success: false, error: 'no imageUrl' },
+    const results: ShotResult[] = [
+      { shotId: 'f1', success: false, error: 'edit timeout' },
+      { shotId: 'f2', success: false, error: 'no imageUrl' },
     ];
     const outcome = decideBatchOutcome(results);
     expect(outcome.kind).toBe('fail');
@@ -67,10 +67,10 @@ describe('decideBatchOutcome', () => {
   });
 
   it('returns complete with mixed counts when some succeeded and some failed', () => {
-    const results: FrameResult[] = [
-      { frameId: 'f1', success: true, imageUrl: 'https://r2/a.png' },
-      { frameId: 'f2', success: false, error: 'edit failed' },
-      { frameId: 'f3', success: true, imageUrl: 'https://r2/c.png' },
+    const results: ShotResult[] = [
+      { shotId: 'f1', success: true, imageUrl: 'https://r2/a.png' },
+      { shotId: 'f2', success: false, error: 'edit failed' },
+      { shotId: 'f3', success: true, imageUrl: 'https://r2/c.png' },
     ];
     const outcome = decideBatchOutcome(results);
     expect(outcome).toEqual({
@@ -131,36 +131,36 @@ describe('rejectionReasonMessage', () => {
 
 describe('settledToResult', () => {
   it('passes fulfilled results through unchanged', () => {
-    const fulfilled: PromiseSettledResult<FrameResult> = {
+    const fulfilled: PromiseSettledResult<ShotResult> = {
       status: 'fulfilled',
-      value: { frameId: 'f1', success: true, imageUrl: 'https://r2/a.png' },
+      value: { shotId: 'f1', success: true, imageUrl: 'https://r2/a.png' },
     };
     expect(settledToResult(fulfilled, 'ignored')).toEqual({
-      frameId: 'f1',
+      shotId: 'f1',
       success: true,
       imageUrl: 'https://r2/a.png',
     });
   });
 
   it('converts Error rejection to a failure result with the message', () => {
-    const rejected: PromiseSettledResult<FrameResult> = {
+    const rejected: PromiseSettledResult<ShotResult> = {
       status: 'rejected',
       reason: new Error('invoke failed'),
     };
     expect(settledToResult(rejected, 'f1')).toEqual({
-      frameId: 'f1',
+      shotId: 'f1',
       success: false,
       error: 'invoke failed',
     });
   });
 
-  it('uses `unknown` frameId when the index lookup returns undefined', () => {
-    const rejected: PromiseSettledResult<FrameResult> = {
+  it('uses `unknown` shotId when the index lookup returns undefined', () => {
+    const rejected: PromiseSettledResult<ShotResult> = {
       status: 'rejected',
       reason: new Error('boom'),
     };
     expect(settledToResult(rejected, undefined)).toEqual({
-      frameId: 'unknown',
+      shotId: 'unknown',
       success: false,
       error: 'boom',
     });

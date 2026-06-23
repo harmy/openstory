@@ -61,7 +61,7 @@ export class MotionBatchWorkflow extends OpenStoryWorkflowEntrypoint<BatchMotion
     if (!sequenceId) {
       throw new WorkflowValidationError('sequenceId is required');
     }
-    if (!input.frames.length) {
+    if (!input.shots.length) {
       throw new WorkflowValidationError('At least one frame is required');
     }
     if (includeMusic && !input.music) {
@@ -78,34 +78,34 @@ export class MotionBatchWorkflow extends OpenStoryWorkflowEntrypoint<BatchMotion
     // the rest are alternates in `frame_variants`. Pattern 3 spawns + awaits
     // each child via `spawnAndAwaitChild`; Promise.allSettled lets a single
     // failing (frame, model) not poison the rest of the batch.
-    const motionJobs = buildMotionJobs(input.frames, input.videoModels);
+    const motionJobs = buildMotionJobs(input.shots, input.videoModels);
 
-    const motionAwaits = motionJobs.map(({ frame, frameIndex, model }) => {
+    const motionAwaits = motionJobs.map(({ shot, shotIndex, model }) => {
       // Per-model prompt: re-assemble from the structured motion prompt when
       // present so audio-capable models get dialogue/audio sections, falling
       // back to the pre-assembled `prompt` for manual single-model paths.
-      const prompt = frame.motionPrompt
+      const prompt = shot.motionPrompt
         ? assembleMotionPrompt({
-            motionPrompt: frame.motionPrompt,
+            motionPrompt: shot.motionPrompt,
             model,
-            characterTags: frame.characterTags,
+            characterTags: shot.characterTags,
           })
-        : frame.prompt;
+        : shot.prompt;
 
       const motionBody: MotionWorkflowInput = {
         userId: input.userId,
         teamId: input.teamId,
-        frameId: frame.frameId,
+        shotId: shot.shotId,
         sequenceId,
-        imageUrl: frame.imageUrl,
+        imageUrl: shot.imageUrl,
         prompt,
         model,
-        duration: frame.duration,
-        fps: frame.fps,
-        motionBucket: frame.motionBucket,
-        aspectRatio: frame.aspectRatio,
-        generateAudio: frame.generateAudio,
-        userEditedPrompt: frame.userEditedPrompt,
+        duration: shot.duration,
+        fps: shot.fps,
+        motionBucket: shot.motionBucket,
+        aspectRatio: shot.aspectRatio,
+        generateAudio: shot.generateAudio,
+        userEditedPrompt: shot.userEditedPrompt,
         // Add-model (#547) batches generate alternates only — the child must
         // not write the legacy `frames.video*` columns.
         variantOnly: input.variantOnly,
@@ -119,10 +119,10 @@ export class MotionBatchWorkflow extends OpenStoryWorkflowEntrypoint<BatchMotion
           parentInstanceId,
           // The model token keeps sibling-model children from colliding on the
           // global CF instance id (mirrors frame-images' childId scheme).
-          childId: `motion:${sequenceId}:${frame.frameId}:${model}`,
+          childId: `motion:${sequenceId}:${shot.shotId}:${model}`,
           childPayload: motionBody,
-          spawnStepName: `spawn-motion-${frameIndex}-${model}`,
-          awaitStepName: `await-motion-${frameIndex}-${model}`,
+          spawnStepName: `spawn-motion-${shotIndex}-${model}`,
+          awaitStepName: `await-motion-${shotIndex}-${model}`,
           // Must exceed the child's own budget: motion polls fal for up to
           // 30 minutes (MAX_BATCHES in motion-workflow.ts) plus submit/
           // compress/persist steps and notify lag under a burst.
@@ -196,7 +196,7 @@ export class MotionBatchWorkflow extends OpenStoryWorkflowEntrypoint<BatchMotion
         // don't reliably survive into the log body (the June 7 run produced
         // bare "Motion failed for frame …:" lines with no cause attached).
         logger.warn(
-          `[MotionBatchWorkflow:cf] Motion failed for frame ${job?.frame.frameId ?? '(unknown)'} model ${job?.model ?? '(unknown)'}: ${String(r.reason)}`,
+          `[MotionBatchWorkflow:cf] Motion failed for frame ${job?.shot.shotId ?? '(unknown)'} model ${job?.model ?? '(unknown)'}: ${String(r.reason)}`,
           {
             err: r.reason,
           }

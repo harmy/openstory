@@ -10,8 +10,8 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { frameKeys } from '@/hooks/use-frames';
-import type { Frame } from '@/lib/db/schema';
+import { shotKeys } from '@/hooks/use-shots';
+import type { Shot } from '@/lib/db/schema';
 import { updateQueryCacheFromEvent } from '@/lib/realtime/query-cache-updater';
 
 const SEQ = 'seq-1';
@@ -19,7 +19,7 @@ const OLD_THUMB = 'https://cdn/old-thumb.jpg';
 const OLD_VIDEO = 'https://cdn/old-video.mp4';
 const NEW_URL = 'https://cdn/added-model-output.mp4';
 
-function makeFrame(overrides: Partial<Frame> = {}): Frame {
+function makeFrame(overrides: Partial<Shot> = {}): Shot {
   return {
     id: 'frame-1',
     sequenceId: SEQ,
@@ -68,8 +68,8 @@ function makeFrame(overrides: Partial<Frame> = {}): Frame {
   };
 }
 
-function getCachedFrame(qc: QueryClient): Frame | undefined {
-  return qc.getQueryData<Frame[]>(frameKeys.list(SEQ))?.[0];
+function getCachedFrame(qc: QueryClient): Shot | undefined {
+  return qc.getQueryData<Shot[]>(shotKeys.list(SEQ))?.[0];
 }
 
 describe('updateQueryCacheFromEvent — variant-only guard (#547)', () => {
@@ -78,7 +78,7 @@ describe('updateQueryCacheFromEvent — variant-only guard (#547)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     qc = new QueryClient();
-    qc.setQueryData(frameKeys.list(SEQ), [makeFrame()]);
+    qc.setQueryData(shotKeys.list(SEQ), [makeFrame()]);
   });
 
   afterEach(() => {
@@ -91,7 +91,7 @@ describe('updateQueryCacheFromEvent — variant-only guard (#547)', () => {
       const invalidate = vi.spyOn(qc, 'invalidateQueries');
 
       updateQueryCacheFromEvent(qc, SEQ, 'generation.image:progress', {
-        frameId: 'frame-1',
+        shotId: 'frame-1',
         status: 'completed',
         thumbnailUrl: NEW_URL,
         model: 'flux_pro',
@@ -110,12 +110,12 @@ describe('updateQueryCacheFromEvent — variant-only guard (#547)', () => {
       expect(invalidatedKeys).toContainEqual(['sequence-image-variants', SEQ]);
       expect(invalidatedKeys).toContainEqual(['sequence-image-models', SEQ]);
       // The frames list itself is never invalidated by this handler.
-      expect(invalidatedKeys).not.toContainEqual(frameKeys.list(SEQ));
+      expect(invalidatedKeys).not.toContainEqual(shotKeys.list(SEQ));
     });
 
     it('primary completion (no variantOnly) still writes the thumbnail onto the frame', () => {
       updateQueryCacheFromEvent(qc, SEQ, 'generation.image:progress', {
-        frameId: 'frame-1',
+        shotId: 'frame-1',
         status: 'completed',
         thumbnailUrl: NEW_URL,
         model: 'nano_banana_2',
@@ -127,12 +127,12 @@ describe('updateQueryCacheFromEvent — variant-only guard (#547)', () => {
     });
 
     it('primary failure writes the reason onto thumbnailError so the banner shows it live (#881)', () => {
-      qc.setQueryData(frameKeys.list(SEQ), [
+      qc.setQueryData(shotKeys.list(SEQ), [
         makeFrame({ thumbnailStatus: 'generating', thumbnailError: null }),
       ]);
 
       updateQueryCacheFromEvent(qc, SEQ, 'generation.image:progress', {
-        frameId: 'frame-1',
+        shotId: 'frame-1',
         status: 'failed',
         model: 'nano_banana_2',
         error: 'Blocked by content filter',
@@ -144,12 +144,12 @@ describe('updateQueryCacheFromEvent — variant-only guard (#547)', () => {
     });
 
     it('a fresh generating attempt clears a stale thumbnailError', () => {
-      qc.setQueryData(frameKeys.list(SEQ), [
+      qc.setQueryData(shotKeys.list(SEQ), [
         makeFrame({ thumbnailStatus: 'failed', thumbnailError: 'old error' }),
       ]);
 
       updateQueryCacheFromEvent(qc, SEQ, 'generation.image:progress', {
-        frameId: 'frame-1',
+        shotId: 'frame-1',
         status: 'generating',
         model: 'nano_banana_2',
       });
@@ -161,7 +161,7 @@ describe('updateQueryCacheFromEvent — variant-only guard (#547)', () => {
       const invalidate = vi.spyOn(qc, 'invalidateQueries');
 
       updateQueryCacheFromEvent(qc, SEQ, 'generation.image:progress', {
-        frameId: 'frame-1',
+        shotId: 'frame-1',
         status: 'failed',
         model: 'flux_pro',
         variantOnly: true,
@@ -186,7 +186,7 @@ describe('updateQueryCacheFromEvent — variant-only guard (#547)', () => {
       const invalidate = vi.spyOn(qc, 'invalidateQueries');
 
       updateQueryCacheFromEvent(qc, SEQ, 'generation.video:progress', {
-        frameId: 'frame-1',
+        shotId: 'frame-1',
         status: 'completed',
         videoUrl: NEW_URL,
         model: 'kling_25',
@@ -205,7 +205,7 @@ describe('updateQueryCacheFromEvent — variant-only guard (#547)', () => {
 
     it('variant-only failure does not flip the primary video to failed', () => {
       updateQueryCacheFromEvent(qc, SEQ, 'generation.video:progress', {
-        frameId: 'frame-1',
+        shotId: 'frame-1',
         status: 'failed',
         model: 'kling_25',
         variantOnly: true,
@@ -218,7 +218,7 @@ describe('updateQueryCacheFromEvent — variant-only guard (#547)', () => {
 
     it('primary completion (no variantOnly) still writes the video onto the frame', () => {
       updateQueryCacheFromEvent(qc, SEQ, 'generation.video:progress', {
-        frameId: 'frame-1',
+        shotId: 'frame-1',
         status: 'completed',
         videoUrl: NEW_URL,
         model: 'veo3',
@@ -230,12 +230,12 @@ describe('updateQueryCacheFromEvent — variant-only guard (#547)', () => {
     });
 
     it('primary failure writes the reason onto videoError so the banner shows it live (#881)', () => {
-      qc.setQueryData(frameKeys.list(SEQ), [
+      qc.setQueryData(shotKeys.list(SEQ), [
         makeFrame({ videoStatus: 'generating', videoError: null }),
       ]);
 
       updateQueryCacheFromEvent(qc, SEQ, 'generation.video:progress', {
-        frameId: 'frame-1',
+        shotId: 'frame-1',
         status: 'failed',
         model: 'veo3',
         error: 'Motion generation rejected by content filter',

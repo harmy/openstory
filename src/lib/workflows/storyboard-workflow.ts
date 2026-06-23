@@ -103,9 +103,9 @@ export class StoryboardWorkflow extends OpenStoryWorkflowEntrypoint<StoryboardWo
         throw new NonRetryableError('No style found');
       }
 
-      const existingFrames = await scopedDb.frames.listBySequence(sequenceId);
+      const existingFrames = await scopedDb.shots.listBySequence(sequenceId);
       await Promise.all(
-        existingFrames.map((frame) => scopedDb.frames.delete(frame.id))
+        existingFrames.map((frame) => scopedDb.shots.delete(frame.id))
       );
 
       await seq.updateStatus('processing');

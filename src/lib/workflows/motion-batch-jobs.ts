@@ -20,21 +20,21 @@
 import { DEFAULT_VIDEO_MODEL, type ImageToVideoModel } from '@/lib/ai/models';
 
 export type MotionJob<F> = {
-  frame: F;
-  frameIndex: number;
+  shot: F;
+  shotIndex: number;
   model: ImageToVideoModel;
 };
 
 export function buildMotionJobs<F extends { model?: ImageToVideoModel }>(
-  frames: readonly F[],
+  shots: readonly F[],
   videoModels: readonly ImageToVideoModel[] | undefined
 ): MotionJob<F>[] {
   const topVideoModels =
     videoModels && videoModels.length > 0 ? [...new Set(videoModels)] : null;
 
-  return frames.flatMap((frame, frameIndex) => {
+  return shots.flatMap((shot, shotIndex) => {
     const models: ImageToVideoModel[] =
-      topVideoModels ?? (frame.model ? [frame.model] : [DEFAULT_VIDEO_MODEL]);
-    return models.map((model) => ({ frame, frameIndex, model }));
+      topVideoModels ?? (shot.model ? [shot.model] : [DEFAULT_VIDEO_MODEL]);
+    return models.map((model) => ({ shot, shotIndex, model }));
   });
 }

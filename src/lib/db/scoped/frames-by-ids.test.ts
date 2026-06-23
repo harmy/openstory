@@ -11,7 +11,7 @@
 
 import type { Database } from '@/lib/db/client';
 import { generateId } from '@/lib/db/id';
-import { frames, sequences, styles, teams } from '@/lib/db/schema';
+import { shots, sequences, styles, teams } from '@/lib/db/schema';
 import { relations } from '@/lib/db/schema/relations';
 import { type Client, createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
@@ -24,7 +24,7 @@ let db: Database;
 let teamId = '';
 
 async function seed() {
-  await db.delete(frames);
+  await db.delete(shots);
   await db.delete(sequences);
   await db.delete(styles);
   await db.delete(teams);
@@ -66,7 +66,7 @@ async function seedSequences(
       title: `S${i}`,
       styleId,
     });
-    await db.insert(frames).values([
+    await db.insert(shots).values([
       { sequenceId: seqId, orderIndex: 0 },
       { sequenceId: seqId, orderIndex: 1 },
       { sequenceId: seqId, orderIndex: 2 },
@@ -151,7 +151,7 @@ describe('listFramesByIds', () => {
       title: 'X',
       styleId: otherStyle.id,
     });
-    await db.insert(frames).values({ sequenceId: otherSeqId, orderIndex: 0 });
+    await db.insert(shots).values({ sequenceId: otherSeqId, orderIndex: 0 });
 
     const methods = createSequencesMethods(db, teamId, generateId());
     const result = await methods.listFramesByIds([...mySeqIds, otherSeqId]);

@@ -13,8 +13,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { NewFrame, NewFrameVariant } from '@/lib/db/schema';
-import type { VariantType } from '@/lib/db/schema/frame-variants';
+import type { NewShot, NewShotVariant } from '@/lib/db/schema';
+import type { VariantType } from '@/lib/db/schema/shot-variants';
 import {
   buildMotionCompletedWrites,
   buildMotionFailedWrites,
@@ -98,12 +98,12 @@ describe('buildMotionFailedWrites', () => {
   });
 });
 
-type FrameUpdateCall = { frameId: string; data: Partial<NewFrame> };
+type FrameUpdateCall = { shotId: string; data: Partial<NewShot> };
 type VariantUpdateCall = {
-  frameId: string;
+  shotId: string;
   variantType: VariantType;
   model: string;
-  data: Partial<NewFrameVariant>;
+  data: Partial<NewShotVariant>;
 };
 type CallName =
   | 'frames.update'
@@ -116,25 +116,25 @@ function buildScopedDbSpy(
   scopedDb: PersistMotionScopedDb;
   framesUpdates: FrameUpdateCall[];
   variantsUpdates: VariantUpdateCall[];
-  variantsUpserts: NewFrameVariant[];
+  variantsUpserts: NewShotVariant[];
   callOrder: CallName[];
 } {
   const framesUpdates: FrameUpdateCall[] = [];
   const variantsUpdates: VariantUpdateCall[] = [];
-  const variantsUpserts: NewFrameVariant[] = [];
+  const variantsUpserts: NewShotVariant[] = [];
   const callOrder: CallName[] = [];
   const scopedDb: PersistMotionScopedDb = {
-    frames: {
-      update: async (frameId, data) => {
-        framesUpdates.push({ frameId, data });
+    shots: {
+      update: async (shotId, data) => {
+        framesUpdates.push({ shotId, data });
         callOrder.push('frames.update');
         if (opts.frameMissing) return undefined;
-        return { id: frameId };
+        return { id: shotId };
       },
     },
-    frameVariants: {
-      updateByFrameAndModel: async (frameId, variantType, model, data) => {
-        variantsUpdates.push({ frameId, variantType, model, data });
+    shotVariants: {
+      updateByFrameAndModel: async (shotId, variantType, model, data) => {
+        variantsUpdates.push({ shotId, variantType, model, data });
         callOrder.push('frameVariants.updateByFrameAndModel');
         // null = no matching primary row exists (caller decides whether to insert).
         return opts.variantMissing ? null : { id: 'v1' };
@@ -164,7 +164,7 @@ describe('persistMotionCompletion', () => {
 
     const outcome = await persistMotionCompletion({
       scopedDb,
-      frameId: 'f1',
+      shotId: 'f1',
       model: 'veo3',
       upload,
       durationMs: 5000,
@@ -189,7 +189,7 @@ describe('persistMotionCompletion', () => {
 
     const [variantUpdate] = variantsUpdates;
     if (!variantUpdate) throw new Error('expected variant update call');
-    expect(variantUpdate.frameId).toBe('f1');
+    expect(variantUpdate.shotId).toBe('f1');
     expect(variantUpdate.variantType).toBe('video');
     expect(variantUpdate.model).toBe('veo3');
     expect(variantUpdate.data.status).toBe('completed');
@@ -199,7 +199,7 @@ describe('persistMotionCompletion', () => {
       {
         event: 'generation.video:progress',
         payload: {
-          frameId: 'f1',
+          shotId: 'f1',
           status: 'completed',
           videoUrl: upload.url,
           model: 'veo3',
@@ -215,7 +215,7 @@ describe('persistMotionCompletion', () => {
 
     const outcome = await persistMotionCompletion({
       scopedDb,
-      frameId: 'f1',
+      shotId: 'f1',
       model: 'veo3',
       upload,
       durationMs: 5000,
@@ -248,7 +248,7 @@ describe('persistMotionFailure', () => {
 
     await persistMotionFailure({
       scopedDb,
-      frameId: 'f1',
+      shotId: 'f1',
       sequenceId: 'seq1',
       model: 'veo3',
       error: 'fal 500',
@@ -273,7 +273,7 @@ describe('persistMotionFailure', () => {
 
     const [variantUpdate] = variantsUpdates;
     if (!variantUpdate) throw new Error('expected variant update call');
-    expect(variantUpdate.frameId).toBe('f1');
+    expect(variantUpdate.shotId).toBe('f1');
     expect(variantUpdate.variantType).toBe('video');
     expect(variantUpdate.model).toBe('veo3');
     expect(variantUpdate.data).toEqual({ status: 'failed', error: 'fal 500' });
@@ -286,7 +286,7 @@ describe('persistMotionFailure', () => {
       {
         event: 'generation.video:progress',
         payload: {
-          frameId: 'f1',
+          shotId: 'f1',
           status: 'failed',
           model: 'veo3',
           // #881: the reason is now carried so the cache updater writes
@@ -303,7 +303,7 @@ describe('persistMotionFailure', () => {
 
     await persistMotionFailure({
       scopedDb,
-      frameId: 'f1',
+      shotId: 'f1',
       sequenceId: 'seq1',
       model: 'veo3',
       error: 'Insufficient credits for motion generation',
@@ -322,7 +322,7 @@ describe('persistMotionFailure', () => {
     const [upserted] = variantsUpserts;
     if (!upserted) throw new Error('expected frameVariants.upsert call');
     expect(upserted).toMatchObject({
-      frameId: 'f1',
+      shotId: 'f1',
       sequenceId: 'seq1',
       variantType: 'video',
       model: 'veo3',
@@ -341,7 +341,7 @@ describe('variant-only (#547)', () => {
 
     const outcome = await persistMotionCompletion({
       scopedDb,
-      frameId: 'f1',
+      shotId: 'f1',
       model: 'veo3',
       upload,
       durationMs: 5000,
@@ -363,7 +363,7 @@ describe('variant-only (#547)', () => {
     expect(variantUpdate.data.status).toBe('completed');
     expect(emits).toEqual([
       {
-        frameId: 'f1',
+        shotId: 'f1',
         status: 'completed',
         videoUrl: upload.url,
         model: 'veo3',
@@ -381,7 +381,7 @@ describe('variant-only (#547)', () => {
 
     const outcome = await persistMotionCompletion({
       scopedDb,
-      frameId: 'f1',
+      shotId: 'f1',
       model: 'veo3',
       upload,
       durationMs: 5000,
@@ -405,7 +405,7 @@ describe('variant-only (#547)', () => {
 
     await persistMotionFailure({
       scopedDb,
-      frameId: 'f1',
+      shotId: 'f1',
       sequenceId: 'seq1',
       model: 'veo3',
       error: 'fal 500',

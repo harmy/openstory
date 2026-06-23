@@ -119,11 +119,11 @@ function mapEventToAction(
         },
       };
 
-    case 'generation.frame:created':
+    case 'generation.shot:created':
       return {
         type: 'FRAME_CREATED',
         payload: {
-          frameId: asString(data.frameId),
+          shotId: asString(data.shotId),
           sceneId: asString(data.sceneId),
           orderIndex: asNumber(data.orderIndex),
         },
@@ -133,7 +133,7 @@ function mapEventToAction(
       return {
         type: 'IMAGE_PROGRESS',
         payload: {
-          frameId: asString(data.frameId),
+          shotId: asString(data.shotId),
           status: asFrameStatus(data.status),
           thumbnailUrl: asOptionalString(data.thumbnailUrl),
           previewThumbnailUrl: asOptionalString(data.previewThumbnailUrl),
@@ -145,7 +145,7 @@ function mapEventToAction(
       return {
         type: 'VIDEO_PROGRESS',
         payload: {
-          frameId: asString(data.frameId),
+          shotId: asString(data.shotId),
           status: asFrameStatus(data.status),
           videoUrl: asOptionalString(data.videoUrl),
           retry: asRetryInfo(data),
@@ -317,8 +317,8 @@ export function useGenerationStream(
       'generation.phase:complete',
       'generation.scene:new',
       'generation.scene:updated',
-      'generation.frame:created',
-      'generation.frame:updated',
+      'generation.shot:created',
+      'generation.shot:updated',
       'generation.image:progress',
       'generation.video:progress',
       'generation.audio:progress',

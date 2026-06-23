@@ -87,7 +87,7 @@ export async function executeSmartRetry(context: SmartRetryContext) {
   // so we never race a live pipeline.
   await assertNoActiveStoryboard(context.scopedDb, sequence.id);
 
-  const frames = await context.scopedDb.frames.listBySequence(sequence.id);
+  const frames = await context.scopedDb.shots.listBySequence(sequence.id);
   const summary = analyzeFailures(frames, sequence);
 
   if (!summary.hasFailed) {
@@ -223,7 +223,7 @@ export async function executeSmartRetry(context: SmartRetryContext) {
         model: imageModel,
         imageSize: aspectRatioToImageSize(sequence.aspectRatio),
         numImages: 1,
-        frameId: frame.id,
+        shotId: frame.id,
         sequenceId: sequence.id,
         referenceImages,
       };
@@ -246,7 +246,7 @@ export async function executeSmartRetry(context: SmartRetryContext) {
       const workflowInput: MotionWorkflowInput = {
         userId: user.id,
         teamId,
-        frameId: frame.id,
+        shotId: frame.id,
         sequenceId: sequence.id,
         imageUrl: frame.thumbnailUrl,
         prompt: resolveMotionPrompt(frame, videoModel),
@@ -268,7 +268,7 @@ export async function executeSmartRetry(context: SmartRetryContext) {
 
   // 3. Retry failed music
   if (hasMusicFailure && sequence.musicPrompt) {
-    const allFrames = await context.scopedDb.frames.listBySequence(sequence.id);
+    const allFrames = await context.scopedDb.shots.listBySequence(sequence.id);
     const totalDuration = allFrames.reduce((sum, frame) => {
       const seconds = frame.durationMs
         ? frame.durationMs / 1000
@@ -303,7 +303,7 @@ export async function executeSmartRetry(context: SmartRetryContext) {
     sequence.musicStatus !== 'completed' &&
     sequence.status === 'failed'
   ) {
-    const allFrames = await context.scopedDb.frames.listBySequence(sequence.id);
+    const allFrames = await context.scopedDb.shots.listBySequence(sequence.id);
     const scenes = buildSceneSummaries(allFrames);
     const totalDuration = allFrames.reduce((sum, frame) => {
       const seconds = frame.durationMs

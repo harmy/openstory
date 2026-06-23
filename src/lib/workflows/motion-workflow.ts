@@ -126,7 +126,17 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
     step: WorkflowStep,
     scopedDb: ScopedDb
   ): Promise<MotionWorkflowResult> {
-    const input = event.payload;
+    const rawInput = event.payload;
+    // Back-compat: accept shotId or frameId from in-flight instances serialized before #906
+    // TODO(#906): remove frameId shim one release after deploy
+    const input = {
+      ...rawInput,
+      shotId:
+        rawInput.shotId ??
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- back-compat shim for in-flight CF Workflow instances serialized before #906
+        (rawInput as { frameId?: string }).frameId ??
+        undefined,
+    };
     const workflowRunId = event.instanceId;
     const model = input.model || DEFAULT_VIDEO_MODEL;
 
@@ -143,9 +153,9 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
     // so a `sequenceId`-less caller fails loudly at the boundary rather than
     // silently writing the legacy columns while skipping the variant half
     // (which would leave the model invisible in the scenes-view switcher).
-    if (input.frameId && !input.sequenceId) {
+    if (input.shotId && !input.sequenceId) {
       throw new WorkflowValidationError(
-        'sequenceId is required when frameId is set (motion dual-write)'
+        'sequenceId is required when shotId is set (motion dual-write)'
       );
     }
 
@@ -184,7 +194,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
     const { frameDeleted } = await step.do(
       'set-generating-status',
       async () => {
-        if (!input.frameId) return { frameDeleted: false };
+        if (!input.shotId) return { frameDeleted: false };
 
         const generatingWrites = buildMotionGeneratingWrites({
           model,
@@ -195,16 +205,14 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
         // read the frame instead. The per-model `frame_variants` row (opened
         // below) carries the in-flight state; the primary video is left intact.
         const frame = input.variantOnly
-          ? await scopedDb.frames.getById(input.frameId)
-          : await scopedDb.frames.update(
-              input.frameId,
-              generatingWrites.frame,
-              { throwOnMissing: false }
-            );
+          ? await scopedDb.shots.getById(input.shotId)
+          : await scopedDb.shots.update(input.shotId, generatingWrites.frame, {
+              throwOnMissing: false,
+            });
 
         if (!frame) {
           logger.info(
-            `[MotionWorkflow:cf] Frame ${input.frameId} was deleted, skipping workflow`
+            `[MotionWorkflow:cf] Frame ${input.shotId} was deleted, skipping workflow`
           );
           return { frameDeleted: true };
         }
@@ -241,15 +249,15 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
             }
           } catch (err) {
             logger.warn(
-              `[MotionWorkflow:cf] Could not compute upstream hash for user-edit on frame ${input.frameId}; recording with null hash`,
+              `[MotionWorkflow:cf] Could not compute upstream hash for user-edit on frame ${input.shotId}; recording with null hash`,
               {
                 err,
               }
             );
           }
 
-          await scopedDb.framePromptVariants.write({
-            frameId: input.frameId,
+          await scopedDb.shotPromptVariants.write({
+            shotId: input.shotId,
             promptType: 'motion',
             text: input.prompt,
             source: 'user-edit',
@@ -265,8 +273,8 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
         // across models (matching the image template — whichever model child
         // finishes last lands there); per-model output lives in frame_variants.
         if (input.sequenceId) {
-          await scopedDb.frameVariants.upsert({
-            frameId: input.frameId,
+          await scopedDb.shotVariants.upsert({
+            shotId: input.shotId,
             sequenceId: input.sequenceId,
             variantType: 'video',
             model,
@@ -278,7 +286,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
           await getGenerationChannel(input.sequenceId).emit(
             'generation.video:progress',
             {
-              frameId: input.frameId,
+              shotId: input.shotId,
               status: 'generating',
               model,
               // Variant-only (#547): don't flip the primary frame to
@@ -288,7 +296,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
           );
         } catch (emitError) {
           logger.error(
-            `[MotionWorkflow:cf] Failed to emit generation.video:progress for frame ${input.frameId}:`,
+            `[MotionWorkflow:cf] Failed to emit generation.video:progress for frame ${input.shotId}:`,
             {
               err: emitError,
             }
@@ -351,11 +359,11 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
         // state so the scenes UI shows "Retrying (N/3)…" instead of a spinner
         // indistinguishable from a hang (#882). `attempt` is 0-indexed; show it
         // 1-based.
-        if (attempt > 0 && input.frameId && input.sequenceId) {
+        if (attempt > 0 && input.shotId && input.sequenceId) {
           await getGenerationChannel(input.sequenceId).emit(
             'generation.video:progress',
             {
-              frameId: input.frameId,
+              shotId: input.shotId,
               status: 'generating',
               phase: 'retrying',
               attempt: attempt + 1,
@@ -402,7 +410,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
       if (!submitOutcome.ok) {
         lastRejection = submitOutcome.rejection;
         logger.warn(
-          `[MotionWorkflow:cf] content-flag rejection on submit attempt ${attempt + 1}/${MAX_MOTION_ATTEMPTS} for frame ${input.frameId}: ${submitOutcome.rejection}`
+          `[MotionWorkflow:cf] content-flag rejection on submit attempt ${attempt + 1}/${MAX_MOTION_ATTEMPTS} for frame ${input.shotId}: ${submitOutcome.rejection}`
         );
         continue;
       }
@@ -504,14 +512,14 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
         succeededJob = job;
         if (attempt > 0) {
           logger.info(
-            `[MotionWorkflow:cf] content-flag retry rescued clip for frame ${input.frameId} on attempt ${attempt + 1}`,
+            `[MotionWorkflow:cf] content-flag retry rescued clip for frame ${input.shotId} on attempt ${attempt + 1}`,
             {
               event: CONTENT_REJECTION_RETRY_EVENT,
               outcome: 'rescued',
               kind: 'motion',
               model,
               attempts: attempt + 1,
-              frameId: input.frameId,
+              shotId: input.shotId,
               sequenceId: input.sequenceId,
             }
           );
@@ -522,7 +530,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
       if (rejected) {
         lastRejection = rejected;
         logger.warn(
-          `[MotionWorkflow:cf] content-flag rejection on poll attempt ${attempt + 1}/${MAX_MOTION_ATTEMPTS} for frame ${input.frameId}: ${rejected}`
+          `[MotionWorkflow:cf] content-flag rejection on poll attempt ${attempt + 1}/${MAX_MOTION_ATTEMPTS} for frame ${input.shotId}: ${rejected}`
         );
         continue;
       }
@@ -537,14 +545,14 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
 
     if (!videoUrl) {
       logger.error(
-        `[MotionWorkflow:cf] content-flag retry exhausted for frame ${input.frameId} after ${MAX_MOTION_ATTEMPTS} attempts`,
+        `[MotionWorkflow:cf] content-flag retry exhausted for frame ${input.shotId} after ${MAX_MOTION_ATTEMPTS} attempts`,
         {
           event: CONTENT_REJECTION_RETRY_EVENT,
           outcome: 'exhausted',
           kind: 'motion',
           model,
           attempts: MAX_MOTION_ATTEMPTS,
-          frameId: input.frameId,
+          shotId: input.shotId,
           sequenceId: input.sequenceId,
           rejection: lastRejection,
         }
@@ -595,7 +603,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
           idempotencyKey: `${event.instanceId}:motion`,
           metadata: {
             model,
-            frameId: input.frameId,
+            shotId: input.shotId,
             sequenceId: input.sequenceId,
             duration: duration,
             unitsBilled: billedUnits,
@@ -605,12 +613,12 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
       });
     }
 
-    if (input.frameId) {
-      const { frameId } = input;
+    if (input.shotId) {
+      const { shotId } = input;
 
       // Step 3: Fetch frame and sequence data for human-readable filename
       const frameData = await step.do('fetch-frame-data', async () => {
-        const frame = await scopedDb.frames.getWithSequence(frameId);
+        const frame = await scopedDb.shots.getWithSequence(shotId);
         if (!frame) throw new Error('Frame not found');
         return {
           sequenceTitle: frame.sequence.title,
@@ -628,7 +636,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
           videoUrl,
           teamId: input.teamId,
           sequenceId: input.sequenceId,
-          frameId,
+          shotId,
           sequenceTitle: frameData.sequenceTitle,
           sceneTitle: frameData.sceneTitle,
         });
@@ -648,7 +656,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
       await step.do('update-frame', async () => {
         const outcome = await persistMotionCompletion({
           scopedDb,
-          frameId,
+          shotId,
           model,
           upload: { url: storageResult.url, path: storageResult.path },
           durationMs: duration * 1000,
@@ -659,7 +667,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
               await getGenerationChannel(input.sequenceId).emit(event, payload);
             } catch (emitError) {
               logger.error(
-                `[MotionWorkflow:cf] Failed to emit generation.video:progress for frame ${frameId}:`,
+                `[MotionWorkflow:cf] Failed to emit generation.video:progress for frame ${shotId}:`,
                 { err: emitError }
               );
             }
@@ -668,7 +676,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
 
         if (outcome.status === 'frame-deleted') {
           logger.info(
-            `[MotionWorkflow:cf] Frame ${frameId} was deleted, skipping final update`
+            `[MotionWorkflow:cf] Frame ${shotId} was deleted, skipping final update`
           );
         }
       });
@@ -692,11 +700,11 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
 
     // Motion is always sequence-scoped (every trigger sets both ids), and the
     // dual-write needs sequenceId for the frame_variants row — so gate on both.
-    if (input.frameId && input.sequenceId) {
-      const { frameId, sequenceId } = input;
+    if (input.shotId && input.sequenceId) {
+      const { shotId, sequenceId } = input;
       await persistMotionFailure({
         scopedDb,
-        frameId,
+        shotId,
         sequenceId,
         model,
         error,
@@ -707,7 +715,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
             await getGenerationChannel(sequenceId).emit(event2, payload);
           } catch (emitError) {
             logger.error(
-              `[MotionWorkflow:cf] Failed to emit generation.video:progress for frame ${frameId}:`,
+              `[MotionWorkflow:cf] Failed to emit generation.video:progress for frame ${shotId}:`,
               { err: emitError }
             );
           }
@@ -717,12 +725,12 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
 
     if (isContentRejectionError(error)) {
       logger.warn(
-        `[MotionWorkflow:cf] frame ${input.frameId} failed a content checker`,
+        `[MotionWorkflow:cf] frame ${input.shotId} failed a content checker`,
         {
           event: CONTENT_REJECTION_EVENT,
           kind: 'motion',
           model,
-          frameId: input.frameId,
+          shotId: input.shotId,
           sequenceId: input.sequenceId,
           error,
         }
@@ -730,7 +738,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
     }
 
     logger.error(
-      `[MotionWorkflow:cf] Motion generation failed for frame ${input.frameId}: ${error}`
+      `[MotionWorkflow:cf] Motion generation failed for frame ${input.shotId}: ${error}`
     );
   }
 }

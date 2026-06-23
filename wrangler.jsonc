@@ -190,9 +190,9 @@
       "class_name": "LocationMatchingWorkflow",
     },
     {
-      "name": "frame-images-workflow",
-      "binding": "FRAME_IMAGES_WORKFLOW",
-      "class_name": "FrameImagesWorkflow",
+      "name": "shot-images-workflow",
+      "binding": "SHOT_IMAGES_WORKFLOW",
+      "class_name": "ShotImagesWorkflow",
     },
     {
       "name": "talent-matching-workflow",
@@ -225,9 +225,9 @@
       "class_name": "MotionMusicPromptsWorkflow",
     },
     {
-      "name": "regenerate-frames-workflow",
-      "binding": "REGENERATE_FRAMES_WORKFLOW",
-      "class_name": "RegenerateFramesWorkflow",
+      "name": "regenerate-shots-workflow",
+      "binding": "REGENERATE_SHOTS_WORKFLOW",
+      "class_name": "RegenerateShotsWorkflow",
     },
     {
       "name": "recast-location-workflow",
@@ -417,9 +417,9 @@
           "class_name": "LocationMatchingWorkflow",
         },
         {
-          "name": "frame-images-workflow",
-          "binding": "FRAME_IMAGES_WORKFLOW",
-          "class_name": "FrameImagesWorkflow",
+          "name": "shot-images-workflow",
+          "binding": "SHOT_IMAGES_WORKFLOW",
+          "class_name": "ShotImagesWorkflow",
         },
         {
           "name": "talent-matching-workflow",
@@ -452,9 +452,9 @@
           "class_name": "MotionMusicPromptsWorkflow",
         },
         {
-          "name": "regenerate-frames-workflow",
-          "binding": "REGENERATE_FRAMES_WORKFLOW",
-          "class_name": "RegenerateFramesWorkflow",
+          "name": "regenerate-shots-workflow",
+          "binding": "REGENERATE_SHOTS_WORKFLOW",
+          "class_name": "RegenerateShotsWorkflow",
         },
         {
           "name": "recast-location-workflow",
@@ -662,9 +662,9 @@
           "class_name": "LocationMatchingWorkflow",
         },
         {
-          "name": "frame-images-workflow",
-          "binding": "FRAME_IMAGES_WORKFLOW",
-          "class_name": "FrameImagesWorkflow",
+          "name": "shot-images-workflow",
+          "binding": "SHOT_IMAGES_WORKFLOW",
+          "class_name": "ShotImagesWorkflow",
         },
         {
           "name": "talent-matching-workflow",
@@ -697,9 +697,9 @@
           "class_name": "MotionMusicPromptsWorkflow",
         },
         {
-          "name": "regenerate-frames-workflow",
-          "binding": "REGENERATE_FRAMES_WORKFLOW",
-          "class_name": "RegenerateFramesWorkflow",
+          "name": "regenerate-shots-workflow",
+          "binding": "REGENERATE_SHOTS_WORKFLOW",
+          "class_name": "RegenerateShotsWorkflow",
         },
         {
           "name": "recast-location-workflow",

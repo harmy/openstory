@@ -3,14 +3,14 @@
  * Team-scoped sequence CRUD and per-sequence update methods.
  */
 
-import { DEFAULT_VIDEO_MODEL } from '@/lib/ai/models';
+import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL } from '@/lib/ai/models';
 import {
   type AspectRatio,
   DEFAULT_ASPECT_RATIO,
 } from '@/lib/constants/aspect-ratios';
 import type { Database } from '@/lib/db/client';
-import { frames, sequences } from '@/lib/db/schema';
-import type { Frame, NewSequence, Sequence, Style } from '@/lib/db/schema';
+import { sequences, shots } from '@/lib/db/schema';
+import type { NewSequence, Sequence, Shot, Style } from '@/lib/db/schema';
 import type { MusicStatus, SequenceStatus } from '@/lib/db/schema/sequences';
 import { ValidationError } from '@/lib/errors';
 import { and, asc, desc, eq, inArray, isNull, lt, not, or } from 'drizzle-orm';
@@ -24,8 +24,8 @@ export type MusicFieldsUpdate = {
   musicGeneratedAt?: Date;
 };
 
-type SequenceWithFrames = Sequence & {
-  frames: Frame[];
+type SequenceWithShots = Sequence & {
+  shots: Shot[];
   style: Style | null;
 };
 
@@ -97,11 +97,11 @@ function createSequencesReadMethods(db: Database, teamId: string) {
 
     getWithFrames: async (
       sequenceId: string
-    ): Promise<SequenceWithFrames | null> => {
+    ): Promise<SequenceWithShots | null> => {
       const result = await db.query.sequences.findFirst({
         where: { id: sequenceId, teamId },
         with: {
-          frames: {
+          shots: {
             orderBy: { orderIndex: 'asc' },
           },
           style: true,
@@ -132,7 +132,7 @@ function createSequencesReadMethods(db: Database, teamId: string) {
      * applied via the join so caller-supplied ids from another team simply
      * return nothing rather than leak.
      */
-    listFramesByIds: async (sequenceIds: string[]): Promise<Frame[]> => {
+    listFramesByIds: async (sequenceIds: string[]): Promise<Shot[]> => {
       if (sequenceIds.length === 0) return [];
       // Chunk the ids to stay under D1's bound-parameter ceiling. Each chunk
       // holds all of a sequence's frames (we split on sequence boundaries), so
@@ -146,16 +146,16 @@ function createSequencesReadMethods(db: Database, teamId: string) {
         batches.map((batch) =>
           db
             .select()
-            .from(frames)
-            .innerJoin(sequences, eq(frames.sequenceId, sequences.id))
+            .from(shots)
+            .innerJoin(sequences, eq(shots.sequenceId, sequences.id))
             .where(
               and(
-                inArray(frames.sequenceId, batch),
+                inArray(shots.sequenceId, batch),
                 eq(sequences.teamId, teamId)
               )
             )
-            .orderBy(asc(frames.sequenceId), asc(frames.orderIndex))
-            .then((rows) => rows.map((row) => row.frames))
+            .orderBy(asc(shots.sequenceId), asc(shots.orderIndex))
+            .then((rows) => rows.map((row) => row.shots))
         )
       );
       return results.flat();
@@ -194,10 +194,11 @@ export function createSequencesMethods(
         styleId: params.styleId,
         aspectRatio: params.aspectRatio ?? DEFAULT_ASPECT_RATIO,
         analysisModel: params.analysisModel,
-        imageModel: params.imageModel,
-        // The sequences SQL column default is the stale 'kling_v3_pro' (see
-        // schema/sequences.ts) and can't be changed without a D1 table
-        // rebuild, so default the app's choice here instead of relying on it.
+        // The sequences SQL column defaults are stale literals ('nano_banana_2'
+        // for image, 'kling_v3_pro' for video — see schema/sequences.ts) that
+        // can't be changed without a D1 table rebuild, so resolve the app's real
+        // default here instead of relying on the column default.
+        imageModel: params.imageModel ?? DEFAULT_IMAGE_MODEL,
         videoModel: params.videoModel ?? DEFAULT_VIDEO_MODEL,
         musicModel: params.musicModel,
         autoGenerateMotion: params.autoGenerateMotion ?? false,

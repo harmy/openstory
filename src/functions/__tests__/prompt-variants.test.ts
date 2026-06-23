@@ -32,7 +32,7 @@ describe('isPromptUpToDate', () => {
 });
 
 describe('framePromptDedupId', () => {
-  it('builds a stable id keyed by promptType, frameId, and live hash', () => {
+  it('builds a stable id keyed by promptType, shotId, and live hash', () => {
     expect(framePromptDedupId('visual', 'frame-1', 'hash-abc')).toBe(
       'prompt-visual-frame-1-hash-abc'
     );

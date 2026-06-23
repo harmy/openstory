@@ -17,10 +17,10 @@ const meta: Meta<typeof SceneList> = {
     layout: 'fullscreen',
   },
   args: {
-    frames: [],
+    shots: [],
     selectedFrameId: undefined,
     aspectRatio: DEFAULT_ASPECT_RATIO,
-    onSelectFrame: () => console.log('onSelectFrame'),
+    onSelectShot: () => console.log('onSelectShot'),
     regeneratingImages: new Set<string>(),
     regeneratingMotion: new Set<string>(),
     musicPromptsReady: false,
@@ -35,49 +35,49 @@ const mockFrames = generateMockFrames(5, 'mock-sequence-id');
 
 export const WithScenes: Story = {
   args: {
-    frames: mockFrames,
+    shots: mockFrames,
     selectedFrameId: mockFrames[1]?.id ?? undefined,
   },
 };
 
 export const NoSelectedScene: Story = {
   args: {
-    frames: mockFrames,
+    shots: mockFrames,
     selectedFrameId: undefined,
   },
 };
 
 export const MultipleCompleted: Story = {
   args: {
-    frames: mockFrames,
+    shots: mockFrames,
     selectedFrameId: mockFrames[0]?.id ?? undefined,
   },
 };
 
 export const AllCompleted: Story = {
   args: {
-    frames: mockFrames,
+    shots: mockFrames,
     selectedFrameId: undefined,
   },
 };
 
 export const Empty: Story = {
   args: {
-    frames: [],
+    shots: [],
     selectedFrameId: undefined,
   },
 };
 
 export const ManyScenes: Story = {
   args: {
-    frames: generateMockFrames(15, 'mock-sequence-id'),
+    shots: generateMockFrames(15, 'mock-sequence-id'),
     selectedFrameId: undefined,
   },
 };
 
 export const GeneratingThumbnails: Story = {
   args: {
-    frames: mockFrames.map((frame, idx) => ({
+    shots: mockFrames.map((frame, idx) => ({
       ...frame,
       thumbnailStatus:
         idx < 3 ? ('generating' as const) : ('completed' as const),
@@ -89,7 +89,7 @@ export const GeneratingThumbnails: Story = {
 
 export const WithFailures: Story = {
   args: {
-    frames: mockFrames.map((frame, idx) => ({
+    shots: mockFrames.map((frame, idx) => ({
       ...frame,
       thumbnailStatus: idx === 2 ? ('failed' as const) : ('completed' as const),
       thumbnailUrl: idx === 2 ? null : frame.thumbnailUrl,
@@ -101,7 +101,7 @@ export const WithFailures: Story = {
 
 export const MixedStates: Story = {
   args: {
-    frames: mockFrames.map((frame, idx) => {
+    shots: mockFrames.map((frame, idx) => {
       if (idx === 0) {
         return {
           ...frame,
@@ -136,7 +136,7 @@ export const MixedStates: Story = {
 // Width variations
 export const WidthMedium: Story = {
   args: {
-    frames: mockFrames,
+    shots: mockFrames,
     selectedFrameId: mockFrames[1]?.id ?? undefined,
   },
   decorators: [
@@ -152,7 +152,7 @@ export const WidthMedium: Story = {
 
 export const WidthLarge: Story = {
   args: {
-    frames: mockFrames,
+    shots: mockFrames,
     selectedFrameId: mockFrames[1]?.id ?? undefined,
   },
   decorators: [
@@ -168,7 +168,7 @@ export const WidthLarge: Story = {
 
 export const WidthExtraLarge: Story = {
   args: {
-    frames: mockFrames,
+    shots: mockFrames,
     selectedFrameId: mockFrames[1]?.id ?? undefined,
   },
   decorators: [

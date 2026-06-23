@@ -190,7 +190,7 @@ describe('Pattern 3 childIds are CF-valid after sanitization', () => {
     'motion:seq-123:frame-7',
     'analyze-script:01KS23834FEGDBN8074VVPR3Q8',
     'character-sheet:recast:01KS23',
-    'regenerate-frames:character:01KS23',
+    'regenerate-shots:character:01KS23',
     'music-prompt:01KS23',
     'motion-prompts:01KS23',
   ];

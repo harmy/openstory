@@ -13,7 +13,7 @@ import {
 } from '@/lib/ai/prompt-context';
 import {
   FRAME_PROMPT_TYPES,
-  type FramePromptVariant,
+  type ShotPromptVariant,
   type SequenceMusicPromptVariant,
 } from '@/lib/db/schema';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
@@ -44,10 +44,10 @@ const promptTypeSchema = z.enum(FRAME_PROMPT_TYPES);
  */
 export function framePromptDedupId(
   promptType: 'visual' | 'motion',
-  frameId: string,
+  shotId: string,
   liveHash: string
 ): string {
-  return `prompt-${promptType}-${frameId}-${liveHash}`;
+  return `prompt-${promptType}-${shotId}-${liveHash}`;
 }
 
 /**
@@ -58,10 +58,10 @@ export function framePromptDedupId(
  */
 export function framePromptForceDedupId(
   promptType: 'visual' | 'motion',
-  frameId: string,
+  shotId: string,
   nonce: string
 ): string {
-  return `prompt-${promptType}-${frameId}-force-${nonce}`;
+  return `prompt-${promptType}-${shotId}-force-${nonce}`;
 }
 
 /** Stable deduplication ID for music-prompt regeneration — see above. */
@@ -80,7 +80,7 @@ export function isPromptUpToDate(
   return storedHash !== null && storedHash === liveHash;
 }
 
-export type FramePromptVariantWithAuthor = FramePromptVariant & {
+export type ShotPromptVariantWithAuthor = ShotPromptVariant & {
   createdByName: string | null;
 };
 
@@ -89,17 +89,17 @@ export type SequenceMusicPromptVariantWithAuthor =
 
 const frameListInput = z.object({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
   promptType: promptTypeSchema,
 });
 
-export const listFramePromptVariantsFn = createServerFn({ method: 'GET' })
+export const listShotPromptVariantsFn = createServerFn({ method: 'GET' })
   .middleware([frameAccessMiddleware])
   .inputValidator(zodValidator(frameListInput))
   .handler(
-    async ({ context, data }): Promise<FramePromptVariantWithAuthor[]> => {
-      return await context.scopedDb.framePromptVariants.listByFrameWithAuthor(
-        data.frameId,
+    async ({ context, data }): Promise<ShotPromptVariantWithAuthor[]> => {
+      return await context.scopedDb.shotPromptVariants.listByFrameWithAuthor(
+        data.shotId,
         data.promptType
       );
     }
@@ -128,24 +128,24 @@ export const listSequenceMusicPromptVariantsFn = createServerFn({
 // would short-circuit the staleness check to "fresh" forever.
 const frameRestoreInput = z.object({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
   variantId: ulidSchema,
 });
 
-export const restoreFramePromptVariantFn = createServerFn({ method: 'POST' })
+export const restoreShotPromptVariantFn = createServerFn({ method: 'POST' })
   .middleware([frameAccessMiddleware])
   .inputValidator(zodValidator(frameRestoreInput))
   .handler(async ({ context, data }) => {
-    const chosen = await context.scopedDb.framePromptVariants.getByIdForFrame(
+    const chosen = await context.scopedDb.shotPromptVariants.getByIdForFrame(
       data.variantId,
-      data.frameId
+      data.shotId
     );
     if (!chosen) {
       throw new Error('Prompt variant not found for this frame');
     }
 
-    const inserted = await context.scopedDb.framePromptVariants.write({
-      frameId: data.frameId,
+    const inserted = await context.scopedDb.shotPromptVariants.write({
+      shotId: data.shotId,
       promptType: chosen.promptType,
       text: chosen.text,
       components: chosen.components,
@@ -192,7 +192,7 @@ export const restoreSequenceMusicPromptVariantFn = createServerFn({
 
 const frameRegenerateInput = z.object({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
   promptType: promptTypeSchema,
   // `force: true` bypasses the up-to-date short-circuit so the user can roll
   // the dice on a fresh non-deterministic LLM completion even when no upstream
@@ -204,7 +204,7 @@ export const regenerateFramePromptFn = createServerFn({ method: 'POST' })
   .middleware([frameAccessMiddleware])
   .inputValidator(zodValidator(frameRegenerateInput))
   .handler(async ({ context, data }) => {
-    const { frame, sequence, scopedDb, user, teamId } = context;
+    const { shot: frame, sequence, scopedDb, user, teamId } = context;
 
     if (!frame.metadata) {
       throw new Error('Frame has no scene metadata to regenerate from');
@@ -253,7 +253,7 @@ export const regenerateFramePromptFn = createServerFn({ method: 'POST' })
       userId: user.id,
       teamId,
       sequenceId: sequence.id,
-      frameId: frame.id,
+      shotId: frame.id,
       scene: frame.metadata,
       aspectRatio: sequence.aspectRatio,
       characterBible: ctx.characterBible,
@@ -305,7 +305,7 @@ export const regenerateMusicPromptFn = createServerFn({ method: 'POST' })
   .handler(async ({ context }) => {
     const { sequence, scopedDb, user, teamId } = context;
 
-    const frames = await scopedDb.frames.listBySequence(sequence.id);
+    const frames = await scopedDb.shots.listBySequence(sequence.id);
     const scenes = frames
       .map((f) => f.metadata)
       .filter((m): m is NonNullable<typeof m> => m !== null);
@@ -364,7 +364,7 @@ export const getMusicPromptStalenessFn = createServerFn({ method: 'GET' })
     }
 
     try {
-      const frames = await scopedDb.frames.listBySequence(sequence.id);
+      const frames = await scopedDb.shots.listBySequence(sequence.id);
       const scenes = frames
         .map((f) => f.metadata)
         .filter((m): m is NonNullable<typeof m> => m !== null);
@@ -420,9 +420,7 @@ export const getDivergentVariantPromptDiffFn = createServerFn({
   .middleware([sequenceAccessMiddleware])
   .inputValidator(zodValidator(variantPromptDiffInput))
   .handler(async ({ context, data }): Promise<VariantPromptDiff> => {
-    const variant = await context.scopedDb.frameVariants.getById(
-      data.variantId
-    );
+    const variant = await context.scopedDb.shotVariants.getById(data.variantId);
     if (!variant) return null;
     // Auth boundary: don't silently collapse cross-sequence access into a
     // 'no diff' return — that would mask an authorization bug.
@@ -436,8 +434,8 @@ export const getDivergentVariantPromptDiffFn = createServerFn({
 
     const promptType = variant.variantType === 'image' ? 'visual' : 'motion';
     const candidates =
-      await context.scopedDb.framePromptVariants.listCandidatesAtOrBefore(
-        variant.frameId,
+      await context.scopedDb.shotPromptVariants.listCandidatesAtOrBefore(
+        variant.shotId,
         promptType,
         variant.createdAt
       );
@@ -453,14 +451,12 @@ export const getDivergentVariantPromptDiffFn = createServerFn({
       return null;
     }
 
-    const [frameRow] = await context.scopedDb.frames.getByIds([
-      variant.frameId,
-    ]);
+    const [frameRow] = await context.scopedDb.shots.getByIds([variant.shotId]);
     if (!frameRow) {
       // FK invariant violation — variant references a frame that no longer
       // exists.
       throw new Error(
-        `Frame ${variant.frameId} missing for variant ${variant.id}`
+        `Frame ${variant.shotId} missing for variant ${variant.id}`
       );
     }
     const live =

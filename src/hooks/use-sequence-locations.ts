@@ -27,8 +27,8 @@ export const sequenceLocationKeys = {
   all: ['sequence-locations'] as const,
   list: (sequenceId: string) =>
     [...sequenceLocationKeys.all, 'list', sequenceId] as const,
-  framesForLocation: (sequenceId: string, locationId: string) =>
-    [...sequenceLocationKeys.all, 'frames', sequenceId, locationId] as const,
+  shotsForLocation: (sequenceId: string, locationId: string) =>
+    [...sequenceLocationKeys.all, 'shots', sequenceId, locationId] as const,
   teamLibrary: ['team-locations-library'] as const,
 };
 
@@ -86,7 +86,7 @@ export function useLibraryLocations() {
  */
 export function useFrameIdsForLocation(sequenceId: string, locationId: string) {
   return useQuery({
-    queryKey: sequenceLocationKeys.framesForLocation(sequenceId, locationId),
+    queryKey: sequenceLocationKeys.shotsForLocation(sequenceId, locationId),
     queryFn: () =>
       getFrameIdsForLocationFn({ data: { sequenceId, locationId } }),
     enabled: !!sequenceId && !!locationId,
@@ -113,7 +113,7 @@ export function useRecastLocation() {
         queryKey: sequenceLocationKeys.all,
       });
       // Invalidate frames that are at this location
-      void queryClient.invalidateQueries({ queryKey: ['frames'] });
+      void queryClient.invalidateQueries({ queryKey: ['shots'] });
     },
   });
 }

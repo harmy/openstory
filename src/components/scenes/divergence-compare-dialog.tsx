@@ -10,8 +10,8 @@ import {
 } from '@/components/ui/dialog';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Frame, FrameVariant } from '@/lib/db/schema';
-import type { VariantType } from '@/lib/db/schema/frame-variants';
+import type { Shot, ShotVariant } from '@/lib/db/schema';
+import type { VariantType } from '@/lib/db/schema/shot-variants';
 
 type DivergencePromptDiff = {
   label: string;
@@ -22,8 +22,8 @@ type DivergencePromptDiff = {
 type DivergenceCompareDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  frame: Frame;
-  variant: FrameVariant;
+  frame: Shot;
+  variant: ShotVariant;
   onPromote: () => void;
   onDiscard: () => void;
   isPromoting?: boolean;
@@ -41,7 +41,7 @@ const ARTIFACT_LABEL: Record<VariantType, string> = {
 };
 
 function liveAssetForVariant(
-  frame: Frame,
+  frame: Shot,
   variantType: VariantType
 ): { url: string | null; kind: 'image' | 'video' | 'audio' } {
   switch (variantType) {

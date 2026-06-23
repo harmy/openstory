@@ -16,7 +16,7 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
-import type { Frame, Sequence } from '@/lib/db/schema';
+import type { Shot, Sequence } from '@/lib/db/schema';
 import type { ScopedDb } from '@/lib/db/scoped';
 
 const assertNoActiveStoryboardMock = vi.fn();
@@ -87,7 +87,7 @@ function makeSequence(overrides: Partial<Sequence> = {}): Sequence {
   };
 }
 
-function makeFrame(overrides: Partial<Frame> = {}): Frame {
+function makeFrame(overrides: Partial<Shot> = {}): Shot {
   return {
     id: 'frame-1',
     sequenceId: 'seq_1',
@@ -136,13 +136,13 @@ function makeFrame(overrides: Partial<Frame> = {}): Frame {
   };
 }
 
-function makeContext(sequence: Sequence, frames: Frame[]) {
+function makeContext(sequence: Sequence, frames: Shot[]) {
   const updateStatus = vi.fn();
   const updateMusicFields = vi.fn();
   const listBySequence = vi.fn(async () => frames);
   const listWithSheets = vi.fn(async () => []);
   const stub = {
-    frames: { listBySequence },
+    shots: { listBySequence },
     characters: { listWithSheets },
     sequence: vi.fn(() => ({ updateStatus, updateMusicFields })),
   };
@@ -245,7 +245,7 @@ describe('executeSmartRetry — partial retry status reset', () => {
     expect(triggerWorkflowMock).toHaveBeenCalledWith(
       '/image',
       expect.objectContaining({
-        frameId: 'frame-1',
+        shotId: 'frame-1',
         prompt: 'A cinematic shot of the lab',
         sequenceId: 'seq_1',
       }),
@@ -286,7 +286,7 @@ describe('executeSmartRetry — partial retry status reset', () => {
     expect(triggerWorkflowMock).toHaveBeenCalledTimes(1);
     expect(triggerWorkflowMock).toHaveBeenCalledWith(
       '/image',
-      expect.objectContaining({ frameId: 'frame-1' }),
+      expect.objectContaining({ shotId: 'frame-1' }),
       expect.objectContaining({ label: expect.any(String) })
     );
     expect(result).toEqual({
@@ -313,7 +313,7 @@ describe('executeSmartRetry — partial retry status reset', () => {
     expect(triggerWorkflowMock).toHaveBeenCalledWith(
       '/motion',
       expect.objectContaining({
-        frameId: 'frame-1',
+        shotId: 'frame-1',
         sequenceId: 'seq_1',
         imageUrl: 'https://cdn/thumb.jpg',
         prompt: 'slow pan across the lab',

@@ -6,12 +6,12 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '@/lib/db/client';
 import type {
-  Frame,
+  Shot,
   NewSequenceLocation,
   ReferenceStatus,
   SequenceLocation,
 } from '@/lib/db/schema';
-import { frames, sequenceLocations, sequences } from '@/lib/db/schema';
+import { shots, sequenceLocations, sequences } from '@/lib/db/schema';
 
 // ============================================================================
 // Pure utility functions (exported separately, not in factory)
@@ -47,7 +47,7 @@ export function locationMatchesTag(
  * Used when generating frame images to include location references
  */
 export function matchLocationsToFrame(
-  frame: Pick<Frame, 'metadata'>,
+  frame: Pick<Shot, 'metadata'>,
   allLocations: SequenceLocation[]
 ): SequenceLocation[] {
   const environmentTag = frame.metadata?.continuity?.environmentTag ?? '';
@@ -311,7 +311,7 @@ export function createSequenceLocationsMethods(db: Database) {
     getFramesForLocation: async (
       sequenceId: string,
       locationId: string
-    ): Promise<Frame[]> => {
+    ): Promise<Shot[]> => {
       // Get the location to extract matching patterns
       const locResult = await db
         .select()
@@ -326,11 +326,11 @@ export function createSequenceLocationsMethods(db: Database) {
       // Get all frames for the sequence
       const allFrames = await db
         .select()
-        .from(frames)
-        .where(eq(frames.sequenceId, sequenceId));
+        .from(shots)
+        .where(eq(shots.sequenceId, sequenceId));
 
       // Filter frames that are at this location
-      return (allFrames as Frame[]).filter((frame) => {
+      return (allFrames as Shot[]).filter((frame) => {
         const environmentTag = frame.metadata?.continuity?.environmentTag ?? '';
         const sceneLocation = frame.metadata?.metadata?.location ?? '';
 
@@ -359,11 +359,11 @@ export function createSequenceLocationsMethods(db: Database) {
       // Get all frames for the sequence
       const allFrames = await db
         .select()
-        .from(frames)
-        .where(eq(frames.sequenceId, sequenceId));
+        .from(shots)
+        .where(eq(shots.sequenceId, sequenceId));
 
       // Filter frames and return IDs
-      return (allFrames as Frame[])
+      return (allFrames as Shot[])
         .filter((frame) => {
           const environmentTag =
             frame.metadata?.continuity?.environmentTag ?? '';
