@@ -1,17 +1,17 @@
 /**
- * In-memory DB tests for `sequences.listFramesByIds` (#957).
+ * In-memory DB tests for `sequences.listShotsByIds` (#957).
  *
- * The sequences/eval list pages fetch frames for every sequence on a team in
+ * The sequences/eval list pages fetch shots for every sequence on a team in
  * one batched call. Once a team grew past ~500 sequences the request tripped a
  * `z.array().max(500)` cap, and the underlying `inArray` would overflow D1's
- * 100-bound-parameter limit. `listFramesByIds` now chunks the ids; these tests
- * cover a list larger than the chunk size to prove every frame still comes back
+ * 100-bound-parameter limit. `listShotsByIds` now chunks the ids; these tests
+ * cover a list larger than the chunk size to prove every shot still comes back
  * grouped and in per-sequence order.
  */
 
 import type { Database } from '@/lib/db/client';
 import { generateId } from '@/lib/db/id';
-import { frames, sequences, styles, teams } from '@/lib/db/schema';
+import { shots, sequences, styles, teams } from '@/lib/db/schema';
 import { relations } from '@/lib/db/schema/relations';
 import { type Client, createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
@@ -24,7 +24,7 @@ let db: Database;
 let teamId = '';
 
 async function seed() {
-  await db.delete(frames);
+  await db.delete(shots);
   await db.delete(sequences);
   await db.delete(styles);
   await db.delete(teams);
@@ -51,7 +51,7 @@ async function seed() {
   return style.id;
 }
 
-/** Insert `count` sequences, each with 3 frames; returns the sequence ids. */
+/** Insert `count` sequences, each with 3 shots; returns the sequence ids. */
 async function seedSequences(
   styleId: string,
   count: number
@@ -66,7 +66,7 @@ async function seedSequences(
       title: `S${i}`,
       styleId,
     });
-    await db.insert(frames).values([
+    await db.insert(shots).values([
       { sequenceId: seqId, orderIndex: 0 },
       { sequenceId: seqId, orderIndex: 1 },
       { sequenceId: seqId, orderIndex: 2 },
@@ -90,28 +90,28 @@ beforeEach(async () => {
   styleId = await seed();
 });
 
-describe('listFramesByIds', () => {
+describe('listShotsByIds', () => {
   it('returns [] for an empty input', async () => {
     const methods = createSequencesMethods(db, teamId, generateId());
-    await expect(methods.listFramesByIds([])).resolves.toEqual([]);
+    await expect(methods.listShotsByIds([])).resolves.toEqual([]);
   });
 
-  it('returns every frame when the id list spans multiple chunks', async () => {
+  it('returns every shot when the id list spans multiple chunks', async () => {
     // 250 sequences > the 90-id chunk size, so the query fans out across 3
     // batches. The old single-query path would also blow past D1's 100-param
     // limit here.
     const seqIds = await seedSequences(styleId, 250);
     const methods = createSequencesMethods(db, teamId, generateId());
 
-    const result = await methods.listFramesByIds(seqIds);
+    const result = await methods.listShotsByIds(seqIds);
 
     expect(result).toHaveLength(250 * 3);
-    // Every requested sequence is represented with all 3 of its frames.
+    // Every requested sequence is represented with all 3 of its shots.
     const bySeq = new Map<string, number[]>();
-    for (const frame of result) {
-      const existing = bySeq.get(frame.sequenceId) ?? [];
-      existing.push(frame.orderIndex);
-      bySeq.set(frame.sequenceId, existing);
+    for (const shot of result) {
+      const existing = bySeq.get(shot.sequenceId) ?? [];
+      existing.push(shot.orderIndex);
+      bySeq.set(shot.sequenceId, existing);
     }
     expect(bySeq.size).toBe(250);
     for (const seqId of seqIds) {
@@ -119,7 +119,7 @@ describe('listFramesByIds', () => {
     }
   });
 
-  it('never leaks frames from another team', async () => {
+  it('never leaks shots from another team', async () => {
     const mySeqIds = await seedSequences(styleId, 2);
 
     // A second team with its own sequence — its id is requested but must not
@@ -151,10 +151,10 @@ describe('listFramesByIds', () => {
       title: 'X',
       styleId: otherStyle.id,
     });
-    await db.insert(frames).values({ sequenceId: otherSeqId, orderIndex: 0 });
+    await db.insert(shots).values({ sequenceId: otherSeqId, orderIndex: 0 });
 
     const methods = createSequencesMethods(db, teamId, generateId());
-    const result = await methods.listFramesByIds([...mySeqIds, otherSeqId]);
+    const result = await methods.listShotsByIds([...mySeqIds, otherSeqId]);
 
     expect(result).toHaveLength(2 * 3);
     expect(result.every((f) => f.sequenceId !== otherSeqId)).toBe(true);

@@ -5,7 +5,7 @@ import type { NewLocationSheet } from '@/lib/db/schema';
 // Import pure utility functions before vi.doMock so they can be re-exported
 import {
   locationMatchesTag,
-  matchLocationsToFrame,
+  matchLocationsToShot,
 } from '@/lib/db/scoped/sequence-locations';
 
 // ============================================================================
@@ -15,7 +15,7 @@ import {
 const mockSequencesList = vi.fn();
 const mockSequencesCreate = vi.fn();
 const mockSequencesGetById = vi.fn();
-const mockSequencesGetWithFrames = vi.fn();
+const mockSequencesGetWithShots = vi.fn();
 const mockSequencesUpdate = vi.fn();
 const mockSequencesDelete = vi.fn();
 const mockSequencesGetForUser = vi.fn();
@@ -31,14 +31,14 @@ vi.doMock('@/lib/db/scoped/sequences', () => ({
   createSequencesReadMethods: vi.fn(() => ({
     list: mockSequencesList,
     getById: mockSequencesGetById,
-    getWithFrames: mockSequencesGetWithFrames,
+    getWithShots: mockSequencesGetWithShots,
     getForUser: mockSequencesGetForUser,
   })),
   createSequencesMethods: vi.fn(() => ({
     list: mockSequencesList,
     create: mockSequencesCreate,
     getById: mockSequencesGetById,
-    getWithFrames: mockSequencesGetWithFrames,
+    getWithShots: mockSequencesGetWithShots,
     update: mockSequencesUpdate,
     delete: mockSequencesDelete,
     getForUser: mockSequencesGetForUser,
@@ -248,7 +248,7 @@ const mockCharactersListWithTalent = vi.fn();
 const mockCharactersListWithSheets = vi.fn();
 const mockCharactersUpdateTalent = vi.fn();
 const mockCharactersUpdateSheetStatus = vi.fn();
-const mockCharactersGetFrameIdsForCharacter = vi.fn();
+const mockCharactersGetShotIdsForCharacter = vi.fn();
 
 vi.doMock('@/lib/db/scoped/characters', () => ({
   createCharactersMethods: vi.fn(() => ({
@@ -257,7 +257,7 @@ vi.doMock('@/lib/db/scoped/characters', () => ({
     listWithSheets: mockCharactersListWithSheets,
     updateTalent: mockCharactersUpdateTalent,
     updateSheetStatus: mockCharactersUpdateSheetStatus,
-    getFrameIdsForCharacter: mockCharactersGetFrameIdsForCharacter,
+    getShotIdsForCharacter: mockCharactersGetShotIdsForCharacter,
   })),
 }));
 
@@ -265,7 +265,7 @@ const mockSeqLocationsGetById = vi.fn();
 const mockSeqLocationsList = vi.fn();
 const mockSeqLocationsListWithReferences = vi.fn();
 const mockSeqLocationsUpdateReferenceStatus = vi.fn();
-const mockSeqLocationsGetFrameIdsForLocation = vi.fn();
+const mockSeqLocationsGetShotIdsForLocation = vi.fn();
 const mockSeqLocationsGetTeamLibrary = vi.fn();
 
 vi.doMock('@/lib/db/scoped/sequence-locations', () => ({
@@ -274,15 +274,15 @@ vi.doMock('@/lib/db/scoped/sequence-locations', () => ({
     list: mockSeqLocationsList,
     listWithReferences: mockSeqLocationsListWithReferences,
     updateReferenceStatus: mockSeqLocationsUpdateReferenceStatus,
-    getFrameIdsForLocation: mockSeqLocationsGetFrameIdsForLocation,
+    getShotIdsForLocation: mockSeqLocationsGetShotIdsForLocation,
     getTeamLibrary: mockSeqLocationsGetTeamLibrary,
   })),
   // Re-export pure utility functions so other test files importing them aren't broken
   locationMatchesTag,
-  matchLocationsToFrame,
+  matchLocationsToShot,
 }));
 
-// DB chain mock for inline operations (characters, frames)
+// DB chain mock for inline operations (characters, shots)
 const mockWhere = vi.fn();
 const mockSelect = vi.fn();
 const mockFrom = vi.fn();
@@ -318,7 +318,7 @@ describe('createScopedDb', () => {
       mockSequencesList,
       mockSequencesCreate,
       mockSequencesGetById,
-      mockSequencesGetWithFrames,
+      mockSequencesGetWithShots,
       mockUpdateStatus,
       mockUpdateMusicFields,
       mockGetMusicStatus,
@@ -373,12 +373,12 @@ describe('createScopedDb', () => {
       mockCharactersListWithSheets,
       mockCharactersUpdateTalent,
       mockCharactersUpdateSheetStatus,
-      mockCharactersGetFrameIdsForCharacter,
+      mockCharactersGetShotIdsForCharacter,
       mockSeqLocationsGetById,
       mockSeqLocationsList,
       mockSeqLocationsListWithReferences,
       mockSeqLocationsUpdateReferenceStatus,
-      mockSeqLocationsGetFrameIdsForLocation,
+      mockSeqLocationsGetShotIdsForLocation,
       mockSeqLocationsGetTeamLibrary,
       mockBillingGetBalance,
       mockBillingDeductCredits,
@@ -443,14 +443,14 @@ describe('createScopedDb', () => {
       expect(result).toEqual(sentinel);
     });
 
-    it('getWithFrames() delegates to sub-module', async () => {
-      const sentinel = { id: 'seq_1', frames: [] };
-      mockSequencesGetWithFrames.mockResolvedValue(sentinel);
+    it('getWithShots() delegates to sub-module', async () => {
+      const sentinel = { id: 'seq_1', shots: [] };
+      mockSequencesGetWithShots.mockResolvedValue(sentinel);
 
       const db = createScopedDb(TEAM_ID, USER_ID);
-      const result = await db.sequences.getWithFrames('seq_1');
+      const result = await db.sequences.getWithShots('seq_1');
 
-      expect(mockSequencesGetWithFrames).toHaveBeenCalledWith('seq_1');
+      expect(mockSequencesGetWithShots).toHaveBeenCalledWith('seq_1');
       expect(result).toEqual(sentinel);
     });
   });
@@ -785,17 +785,17 @@ describe('createScopedDb', () => {
       expect(result).toEqual(sentinel);
     });
 
-    it('getFrameIdsForCharacter() delegates to sub-module', async () => {
-      const sentinel = ['frame_01', 'frame_02'];
-      mockCharactersGetFrameIdsForCharacter.mockResolvedValue(sentinel);
+    it('getShotIdsForCharacter() delegates to sub-module', async () => {
+      const sentinel = ['shot_01', 'shot_02'];
+      mockCharactersGetShotIdsForCharacter.mockResolvedValue(sentinel);
 
       const db = createScopedDb(TEAM_ID, USER_ID);
-      const result = await db.characters.getFrameIdsForCharacter(
+      const result = await db.characters.getShotIdsForCharacter(
         'seq_01',
         'char_01'
       );
 
-      expect(mockCharactersGetFrameIdsForCharacter).toHaveBeenCalledWith(
+      expect(mockCharactersGetShotIdsForCharacter).toHaveBeenCalledWith(
         'seq_01',
         'char_01'
       );
@@ -854,17 +854,17 @@ describe('createScopedDb', () => {
       expect(result).toEqual(sentinel);
     });
 
-    it('getFrameIdsForLocation() delegates to sub-module', async () => {
-      const sentinel = ['frame_01', 'frame_03'];
-      mockSeqLocationsGetFrameIdsForLocation.mockResolvedValue(sentinel);
+    it('getShotIdsForLocation() delegates to sub-module', async () => {
+      const sentinel = ['shot_01', 'shot_03'];
+      mockSeqLocationsGetShotIdsForLocation.mockResolvedValue(sentinel);
 
       const db = createScopedDb(TEAM_ID, USER_ID);
-      const result = await db.sequenceLocations.getFrameIdsForLocation(
+      const result = await db.sequenceLocations.getShotIdsForLocation(
         'seq_01',
         'loc_01'
       );
 
-      expect(mockSeqLocationsGetFrameIdsForLocation).toHaveBeenCalledWith(
+      expect(mockSeqLocationsGetShotIdsForLocation).toHaveBeenCalledWith(
         'seq_01',
         'loc_01'
       );
@@ -887,13 +887,13 @@ describe('createScopedDb', () => {
     });
   });
 
-  describe('frames', () => {
+  describe('shots', () => {
     it('getById() queries db directly', async () => {
-      const sentinel = { id: 'frame_01' };
+      const sentinel = { id: 'shot_01' };
       mockWhere.mockResolvedValue([sentinel]);
 
       const db = createScopedDb(TEAM_ID, USER_ID);
-      const result = await db.frames.getById('frame_01');
+      const result = await db.shots.getById('shot_01');
 
       expect(result).toEqual(sentinel);
     });
@@ -902,7 +902,7 @@ describe('createScopedDb', () => {
       mockWhere.mockResolvedValue([]);
 
       const db = createScopedDb(TEAM_ID, USER_ID);
-      const result = await db.frames.getById('frame_99');
+      const result = await db.shots.getById('shot_99');
 
       expect(result).toBeNull();
     });

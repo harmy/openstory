@@ -12,18 +12,18 @@ import { ReplaceElementPopover } from './replace-element-popover';
 type ElementCardProps = {
   element: SequenceElement;
   sequenceId: string;
-  affectedFrameCount: number;
+  affectedShotCount: number;
   affectedVideoCount: number;
 };
 
 export const ElementCard: React.FC<ElementCardProps> = ({
   element,
   sequenceId,
-  affectedFrameCount,
+  affectedShotCount,
   affectedVideoCount,
 }) => {
   const deleteMutation = useDeleteSequenceElement();
-  const { editing: editingFrames } = useReplaceElementProgress(
+  const { editing: editingShots } = useReplaceElementProgress(
     sequenceId,
     element.id,
     element.token
@@ -33,7 +33,7 @@ export const ElementCard: React.FC<ElementCardProps> = ({
 
   const isAnalyzing =
     element.visionStatus === 'pending' || element.visionStatus === 'analyzing';
-  const isReplacing = editingFrames || isAnalyzing;
+  const isReplacing = editingShots || isAnalyzing;
   const visionDone = element.visionStatus === 'completed';
   const visionFailed = element.visionStatus === 'failed';
 
@@ -45,7 +45,7 @@ export const ElementCard: React.FC<ElementCardProps> = ({
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/70 backdrop-blur-sm">
               <Loader2 className="size-6 animate-spin text-muted-foreground" />
               <p className="text-xs text-muted-foreground">
-                {isAnalyzing ? 'Analyzing…' : 'Editing frames…'}
+                {isAnalyzing ? 'Analyzing…' : 'Editing shots…'}
               </p>
             </div>
           ) : null}
@@ -94,7 +94,7 @@ export const ElementCard: React.FC<ElementCardProps> = ({
             sequenceId={sequenceId}
             elementId={element.id}
             token={element.token}
-            affectedFrameCount={affectedFrameCount}
+            affectedShotCount={affectedShotCount}
             affectedVideoCount={affectedVideoCount}
             disabled={isReplacing}
           />
@@ -128,10 +128,10 @@ export const ElementCard: React.FC<ElementCardProps> = ({
             <span>{element.description ?? 'No description'}</span>
           )}
         </div>
-        {affectedFrameCount > 0 ? (
+        {affectedShotCount > 0 ? (
           <p className="text-xs text-muted-foreground/70">
-            Used in {affectedFrameCount} frame
-            {affectedFrameCount === 1 ? '' : 's'}
+            Used in {affectedShotCount} shot
+            {affectedShotCount === 1 ? '' : 's'}
             {affectedVideoCount > 0
               ? ` (${affectedVideoCount} with video)`
               : ''}
@@ -146,7 +146,7 @@ export const ElementCard: React.FC<ElementCardProps> = ({
           sequenceId={sequenceId}
           elementId={element.id}
           currentToken={element.token}
-          affectedFrameCount={affectedFrameCount}
+          affectedShotCount={affectedShotCount}
         />
       )}
     </>

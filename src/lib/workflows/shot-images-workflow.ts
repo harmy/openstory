@@ -1,7 +1,7 @@
 /**
- * Cloudflare Workflows port of `frameImagesWorkflow`.
+ * Cloudflare Workflows port of `shotImagesWorkflow`.
  *
- * Mirrors the QStash version (`src/lib/workflows/frame-images-workflow.ts`)
+ * Mirrors the QStash version (`src/lib/workflows/shot-images-workflow.ts`)
  * step for step — same step names, same control flow, same side effects.
  * Differences (all infrastructure-level, not behavioural):
  *
@@ -36,8 +36,8 @@ import { WorkflowValidationError } from '@/lib/workflow/errors';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import { NonRetryableError } from 'cloudflare:workflows';
 import type {
-  FrameImagesWorkflowInput,
-  FrameImagesWorkflowResult,
+  ShotImagesWorkflowInput,
+  ShotImagesWorkflowResult,
   ImageWorkflowInput,
   ShotVariantWorkflowInput,
 } from '@/lib/workflow/types';
@@ -47,27 +47,27 @@ import {
   matchLocationsToScene,
 } from '@/lib/workflows/scene-matching';
 import {
-  computeFrameImageSceneHash,
-  computeFrameImagesHashFromDto,
-  type FrameImageSceneSnapshot,
+  computeShotImageSceneHash,
+  computeShotImagesHashFromDto,
+  type ShotImageSceneSnapshot,
 } from '@/lib/workflows/sheet-snapshots';
 import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { getLogger } from '@/lib/observability/logger';
 
-const logger = getLogger(['openstory', 'workflow', 'frame-images']);
+const logger = getLogger(['openstory', 'workflow', 'shot-images']);
 
 type ImageChildResult = {
   imageUrl: string;
-  frameId?: string;
+  shotId?: string;
   sequenceId?: string;
 };
 
-export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImagesWorkflowInput> {
+export class ShotImagesWorkflow extends OpenStoryWorkflowEntrypoint<ShotImagesWorkflowInput> {
   protected override async runImpl(
-    event: Readonly<WorkflowEvent<FrameImagesWorkflowInput>>,
+    event: Readonly<WorkflowEvent<ShotImagesWorkflowInput>>,
     step: WorkflowStep,
     scopedDb: ScopedDb
-  ): Promise<FrameImagesWorkflowResult> {
+  ): Promise<ShotImagesWorkflowResult> {
     const input = event.payload;
     const parentInstanceId = event.instanceId;
 
@@ -82,7 +82,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
         return;
       }
       const expected = input.snapshotInputHash ?? '';
-      const recomputed = await computeFrameImagesHashFromDto({
+      const recomputed = await computeShotImagesHashFromDto({
         ...input,
         sceneSnapshots: input.sceneSnapshots,
       });
@@ -102,7 +102,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
       charactersWithSheets,
       locationsWithSheets,
       elements: elementsFromInput = [],
-      frameMapping,
+      shotMapping,
       imageModel,
       imageModels: imageModelsInput,
       aspectRatio,
@@ -159,8 +159,8 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
     const imageSize = aspectRatioToImageSize(aspectRatio);
 
     // Build a sceneId→snapshot index once so the per-(scene, model) inner
-    // loop doesn't repeat O(snapshots) `find` work for every frame × model.
-    const sceneSnapshotsById = new Map<string, FrameImageSceneSnapshot>(
+    // loop doesn't repeat O(snapshots) `find` work for every shot × model.
+    const sceneSnapshotsById = new Map<string, ShotImageSceneSnapshot>(
       (input.sceneSnapshots ?? []).map((s) => [s.sceneId, s])
     );
 
@@ -178,7 +178,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
           const snap = sceneSnapshotsById.get(scene.sceneId);
           for (const model of imageModels) {
             out[snapshotHashKey(scene.sceneId, model)] = snap
-              ? await computeFrameImageSceneHash(snap, model, aspectRatio)
+              ? await computeShotImageSceneHash(snap, model, aspectRatio)
               : undefined;
           }
         }
@@ -201,7 +201,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
           );
         }
 
-        const matchedFrame = frameMapping.find(
+        const matchedShot = shotMapping.find(
           (f) => f.sceneId === scene.sceneId
         );
 
@@ -234,7 +234,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
         // same scene.
         const modelResults = await Promise.allSettled(
           imageModels.map(async (model) => {
-            const perFrameSnapshotInputHash =
+            const perShotSnapshotInputHash =
               snapshotHashByKey[snapshotHashKey(scene.sceneId, model)];
 
             const childBody: ImageWorkflowInput = {
@@ -245,20 +245,20 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
               imageSize,
               aspectRatio,
               numImages: 1,
-              frameId: matchedFrame?.frameId,
+              shotId: matchedShot?.shotId,
               sequenceId,
               referenceImages:
                 allReferences.length > 0 ? allReferences : undefined,
               sceneSnapshot,
-              snapshotInputHash: perFrameSnapshotInputHash,
+              snapshotInputHash: perShotSnapshotInputHash,
             };
 
             // Per-spawn unique IDs. Include the model so the per-(scene,
             // model) fan-out gets distinct CF instance IDs — siblings
-            // would otherwise collide on `image:${sequenceId}:${frameId}`
+            // would otherwise collide on `image:${sequenceId}:${shotId}`
             // (CF instance IDs are global per Worker script).
-            const childIdSuffix = matchedFrame?.frameId
-              ? `image:${sequenceId ?? 'no-seq'}:${matchedFrame.frameId}:${model}`
+            const childIdSuffix = matchedShot?.shotId
+              ? `image:${sequenceId ?? 'no-seq'}:${matchedShot.shotId}:${model}`
               : `image:${sequenceId ?? 'no-seq'}:${scene.sceneId}:${model}`;
 
             const childOutput = await spawnAndAwaitChild<
@@ -266,7 +266,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
               ImageChildResult
             >(step, {
               binding: imageBinding,
-              parentBindingName: 'FRAME_IMAGES_WORKFLOW',
+              parentBindingName: 'SHOT_IMAGES_WORKFLOW',
               parentInstanceId,
               childId: childIdSuffix,
               childPayload: childBody,
@@ -282,10 +282,10 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
             }
 
             // Trigger variant (shot grid) workflow as a separate top-level
-            // run. Fire-and-forget — frame-images shouldn't block on it,
-            // since the variant just enriches the frame after the fact and
+            // run. Fire-and-forget — shot-images shouldn't block on it,
+            // since the variant just enriches the shot after the fact and
             // its progress is tracked independently via
-            // `frame.variantImageStatus`.
+            // `shot.variantImageStatus`.
             await step.do(
               `trigger-variant-${scene.sceneId}-${model}`,
               async () => {
@@ -295,7 +295,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
                     userId: input.userId,
                     teamId: input.teamId,
                     sequenceId,
-                    frameId: matchedFrame?.frameId,
+                    shotId: matchedShot?.shotId,
                     thumbnailUrl: childOutput.imageUrl,
                     scenePrompt: scene.prompts?.visual?.fullPrompt,
                     characterReferences:
@@ -316,7 +316,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
                     // paid job (see dedup-ids.ts).
                     deduplicationId: shotVariantDedupId(
                       parentInstanceId,
-                      matchedFrame?.frameId ?? scene.sceneId,
+                      matchedShot?.shotId ?? scene.sceneId,
                       model
                     ),
                   }
@@ -332,7 +332,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
         // gets returned as this scene's `imageUrl`; if it failed we throw
         // for parity with the QStash original's `result.isFailed` check.
         // Sibling-model failures are logged but don't block — they're
-        // alternates that enrich `frame_variants`, not the primary.
+        // alternates that enrich `shot_variants`, not the primary.
         const primary = modelResults[0];
         if (!primary) {
           throw new WorkflowValidationError(
@@ -348,7 +348,7 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
           const r = modelResults[i];
           if (r?.status === 'rejected') {
             logger.warn(
-              `[FrameImagesWorkflow:cf] Alternate model ${imageModels[i]} failed for scene ${scene.sceneId}:`,
+              `[ShotImagesWorkflow:cf] Alternate model ${imageModels[i]} failed for scene ${scene.sceneId}:`,
               {
                 err: r.reason,
               }
@@ -366,13 +366,13 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
     // every later image onto the wrong scene and made the trailing scene
     // throw "has no generated image URL" (June 6 sample-run failure).
     // Rejections get reported but don't kill the workflow, so a single scene
-    // with no visual prompt (or a deleted frame mid-flight) can't poison the
+    // with no visual prompt (or a deleted shot mid-flight) can't poison the
     // rest of the batch.
     const imageUrls: (string | null)[] = sceneResults.map((r, i) => {
       if (r.status === 'fulfilled') return r.value;
       const scene = scenesWithVisualPrompts[i];
       logger.error(
-        `[FrameImagesWorkflow:cf] Scene ${scene?.sceneId ?? '(unknown)'} failed: ${String(r.reason)}`,
+        `[ShotImagesWorkflow:cf] Scene ${scene?.sceneId ?? '(unknown)'} failed: ${String(r.reason)}`,
         {
           err: r.reason,
         }
@@ -387,13 +387,13 @@ export class FrameImagesWorkflow extends OpenStoryWorkflowEntrypoint<FrameImages
     event,
     error,
   }: {
-    event: Readonly<WorkflowEvent<FrameImagesWorkflowInput>>;
+    event: Readonly<WorkflowEvent<ShotImagesWorkflowInput>>;
     error: string;
     scopedDb: ScopedDb;
   }): void {
     const input = event.payload;
     logger.error(
-      `[FrameImagesWorkflow:cf] Frame image generation failed for sequence ${input.sequenceId}: ${error}`
+      `[ShotImagesWorkflow:cf] Shot image generation failed for sequence ${input.sequenceId}: ${error}`
     );
   }
 }

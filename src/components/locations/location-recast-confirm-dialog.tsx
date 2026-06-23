@@ -16,7 +16,7 @@ type LocationRecastConfirmDialogProps = {
   onConfirm: () => void;
   locationName: string;
   libraryLocationName: string;
-  affectedFrameCount: number;
+  affectedShotCount: number;
   isLoading: boolean;
 };
 
@@ -28,7 +28,7 @@ export const LocationRecastConfirmDialog: React.FC<
   onConfirm,
   locationName,
   libraryLocationName,
-  affectedFrameCount,
+  affectedShotCount,
   isLoading,
 }) => {
   return (
@@ -39,12 +39,12 @@ export const LocationRecastConfirmDialog: React.FC<
           <AlertDialogDescription>
             This will regenerate the reference image for "{locationName}" using
             "{libraryLocationName}" as the visual reference.
-            {affectedFrameCount > 0 && (
+            {affectedShotCount > 0 && (
               <>
                 {' '}
                 <strong>
-                  {affectedFrameCount} frame
-                  {affectedFrameCount !== 1 ? 's' : ''}
+                  {affectedShotCount} shot
+                  {affectedShotCount !== 1 ? 's' : ''}
                 </strong>{' '}
                 at this location will be regenerated with the new look.
               </>

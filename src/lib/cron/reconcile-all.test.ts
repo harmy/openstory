@@ -12,15 +12,15 @@
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
-  frameVariants,
-  frames,
+  shotVariants,
+  shots,
   sequenceElements,
   sequences,
 } from '@/lib/db/schema';
 
 type SchemaTable =
-  | typeof frames
-  | typeof frameVariants
+  | typeof shots
+  | typeof shotVariants
   | typeof sequences
   | typeof sequenceElements;
 type SetPayload = Record<string, Date | string>;
@@ -143,7 +143,7 @@ describe('reconcileAllStuckJobs — pass isolation', () => {
 
     const counts = await reconcileAllStuckJobs();
 
-    expect(counts['frames.thumbnail']).toBe(PASS_ERRORED);
+    expect(counts['shots.thumbnail']).toBe(PASS_ERRORED);
     expect(counts['sequences.music']).toBeGreaterThan(0);
     expect(counts['sequence_elements.vision']).toBeGreaterThan(0);
   });
@@ -153,7 +153,7 @@ describe('reconcileAllStuckJobs — run-id-verified passes', () => {
   test('caps stuck-row selection at MAX_ROWS_PER_PASS (100) per verified pass', async () => {
     const { reconcileAllStuckJobs } = await import('./reconcile-all');
     await reconcileAllStuckJobs();
-    // 7 verified passes: 4 frames + 2 frame_variants + sequences.status.
+    // 7 verified passes: 4 shots + 2 shot_variants + sequences.status.
     expect(limitArgs.filter((n) => n === 100)).toHaveLength(7);
   });
 
@@ -163,7 +163,7 @@ describe('reconcileAllStuckJobs — run-id-verified passes', () => {
 
     await reconcileAllStuckJobs();
 
-    const verifiedTables: SchemaTable[] = [frames, frameVariants, sequences];
+    const verifiedTables: SchemaTable[] = [shots, shotVariants, sequences];
     const verifiedUpdates = updateCalls.filter(
       (c) => verifiedTables.includes(c.table) && !('musicStatus' in c.payload) // sequences.music is blind-fail, not verified
     );
@@ -177,7 +177,7 @@ describe('reconcileAllStuckJobs — run-id-verified passes', () => {
 
     await reconcileAllStuckJobs();
 
-    const verifiedTables: SchemaTable[] = [frames, frameVariants, sequences];
+    const verifiedTables: SchemaTable[] = [shots, shotVariants, sequences];
     const verifiedUpdates = updateCalls.filter(
       (c) => verifiedTables.includes(c.table) && !('musicStatus' in c.payload) // sequences.music is blind-fail, not verified
     );

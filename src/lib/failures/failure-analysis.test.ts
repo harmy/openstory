@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest';
 import { analyzeFailures } from './failure-analysis';
-import type { Frame } from '@/lib/db/schema/frames';
+import type { Shot } from '@/lib/db/schema/shots';
 import type { Sequence } from '@/lib/db/schema/sequences';
 
-function makeFrame(overrides: Partial<Frame> = {}): Frame {
+function makeShot(overrides: Partial<Shot> = {}): Shot {
   return {
-    id: 'frame-1',
+    id: 'shot-1',
     sequenceId: 'seq-1',
     orderIndex: 0,
     description: 'A scene',
@@ -93,10 +93,10 @@ function makeSequence(overrides: Partial<Sequence> = {}): Sequence {
 
 describe('analyzeFailures', () => {
   test('no failures returns empty summary', () => {
-    const frames = [makeFrame(), makeFrame({ id: 'frame-2', orderIndex: 1 })];
+    const shots = [makeShot(), makeShot({ id: 'shot-2', orderIndex: 1 })];
     const sequence = makeSequence();
 
-    const result = analyzeFailures(frames, sequence);
+    const result = analyzeFailures(shots, sequence);
 
     expect(result.hasFailed).toBe(false);
     expect(result.requiresFullRetry).toBe(false);
@@ -104,7 +104,7 @@ describe('analyzeFailures', () => {
     expect(result.totalFailures).toBe(0);
   });
 
-  test('script analysis failure (no frames) requires full retry', () => {
+  test('script analysis failure (no shots) requires full retry', () => {
     const sequence = makeSequence({ status: 'failed' });
 
     const result = analyzeFailures([], sequence);
@@ -115,17 +115,17 @@ describe('analyzeFailures', () => {
   });
 
   test('image-only failures', () => {
-    const frames = [
-      makeFrame({
+    const shots = [
+      makeShot({
         thumbnailStatus: 'failed',
         thumbnailUrl: null,
         thumbnailError: 'Model timeout',
       }),
-      makeFrame({ id: 'frame-2', orderIndex: 1 }),
+      makeShot({ id: 'shot-2', orderIndex: 1 }),
     ];
     const sequence = makeSequence({ status: 'failed' });
 
-    const result = analyzeFailures(frames, sequence);
+    const result = analyzeFailures(shots, sequence);
 
     expect(result.hasFailed).toBe(true);
     expect(result.requiresFullRetry).toBe(false);
@@ -133,36 +133,36 @@ describe('analyzeFailures', () => {
     const [imageGroup] = result.groups;
     if (!imageGroup) throw new Error('test setup: image group missing');
     expect(imageGroup.category).toBe('image');
-    expect(imageGroup.frames).toHaveLength(1);
-    const [imageFrame] = imageGroup.frames;
-    if (!imageFrame) throw new Error('test setup: image frame missing');
-    expect(imageFrame.error).toBe('Model timeout');
+    expect(imageGroup.shots).toHaveLength(1);
+    const [imageShot] = imageGroup.shots;
+    if (!imageShot) throw new Error('test setup: image shot missing');
+    expect(imageShot.error).toBe('Model timeout');
     expect(result.headline).toContain('1 image failed');
   });
 
   test('motion-only failures', () => {
-    const frames = [
-      makeFrame({
+    const shots = [
+      makeShot({
         videoStatus: 'failed',
         videoUrl: null,
         videoError: 'Generation timeout',
       }),
-      makeFrame({ id: 'frame-2', orderIndex: 1 }),
+      makeShot({ id: 'shot-2', orderIndex: 1 }),
     ];
     const sequence = makeSequence({ status: 'failed' });
 
-    const result = analyzeFailures(frames, sequence);
+    const result = analyzeFailures(shots, sequence);
 
     expect(result.hasFailed).toBe(true);
     expect(result.requiresFullRetry).toBe(false);
     const motionGroup = result.groups.find((g) => g.category === 'motion');
     expect(motionGroup).toBeDefined();
-    expect(motionGroup?.frames).toHaveLength(1);
+    expect(motionGroup?.shots).toHaveLength(1);
     expect(result.headline).toContain('1 motion video failed');
   });
 
   test('music-only failure', () => {
-    const frames = [makeFrame()];
+    const shots = [makeShot()];
     const sequence = makeSequence({
       status: 'failed',
       musicStatus: 'failed',
@@ -170,7 +170,7 @@ describe('analyzeFailures', () => {
       musicPrompt: 'Epic music',
     });
 
-    const result = analyzeFailures(frames, sequence);
+    const result = analyzeFailures(shots, sequence);
 
     expect(result.hasFailed).toBe(true);
     const musicGroup = result.groups.find((g) => g.category === 'music');
@@ -180,14 +180,14 @@ describe('analyzeFailures', () => {
   });
 
   test('mixed failures (image + motion)', () => {
-    const frames = [
-      makeFrame({
+    const shots = [
+      makeShot({
         thumbnailStatus: 'failed',
         thumbnailUrl: null,
         thumbnailError: 'Image error',
       }),
-      makeFrame({
-        id: 'frame-2',
+      makeShot({
+        id: 'shot-2',
         orderIndex: 1,
         videoStatus: 'failed',
         videoError: 'Motion error',
@@ -195,7 +195,7 @@ describe('analyzeFailures', () => {
     ];
     const sequence = makeSequence({ status: 'failed' });
 
-    const result = analyzeFailures(frames, sequence);
+    const result = analyzeFailures(shots, sequence);
 
     expect(result.hasFailed).toBe(true);
     expect(result.groups.length).toBeGreaterThanOrEqual(2);
@@ -204,8 +204,8 @@ describe('analyzeFailures', () => {
   });
 
   test('motion failed but no thumbnail skips motion retry', () => {
-    const frames = [
-      makeFrame({
+    const shots = [
+      makeShot({
         thumbnailUrl: null,
         thumbnailStatus: 'failed',
         videoStatus: 'failed',
@@ -214,7 +214,7 @@ describe('analyzeFailures', () => {
     ];
     const sequence = makeSequence({ status: 'failed' });
 
-    const result = analyzeFailures(frames, sequence);
+    const result = analyzeFailures(shots, sequence);
 
     const motionGroup = result.groups.find((g) => g.category === 'motion');
     expect(motionGroup).toBeUndefined();
@@ -223,8 +223,8 @@ describe('analyzeFailures', () => {
   });
 
   test('missing motion prompts requires full retry', () => {
-    const frames = [
-      makeFrame({
+    const shots = [
+      makeShot({
         thumbnailStatus: 'completed',
         motionPrompt: null,
         videoStatus: 'pending',
@@ -232,7 +232,7 @@ describe('analyzeFailures', () => {
     ];
     const sequence = makeSequence({ status: 'failed' });
 
-    const result = analyzeFailures(frames, sequence);
+    const result = analyzeFailures(shots, sequence);
 
     expect(result.requiresFullRetry).toBe(true);
     const promptGroup = result.groups.find(
@@ -243,7 +243,7 @@ describe('analyzeFailures', () => {
   });
 
   test('missing music prompt does not require full retry', () => {
-    const frames = [makeFrame()];
+    const shots = [makeShot()];
     const sequence = makeSequence({
       status: 'failed',
       musicPrompt: null,
@@ -251,7 +251,7 @@ describe('analyzeFailures', () => {
       musicStatus: 'pending',
     });
 
-    const result = analyzeFailures(frames, sequence);
+    const result = analyzeFailures(shots, sequence);
 
     expect(result.requiresFullRetry).toBe(false);
     const promptGroup = result.groups.find(
@@ -262,10 +262,10 @@ describe('analyzeFailures', () => {
   });
 
   test('completed sequence with no failures', () => {
-    const frames = [makeFrame()];
+    const shots = [makeShot()];
     const sequence = makeSequence({ status: 'completed' });
 
-    const result = analyzeFailures(frames, sequence);
+    const result = analyzeFailures(shots, sequence);
 
     expect(result.hasFailed).toBe(false);
     expect(result.requiresFullRetry).toBe(false);

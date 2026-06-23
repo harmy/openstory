@@ -4,7 +4,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Card } from '@/components/ui/card';
 import { EvalSequenceRow } from './eval-sequence-row';
-import type { SequenceWithFrames } from '@/hooks/use-sequences-with-frames';
+import type { SequenceWithShots } from '@/hooks/use-sequences-with-shots';
 import type { ViewMode } from './eval-view';
 import type { DialogTab } from './eval-cell-dialog';
 import { Route as sequencesTheatreRoute } from '@/routes/_app/sequences/$id/theatre';
@@ -15,9 +15,9 @@ const VIDEO_WIDTH = 400;
 const CELL_WIDTH = 200;
 
 type EvalMatrixProps = {
-  sequences: SequenceWithFrames[];
+  sequences: SequenceWithShots[];
   viewMode: ViewMode;
-  framesLoadingMap: Record<string, boolean>;
+  shotsLoadingMap: Record<string, boolean>;
   divergenceMap?: Map<string, { hasMusic: boolean }>;
   onLoadMore?: () => void;
   hasMore?: boolean;
@@ -32,7 +32,7 @@ type OpenDialogState = {
 export const EvalMatrix: React.FC<EvalMatrixProps> = ({
   sequences,
   viewMode,
-  framesLoadingMap,
+  shotsLoadingMap,
   divergenceMap,
   onLoadMore,
   hasMore,
@@ -43,7 +43,7 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
 
   // Calculate max scene count across all sequences
   const maxSceneCount = useMemo(() => {
-    return Math.max(1, ...sequences.map((s) => s.frames.length));
+    return Math.max(1, ...sequences.map((s) => s.shots.length));
   }, [sequences]);
 
   const rowVirtualizer = useVirtualizer({
@@ -67,7 +67,7 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
   const totalWidth = METADATA_WIDTH + VIDEO_WIDTH + maxSceneCount * CELL_WIDTH;
 
   const handleNavigateToCell = (sequenceIndex: number, sceneIndex: number) => {
-    // Validate bounds and check if frame exists
+    // Validate bounds and check if shot exists
     if (
       sequenceIndex >= 0 &&
       sequenceIndex < sequences.length &&
@@ -147,7 +147,7 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
                   viewMode={viewMode}
                   maxSceneCount={maxSceneCount}
                   sequenceIndex={virtualRow.index}
-                  framesLoading={framesLoadingMap[sequence.id] ?? false}
+                  shotsLoading={shotsLoadingMap[sequence.id] ?? false}
                   divergence={divergenceMap?.get(sequence.id)}
                   openDialog={openDialog}
                   onOpenDialogChange={setOpenDialog}

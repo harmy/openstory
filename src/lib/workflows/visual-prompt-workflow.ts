@@ -60,7 +60,7 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
       elementBible,
       styleConfig,
       analysisModelId,
-      frameMapping,
+      shotMapping,
       sequenceId,
     } = input;
 
@@ -96,9 +96,8 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
         teamId: input.teamId,
         userId: input.userId,
         sequenceId: input.sequenceId,
-        // Frame id of the scene to save the visual prompt to
-        frameId: frameMapping?.find((f) => f.sceneId === scene.sceneId)
-          ?.frameId,
+        // Shot id of the scene to save the visual prompt to
+        shotId: shotMapping?.find((f) => f.sceneId === scene.sceneId)?.shotId,
       };
 
       const childResult = await spawnAndAwaitChild<

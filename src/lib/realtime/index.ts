@@ -37,15 +37,15 @@ export const realtimeSchema = {
     }),
   },
 
-  // Per-frame prompt regeneration events. Lives on its own channel
-  // (`frame-prompt:${frameId}`) so a client only pays the realtime cost while
-  // it's actually viewing the frame, and history replay rebuilds the
+  // Per-shot prompt regeneration events. Lives on its own channel
+  // (`shot-prompt:${shotId}`) so a client only pays the realtime cost while
+  // it's actually viewing the shot, and history replay rebuilds the
   // streaming-text state for the active prompt type if the user navigates
   // away and back mid-generation. The `delta` carries the incremental visible
   // characters of the `fullPrompt` field — extraction happens server-side via
   // `extractStreamingStringField` so the client doesn't have to parse partial
   // JSON.
-  framePrompt: {
+  shotPrompt: {
     streaming: z.object({
       promptType: z.enum(['visual', 'motion']),
       delta: z.string(),
@@ -87,16 +87,16 @@ export const realtimeSchema = {
       durationSeconds: z.number(),
     }),
 
-    // Frame events (after DB write)
-    'frame:created': z.object({
-      frameId: z.string(),
+    // Shot events (after DB write)
+    'shot:created': z.object({
+      shotId: z.string(),
       sceneId: z.string(),
       orderIndex: z.number(),
     }),
 
-    // Frame updated with prompts (visual, motion, audio)
-    'frame:updated': z.object({
-      frameId: z.string(),
+    // Shot updated with prompts (visual, motion, audio)
+    'shot:updated': z.object({
+      shotId: z.string(),
       updateType: z.enum([
         'visual-prompt',
         'motion-prompt',
@@ -108,7 +108,7 @@ export const realtimeSchema = {
 
     // Image generation progress
     'image:progress': z.object({
-      frameId: z.string(),
+      shotId: z.string(),
       status: z
         .enum(['pending', 'generating', 'completed', 'failed'])
         .optional(),
@@ -129,27 +129,27 @@ export const realtimeSchema = {
       // dropdown without clobbering the displayed primary thumbnail.
       variantOnly: z.boolean().optional(),
       // Failure reason (e.g. content-filter rejection). Carried on `failed`
-      // so the cache updater can write `frames.thumbnailError` live — without
+      // so the cache updater can write `shots.thumbnailError` live — without
       // it the FailureSummaryBanner only ever shows "Unknown error" until a
       // full refetch (#881).
       error: z.string().optional(),
     }),
 
-    // Fast preview frames replaced by AI-analyzed frames
+    // Fast preview shots replaced by AI-analyzed shots
     'preview:replaced': z.object({
       newSceneCount: z.number(),
     }),
 
     // Image generation progress
     'variant-image:progress': z.object({
-      frameId: z.string(),
+      shotId: z.string(),
       status: z.enum(['pending', 'generating', 'completed', 'failed']),
       variantImageUrl: z.string().optional(),
     }),
 
     // Video generation progress
     'video:progress': z.object({
-      frameId: z.string(),
+      shotId: z.string(),
       status: z.enum(['pending', 'generating', 'completed', 'failed']),
       videoUrl: z.string().optional(),
       // In-flight retry state (#882) — see `image:progress` above. Emitted
@@ -168,13 +168,13 @@ export const realtimeSchema = {
       // without clobbering the displayed primary video.
       variantOnly: z.boolean().optional(),
       // Failure reason — carried on `failed` so the cache updater writes
-      // `frames.videoError` live (see image:progress.error above). (#881)
+      // `shots.videoError` live (see image:progress.error above). (#881)
       error: z.string().optional(),
     }),
 
-    // Audio/music generation progress (frameId optional for sequence-level music)
+    // Audio/music generation progress (shotId optional for sequence-level music)
     'audio:progress': z.object({
-      frameId: z.string().optional(),
+      shotId: z.string().optional(),
       status: z.enum(['pending', 'generating', 'completed', 'failed']),
       audioUrl: z.string().optional(),
       // Which audio model produced this update. Optional for backward compat
@@ -201,10 +201,10 @@ export const realtimeSchema = {
       error: z.string().optional(),
     }),
 
-    // Recast-triggered frame regeneration events (characters)
+    // Recast-triggered shot regeneration events (characters)
     'recast:start': z.object({
       characterId: z.string(),
-      frameCount: z.number(),
+      shotCount: z.number(),
     }),
     'recast:complete': z.object({
       characterId: z.string(),
@@ -219,7 +219,7 @@ export const realtimeSchema = {
     // Recast-location events
     'recast-location:start': z.object({
       locationId: z.string(),
-      frameCount: z.number(),
+      shotCount: z.number(),
     }),
     'recast-location:complete': z.object({
       locationId: z.string(),
@@ -231,10 +231,10 @@ export const realtimeSchema = {
       error: z.string(),
     }),
 
-    // Replace-element events: edit affected frames to swap an element
+    // Replace-element events: edit affected shots to swap an element
     'replace-element:start': z.object({
       elementId: z.string().min(1),
-      frameCount: z.number().int().nonnegative(),
+      shotCount: z.number().int().nonnegative(),
       videoCount: z.number().int().nonnegative().optional(),
     }),
     'replace-element:complete': z.object({
@@ -294,13 +294,13 @@ export const realtimeSchema = {
     // Discriminated by `entityType` so consumers can narrow the artifact enum
     // per-branch and rely on `divergedVariantId` being present (every current
     // emitter parks its result and references the new variant row's id; the
-    // helpers in `sheet-divergence.ts` and `regenerate-frames-workflow.ts` are
+    // helpers in `sheet-divergence.ts` and `regenerate-shots-workflow.ts` are
     // the sole emit sites). A flat `z.object` here would let consumers redeclare
     // the payload locally with a wider `entityType: string`, which is what
     // masked the round-1 talent-channel routing bug.
     'stale:detected': z.discriminatedUnion('entityType', [
       z.object({
-        entityType: z.literal('frame'),
+        entityType: z.literal('shot'),
         entityId: z.string(),
         artifact: z.enum(['thumbnail', 'variant-image', 'video', 'audio']),
         snapshotInputHash: z.string(),
@@ -513,11 +513,11 @@ export function getLocationChannel(locationId?: string): RealtimeChannelApi {
 }
 
 /**
- * Get a channel for per-frame prompt regeneration streaming.
- * @param frameId - The frame ID to use as the channel identifier
+ * Get a channel for per-shot prompt regeneration streaming.
+ * @param shotId - The shot ID to use as the channel identifier
  */
-export function getFramePromptChannel(frameId?: string): RealtimeChannelApi {
-  return frameId
-    ? realtimeChannel(`frame-prompt:${frameId}`)
-    : noopChannel('frame-prompt');
+export function getShotPromptChannel(shotId?: string): RealtimeChannelApi {
+  return shotId
+    ? realtimeChannel(`shot-prompt:${shotId}`)
+    : noopChannel('shot-prompt');
 }

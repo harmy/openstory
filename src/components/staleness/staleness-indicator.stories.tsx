@@ -27,7 +27,7 @@ const meta: Meta<typeof StalenessIndicator> = {
     entityType: {
       control: 'select',
       options: [
-        'frame',
+        'shot',
         'character',
         'location',
         'library-location',
@@ -42,7 +42,7 @@ const meta: Meta<typeof StalenessIndicator> = {
   },
   args: {
     artifact: 'thumbnail',
-    entityType: 'frame',
+    entityType: 'shot',
   },
 };
 
@@ -67,7 +67,7 @@ export const NonStale: Story = {
           {isStale ? (
             <StalenessIndicator
               artifact="thumbnail"
-              entityType="frame"
+              entityType="shot"
               onRegenerate={() => {}}
             />
           ) : (
@@ -83,7 +83,7 @@ export const StaleInline: Story = {
   args: {
     density: 'inline',
     artifact: 'thumbnail',
-    entityType: 'frame',
+    entityType: 'shot',
   },
   decorators: [
     (Story) => (
@@ -98,7 +98,7 @@ export const StaleInlineDismissible: Story = {
   args: {
     density: 'inline',
     artifact: 'video',
-    entityType: 'frame',
+    entityType: 'shot',
     onDismiss: () => {},
   },
   decorators: [
@@ -114,7 +114,7 @@ export const StaleCornerDot: Story = {
   args: {
     density: 'corner-dot',
     artifact: 'thumbnail',
-    entityType: 'frame',
+    entityType: 'shot',
   },
   render: (args) => (
     <Card className="relative w-72">
@@ -134,7 +134,7 @@ const SoftDismissDemo: React.FC = () => {
     <div className="flex max-w-xl flex-col gap-3">
       <StalenessIndicator
         artifact="thumbnail"
-        entityType="frame"
+        entityType="shot"
         onRegenerate={() => setCount((c) => c + 1)}
         onDismiss={() => {}}
       />

@@ -1,4 +1,4 @@
-import { generateMockFrames } from '@/lib/mocks/data-generators';
+import { generateMockShots } from '@/lib/mocks/data-generators';
 import { DEFAULT_ASPECT_RATIO } from '@/lib/constants/aspect-ratios';
 import type { Meta, StoryObj } from '@storybook/react';
 import { SceneList } from './scene-list';
@@ -17,10 +17,10 @@ const meta: Meta<typeof SceneList> = {
     layout: 'fullscreen',
   },
   args: {
-    frames: [],
-    selectedFrameId: undefined,
+    shots: [],
+    selectedShotId: undefined,
     aspectRatio: DEFAULT_ASPECT_RATIO,
-    onSelectFrame: () => console.log('onSelectFrame'),
+    onSelectShot: () => console.log('onSelectShot'),
     regeneratingImages: new Set<string>(),
     regeneratingMotion: new Set<string>(),
     musicPromptsReady: false,
@@ -30,114 +30,114 @@ const meta: Meta<typeof SceneList> = {
 export default meta;
 type Story = StoryObj<typeof SceneList>;
 
-// Generate mock frames for different scenarios
-const mockFrames = generateMockFrames(5, 'mock-sequence-id');
+// Generate mock shots for different scenarios
+const mockShots = generateMockShots(5, 'mock-sequence-id');
 
 export const WithScenes: Story = {
   args: {
-    frames: mockFrames,
-    selectedFrameId: mockFrames[1]?.id ?? undefined,
+    shots: mockShots,
+    selectedShotId: mockShots[1]?.id ?? undefined,
   },
 };
 
 export const NoSelectedScene: Story = {
   args: {
-    frames: mockFrames,
-    selectedFrameId: undefined,
+    shots: mockShots,
+    selectedShotId: undefined,
   },
 };
 
 export const MultipleCompleted: Story = {
   args: {
-    frames: mockFrames,
-    selectedFrameId: mockFrames[0]?.id ?? undefined,
+    shots: mockShots,
+    selectedShotId: mockShots[0]?.id ?? undefined,
   },
 };
 
 export const AllCompleted: Story = {
   args: {
-    frames: mockFrames,
-    selectedFrameId: undefined,
+    shots: mockShots,
+    selectedShotId: undefined,
   },
 };
 
 export const Empty: Story = {
   args: {
-    frames: [],
-    selectedFrameId: undefined,
+    shots: [],
+    selectedShotId: undefined,
   },
 };
 
 export const ManyScenes: Story = {
   args: {
-    frames: generateMockFrames(15, 'mock-sequence-id'),
-    selectedFrameId: undefined,
+    shots: generateMockShots(15, 'mock-sequence-id'),
+    selectedShotId: undefined,
   },
 };
 
 export const GeneratingThumbnails: Story = {
   args: {
-    frames: mockFrames.map((frame, idx) => ({
-      ...frame,
+    shots: mockShots.map((shot, idx) => ({
+      ...shot,
       thumbnailStatus:
         idx < 3 ? ('generating' as const) : ('completed' as const),
-      thumbnailUrl: idx < 3 ? null : frame.thumbnailUrl,
+      thumbnailUrl: idx < 3 ? null : shot.thumbnailUrl,
     })),
-    selectedFrameId: mockFrames[0]?.id ?? undefined,
+    selectedShotId: mockShots[0]?.id ?? undefined,
   },
 };
 
 export const WithFailures: Story = {
   args: {
-    frames: mockFrames.map((frame, idx) => ({
-      ...frame,
+    shots: mockShots.map((shot, idx) => ({
+      ...shot,
       thumbnailStatus: idx === 2 ? ('failed' as const) : ('completed' as const),
-      thumbnailUrl: idx === 2 ? null : frame.thumbnailUrl,
+      thumbnailUrl: idx === 2 ? null : shot.thumbnailUrl,
       thumbnailError: idx === 2 ? 'Generation timeout' : null,
     })),
-    selectedFrameId: undefined,
+    selectedShotId: undefined,
   },
 };
 
 export const MixedStates: Story = {
   args: {
-    frames: mockFrames.map((frame, idx) => {
+    shots: mockShots.map((shot, idx) => {
       if (idx === 0) {
         return {
-          ...frame,
+          ...shot,
           thumbnailStatus: 'pending' as const,
           thumbnailUrl: null,
         };
       }
       if (idx === 1) {
         return {
-          ...frame,
+          ...shot,
           thumbnailStatus: 'generating' as const,
           thumbnailUrl: null,
         };
       }
       if (idx === 2) {
         return {
-          ...frame,
+          ...shot,
           thumbnailStatus: 'failed' as const,
           thumbnailUrl: null,
           thumbnailError: 'API error',
         };
       }
       return {
-        ...frame,
+        ...shot,
         thumbnailStatus: 'completed' as const,
       };
     }),
-    selectedFrameId: mockFrames[1]?.id ?? undefined,
+    selectedShotId: mockShots[1]?.id ?? undefined,
   },
 };
 
 // Width variations
 export const WidthMedium: Story = {
   args: {
-    frames: mockFrames,
-    selectedFrameId: mockFrames[1]?.id ?? undefined,
+    shots: mockShots,
+    selectedShotId: mockShots[1]?.id ?? undefined,
   },
   decorators: [
     (Story) => (
@@ -152,8 +152,8 @@ export const WidthMedium: Story = {
 
 export const WidthLarge: Story = {
   args: {
-    frames: mockFrames,
-    selectedFrameId: mockFrames[1]?.id ?? undefined,
+    shots: mockShots,
+    selectedShotId: mockShots[1]?.id ?? undefined,
   },
   decorators: [
     (Story) => (
@@ -168,8 +168,8 @@ export const WidthLarge: Story = {
 
 export const WidthExtraLarge: Story = {
   args: {
-    frames: mockFrames,
-    selectedFrameId: mockFrames[1]?.id ?? undefined,
+    shots: mockShots,
+    selectedShotId: mockShots[1]?.id ?? undefined,
   },
   decorators: [
     (Story) => (

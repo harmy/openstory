@@ -1,13 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 import {
-  createTestFrame,
-  getTestFrame,
-  getTestSequenceFrames,
+  createTestShot,
+  getTestShot,
+  getTestSequenceShots,
 } from '@/lib/test/seed';
 import { testOnlyGuard } from './route';
 
-const CreateFrameSchema = z.object({
+const CreateShotSchema = z.object({
   sequenceId: z.string(),
   orderIndex: z.number(),
   thumbnailUrl: z.string().optional(),
@@ -17,14 +17,15 @@ const CreateFrameSchema = z.object({
     .optional(),
 });
 
-export const Route = createFileRoute('/api/test/frame')({
+export const Route = createFileRoute('/api/test/shot')({
   server: {
     middleware: [testOnlyGuard],
     handlers: ({ createHandlers }) =>
       createHandlers({
         POST: async ({ request }) => {
-          const { sequenceId, orderIndex, ...options } =
-            CreateFrameSchema.parse(await request.json());
+          const { sequenceId, orderIndex, ...options } = CreateShotSchema.parse(
+            await request.json()
+          );
 
           if (!sequenceId || typeof orderIndex !== 'number') {
             return Response.json(
@@ -33,13 +34,13 @@ export const Route = createFileRoute('/api/test/frame')({
             );
           }
 
-          const frame = await createTestFrame(sequenceId, orderIndex, options);
-          return Response.json(frame);
+          const shot = await createTestShot(sequenceId, orderIndex, options);
+          return Response.json(shot);
         },
 
         /**
-         * GET /api/test/frame?id=...  -> single frame
-         * GET /api/test/frame?sequenceId=... -> all frames for seq (for polling)
+         * GET /api/test/shot?id=...  -> single shot
+         * GET /api/test/shot?sequenceId=... -> all shots for seq (for polling)
          */
         GET: async ({ request }) => {
           const url = new URL(request.url);
@@ -47,16 +48,16 @@ export const Route = createFileRoute('/api/test/frame')({
           const sequenceId = url.searchParams.get('sequenceId');
 
           if (id) {
-            const frame = await getTestFrame(id);
-            if (!frame) {
+            const shot = await getTestShot(id);
+            if (!shot) {
               return Response.json({ error: 'not found' }, { status: 404 });
             }
-            return Response.json(frame);
+            return Response.json(shot);
           }
 
           if (sequenceId) {
-            const frames = await getTestSequenceFrames(sequenceId);
-            return Response.json(frames);
+            const shots = await getTestSequenceShots(sequenceId);
+            return Response.json(shots);
           }
 
           return Response.json(

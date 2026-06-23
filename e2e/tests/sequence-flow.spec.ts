@@ -17,13 +17,13 @@ import {
 } from '../fixtures/talent.fixture';
 import {
   createTestSequence,
-  createTestFrame,
+  createTestShot,
   createTestCharacter,
   cleanupSequenceById,
-  getTestFrame,
+  getTestShot,
   getTestCharacter,
   type TestSequence,
-  type TestFrame,
+  type TestShot,
   type TestCharacter,
 } from '../fixtures/sequence.fixture';
 
@@ -149,20 +149,20 @@ Here's your caffeine fix. How's it going?
 // Each test creates its own data with unique names for parallel execution
 testWithUser.describe('Variant Selection', () => {
   let testSequence: TestSequence;
-  let testFrame: TestFrame;
+  let testShot: TestShot;
   const originalThumbnailUrl =
     'http://localhost:3001/api/test/image?w=1024&h=576&label=thumb';
 
   testWithUser.beforeEach(async ({ page, testUser }) => {
     await setupMockRoutes(page);
 
-    // Create pre-seeded sequence with frame that has variant image (unique name)
+    // Create pre-seeded sequence with shot that has variant image (unique name)
     testSequence = await createTestSequence(
       testUser.teamId,
       testUser.id,
       `E2E Variant Test Sequence ${crypto.randomUUID().slice(0, 8)}`
     );
-    testFrame = await createTestFrame(testSequence.id, 0, {
+    testShot = await createTestShot(testSequence.id, 0, {
       // Use real placeholder images
       thumbnailUrl: originalThumbnailUrl,
       variantImageUrl:
@@ -177,8 +177,8 @@ testWithUser.describe('Variant Selection', () => {
 
   testWithUser('can select variant from grid', async ({ page }) => {
     // Verify initial state in database
-    const frameBefore = await getTestFrame(testFrame.id);
-    expect(frameBefore?.thumbnailUrl).toBe(originalThumbnailUrl);
+    const shotBefore = await getTestShot(testShot.id);
+    expect(shotBefore?.thumbnailUrl).toBe(originalThumbnailUrl);
 
     // Navigate directly to the sequence scenes page
     await page.goto(`/sequences/${testSequence.id}/scenes`);
@@ -189,8 +189,8 @@ testWithUser.describe('Variant Selection', () => {
       page.getByRole('heading', { name: testSequence.title })
     ).toBeVisible({ timeout: 15000 });
 
-    // Also wait for the frame thumbnail to be visible
-    // Frames load via a separate API call from the sequence data, so needs its own timeout
+    // Also wait for the shot thumbnail to be visible
+    // Shots load via a separate API call from the sequence data, so needs its own timeout
     await expect(page.getByRole('img', { name: 'Scene 1' })).toBeVisible({
       timeout: 15000,
     });
@@ -225,8 +225,8 @@ testWithUser.describe('Variant Selection', () => {
     await expect
       .poll(
         async () => {
-          const frameAfter = await getTestFrame(testFrame.id);
-          return frameAfter?.thumbnailUrl;
+          const shotAfter = await getTestShot(testShot.id);
+          return shotAfter?.thumbnailUrl;
         },
         { timeout: 20_000 }
       )

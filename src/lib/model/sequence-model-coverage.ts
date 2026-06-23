@@ -1,6 +1,6 @@
 import type { ModelGenerationStatus } from '@/components/model/base-model-selector';
-import type { FrameVariant } from '@/lib/db/schema';
-import type { VariantType } from '@/lib/db/schema/frame-variants';
+import type { ShotVariant } from '@/lib/db/schema';
+import type { VariantType } from '@/lib/db/schema/shot-variants';
 
 /**
  * Sequence-wide generation coverage for one model (#547). Drives the header
@@ -27,14 +27,14 @@ export type ModelCoverage = {
 };
 
 /**
- * Build a per-model coverage map for a sequence from its `frame_variants` rows
+ * Build a per-model coverage map for a sequence from its `shot_variants` rows
  * of one type. Only primary rows count (divergent/discarded alternates are
  * excluded). The live primary model (when supplied) is marked `set`; every
  * other model reports how many scenes it has generated for so the dropdown can
  * show e.g. "8/10" while an added model is still filling in.
  */
 export function computeSequenceModelCoverage(opts: {
-  variants: readonly FrameVariant[] | undefined;
+  variants: readonly ShotVariant[] | undefined;
   variantType: VariantType;
   /** The live primary model (marked `set`), if any. */
   primaryModel?: string | null;
@@ -43,22 +43,22 @@ export function computeSequenceModelCoverage(opts: {
   const map = new Map<string, ModelCoverage>();
   if (!variants) return map;
 
-  const completedFramesByModel = new Map<string, Set<string>>();
+  const completedShotsByModel = new Map<string, Set<string>>();
   const generating = new Set<string>();
   const failed = new Set<string>();
-  const allCompletedFrames = new Set<string>();
+  const allCompletedShots = new Set<string>();
 
   for (const v of variants) {
     if (v.variantType !== variantType) continue;
     if (v.divergedAt !== null || v.discardedAt !== null) continue;
     if (v.status === 'completed' && v.url) {
-      let frames = completedFramesByModel.get(v.model);
-      if (!frames) {
-        frames = new Set();
-        completedFramesByModel.set(v.model, frames);
+      let shots = completedShotsByModel.get(v.model);
+      if (!shots) {
+        shots = new Set();
+        completedShotsByModel.set(v.model, shots);
       }
-      frames.add(v.frameId);
-      allCompletedFrames.add(v.frameId);
+      shots.add(v.shotId);
+      allCompletedShots.add(v.shotId);
     } else if (v.status === 'generating' || v.status === 'pending') {
       generating.add(v.model);
     } else if (v.status === 'failed') {
@@ -66,16 +66,16 @@ export function computeSequenceModelCoverage(opts: {
     }
   }
 
-  const total = allCompletedFrames.size;
+  const total = allCompletedShots.size;
   const models = new Set<string>([
-    ...completedFramesByModel.keys(),
+    ...completedShotsByModel.keys(),
     ...generating,
     ...failed,
   ]);
   if (primaryModel) models.add(primaryModel);
 
   for (const model of models) {
-    const completed = completedFramesByModel.get(model)?.size ?? 0;
+    const completed = completedShotsByModel.get(model)?.size ?? 0;
     let status: ModelGenerationStatus;
     if (model === primaryModel) {
       status = 'set';

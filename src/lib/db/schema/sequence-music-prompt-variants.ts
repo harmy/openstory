@@ -19,7 +19,7 @@ import {
 } from 'drizzle-orm/sqlite-core';
 import { generateId } from '../id';
 import { user } from './auth';
-import { type PromptVariantSource } from './frame-prompt-variants';
+import { type PromptVariantSource } from './shot-prompt-variants';
 import { sequences } from './sequences';
 
 const SEQUENCE_MUSIC_PROMPT_TYPE = 'music' as const;

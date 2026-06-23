@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FrameVariant } from '@/lib/db/schema';
+import type { ShotVariant } from '@/lib/db/schema';
 import { computeSequenceModelCoverage } from './sequence-model-coverage';
 
 /**
@@ -7,9 +7,9 @@ import { computeSequenceModelCoverage } from './sequence-model-coverage';
  * "has this model generated across the whole sequence, and is it the primary".
  */
 
-const baseVariant: FrameVariant = {
+const baseVariant: ShotVariant = {
   id: 'v',
-  frameId: 'f1',
+  shotId: 'f1',
   sequenceId: 'seq1',
   variantType: 'image',
   model: 'nano_banana_2',
@@ -33,19 +33,19 @@ const baseVariant: FrameVariant = {
   updatedAt: new Date(),
 };
 
-function variant(overrides: Partial<FrameVariant>): FrameVariant {
+function variant(overrides: Partial<ShotVariant>): ShotVariant {
   return { ...baseVariant, ...overrides };
 }
 
 describe('computeSequenceModelCoverage', () => {
   it('marks the primary model as set and reports partial coverage for an added model', () => {
     const variants = [
-      // Primary model: generated for all 3 frames.
-      variant({ id: 'a1', frameId: 'f1', model: 'nano_banana_2' }),
-      variant({ id: 'a2', frameId: 'f2', model: 'nano_banana_2' }),
-      variant({ id: 'a3', frameId: 'f3', model: 'nano_banana_2' }),
+      // Primary model: generated for all 3 shots.
+      variant({ id: 'a1', shotId: 'f1', model: 'nano_banana_2' }),
+      variant({ id: 'a2', shotId: 'f2', model: 'nano_banana_2' }),
+      variant({ id: 'a3', shotId: 'f3', model: 'nano_banana_2' }),
       // Added model: generated for only 1 of the 3.
-      variant({ id: 'b1', frameId: 'f1', model: 'flux_pro' }),
+      variant({ id: 'b1', shotId: 'f1', model: 'flux_pro' }),
     ];
 
     const coverage = computeSequenceModelCoverage({
@@ -68,10 +68,10 @@ describe('computeSequenceModelCoverage', () => {
 
   it('reports generating when an added model has pending rows and nothing completed', () => {
     const variants = [
-      variant({ id: 'a1', frameId: 'f1', model: 'nano_banana_2' }),
+      variant({ id: 'a1', shotId: 'f1', model: 'nano_banana_2' }),
       variant({
         id: 'b1',
-        frameId: 'f1',
+        shotId: 'f1',
         model: 'flux_pro',
         status: 'generating',
         url: null,
@@ -90,10 +90,10 @@ describe('computeSequenceModelCoverage', () => {
 
   it('reports failed when an added model has only failed rows', () => {
     const variants = [
-      variant({ id: 'a1', frameId: 'f1', model: 'nano_banana_2' }),
+      variant({ id: 'a1', shotId: 'f1', model: 'nano_banana_2' }),
       variant({
         id: 'b1',
-        frameId: 'f1',
+        shotId: 'f1',
         model: 'flux_pro',
         status: 'failed',
         url: null,
@@ -112,13 +112,13 @@ describe('computeSequenceModelCoverage', () => {
 
   it('reports completed (not generating) when a model has both completed and in-flight rows', () => {
     const variants = [
-      variant({ id: 'a1', frameId: 'f1', model: 'nano_banana_2' }),
-      variant({ id: 'a2', frameId: 'f2', model: 'nano_banana_2' }),
+      variant({ id: 'a1', shotId: 'f1', model: 'nano_banana_2' }),
+      variant({ id: 'a2', shotId: 'f2', model: 'nano_banana_2' }),
       // flux_pro: one scene done, another still generating.
-      variant({ id: 'b1', frameId: 'f1', model: 'flux_pro' }),
+      variant({ id: 'b1', shotId: 'f1', model: 'flux_pro' }),
       variant({
         id: 'b2',
-        frameId: 'f2',
+        shotId: 'f2',
         model: 'flux_pro',
         status: 'generating',
         url: null,
@@ -141,16 +141,16 @@ describe('computeSequenceModelCoverage', () => {
 
   it('ignores divergent and discarded alternates', () => {
     const variants = [
-      variant({ id: 'a1', frameId: 'f1', model: 'nano_banana_2' }),
+      variant({ id: 'a1', shotId: 'f1', model: 'nano_banana_2' }),
       variant({
         id: 'd1',
-        frameId: 'f1',
+        shotId: 'f1',
         model: 'flux_pro',
         divergedAt: new Date(),
       }),
       variant({
         id: 'x1',
-        frameId: 'f2',
+        shotId: 'f2',
         model: 'flux_pro',
         discardedAt: new Date(),
       }),
@@ -169,8 +169,8 @@ describe('computeSequenceModelCoverage', () => {
 
   it('filters by variant type', () => {
     const variants = [
-      variant({ id: 'a1', frameId: 'f1', variantType: 'image', model: 'm1' }),
-      variant({ id: 'v1', frameId: 'f1', variantType: 'video', model: 'm1' }),
+      variant({ id: 'a1', shotId: 'f1', variantType: 'image', model: 'm1' }),
+      variant({ id: 'v1', shotId: 'f1', variantType: 'video', model: 'm1' }),
     ];
 
     const videoCoverage = computeSequenceModelCoverage({

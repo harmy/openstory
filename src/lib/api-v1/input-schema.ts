@@ -133,7 +133,7 @@ export const apiCreateSequenceSchema = z
     motion: z
       .boolean()
       .default(false)
-      .meta({ description: 'Generate motion (video) for each frame.' }),
+      .meta({ description: 'Generate motion (video) for each shot.' }),
     music: z
       .boolean()
       .default(false)

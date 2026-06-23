@@ -19,7 +19,7 @@ type RenameElementDialogProps = {
   sequenceId: string;
   elementId: string;
   currentToken: string;
-  affectedFrameCount: number;
+  affectedShotCount: number;
 };
 
 export const RenameElementDialog: React.FC<RenameElementDialogProps> = ({
@@ -28,7 +28,7 @@ export const RenameElementDialog: React.FC<RenameElementDialogProps> = ({
   sequenceId,
   elementId,
   currentToken,
-  affectedFrameCount,
+  affectedShotCount,
 }) => {
   const renameMutation = useRenameSequenceElementToken();
   const [value, setValue] = useState(currentToken);
@@ -66,9 +66,9 @@ export const RenameElementDialog: React.FC<RenameElementDialogProps> = ({
           onOpenChange(false);
           const updates: string[] = [];
           if (result.scriptUpdated) updates.push('script');
-          if (result.framesUpdated > 0) {
+          if (result.shotsUpdated > 0) {
             updates.push(
-              `${result.framesUpdated} frame${result.framesUpdated === 1 ? '' : 's'}`
+              `${result.shotsUpdated} shot${result.shotsUpdated === 1 ? '' : 's'}`
             );
           }
           const suffix =
@@ -91,11 +91,11 @@ export const RenameElementDialog: React.FC<RenameElementDialogProps> = ({
           <DialogHeader>
             <DialogTitle>Rename element</DialogTitle>
             <DialogDescription>
-              {affectedFrameCount > 0
-                ? `${currentToken} is used in ${affectedFrameCount} frame${
-                    affectedFrameCount === 1 ? '' : 's'
-                  }. Renaming will rewrite every reference in your script and frames.`
-                : 'Renaming will rewrite every reference in your script and frames.'}
+              {affectedShotCount > 0
+                ? `${currentToken} is used in ${affectedShotCount} shot${
+                    affectedShotCount === 1 ? '' : 's'
+                  }. Renaming will rewrite every reference in your script and shots.`
+                : 'Renaming will rewrite every reference in your script and shots.'}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2 py-4">

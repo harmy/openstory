@@ -1,9 +1,8 @@
 /**
- * Frames Schema
- * Individual frames/shots within a sequence
+ * Shots Schema
+ * Individual shots within a sequence
  */
 
-import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
 import type { Scene } from '@/lib/ai/scene-analysis.schema';
 import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import {
@@ -16,27 +15,27 @@ import {
 import { generateId } from '../id';
 import { sequences } from './sequences';
 
-export const FRAME_GENERATION_STATUSES = [
+export const SHOT_GENERATION_STATUSES = [
   'pending',
   'generating',
   'completed',
   'failed',
 ] as const;
-type FrameGenerationStatus = (typeof FRAME_GENERATION_STATUSES)[number];
+type ShotGenerationStatus = (typeof SHOT_GENERATION_STATUSES)[number];
 
 /**
- * Frames table
- * Individual frames/shots within a sequence
+ * Shots table
+ * Individual shots within a sequence
  *
- * Each frame represents one scene from script analysis and stores:
+ * Each shot represents one scene from script analysis and stores:
  * - Visual content (thumbnailUrl for image, videoUrl for motion)
  * - Scene data in metadata field (populated progressively across 5 phases)
  * - Generation tracking information
  *
  * @see src/lib/ai/scene-analysis.schema.ts for Scene structure
  */
-export const frames = snakeCase.table(
-  'frames',
+export const shots = snakeCase.table(
+  'shots',
   {
     id: text()
       .$defaultFn(() => generateId())
@@ -52,9 +51,7 @@ export const frames = snakeCase.table(
     previewThumbnailUrl: text(), // Fast preview CDN URL (not stored in R2; URL may expire but column persists)
     thumbnailPath: text(), // R2 storage path (not signed URL)
     variantImageUrl: text(), // R2 storage path (not signed URL)
-    variantImageStatus: text()
-      .$type<FrameGenerationStatus>()
-      .default('pending'),
+    variantImageStatus: text().$type<ShotGenerationStatus>().default('pending'),
     variantWorkflowRunId: text(),
     variantImageGeneratedAt: integer({
       mode: 'timestamp',
@@ -63,16 +60,22 @@ export const frames = snakeCase.table(
     videoUrl: text(),
     videoPath: text(), // R2 storage path (not signed URL)
     // Thumbnail generation status tracking
-    thumbnailStatus: text().$type<FrameGenerationStatus>().default('pending'),
+    thumbnailStatus: text().$type<ShotGenerationStatus>().default('pending'),
     thumbnailWorkflowRunId: text(),
     thumbnailGeneratedAt: integer({
       mode: 'timestamp',
     }),
     thumbnailError: text(),
-    imageModel: text({ length: 100 }).default(DEFAULT_IMAGE_MODEL).notNull(), // Model used for image generation
+    // SQL default pinned to the literal 'nano_banana_2' to match every deployed
+    // DB's column default. DEFAULT_IMAGE_MODEL was bumped to 'gpt_image_2'
+    // WITHOUT a migration; SQLite can't ALTER (or DROP) a column default without
+    // a full table rebuild, which CASCADE-deletes child rows on D1 (the #612
+    // trap). The shot-create path resolves the real default in app code; this
+    // literal is just a never-relied-on fallback.
+    imageModel: text({ length: 100 }).default('nano_banana_2').notNull(),
     imagePrompt: text(), // User-updated image prompt (overrides AI-generated prompt from metadata)
     // Video/motion generation status tracking
-    videoStatus: text().$type<FrameGenerationStatus>().default('pending'),
+    videoStatus: text().$type<ShotGenerationStatus>().default('pending'),
     videoWorkflowRunId: text(),
     videoGeneratedAt: integer({
       mode: 'timestamp',
@@ -83,7 +86,7 @@ export const frames = snakeCase.table(
     // Audio/music generation status tracking
     audioUrl: text(),
     audioPath: text(), // R2 storage path (not signed URL)
-    audioStatus: text().$type<FrameGenerationStatus>().default('pending'),
+    audioStatus: text().$type<ShotGenerationStatus>().default('pending'),
     audioWorkflowRunId: text(),
     audioGeneratedAt: integer({
       mode: 'timestamp',
@@ -120,23 +123,23 @@ export const frames = snakeCase.table(
   },
   (table) => [
     // Compound index for efficient ordering queries
-    index('idx_frames_order').on(table.sequenceId, table.orderIndex),
-    index('idx_frames_sequence_id').on(table.sequenceId),
-    // Unique constraint: one frame per sequence/order combination
-    uniqueIndex('frames_sequence_id_order_index_key').on(
+    index('idx_shots_order').on(table.sequenceId, table.orderIndex),
+    index('idx_shots_sequence_id').on(table.sequenceId),
+    // Unique constraint: one shot per sequence/order combination
+    uniqueIndex('shots_sequence_id_order_index_key').on(
       table.sequenceId,
       table.orderIndex
     ),
   ]
 );
 
-// Override the inferred Frame type to use Scene for metadata
-type InferredFrame = InferSelectModel<typeof frames>;
-export type Frame = Omit<InferredFrame, 'metadata'> & {
+// Override the inferred Shot type to use Scene for metadata
+type InferredShot = InferSelectModel<typeof shots>;
+export type Shot = Omit<InferredShot, 'metadata'> & {
   metadata: Scene | null; // Nullable until script analysis completes, fields populate progressively
 };
 
-type InferredNewFrame = InferInsertModel<typeof frames>;
-export type NewFrame = Omit<InferredNewFrame, 'metadata'> & {
+type InferredNewShot = InferInsertModel<typeof shots>;
+export type NewShot = Omit<InferredNewShot, 'metadata'> & {
   metadata?: Scene | null; // Optional - can be null initially, populated during script analysis
 };

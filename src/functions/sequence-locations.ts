@@ -58,20 +58,20 @@ export const getTeamLocationsLibraryFn = createServerFn({ method: 'GET' })
     });
   });
 
-const getFrameIdsForLocationInputSchema = z.object({
+const getShotIdsForLocationInputSchema = z.object({
   locationId: z.string().min(1),
 });
 
-export const getFrameIdsForLocationFn = createServerFn({ method: 'GET' })
+export const getShotIdsForLocationFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
-  .inputValidator(zodValidator(getFrameIdsForLocationInputSchema))
+  .inputValidator(zodValidator(getShotIdsForLocationInputSchema))
   .handler(async ({ context, data }) => {
-    const frameIds =
-      await context.scopedDb.sequenceLocations.getFrameIdsForLocation(
+    const shotIds =
+      await context.scopedDb.sequenceLocations.getShotIdsForLocation(
         context.sequence.id,
         data.locationId
       );
-    return { frameIds, count: frameIds.length };
+    return { shotIds, count: shotIds.length };
   });
 
 const recastLocationInputSchema = z.object({
@@ -83,7 +83,7 @@ const recastLocationInputSchema = z.object({
 
 /**
  * Recast a location with a library location reference.
- * Triggers location reference regeneration and frame regeneration.
+ * Triggers location reference regeneration and shot regeneration.
  */
 export const recastLocationFn = createServerFn({ method: 'POST' })
   .middleware([authWithTeamMiddleware])
@@ -117,8 +117,8 @@ export const recastLocationFn = createServerFn({ method: 'POST' })
       { locationId: data.locationId, status: 'generating' }
     );
 
-    const affectedFrameIds =
-      await context.scopedDb.sequenceLocations.getFrameIdsForLocation(
+    const affectedShotIds =
+      await context.scopedDb.sequenceLocations.getShotIdsForLocation(
         location.sequenceId,
         data.locationId
       );
@@ -135,7 +135,7 @@ export const recastLocationFn = createServerFn({ method: 'POST' })
         referenceImageUrl: data.referenceImageUrl,
         libraryLocationDescription: data.description,
         imageModel: safeTextToImageModel(sequence.imageModel),
-        affectedFrameIds,
+        affectedShotIds,
         styleConfig,
       } satisfies RecastLocationWorkflowInput,
       { label: buildWorkflowLabel(location.sequenceId) }
@@ -144,6 +144,6 @@ export const recastLocationFn = createServerFn({ method: 'POST' })
     return {
       locationId: data.locationId,
       referenceWorkflowRunId: workflowRunId,
-      affectedFrameIds,
+      affectedShotIds,
     };
   });

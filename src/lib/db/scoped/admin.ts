@@ -9,11 +9,11 @@ import type { Database } from '@/lib/db/client';
 import { generateId } from '@/lib/db/id';
 import { user } from '@/lib/db/schema/auth';
 import { credits, transactions } from '@/lib/db/schema/credits';
-import { frames } from '@/lib/db/schema/frames';
+import { shots } from '@/lib/db/schema/shots';
 import { giftTokenRedemptions, giftTokens } from '@/lib/db/schema/gift-tokens';
 import type { GiftToken } from '@/lib/db/schema/gift-tokens';
 import { sequences } from '@/lib/db/schema/sequences';
-import type { Frame, Sequence } from '@/lib/db/schema';
+import type { Shot, Sequence } from '@/lib/db/schema';
 import { teamMembers, teams } from '@/lib/db/schema/teams';
 import { ValidationError } from '@/lib/errors';
 import { and, asc, count, desc, eq, like, not, or, sql } from 'drizzle-orm';
@@ -132,7 +132,7 @@ export function createAdminMethods(db: Database) {
     }));
   }
 
-  // ---- Support: cross-team sequence/frame access ----
+  // ---- Support: cross-team sequence/shot access ----
 
   type SequenceWithCreator = Sequence & {
     creatorName: string | null;
@@ -175,12 +175,12 @@ export function createAdminMethods(db: Database) {
     }));
   }
 
-  async function getFramesForSequence(sequenceId: string): Promise<Frame[]> {
+  async function getShotsForSequence(sequenceId: string): Promise<Shot[]> {
     return await db
       .select()
-      .from(frames)
-      .where(eq(frames.sequenceId, sequenceId))
-      .orderBy(asc(frames.orderIndex));
+      .from(shots)
+      .where(eq(shots.sequenceId, sequenceId))
+      .orderBy(asc(shots.orderIndex));
   }
 
   // ---- User activity reporting ----
@@ -259,7 +259,7 @@ export function createAdminMethods(db: Database) {
     createGiftToken,
     listGiftTokens,
     getAllSequences,
-    getFramesForSequence,
+    getShotsForSequence,
     listUserActivity,
   };
 }

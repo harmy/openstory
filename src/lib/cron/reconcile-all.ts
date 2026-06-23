@@ -19,8 +19,8 @@
 
 import { getDb } from '#db-client';
 import {
-  frames,
-  frameVariants,
+  shots,
+  shotVariants,
   sequenceElements,
   sequences,
 } from '@/lib/db/schema';
@@ -56,14 +56,14 @@ export async function reconcileAllStuckJobs(): Promise<ReconcileCounts> {
   const counts: ReconcileCounts = {};
 
   const passes: Array<[string, () => Promise<number>]> = [
-    ['frames.thumbnail', () => reconcileFramesPass(db, 'thumbnail')],
-    ['frames.video', () => reconcileFramesPass(db, 'video')],
-    ['frames.variant_image', () => reconcileFramesPass(db, 'variantImage')],
-    ['frames.audio', () => reconcileFramesPass(db, 'audio')],
-    ['frame_variants.status', () => reconcileFrameVariantsPass(db, 'primary')],
+    ['shots.thumbnail', () => reconcileShotsPass(db, 'thumbnail')],
+    ['shots.video', () => reconcileShotsPass(db, 'video')],
+    ['shots.variant_image', () => reconcileShotsPass(db, 'variantImage')],
+    ['shots.audio', () => reconcileShotsPass(db, 'audio')],
+    ['shot_variants.status', () => reconcileShotVariantsPass(db, 'primary')],
     [
-      'frame_variants.shot_variant',
-      () => reconcileFrameVariantsPass(db, 'shotVariant'),
+      'shot_variants.shot_variant',
+      () => reconcileShotVariantsPass(db, 'shotVariant'),
     ],
     ['sequences.status', () => reconcileSequencesPass(db)],
     ['sequences.music', () => blindFailPass(db, 'sequencesMusic')],
@@ -101,53 +101,51 @@ export async function reconcileAllStuckJobs(): Promise<ReconcileCounts> {
   return counts;
 }
 
-type FramePipeline = 'thumbnail' | 'video' | 'variantImage' | 'audio';
+type ShotPipeline = 'thumbnail' | 'video' | 'variantImage' | 'audio';
 
 // Why we don't bump `updatedAt` on reconciler writes (applies to every pass
 // in this file): the staleness predicate is `updated_at < cutoff`. If pass A
 // updated `updated_at = now` while writing its status column, pass B's
 // SELECT for the same row would see a fresh timestamp and skip it. So when a
-// frame is stuck across multiple pipelines simultaneously, only the first
+// shot is stuck across multiple pipelines simultaneously, only the first
 // pass would reconcile. Leaving `updated_at` untouched lets sequential
 // passes all see the row as stale until each one has flipped its own
 // status column. The on-load reconciler doesn't have this issue because it
 // collects all stale entries from in-memory data before writing.
-const FRAMES_PIPELINE_COLUMNS = {
+const SHOTS_PIPELINE_COLUMNS = {
   thumbnail: {
-    status: frames.thumbnailStatus,
-    runId: frames.thumbnailWorkflowRunId,
+    status: shots.thumbnailStatus,
+    runId: shots.thumbnailWorkflowRunId,
     setStatus: (next: 'failed' | 'completed') => ({ thumbnailStatus: next }),
   },
   video: {
-    status: frames.videoStatus,
-    runId: frames.videoWorkflowRunId,
+    status: shots.videoStatus,
+    runId: shots.videoWorkflowRunId,
     setStatus: (next: 'failed' | 'completed') => ({ videoStatus: next }),
   },
   variantImage: {
-    status: frames.variantImageStatus,
-    runId: frames.variantWorkflowRunId,
+    status: shots.variantImageStatus,
+    runId: shots.variantWorkflowRunId,
     setStatus: (next: 'failed' | 'completed') => ({ variantImageStatus: next }),
   },
   audio: {
-    status: frames.audioStatus,
-    runId: frames.audioWorkflowRunId,
+    status: shots.audioStatus,
+    runId: shots.audioWorkflowRunId,
     setStatus: (next: 'failed' | 'completed') => ({ audioStatus: next }),
   },
 } as const;
 
-async function reconcileFramesPass(
+async function reconcileShotsPass(
   db: Database,
-  pipeline: FramePipeline
+  pipeline: ShotPipeline
 ): Promise<number> {
-  const cols = FRAMES_PIPELINE_COLUMNS[pipeline];
+  const cols = SHOTS_PIPELINE_COLUMNS[pipeline];
   const staleCutoff = new Date(Date.now() - STALE_THRESHOLD_MS);
 
   const stuck = await db
-    .select({ id: frames.id, runId: cols.runId })
-    .from(frames)
-    .where(
-      and(eq(cols.status, 'generating'), lt(frames.updatedAt, staleCutoff))
-    )
+    .select({ id: shots.id, runId: cols.runId })
+    .from(shots)
+    .where(and(eq(cols.status, 'generating'), lt(shots.updatedAt, staleCutoff)))
     .limit(MAX_ROWS_PER_PASS);
 
   let updated = 0;
@@ -157,44 +155,44 @@ async function reconcileFramesPass(
     // write a terminal status; the next sweep retries.
     if (next === null || next === 'unknown') continue;
     await db
-      .update(frames)
+      .update(shots)
       .set(cols.setStatus(next))
-      .where(eq(frames.id, row.id));
+      .where(eq(shots.id, row.id));
     updated++;
   }
   return updated;
 }
 
-type FrameVariantsPipeline = 'primary' | 'shotVariant';
+type ShotVariantsPipeline = 'primary' | 'shotVariant';
 
-async function reconcileFrameVariantsPass(
+async function reconcileShotVariantsPass(
   db: Database,
-  pipeline: FrameVariantsPipeline
+  pipeline: ShotVariantsPipeline
 ): Promise<number> {
   const staleCutoff = new Date(Date.now() - STALE_THRESHOLD_MS);
 
   const stuck =
     pipeline === 'primary'
       ? await db
-          .select({ id: frameVariants.id, runId: frameVariants.workflowRunId })
-          .from(frameVariants)
+          .select({ id: shotVariants.id, runId: shotVariants.workflowRunId })
+          .from(shotVariants)
           .where(
             and(
-              eq(frameVariants.status, 'generating'),
-              lt(frameVariants.updatedAt, staleCutoff)
+              eq(shotVariants.status, 'generating'),
+              lt(shotVariants.updatedAt, staleCutoff)
             )
           )
           .limit(MAX_ROWS_PER_PASS)
       : await db
           .select({
-            id: frameVariants.id,
-            runId: frameVariants.shotVariantWorkflowRunId,
+            id: shotVariants.id,
+            runId: shotVariants.shotVariantWorkflowRunId,
           })
-          .from(frameVariants)
+          .from(shotVariants)
           .where(
             and(
-              eq(frameVariants.shotVariantStatus, 'generating'),
-              lt(frameVariants.updatedAt, staleCutoff)
+              eq(shotVariants.shotVariantStatus, 'generating'),
+              lt(shotVariants.updatedAt, staleCutoff)
             )
           )
           .limit(MAX_ROWS_PER_PASS);
@@ -205,14 +203,14 @@ async function reconcileFrameVariantsPass(
     if (next === null || next === 'unknown') continue;
     if (pipeline === 'primary') {
       await db
-        .update(frameVariants)
+        .update(shotVariants)
         .set({ status: next })
-        .where(eq(frameVariants.id, row.id));
+        .where(eq(shotVariants.id, row.id));
     } else {
       await db
-        .update(frameVariants)
+        .update(shotVariants)
         .set({ shotVariantStatus: next })
-        .where(eq(frameVariants.id, row.id));
+        .where(eq(shotVariants.id, row.id));
     }
     updated++;
   }
@@ -232,7 +230,7 @@ async function reconcileFrameVariantsPass(
  * can't distinguish slow-but-alive from dead, and 'processing' has no safe
  * blind-fail threshold now that full runs can legitimately take hours.
  */
-// Narrowly typed like FRAMES_PIPELINE_COLUMNS.setStatus so the compiler
+// Narrowly typed like SHOTS_PIPELINE_COLUMNS.setStatus so the compiler
 // enforces the null/'unknown' skip in the loop below: dropping either guard
 // makes this call fail typecheck instead of silently flipping a live (or
 // unverifiable) sequence to 'completed'.

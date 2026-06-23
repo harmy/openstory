@@ -20,7 +20,7 @@ import { IMAGE_TO_VIDEO_MODELS, type ImageToVideoModel } from '@/lib/ai/models';
 import { MOTION_JSON_SCHEMAS } from '@/lib/motion/endpoint-map';
 import { snapDuration } from '@/lib/motion/motion-generation';
 import { getDurationValues, numericOf } from '@/lib/motion/motion-transform';
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import { useMutation } from '@tanstack/react-query';
 import { CopyIcon, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -31,7 +31,7 @@ type SceneScriptTabSavePayload = {
 };
 
 type SceneScriptTabProps = {
-  frame: Frame | undefined;
+  shot: Shot | undefined;
   sequenceId: string;
   scriptText: string | undefined;
   motionModel: ImageToVideoModel;
@@ -48,7 +48,7 @@ type SceneScriptTabProps = {
 };
 
 export const SceneScriptTab: React.FC<SceneScriptTabProps> = ({
-  frame,
+  shot,
   sequenceId,
   scriptText,
   motionModel,
@@ -68,14 +68,14 @@ export const SceneScriptTab: React.FC<SceneScriptTabProps> = ({
     editedScript !== undefined && editedScript !== savedScript;
 
   const savedDurationSeconds =
-    frame?.durationMs && frame.durationMs > 0
-      ? frame.durationMs / 1000
-      : frame?.metadata?.metadata?.durationSeconds;
+    shot?.durationMs && shot.durationMs > 0
+      ? shot.durationMs / 1000
+      : shot?.metadata?.metadata?.durationSeconds;
 
   // Drive the options off the selected motion model's JSON Schema so the user
   // can only pick a value the model actually accepts. If the saved value isn't
   // in the set (model changed since last save, or legacy data), snapping
-  // surfaces a pending edit so Save re-anchors the frame onto a valid duration.
+  // surfaces a pending edit so Save re-anchors the shot onto a valid duration.
   const durationOptions = getDurationValues(
     MOTION_JSON_SCHEMAS[IMAGE_TO_VIDEO_MODELS[motionModel].id]
   ).map(numericOf);
@@ -91,12 +91,12 @@ export const SceneScriptTab: React.FC<SceneScriptTabProps> = ({
 
   const estimateMutation = useMutation({
     mutationFn: async () => {
-      if (!frame?.id) throw new Error('frame required');
+      if (!shot?.id) throw new Error('shot required');
       if (!currentScript.trim()) throw new Error('script is empty');
       return estimateSceneDurationFn({
         data: {
           sequenceId,
-          frameId: frame.id,
+          shotId: shot.id,
           extract: currentScript,
         },
       });
@@ -115,9 +115,9 @@ export const SceneScriptTab: React.FC<SceneScriptTabProps> = ({
 
   const isDirty = isScriptDirty || isDurationDirty;
   const isEstimating = estimateMutation.isPending;
-  const canSave = isDirty && !!frame?.metadata && !isSaving && !isEstimating;
+  const canSave = isDirty && !!shot?.metadata && !isSaving && !isEstimating;
   const canEstimate =
-    !!frame && !!currentScript.trim() && !isSaving && !isEstimating;
+    !!shot && !!currentScript.trim() && !isSaving && !isEstimating;
 
   const handleCancel = () => {
     onEditedScriptChange(undefined);
@@ -149,7 +149,7 @@ export const SceneScriptTab: React.FC<SceneScriptTabProps> = ({
             onValueChange={(value) => onEditedScriptChange(value)}
             placeholder="Enter the script text for this scene…"
             className="min-h-[180px] pr-10"
-            disabled={!frame || isSaving}
+            disabled={!shot || isSaving}
             mentionItems={mentionItems}
           />
           <Button
@@ -177,7 +177,7 @@ export const SceneScriptTab: React.FC<SceneScriptTabProps> = ({
           <Select
             value={String(currentDurationSeconds)}
             onValueChange={(value) => onEditedDurationChange(Number(value))}
-            disabled={!frame || isSaving || isEstimating}
+            disabled={!shot || isSaving || isEstimating}
           >
             <SelectTrigger id="scene-duration-input" className="w-32">
               <SelectValue />

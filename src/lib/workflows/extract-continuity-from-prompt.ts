@@ -1,7 +1,7 @@
 /**
  * Extracts canonical character / element / location tags mentioned in a
  * user-edited prompt, so the next regeneration picks them up via
- * `frame.metadata.continuity`.
+ * `shot.metadata.continuity`.
  *
  * Strict matching: each entity is searched whole-word. Identifier/slug forms
  * (characterId, consistencyTag slug, element token, location slug) match

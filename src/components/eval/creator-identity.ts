@@ -1,4 +1,4 @@
-import type { SequenceWithFrames } from '@/hooks/use-sequences-with-frames';
+import type { SequenceWithShots } from '@/hooks/use-sequences-with-shots';
 
 export type CreatorIdentity = {
   name: string | null;
@@ -6,7 +6,7 @@ export type CreatorIdentity = {
 };
 
 export function getCreatorIdentity(
-  sequence: Pick<SequenceWithFrames, 'creatorName' | 'creatorEmail'>
+  sequence: Pick<SequenceWithShots, 'creatorName' | 'creatorEmail'>
 ): CreatorIdentity {
   return {
     name: sequence.creatorName ?? null,

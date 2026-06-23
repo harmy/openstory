@@ -27,7 +27,7 @@ const base = {
   estimatedSceneCount: SCENE_COUNT,
 };
 
-/** Per-frame motion cost a model contributes across the whole storyboard. */
+/** Per-shot motion cost a model contributes across the whole storyboard. */
 const motionContribution = (model: ImageToVideoModel) =>
   Number(estimateVideoCost(model, DURATION)) * SCENE_COUNT;
 
@@ -42,18 +42,18 @@ const audioContribution = (model: AudioModel) =>
   ) - Number(estimateStoryboardCost({ ...base, autoGenerateMusic: false }));
 
 describe('estimateStoryboardCost', () => {
-  it('adds exactly one extra per-frame image pass per image model', () => {
+  it('adds exactly one extra per-shot image pass per image model', () => {
     const one = Number(estimateStoryboardCost({ ...base, imageModelCount: 1 }));
     const two = Number(estimateStoryboardCost({ ...base, imageModelCount: 2 }));
-    // Only per-frame images scale with model count — the character/location
+    // Only per-shot images scale with model count — the character/location
     // sheets and LLM analysis are charged once regardless.
-    const perFrameImagePass = Number(
+    const perShotImagePass = Number(
       estimateImageCost(IMAGE_MODEL, base.aspectRatio, SCENE_COUNT)
     );
-    expect(two - one).toBe(perFrameImagePass);
+    expect(two - one).toBe(perShotImagePass);
   });
 
-  it('sums each selected video model’s own per-frame motion cost', () => {
+  it('sums each selected video model’s own per-shot motion cost', () => {
     const noMotion = Number(
       estimateStoryboardCost({ ...base, autoGenerateMotion: false })
     );

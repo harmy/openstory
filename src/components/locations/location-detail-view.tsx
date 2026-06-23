@@ -13,7 +13,7 @@ import {
 import {
   sequenceLocationKeys,
   type TeamLibraryLocation,
-  useFrameIdsForLocation,
+  useShotIdsForLocation,
   useRecastLocation,
   useSequenceLocations,
 } from '@/hooks/use-sequence-locations';
@@ -64,7 +64,7 @@ export const LocationDetailView: React.FC<LocationDetailViewProps> = ({
     error,
   } = useSequenceLocations(sequenceId);
   const recastLocation = useRecastLocation();
-  const { data: frameData } = useFrameIdsForLocation(sequenceId, locationId);
+  const { data: shotData } = useShotIdsForLocation(sequenceId, locationId);
 
   // Dialog states for recasting
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -369,7 +369,7 @@ export const LocationDetailView: React.FC<LocationDetailViewProps> = ({
               onConfirm={handleRecastConfirm}
               locationName={location.name}
               libraryLocationName={selectedLibraryLocation.name}
-              affectedFrameCount={frameData?.count ?? 0}
+              affectedShotCount={shotData?.count ?? 0}
               isLoading={recastLocation.isPending}
             />
           )}
@@ -385,13 +385,13 @@ export const LocationDetailView: React.FC<LocationDetailViewProps> = ({
                 Auto-generated from script
               </p>
             </div>
-            {frameData && frameData.count > 0 && (
+            {shotData && shotData.count > 0 && (
               <div className="text-right">
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Used In
                 </p>
                 <p className="text-sm font-medium">
-                  {frameData.count} frame{frameData.count === 1 ? '' : 's'}
+                  {shotData.count} shot{shotData.count === 1 ? '' : 's'}
                 </p>
               </div>
             )}

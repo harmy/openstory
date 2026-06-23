@@ -16,7 +16,7 @@ const logger = getLogger(['openstory', 'ui', 'use-active-video-model']);
  * module-level store + `useSyncExternalStore` keeps every consumer (header
  * dropdown + scenes view) in sync within the tab without prop-drilling across
  * route levels, and survives reloads. `null` means "no explicit pick" — the
- * caller falls back to each frame's own model.
+ * caller falls back to each shot's own model.
  */
 
 const KEY_PREFIX = 'openstory:active-video-model:';

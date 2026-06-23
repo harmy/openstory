@@ -38,8 +38,8 @@ describe('ensureExternallyFetchableUrl', () => {
     setEnv({ R2_PUBLIC_STORAGE_DOMAIN: 'storage.example.com' });
 
     await expect(
-      ensureExternallyFetchableUrl('/r2/thumbnails/team/frame.png')
-    ).resolves.toBe('https://storage.example.com/thumbnails/team/frame.png');
+      ensureExternallyFetchableUrl('/r2/thumbnails/team/shot.png')
+    ).resolves.toBe('https://storage.example.com/thumbnails/team/shot.png');
 
     expect(readStorageObject).not.toHaveBeenCalled();
     expect(falUpload).not.toHaveBeenCalled();
@@ -81,15 +81,15 @@ describe('ensureExternallyFetchableUrl', () => {
       bytes: PNG_BYTES,
       contentType: 'image/png',
     });
-    falUpload.mockResolvedValue('https://v3.fal.media/files/b/abc/frame.png');
+    falUpload.mockResolvedValue('https://v3.fal.media/files/b/abc/shot.png');
 
     await expect(
-      ensureExternallyFetchableUrl('/r2/thumbnails/team/frame.png')
-    ).resolves.toBe('https://v3.fal.media/files/b/abc/frame.png');
+      ensureExternallyFetchableUrl('/r2/thumbnails/team/shot.png')
+    ).resolves.toBe('https://v3.fal.media/files/b/abc/shot.png');
 
-    expect(readStorageObject).toHaveBeenCalledWith('thumbnails/team/frame.png');
+    expect(readStorageObject).toHaveBeenCalledWith('thumbnails/team/shot.png');
     const uploaded = falUpload.mock.calls[0]?.[0];
-    expect(uploaded?.name).toBe('frame.png');
+    expect(uploaded?.name).toBe('shot.png');
     expect(uploaded?.type).toBe('image/png');
   });
 
@@ -100,14 +100,14 @@ describe('ensureExternallyFetchableUrl', () => {
       bytes: PNG_BYTES,
       contentType: 'image/png',
     });
-    falUpload.mockResolvedValue('https://v3.fal.media/files/b/abc/frame.png');
+    falUpload.mockResolvedValue('https://v3.fal.media/files/b/abc/shot.png');
 
     await expect(
       ensureExternallyFetchableUrl(
-        '/r2/thumbnails/team/frame.png',
+        '/r2/thumbnails/team/shot.png',
         'byok-team-key'
       )
-    ).resolves.toBe('https://v3.fal.media/files/b/abc/frame.png');
+    ).resolves.toBe('https://v3.fal.media/files/b/abc/shot.png');
 
     expect(createFalClient).toHaveBeenCalledWith({
       credentials: 'byok-team-key',
@@ -120,9 +120,9 @@ describe('ensureExternallyFetchableUrl', () => {
       bytes: PNG_BYTES,
       contentType: 'image/png',
     });
-    falUpload.mockResolvedValue('https://v3.fal.media/files/b/abc/frame.png');
+    falUpload.mockResolvedValue('https://v3.fal.media/files/b/abc/shot.png');
 
-    await ensureExternallyFetchableUrl('/r2/thumbnails/team/frame.png');
+    await ensureExternallyFetchableUrl('/r2/thumbnails/team/shot.png');
 
     expect(createFalClient).toHaveBeenCalledWith({
       credentials: 'platform-key',

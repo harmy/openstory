@@ -2,12 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { DivergentAlternateBanner } from '@/components/staleness/divergent-alternate-banner';
 import { StalenessIndicator } from '@/components/staleness/staleness-indicator';
-import { getSequenceImageVariantsFn } from '@/functions/frames';
-import { useFrameStaleness } from '@/hooks/use-frame-staleness';
-import type { FrameVariant } from '@/lib/db/schema';
+import { getSequenceImageVariantsFn } from '@/functions/shots';
+import { useShotStaleness } from '@/hooks/use-shot-staleness';
+import type { ShotVariant } from '@/lib/db/schema';
 
-type FrameStalenessBannersProps = {
-  frameId?: string;
+type ShotStalenessBannersProps = {
+  shotId?: string;
   sequenceId: string;
   onRegenerate: () => void;
   onCompareDivergent?: (variantId: string) => void;
@@ -17,41 +17,41 @@ type FrameStalenessBannersProps = {
 
 /**
  * Surfaces Stage 1 divergence + staleness signals for the currently selected
- * frame. The divergent banner is driven by `frame_variants` rows with
+ * shot. The divergent banner is driven by `shot_variants` rows with
  * `divergedAt IS NOT NULL` (refreshed in real time by `stale:detected`); the
  * staleness indicator queries the scoped `isStale` helper. Both render at most
- * once per frame so the panel stays calm — only the most recent divergent
+ * once per shot so the panel stays calm — only the most recent divergent
  * alternate is offered.
  *
  * Compare/promote/discard handlers are intentionally optional: this PR ships
  * the surfacing primitive; the variant resolution UI lands in a follow-up.
  */
-export const FrameStalenessBanners: React.FC<FrameStalenessBannersProps> = ({
-  frameId,
+export const ShotStalenessBanners: React.FC<ShotStalenessBannersProps> = ({
+  shotId,
   sequenceId,
   onRegenerate,
   onCompareDivergent,
   onPromoteDivergent,
   onDiscardDivergent,
 }) => {
-  const { data: staleness } = useFrameStaleness({ sequenceId, frameId });
+  const { data: staleness } = useShotStaleness({ sequenceId, shotId });
 
   // Same key as `scenes-view`; sharing it means the cache invalidation fired
   // by `stale:detected` reaches both the variant grid and this banner with one
   // refetch.
-  const { data: variants } = useQuery<FrameVariant[]>({
+  const { data: variants } = useQuery<ShotVariant[]>({
     queryKey: ['sequence-image-variants', sequenceId],
     queryFn: () => getSequenceImageVariantsFn({ data: { sequenceId } }),
-    enabled: !!sequenceId && !!frameId,
+    enabled: !!sequenceId && !!shotId,
     staleTime: 30_000,
   });
 
   const latestDivergent = useMemo(() => {
-    if (!frameId || !variants) return undefined;
+    if (!shotId || !variants) return undefined;
     return variants
       .filter(
         (v) =>
-          v.frameId === frameId &&
+          v.shotId === shotId &&
           v.variantType === 'image' &&
           v.divergedAt !== null
       )
@@ -59,9 +59,9 @@ export const FrameStalenessBanners: React.FC<FrameStalenessBannersProps> = ({
         (a, b) =>
           (b.divergedAt?.getTime() ?? 0) - (a.divergedAt?.getTime() ?? 0)
       )[0];
-  }, [variants, frameId]);
+  }, [variants, shotId]);
 
-  if (!frameId) return null;
+  if (!shotId) return null;
 
   // Divergent alternate takes precedence: a brand-new alternate is a more
   // actionable signal than a generic "inputs changed" hint, and showing both
@@ -71,7 +71,7 @@ export const FrameStalenessBanners: React.FC<FrameStalenessBannersProps> = ({
       <DivergentAlternateBanner
         variantId={latestDivergent.id}
         artifact="thumbnail"
-        entityType="frame"
+        entityType="shot"
         onCompare={() => onCompareDivergent?.(latestDivergent.id)}
         onPromote={
           onPromoteDivergent
@@ -95,7 +95,7 @@ export const FrameStalenessBanners: React.FC<FrameStalenessBannersProps> = ({
     return (
       <StalenessIndicator
         artifact="thumbnail"
-        entityType="frame"
+        entityType="shot"
         onRegenerate={onRegenerate}
       />
     );

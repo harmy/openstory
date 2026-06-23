@@ -12,13 +12,13 @@ function makeState(
   return {
     currentPhase: 0,
     scenes: [],
-    frames: new Map(),
+    shots: new Map(),
     isComplete: false,
     isFailed: false,
     talentMatches: [],
     locationMatches: [],
     unusedTalent: null,
-    frameRetries: new Map(),
+    shotRetries: new Map(),
     ...overrides,
   };
 }

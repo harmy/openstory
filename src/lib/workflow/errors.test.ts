@@ -95,7 +95,7 @@ describe('isInstanceAlreadyExistsError', () => {
       isInstanceAlreadyExistsError(new Error('bucket already exists'))
     ).toBe(false);
     expect(
-      isInstanceAlreadyExistsError(new Error('table frames already exists'))
+      isInstanceAlreadyExistsError(new Error('table shots already exists'))
     ).toBe(false);
   });
 

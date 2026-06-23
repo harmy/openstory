@@ -71,14 +71,14 @@ export { MotionPromptSceneWorkflow } from '@/lib/workflows/motion-prompt-scene-w
 export { MusicPromptWorkflow } from '@/lib/workflows/music-prompt-workflow';
 export { RecastCharacterWorkflow } from '@/lib/workflows/recast-character-workflow';
 export { LocationMatchingWorkflow } from '@/lib/workflows/location-matching-workflow';
-export { FrameImagesWorkflow } from '@/lib/workflows/frame-images-workflow';
+export { ShotImagesWorkflow } from '@/lib/workflows/shot-images-workflow';
 export { TalentMatchingWorkflow } from '@/lib/workflows/talent-matching-workflow';
 export { CharacterBibleWorkflow } from '@/lib/workflows/character-bible-workflow';
 export { LocationBibleWorkflow } from '@/lib/workflows/location-bible-workflow';
 export { VisualPromptWorkflow } from '@/lib/workflows/visual-prompt-workflow';
 export { MotionPromptWorkflow } from '@/lib/workflows/motion-prompt-workflow';
 export { MotionMusicPromptsWorkflow } from '@/lib/workflows/motion-music-prompts-workflow';
-export { RegenerateFramesWorkflow } from '@/lib/workflows/regenerate-frames-workflow';
+export { RegenerateShotsWorkflow } from '@/lib/workflows/regenerate-shots-workflow';
 export { RecastLocationWorkflow } from '@/lib/workflows/recast-location-workflow';
 export { ReplaceElementWorkflow } from '@/lib/workflows/replace-element-workflow';
 export { SceneSplitWorkflow } from '@/lib/workflows/scene-split-workflow';

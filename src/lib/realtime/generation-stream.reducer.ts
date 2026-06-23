@@ -3,7 +3,7 @@
  * Handles events from the Upstash Realtime channel during storyboard generation.
  */
 
-type FrameStatus = 'pending' | 'generating' | 'completed' | 'failed';
+type ShotStatus = 'pending' | 'generating' | 'completed' | 'failed';
 
 type StreamingScene = {
   sceneId: string;
@@ -13,12 +13,12 @@ type StreamingScene = {
   durationSeconds: number;
 };
 
-type StreamingFrame = {
-  frameId: string;
+type StreamingShot = {
+  shotId: string;
   sceneId: string;
   orderIndex: number;
-  imageStatus: FrameStatus;
-  videoStatus: FrameStatus;
+  imageStatus: ShotStatus;
+  videoStatus: ShotStatus;
   thumbnailUrl?: string;
   previewThumbnailUrl?: string;
   videoUrl?: string;
@@ -50,19 +50,19 @@ type UnusedTalent = {
  * per-step retry budget (image side, #881) and so has no fixed denominator —
  * the overlay then shows a bare "Retrying…".
  */
-type FrameRetryInfo = {
+type ShotRetryInfo = {
   attempt: number;
   maxAttempts?: number;
 };
 
 /**
- * In-flight retry state for a frame (#882). A frame can be mid-retry on its
+ * In-flight retry state for a shot (#882). A shot can be mid-retry on its
  * image and/or its video independently; each key is cleared on the next
  * non-retry update for that artifact (terminal or a fresh first attempt).
  */
-type FrameRetryState = {
-  image?: FrameRetryInfo;
-  video?: FrameRetryInfo;
+type ShotRetryState = {
+  image?: ShotRetryInfo;
+  video?: ShotRetryInfo;
 };
 
 export type GenerationPhase = {
@@ -79,8 +79,8 @@ export type GenerationStreamState = {
   phases: GenerationPhase[];
   /** Scenes received during streaming */
   scenes: StreamingScene[];
-  /** Frames with their generation status */
-  frames: Map<string, StreamingFrame>;
+  /** Shots with their generation status */
+  shots: Map<string, StreamingShot>;
   /** Whether generation is complete */
   isComplete: boolean;
   /** Whether generation failed */
@@ -93,8 +93,8 @@ export type GenerationStreamState = {
   locationMatches: LocationMatch[];
   /** Talent that weren't matched to any character */
   unusedTalent: UnusedTalent | null;
-  /** Per-frame in-flight retry state (#882), keyed by frameId */
-  frameRetries: Map<string, FrameRetryState>;
+  /** Per-shot in-flight retry state (#882), keyed by shotId */
+  shotRetries: Map<string, ShotRetryState>;
 };
 
 export type GenerationStreamAction =
@@ -106,28 +106,28 @@ export type GenerationStreamAction =
   | { type: 'SCENE_NEW'; payload: StreamingScene }
   | { type: 'SCENE_UPDATED'; payload: StreamingScene }
   | {
-      type: 'FRAME_CREATED';
-      payload: { frameId: string; sceneId: string; orderIndex: number };
+      type: 'SHOT_CREATED';
+      payload: { shotId: string; sceneId: string; orderIndex: number };
     }
   | {
       type: 'IMAGE_PROGRESS';
       payload: {
-        frameId: string;
-        status?: FrameStatus;
+        shotId: string;
+        status?: ShotStatus;
         thumbnailUrl?: string;
         previewThumbnailUrl?: string;
         /** Set while a retry attempt is starting (#882); cleared otherwise. */
-        retry?: FrameRetryInfo;
+        retry?: ShotRetryInfo;
       };
     }
   | {
       type: 'VIDEO_PROGRESS';
       payload: {
-        frameId: string;
-        status?: FrameStatus;
+        shotId: string;
+        status?: ShotStatus;
         videoUrl?: string;
         /** Set while a retry attempt is starting (#882); cleared otherwise. */
-        retry?: FrameRetryInfo;
+        retry?: ShotRetryInfo;
       };
     }
   | { type: 'COMPLETE'; payload: { sequenceId: string } }
@@ -172,34 +172,34 @@ function getPhase5Label(config: GenerationPhaseConfig): {
 }
 
 /**
- * Apply a retry signal (or its absence) to the per-frame retry map for one
+ * Apply a retry signal (or its absence) to the per-shot retry map for one
  * artifact. A present `retry` records the in-flight attempt; any non-retry
  * update (terminal status, or a fresh first attempt) clears it. Returns the
  * same map reference when nothing changes so the reducer can no-op.
  */
-function updateFrameRetries(
-  map: Map<string, FrameRetryState>,
-  frameId: string,
+function updateShotRetries(
+  map: Map<string, ShotRetryState>,
+  shotId: string,
   artifact: 'image' | 'video',
-  retry: FrameRetryInfo | undefined
-): Map<string, FrameRetryState> {
-  const current = map.get(frameId);
+  retry: ShotRetryInfo | undefined
+): Map<string, ShotRetryState> {
+  const current = map.get(shotId);
 
   if (retry) {
     const next = new Map(map);
-    next.set(frameId, { ...current, [artifact]: retry });
+    next.set(shotId, { ...current, [artifact]: retry });
     return next;
   }
 
   // No retry on this update — clear any prior retry state for this artifact.
   if (!current?.[artifact]) return map;
   const next = new Map(map);
-  const updated: FrameRetryState = { ...current };
+  const updated: ShotRetryState = { ...current };
   delete updated[artifact];
   if (updated.image || updated.video) {
-    next.set(frameId, updated);
+    next.set(shotId, updated);
   } else {
-    next.delete(frameId);
+    next.delete(shotId);
   }
   return next;
 }
@@ -228,13 +228,13 @@ export function createInitialState(
     currentPhase: 0,
     phases,
     scenes: [],
-    frames: new Map(),
+    shots: new Map(),
     isComplete: false,
     isFailed: false,
     talentMatches: [],
     locationMatches: [],
     unusedTalent: null,
-    frameRetries: new Map(),
+    shotRetries: new Map(),
   };
 }
 
@@ -312,11 +312,11 @@ export function generationStreamReducer(
       return { ...state, scenes: updated };
     }
 
-    case 'FRAME_CREATED': {
-      const { frameId, sceneId, orderIndex } = action.payload;
-      const newFrames = new Map(state.frames);
-      newFrames.set(frameId, {
-        frameId,
+    case 'SHOT_CREATED': {
+      const { shotId, sceneId, orderIndex } = action.payload;
+      const newShots = new Map(state.shots);
+      newShots.set(shotId, {
+        shotId,
         sceneId,
         orderIndex,
         imageStatus: 'pending',
@@ -324,67 +324,67 @@ export function generationStreamReducer(
       });
       return {
         ...state,
-        frames: newFrames,
+        shots: newShots,
       };
     }
 
     case 'IMAGE_PROGRESS': {
-      const { frameId, status, thumbnailUrl, previewThumbnailUrl, retry } =
+      const { shotId, status, thumbnailUrl, previewThumbnailUrl, retry } =
         action.payload;
-      // Retry state is tracked independently of the frames map so it surfaces
-      // even when regenerating an existing frame (no preceding FRAME_CREATED).
-      const frameRetries = updateFrameRetries(
-        state.frameRetries,
-        frameId,
+      // Retry state is tracked independently of the shots map so it surfaces
+      // even when regenerating an existing shot (no preceding SHOT_CREATED).
+      const shotRetries = updateShotRetries(
+        state.shotRetries,
+        shotId,
         'image',
         retry
       );
-      const frame = state.frames.get(frameId);
-      if (!frame) {
-        return frameRetries === state.frameRetries
+      const shot = state.shots.get(shotId);
+      if (!shot) {
+        return shotRetries === state.shotRetries
           ? state
-          : { ...state, frameRetries };
+          : { ...state, shotRetries };
       }
 
-      const newFrames = new Map(state.frames);
-      newFrames.set(frameId, {
-        ...frame,
-        imageStatus: status ?? frame.imageStatus,
-        thumbnailUrl: thumbnailUrl ?? frame.thumbnailUrl,
-        previewThumbnailUrl: previewThumbnailUrl ?? frame.previewThumbnailUrl,
+      const newShots = new Map(state.shots);
+      newShots.set(shotId, {
+        ...shot,
+        imageStatus: status ?? shot.imageStatus,
+        thumbnailUrl: thumbnailUrl ?? shot.thumbnailUrl,
+        previewThumbnailUrl: previewThumbnailUrl ?? shot.previewThumbnailUrl,
       });
       return {
         ...state,
-        frames: newFrames,
-        frameRetries,
+        shots: newShots,
+        shotRetries,
       };
     }
 
     case 'VIDEO_PROGRESS': {
-      const { frameId, status, videoUrl, retry } = action.payload;
-      const frameRetries = updateFrameRetries(
-        state.frameRetries,
-        frameId,
+      const { shotId, status, videoUrl, retry } = action.payload;
+      const shotRetries = updateShotRetries(
+        state.shotRetries,
+        shotId,
         'video',
         retry
       );
-      const frame = state.frames.get(frameId);
-      if (!frame) {
-        return frameRetries === state.frameRetries
+      const shot = state.shots.get(shotId);
+      if (!shot) {
+        return shotRetries === state.shotRetries
           ? state
-          : { ...state, frameRetries };
+          : { ...state, shotRetries };
       }
 
-      const newFrames = new Map(state.frames);
-      newFrames.set(frameId, {
-        ...frame,
+      const newShots = new Map(state.shots);
+      newShots.set(shotId, {
+        ...shot,
         ...(status !== undefined && { videoStatus: status }),
-        videoUrl: videoUrl ?? frame.videoUrl,
+        videoUrl: videoUrl ?? shot.videoUrl,
       });
       return {
         ...state,
-        frames: newFrames,
-        frameRetries,
+        shots: newShots,
+        shotRetries,
       };
     }
 
@@ -431,12 +431,12 @@ export function generationStreamReducer(
       };
 
     case 'PREVIEW_REPLACED':
-      // Clear frame state when preview frames are replaced by AI-analyzed frames
+      // Clear shot state when preview shots are replaced by AI-analyzed shots
       return {
         ...state,
         scenes: [],
-        frames: new Map(),
-        frameRetries: new Map(),
+        shots: new Map(),
+        shotRetries: new Map(),
       };
 
     case 'RESET':

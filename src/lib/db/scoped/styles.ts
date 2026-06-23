@@ -16,7 +16,7 @@ const logger = getLogger(['openstory', 'db', 'styles']);
 
 // `listByIds` chunks its id list per query. It binds only id params (no team
 // filter), so it could go to D1's 100-bound-parameter ceiling; we hold it at 90
-// to match the sibling sequences.listFramesByIds batch size.
+// to match the sibling sequences.listShotsByIds batch size.
 const STYLES_BY_IDS_BATCH = 90;
 
 type StylesListOptions = {

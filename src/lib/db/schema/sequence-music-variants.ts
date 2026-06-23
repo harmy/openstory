@@ -69,7 +69,7 @@ export const sequenceMusicVariants = snakeCase.table(
     inputHash: text(),
     divergedAt: integer({ mode: 'timestamp' }),
     // Soft-delete marker for divergent alternates the user has dismissed.
-    // Mirrors `frame_variants.discarded_at` so the toast Undo flow can clear
+    // Mirrors `shot_variants.discarded_at` so the toast Undo flow can clear
     // the row without losing the artifact.
     discardedAt: integer({ mode: 'timestamp' }),
 

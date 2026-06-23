@@ -22,7 +22,7 @@ Workflow:
      elements, model choices). Generation is asynchronous: you get back 202 with
      the created sequence id(s), workflow run id(s), and a statusUrl to poll.
   2. GET the statusUrl to watch progress: overall status, the style and models
-     used, per-frame image/video status + URLs, music, poster, and ready counts.
+     used, per-shot image/video status + URLs, music, poster, and ready counts.
      Status is derived from the database, so it is always correct even if you
      reconnect later.
 
@@ -37,11 +37,11 @@ Enhance only (no sequence):
   POST /api/v1/scripts/enhance to expand/polish a script without generating a
   video. Takes the enhancement-relevant inputs (style, aspectRatio, targetSeconds,
   elements) and STREAMS the result back as Server-Sent Events: unnamed 'data:'
-  frames each carry { "delta": "..." }; a final 'event: done' frame carries the
+  shots each carry { "delta": "..." }; a final 'event: done' shot carries the
   full { "enhancedScript": "..." } plus a '_links' catalog whose
   'create-sequence' affordance embeds a ready-to-POST example body using the
   enhanced script (with enhance: "off"). Errors after streaming starts arrive
-  as an 'event: error' frame.
+  as an 'event: error' shot.
 
 Authentication:
   Every endpoint except this root requires an API key. Create one in the

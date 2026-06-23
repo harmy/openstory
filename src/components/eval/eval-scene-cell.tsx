@@ -1,6 +1,6 @@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { stripMarkdown } from '@/lib/utils/markdown-plain';
 import { AppImage } from '@/components/ui/app-image';
@@ -9,44 +9,44 @@ import { EvalCellDialog, type DialogTab } from './eval-cell-dialog';
 import type { ViewMode } from './eval-view';
 
 /**
- * Get visual prompt from frame - client-safe utility
+ * Get visual prompt from shot - client-safe utility
  * Prioritizes user-updated prompt over AI-generated prompt
  */
-export function getVisualPrompt(frame: Frame): string | null {
-  if (frame.imagePrompt) {
-    return frame.imagePrompt;
+export function getVisualPrompt(shot: Shot): string | null {
+  if (shot.imagePrompt) {
+    return shot.imagePrompt;
   }
-  const scene = frame.metadata;
+  const scene = shot.metadata;
   return scene?.prompts?.visual?.fullPrompt || null;
 }
 
 /**
- * Get motion prompt from frame - client-safe utility
+ * Get motion prompt from shot - client-safe utility
  * Prioritizes user-updated prompt over AI-generated prompt
  */
-export function getMotionPrompt(frame: Frame): string | null {
-  if (frame.motionPrompt) {
-    return frame.motionPrompt;
+export function getMotionPrompt(shot: Shot): string | null {
+  if (shot.motionPrompt) {
+    return shot.motionPrompt;
   }
-  const scene = frame.metadata;
+  const scene = shot.metadata;
   return scene?.prompts?.motion?.fullPrompt || null;
 }
 
 /**
- * Get original script extract from frame
+ * Get original script extract from shot
  */
-export function getSceneScript(frame: Frame): string | null {
-  const scene = frame.metadata;
+export function getSceneScript(shot: Shot): string | null {
+  const scene = shot.metadata;
   return scene?.originalScript.extract || null;
 }
 
 type EvalSceneCellProps = {
-  frame: Frame | undefined;
+  shot: Shot | undefined;
   viewMode: ViewMode;
   sceneNumber: number;
   sequenceTitle: string;
   aspectRatio: AspectRatio;
-  framesLoading?: boolean;
+  shotsLoading?: boolean;
   dialogOpen: boolean;
   dialogInitialTab?: DialogTab;
   onDialogOpenChange: (open: boolean) => void;
@@ -57,12 +57,12 @@ type EvalSceneCellProps = {
 };
 
 export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
-  frame,
+  shot,
   viewMode,
   sceneNumber,
   sequenceTitle,
   aspectRatio,
-  framesLoading = false,
+  shotsLoading = false,
   dialogOpen,
   dialogInitialTab,
   onDialogOpenChange,
@@ -72,10 +72,10 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
   onNavigateDown,
 }) => {
   const initialTab: DialogTab = dialogInitialTab ?? viewMode;
-  // Empty cell for missing frames — show skeleton while frames are still
+  // Empty cell for missing shots — show skeleton while shots are still
   // loading, otherwise show the "No scene N" placeholder.
-  if (!frame) {
-    if (framesLoading) {
+  if (!shot) {
+    if (shotsLoading) {
       return (
         <div className="border-b p-2 h-full">
           <Skeleton className="w-full h-full" />
@@ -91,18 +91,18 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
     );
   }
 
-  const prompt = getVisualPrompt(frame);
-  const motionPrompt = getMotionPrompt(frame);
-  const script = getSceneScript(frame);
+  const prompt = getVisualPrompt(shot);
+  const motionPrompt = getMotionPrompt(shot);
+  const script = getSceneScript(shot);
 
   const handleClick = () => onDialogOpenChange(true);
 
   // Images view
   if (viewMode === 'images') {
-    if (!frame.thumbnailUrl) {
+    if (!shot.thumbnailUrl) {
       return (
         <div className="border-b p-2 h-full flex items-center justify-center">
-          {frame.thumbnailStatus === 'generating' ? (
+          {shot.thumbnailStatus === 'generating' ? (
             <Skeleton className="w-full h-full" />
           ) : (
             <div className="text-xs text-muted-foreground text-center">
@@ -122,7 +122,7 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
         >
           <div className="flex-1 flex items-center justify-center min-h-0">
             <AppImage
-              src={frame.thumbnailUrl}
+              src={shot.thumbnailUrl}
               alt={`Scene ${sceneNumber}`}
               className="max-w-full max-h-full object-contain rounded-md"
               loading="lazy"
@@ -134,7 +134,7 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
         <EvalCellDialog
           open={dialogOpen}
           onOpenChange={onDialogOpenChange}
-          frame={frame}
+          shot={shot}
           sceneNumber={sceneNumber}
           sequenceTitle={sequenceTitle}
           aspectRatio={aspectRatio}
@@ -174,7 +174,7 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
         <EvalCellDialog
           open={dialogOpen}
           onOpenChange={onDialogOpenChange}
-          frame={frame}
+          shot={shot}
           sceneNumber={sceneNumber}
           sequenceTitle={sequenceTitle}
           aspectRatio={aspectRatio}
@@ -188,12 +188,12 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
     );
   }
 
-  // Motion view (individual frame videos)
+  // Motion view (individual shot videos)
   if (viewMode === 'motion') {
-    if (!frame.videoUrl) {
-      const isGenerating = frame.videoStatus === 'generating';
+    if (!shot.videoUrl) {
+      const isGenerating = shot.videoStatus === 'generating';
 
-      if (frame.thumbnailUrl) {
+      if (shot.thumbnailUrl) {
         return (
           <>
             <button
@@ -203,7 +203,7 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
             >
               <div className="relative flex-1 flex items-center justify-center min-h-0">
                 <AppImage
-                  src={frame.thumbnailUrl}
+                  src={shot.thumbnailUrl}
                   alt={`Scene ${sceneNumber} preview`}
                   className="max-w-full max-h-full object-contain rounded-md opacity-60"
                   loading="lazy"
@@ -220,7 +220,7 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
             <EvalCellDialog
               open={dialogOpen}
               onOpenChange={onDialogOpenChange}
-              frame={frame}
+              shot={shot}
               sceneNumber={sceneNumber}
               sequenceTitle={sequenceTitle}
               aspectRatio={aspectRatio}
@@ -256,8 +256,8 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
         >
           <div className="flex-1 flex items-center justify-center min-h-0">
             <video
-              src={frame.videoUrl}
-              poster={frame.thumbnailUrl ?? undefined}
+              src={shot.videoUrl}
+              poster={shot.thumbnailUrl ?? undefined}
               className="max-w-full max-h-full object-contain rounded-md"
               muted
               loop
@@ -273,7 +273,7 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
         <EvalCellDialog
           open={dialogOpen}
           onOpenChange={onDialogOpenChange}
-          frame={frame}
+          shot={shot}
           sceneNumber={sceneNumber}
           sequenceTitle={sequenceTitle}
           aspectRatio={aspectRatio}
@@ -320,7 +320,7 @@ export const EvalSceneCell: React.FC<EvalSceneCellProps> = ({
       <EvalCellDialog
         open={dialogOpen}
         onOpenChange={onDialogOpenChange}
-        frame={frame}
+        shot={shot}
         sceneNumber={sceneNumber}
         sequenceTitle={sequenceTitle}
         aspectRatio={aspectRatio}

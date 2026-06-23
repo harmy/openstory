@@ -1,7 +1,7 @@
 /**
  * Cloudflare Workflows port of `analyzeScriptWorkflow` — the deepest
  * orchestrator in the system. Sequences scene-split → talent/location
- * matching → character/location bibles + visual prompts → frame images +
+ * matching → character/location bibles + visual prompts → shot images +
  * motion/music prompts → motion-batch.
  *
  * Mirrors the QStash version (`src/lib/workflows/analyze-script-workflow.ts`)
@@ -45,8 +45,8 @@ import type {
   CharacterBibleWorkflowInput,
   ElementSheetWorkflowInput,
   ElementSheetWorkflowResult,
-  FrameImagesWorkflowInput,
-  FrameImagesWorkflowResult,
+  ShotImagesWorkflowInput,
+  ShotImagesWorkflowResult,
   LocationBibleWorkflowInput,
   LocationMatchingWorkflowInput,
   LocationMatchingWorkflowOutput,
@@ -60,9 +60,9 @@ import type {
 } from '@/lib/workflow/types';
 import { findMissingElementEntries } from '@/lib/workflows/element-sheet-workflow';
 import {
-  computeFrameImagesHashFromDto,
-  type FrameImageSceneSnapshot,
-  resolveSceneFrameImageReferences,
+  computeShotImagesHashFromDto,
+  type ShotImageSceneSnapshot,
+  resolveSceneShotImageReferences,
 } from '@/lib/workflows/sheet-snapshots';
 import { waitForElementVision } from '@/lib/workflows/wait-for-sheets';
 import type {
@@ -107,7 +107,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
     const imageModels = resolveImageModels(imageModelsInput, imageModel);
     const videoModels = resolveVideoModels(videoModelsInput, videoModel);
     const audioModels = resolveAudioModels(audioModelsInput, musicModel);
-    // First selected model is primary: it drives the legacy `frames.video*`
+    // First selected model is primary: it drives the legacy `shots.video*`
     // columns and the model-aware duration snapping; the rest are alternates.
     const primaryVideoModel = videoModels[0] ?? videoModel;
 
@@ -122,7 +122,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
     );
 
     // ----------------------------------------------------------------------
-    // PHASE 1: scene-split (LLM stream → scenes/bibles/frameMapping)
+    // PHASE 1: scene-split (LLM stream → scenes/bibles/shotMapping)
     // ----------------------------------------------------------------------
     await step.do('phase-1-start', async () => {
       await getGenerationChannel(sequenceId).emit('generation.phase:start', {
@@ -208,13 +208,8 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
       timeout: '45 minutes',
     });
 
-    const {
-      scenes,
-      frameMapping,
-      characterBible,
-      locationBible,
-      elementBible,
-    } = sceneSplitResult;
+    const { scenes, shotMapping, characterBible, locationBible, elementBible } =
+      sceneSplitResult;
 
     // ----------------------------------------------------------------------
     // PHASE 2: talent + location matching in parallel
@@ -304,7 +299,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
     // treatment. Runs in parallel with the other phase-3 children — visual
     // prompts only consume the bible text, and the generated references are
     // concatenated with `elementsMinimal` into `allElements` before phase 4
-    // attaches them to frames.
+    // attaches them to shots.
     const missingElementEntries = sequenceId
       ? findMissingElementEntries(elementBible, elementsMinimal)
       : [];
@@ -402,7 +397,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
             elementBible,
             styleConfig,
             analysisModelId,
-            frameMapping,
+            shotMapping,
           },
           spawnStepName: 'spawn-visual-prompts',
           awaitStepName: 'await-visual-prompts',
@@ -440,7 +435,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
     const allElements = [...elementsMinimal, ...generatedElements];
 
     // ----------------------------------------------------------------------
-    // PHASE 4: frame images + motion/music prompts in parallel
+    // PHASE 4: shot images + motion/music prompts in parallel
     // ----------------------------------------------------------------------
     await step.do('phase-4-start', async () => {
       await getGenerationChannel(sequenceId).emit('generation.phase:start', {
@@ -449,13 +444,13 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
       });
     });
 
-    // Build per-scene snapshots for frame-images divergence detection. Resolve
+    // Build per-scene snapshots for shot-images divergence detection. Resolve
     // references through the SAME helper the image-gen stamp and staleness
-    // verify use (`resolveSceneFrameImageReferences`) so the three sites can't
+    // verify use (`resolveSceneShotImageReferences`) so the three sites can't
     // drift on matcher choice or hash-filtering — that drift was the #867 bug.
-    const sceneSnapshots: FrameImageSceneSnapshot[] =
+    const sceneSnapshots: ShotImageSceneSnapshot[] =
       scenesWithVisualPrompts.map((scene) => {
-        const refs = resolveSceneFrameImageReferences({
+        const refs = resolveSceneShotImageReferences({
           scene,
           characters: charactersWithSheets,
           locations: locationsWithSheets,
@@ -470,7 +465,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
         };
       });
 
-    const frameImagesPayload: FrameImagesWorkflowInput = {
+    const shotImagesPayload: ShotImagesWorkflowInput = {
       userId: input.userId,
       teamId: input.teamId,
       sequenceId,
@@ -478,18 +473,18 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
       charactersWithSheets,
       locationsWithSheets,
       elements: allElements,
-      frameMapping,
+      shotMapping,
       imageModel,
       imageModels,
       aspectRatio,
       sceneSnapshots,
     };
-    frameImagesPayload.snapshotInputHash = await computeFrameImagesHashFromDto({
-      ...frameImagesPayload,
+    shotImagesPayload.snapshotInputHash = await computeShotImagesHashFromDto({
+      ...shotImagesPayload,
       sceneSnapshots,
     });
 
-    // Render frame images FIRST, then run motion/music prompts — the prior
+    // Render shot images FIRST, then run motion/music prompts — the prior
     // parallel fan-out is now sequential (#929). The motion-prompt pass is
     // conditioned on the ACTUAL rendered starting frame (vision input), which
     // only exists once images have rendered. We capture each scene's primary
@@ -500,17 +495,17 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
     // music artifact in exchange for image-grounded motion. Each child is
     // wrapped in `Promise.allSettled` so a rejection is captured (not thrown)
     // and surfaced together below after recording the analysis duration.
-    const [frameImagesSettled] = await Promise.allSettled([
-      spawnAndAwaitChild<FrameImagesWorkflowInput, FrameImagesWorkflowResult>(
+    const [shotImagesSettled] = await Promise.allSettled([
+      spawnAndAwaitChild<ShotImagesWorkflowInput, ShotImagesWorkflowResult>(
         step,
         {
-          binding: this.env.FRAME_IMAGES_WORKFLOW,
+          binding: this.env.SHOT_IMAGES_WORKFLOW,
           parentBindingName: PARENT_BINDING_NAME,
           parentInstanceId,
-          childId: `frame-images:${sequenceId ?? 'no-seq'}`,
-          childPayload: frameImagesPayload,
-          spawnStepName: 'spawn-frame-images',
-          awaitStepName: 'await-frame-images',
+          childId: `shot-images:${sequenceId ?? 'no-seq'}`,
+          childPayload: shotImagesPayload,
+          spawnStepName: 'spawn-shot-images',
+          awaitStepName: 'await-shot-images',
           // Must exceed the child's own budget — under a many-sequence burst
           // the image queue alone can outlast the 30-minute default.
           timeout: '90 minutes',
@@ -519,18 +514,18 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
     ]);
 
     // Snapshot the rendered primary still per scene. `imageUrls` is aligned to
-    // `scenesWithVisualPrompts` order (frame-images preserves slots, null for a
+    // `scenesWithVisualPrompts` order (shot-images preserves slots, null for a
     // failed scene); a rejected batch → empty map → motion falls back to
     // text-only (and the rejection is raised below regardless).
-    const frameImageUrls =
-      frameImagesSettled.status === 'fulfilled'
-        ? frameImagesSettled.value.imageUrls
+    const shotImageUrls =
+      shotImagesSettled.status === 'fulfilled'
+        ? shotImagesSettled.value.imageUrls
         : [];
     const startingFrameImageUrls: Record<string, string | null> =
       Object.fromEntries(
         scenesWithVisualPrompts.map((scene, i) => [
           scene.sceneId,
-          frameImageUrls[i] ?? null,
+          shotImageUrls[i] ?? null,
         ])
       );
 
@@ -548,7 +543,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
           teamId: input.teamId,
           sequenceId,
           scenesWithVisualPrompts,
-          frameMapping,
+          shotMapping,
           aspectRatio,
           characterBible: castCharacterBible,
           locationBible,
@@ -577,9 +572,9 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
       }
     });
 
-    if (frameImagesSettled.status === 'rejected') {
+    if (shotImagesSettled.status === 'rejected') {
       throw new Error(
-        `Frame image generation failed: ${String(frameImagesSettled.reason)}`
+        `Shot image generation failed: ${String(shotImagesSettled.reason)}`
       );
     }
     if (motionMusicSettled.status === 'rejected') {
@@ -588,7 +583,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
       );
     }
 
-    const imageUrls = frameImagesSettled.value.imageUrls;
+    const imageUrls = shotImagesSettled.value.imageUrls;
     const { completeScenes, musicPrompt, musicTags } = motionMusicSettled.value;
 
     // ----------------------------------------------------------------------
@@ -612,7 +607,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
         totalDuration += scene.metadata?.durationSeconds || 5;
       }
 
-      const batchFrames = completeScenes.flatMap((scene, index) => {
+      const batchShots = completeScenes.flatMap((scene, index) => {
         const motionPromptData = scene.prompts?.motion;
         if (!motionPromptData?.fullPrompt) {
           throw new WorkflowValidationError(
@@ -621,9 +616,9 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
         }
 
         // `imageUrls` is aligned to scene order; a null slot means that
-        // scene's image generation failed (the frame is already marked
+        // scene's image generation failed (the shot is already marked
         // failed by the image workflow). Skip its motion rather than failing
-        // the whole sequence — the remaining frames' clips still render.
+        // the whole sequence — the remaining shots' clips still render.
         const imageUrl = imageUrls[index];
         if (!imageUrl) {
           logger.warn(
@@ -632,14 +627,14 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
           return [];
         }
 
-        const matchedFrame = frameMapping.find(
+        const matchedShot = shotMapping.find(
           (f) => f.sceneId === scene.sceneId
         );
 
         const characterTags = scene.continuity?.characterTags;
 
         return {
-          frameId: matchedFrame?.frameId ?? '',
+          shotId: matchedShot?.shotId ?? '',
           imageUrl,
           // Primary-model prompt (fallback / single-model). `motion-batch`
           // re-assembles per model from `motionPrompt` for the alternates.
@@ -675,7 +670,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
           teamId: input.teamId,
           sequenceId,
           includeMusic: shouldGenerateMusic,
-          frames: batchFrames,
+          shots: batchShots,
           videoModels,
           audioModels: shouldGenerateMusic ? audioModels : undefined,
           music: shouldGenerateMusic

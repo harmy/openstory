@@ -22,15 +22,15 @@ import { buildLocationReferenceImages } from '@/lib/prompts/location-prompt';
 import type { ReferenceImageDescription } from '@/lib/prompts/reference-image-prompt';
 import {
   generateVariantSchema,
-  regenerateFrameSchema,
-} from '@/lib/schemas/frame.schemas';
+  regenerateShotSchema,
+} from '@/lib/schemas/shot.schemas';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import { rescanContinuityFromPrompt } from '@/lib/scenes/rescan-continuity-from-prompt';
 import { triggerWorkflow } from '@/lib/workflow/client';
 import { triggerStoryboard } from '@/lib/workflow/launchers';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import type {
-  FrameImageSceneSnapshot,
+  ShotImageSceneSnapshot,
   ImageWorkflowInput,
   StoryboardWorkflowInput,
   ShotVariantWorkflowInput,
@@ -41,11 +41,11 @@ import {
   matchElementsToScene,
   matchLocationsToScene,
 } from '@/lib/workflows/scene-matching';
-import { computeFrameImageSceneHash } from '@/lib/workflows/sheet-snapshots';
+import { computeShotImageSceneHash } from '@/lib/workflows/sheet-snapshots';
 import { createServerFn } from '@tanstack/react-start';
 import { zodValidator } from '@tanstack/zod-adapter';
 import { z } from 'zod';
-import { frameAccessMiddleware, sequenceAccessMiddleware } from './middleware';
+import { shotAccessMiddleware, sequenceAccessMiddleware } from './middleware';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,10 +69,10 @@ function getSceneLocationReferenceImages(
 }
 
 // ---------------------------------------------------------------------------
-// Generate Frames (Storyboard Workflow)
+// Generate Shots (Storyboard Workflow)
 // ---------------------------------------------------------------------------
 
-export const generateFramesFn = createServerFn({ method: 'POST' })
+export const generateShotsFn = createServerFn({ method: 'POST' })
   .middleware([sequenceAccessMiddleware])
   .handler(async ({ context }) => {
     const { sequence, user } = context;
@@ -100,7 +100,7 @@ export const generateFramesFn = createServerFn({ method: 'POST' })
       teamId: sequence.teamId,
       sequenceId: sequence.id,
       options: {
-        framesPerScene: 3,
+        shotsPerScene: 3,
         generateThumbnails: true,
         generateDescriptions: true,
         aiProvider: 'openrouter',
@@ -115,44 +115,44 @@ export const generateFramesFn = createServerFn({ method: 'POST' })
       workflowInput
     );
 
-    return { workflowRunId, frames: [] };
+    return { workflowRunId, shots: [] };
   });
 
 // ---------------------------------------------------------------------------
-// Generate Image for Frame
+// Generate Image for Shot
 // ---------------------------------------------------------------------------
 
-const generateImageInputSchema = regenerateFrameSchema.extend({
+const generateImageInputSchema = regenerateShotSchema.extend({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
 });
 
-export const generateFrameImageFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
+export const generateShotImageFn = createServerFn({ method: 'POST' })
+  .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(generateImageInputSchema))
   .handler(async ({ context, data }) => {
-    const { frame, sequence, user } = context;
+    const { shot, sequence, user } = context;
 
     // Priority: provided > stored > AI-generated > description
     const prompt =
       data.prompt ||
-      frame.imagePrompt ||
-      frame.metadata?.prompts?.visual?.fullPrompt ||
-      frame.description;
+      shot.imagePrompt ||
+      shot.metadata?.prompts?.visual?.fullPrompt ||
+      shot.description;
 
     if (!prompt) {
-      throw new Error('Frame has no prompt or description to regenerate from');
+      throw new Error('Shot has no prompt or description to regenerate from');
     }
 
     // Auto-link any element/cast/location tags the user mentioned in their
     // edited prompt before computing reference attachment, so a freshly-
     // mentioned LOGO gets its reference image attached to THIS regeneration.
-    // updateFrameFn does the same rescan, but the UI never calls it — the
+    // updateShotFn does the same rescan, but the UI never calls it — the
     // regenerate buttons are the only persistence path for prompts today.
     const userEditedPrompt = data.prompt !== undefined;
-    const baseContinuity = frame.metadata?.continuity;
+    const baseContinuity = shot.metadata?.continuity;
     let continuity = baseContinuity;
-    if (userEditedPrompt && frame.metadata && baseContinuity) {
+    if (userEditedPrompt && shot.metadata && baseContinuity) {
       const rescan = await rescanContinuityFromPrompt({
         scopedDb: context.scopedDb,
         sequenceId: sequence.id,
@@ -161,8 +161,8 @@ export const generateFrameImageFn = createServerFn({ method: 'POST' })
       });
       if (rescan.changed) {
         continuity = rescan.continuity;
-        await context.scopedDb.frames.update(frame.id, {
-          metadata: { ...frame.metadata, continuity: rescan.continuity },
+        await context.scopedDb.shots.update(shot.id, {
+          metadata: { ...shot.metadata, continuity: rescan.continuity },
         });
       }
     }
@@ -182,12 +182,12 @@ export const generateFrameImageFn = createServerFn({ method: 'POST' })
     const matchedLocations = matchLocationsToScene(
       allLocations,
       continuity?.environmentTag ?? '',
-      frame.metadata?.metadata?.location ?? ''
+      shot.metadata?.metadata?.location ?? ''
     );
     const locationReferences = getSceneLocationReferenceImages(
       allLocations,
       continuity?.environmentTag ?? '',
-      frame.metadata?.metadata?.location ?? ''
+      shot.metadata?.metadata?.location ?? ''
     );
 
     const allElements = await context.scopedDb.sequenceElements.list(
@@ -196,12 +196,12 @@ export const generateFrameImageFn = createServerFn({ method: 'POST' })
     const matchedElements = matchElementsToScene(
       allElements,
       continuity?.elementTags ?? [],
-      frame.metadata?.originalScript.extract ?? ''
+      shot.metadata?.originalScript.extract ?? ''
     );
     const elementReferences = buildElementReferenceImages(matchedElements);
 
     const model =
-      data.model || safeTextToImageModel(frame.imageModel, DEFAULT_IMAGE_MODEL);
+      data.model || safeTextToImageModel(shot.imageModel, DEFAULT_IMAGE_MODEL);
 
     await requireCredits(
       context.scopedDb,
@@ -213,15 +213,15 @@ export const generateFrameImageFn = createServerFn({ method: 'POST' })
     // `thumbnailInputHash`. Without this the convergent write path stores
     // `null`, and the staleness check loses the ability to flip back to
     // 'stale' on a future prompt regenerate. The sceneId fallback covers
-    // legacy frames generated before scene metadata was attached.
+    // legacy shots generated before scene metadata was attached.
     const sortedHashes = (
       values: ReadonlyArray<string | null | undefined>
     ): string[] =>
       values
         .filter((v): v is string => typeof v === 'string' && v.length > 0)
         .sort();
-    const sceneSnapshot: FrameImageSceneSnapshot = {
-      sceneId: frame.metadata?.sceneId ?? frame.id,
+    const sceneSnapshot: ShotImageSceneSnapshot = {
+      sceneId: shot.metadata?.sceneId ?? shot.id,
       visualPrompt: prompt,
       characterSheetHashes: sortedHashes(
         matchedCharacters.map((c) => c.sheetInputHash)
@@ -233,7 +233,7 @@ export const generateFrameImageFn = createServerFn({ method: 'POST' })
         matchedElements.map((e) => e.imageUrl)
       ),
     };
-    const snapshotInputHash = await computeFrameImageSceneHash(
+    const snapshotInputHash = await computeShotImageSceneHash(
       sceneSnapshot,
       model,
       sequence.aspectRatio
@@ -246,7 +246,7 @@ export const generateFrameImageFn = createServerFn({ method: 'POST' })
       model,
       imageSize: aspectRatioToImageSize(sequence.aspectRatio),
       numImages: 1,
-      frameId: frame.id,
+      shotId: shot.id,
       sequenceId: sequence.id,
       aspectRatio: sequence.aspectRatio,
       sceneSnapshot,
@@ -260,36 +260,36 @@ export const generateFrameImageFn = createServerFn({ method: 'POST' })
     };
 
     const workflowRunId = await triggerWorkflow('/image', workflowInput, {
-      deduplicationId: `image-${frame.id}-${Date.now()}`,
+      deduplicationId: `image-${shot.id}-${Date.now()}`,
       label: buildWorkflowLabel(sequence.id),
     });
 
-    return { workflowRunId, frameId: frame.id };
+    return { workflowRunId, shotId: shot.id };
   });
 
 // ---------------------------------------------------------------------------
-// Generate Variants for Frame
+// Generate Variants for Shot
 // ---------------------------------------------------------------------------
 
 const generateVariantsInputSchema = generateVariantSchema.extend({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
 });
 
-export const generateFrameVariantsFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
+export const generateShotVariantsFn = createServerFn({ method: 'POST' })
+  .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(generateVariantsInputSchema))
   .handler(async ({ context, data }) => {
-    const { frame, sequence, user } = context;
+    const { shot, sequence, user } = context;
 
-    if (!frame.thumbnailUrl) {
-      throw new Error('Frame must have a thumbnail image to generate variants');
+    if (!shot.thumbnailUrl) {
+      throw new Error('Shot must have a thumbnail image to generate variants');
     }
 
     const allCharacters = await context.scopedDb.characters.listWithSheets(
       sequence.id
     );
-    const characterTags = frame.metadata?.continuity?.characterTags ?? [];
+    const characterTags = shot.metadata?.continuity?.characterTags ?? [];
     const characterReferences = buildCharacterReferenceImages(
       matchCharactersToScene(allCharacters, characterTags)
     );
@@ -298,8 +298,8 @@ export const generateFrameVariantsFn = createServerFn({ method: 'POST' })
       await context.scopedDb.sequenceLocations.listWithReferences(sequence.id);
     const locationReferences = getSceneLocationReferenceImages(
       allLocations,
-      frame.metadata?.continuity?.environmentTag ?? '',
-      frame.metadata?.metadata?.location ?? ''
+      shot.metadata?.continuity?.environmentTag ?? '',
+      shot.metadata?.metadata?.location ?? ''
     );
 
     const numImages = data.numImages ?? 1;
@@ -319,9 +319,9 @@ export const generateFrameVariantsFn = createServerFn({ method: 'POST' })
       userId: user.id,
       teamId: sequence.teamId,
       sequenceId: sequence.id,
-      frameId: frame.id,
-      thumbnailUrl: frame.thumbnailUrl,
-      scenePrompt: frame.metadata?.prompts?.visual?.fullPrompt,
+      shotId: shot.id,
+      thumbnailUrl: shot.thumbnailUrl,
+      scenePrompt: shot.metadata?.prompts?.visual?.fullPrompt,
       model: data.model,
       aspectRatio: sequence.aspectRatio,
       imageSize: data.imageSize || gridConfig.imageSize,
@@ -335,12 +335,12 @@ export const generateFrameVariantsFn = createServerFn({ method: 'POST' })
       '/variant-image',
       workflowInput,
       {
-        deduplicationId: `variant-${frame.id}-${Date.now()}`,
+        deduplicationId: `variant-${shot.id}-${Date.now()}`,
         label: buildWorkflowLabel(sequence.id),
       }
     );
 
-    return { workflowRunId, frameId: frame.id };
+    return { workflowRunId, shotId: shot.id };
   });
 
 // ---------------------------------------------------------------------------
@@ -349,7 +349,7 @@ export const generateFrameVariantsFn = createServerFn({ method: 'POST' })
 
 const selectVariantInputSchema = z.object({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
   variantIndex: z.number().int().min(0).max(8),
 });
 
@@ -364,14 +364,14 @@ function indexToRowCol(
   };
 }
 
-export const selectFrameVariantFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
+export const selectShotVariantFn = createServerFn({ method: 'POST' })
+  .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(selectVariantInputSchema))
   .handler(async ({ context, data }) => {
-    const { frame, sequence, user } = context;
+    const { shot, sequence, user } = context;
 
-    if (!frame.variantImageUrl) {
-      throw new Error('Frame has no variant image to select from');
+    if (!shot.variantImageUrl) {
+      throw new Error('Shot has no variant image to select from');
     }
 
     const gridConfig = getVariantGridConfig(sequence.aspectRatio);
@@ -388,7 +388,7 @@ export const selectFrameVariantFn = createServerFn({ method: 'POST' })
     // and WASM-processing the grid image in-Worker. FAL fetches the cropped
     // tile directly from this URL when upscaling.
     const cropResult = await cropTileFromGrid({
-      gridImageUrl: frame.variantImageUrl,
+      gridImageUrl: shot.variantImageUrl,
       row,
       col,
       gridCols: gridConfig.cols,
@@ -396,7 +396,7 @@ export const selectFrameVariantFn = createServerFn({ method: 'POST' })
     });
 
     // Set cropped thumbnail URL and clear stale motion fields
-    await context.scopedDb.frames.update(frame.id, {
+    await context.scopedDb.shots.update(shot.id, {
       thumbnailUrl: cropResult.url,
       thumbnailPath: null,
       thumbnailStatus: 'generating',
@@ -413,7 +413,7 @@ export const selectFrameVariantFn = createServerFn({ method: 'POST' })
     const allCharacters = await context.scopedDb.characters.listWithSheets(
       sequence.id
     );
-    const characterTags = frame.metadata?.continuity?.characterTags ?? [];
+    const characterTags = shot.metadata?.continuity?.characterTags ?? [];
     const characterReferences = buildCharacterReferenceImages(
       matchCharactersToScene(allCharacters, characterTags)
     );
@@ -422,8 +422,8 @@ export const selectFrameVariantFn = createServerFn({ method: 'POST' })
       await context.scopedDb.sequenceLocations.listWithReferences(sequence.id);
     const locationReferences = getSceneLocationReferenceImages(
       allLocations,
-      frame.metadata?.continuity?.environmentTag ?? '',
-      frame.metadata?.metadata?.location ?? ''
+      shot.metadata?.continuity?.environmentTag ?? '',
+      shot.metadata?.metadata?.location ?? ''
     );
 
     await requireCredits(
@@ -436,7 +436,7 @@ export const selectFrameVariantFn = createServerFn({ method: 'POST' })
       userId: user.id,
       teamId: sequence.teamId,
       sequenceId: sequence.id,
-      frameId: frame.id,
+      shotId: shot.id,
       croppedTileUrl: cropResult.url,
       croppedTilePath: '',
       aspectRatio: sequence.aspectRatio,
@@ -448,13 +448,13 @@ export const selectFrameVariantFn = createServerFn({ method: 'POST' })
       '/upscale-variant',
       workflowInput,
       {
-        deduplicationId: `upscale-variant-${frame.id}-${Date.now()}`,
+        deduplicationId: `upscale-variant-${shot.id}-${Date.now()}`,
         label: buildWorkflowLabel(sequence.id),
       }
     );
 
     return {
-      frameId: frame.id,
+      shotId: shot.id,
       thumbnailUrl: cropResult.url,
       variantIndex: data.variantIndex,
       upscaleWorkflowRunId: workflowRunId,
@@ -467,18 +467,18 @@ export const selectFrameVariantFn = createServerFn({ method: 'POST' })
 
 const setImageFromVariantInputSchema = z.object({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
   model: z.string().min(1),
 });
 
 export const setImageFromVariantFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
+  .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(setImageFromVariantInputSchema))
   .handler(async ({ context, data }) => {
-    const { frame } = context;
+    const { shot } = context;
 
-    const variant = await context.scopedDb.frameVariants.getByFrameAndModel(
-      frame.id,
+    const variant = await context.scopedDb.shotVariants.getByShotAndModel(
+      shot.id,
       'image',
       data.model
     );
@@ -487,7 +487,7 @@ export const setImageFromVariantFn = createServerFn({ method: 'POST' })
       throw new Error('No completed variant found for this model');
     }
 
-    await context.scopedDb.frames.update(frame.id, {
+    await context.scopedDb.shots.update(shot.id, {
       thumbnailUrl: variant.url,
       thumbnailPath: variant.storagePath,
       thumbnailStatus: 'completed',
@@ -508,31 +508,31 @@ export const setImageFromVariantFn = createServerFn({ method: 'POST' })
       videoError: null,
     });
 
-    return { frameId: frame.id, thumbnailUrl: variant.url };
+    return { shotId: shot.id, thumbnailUrl: variant.url };
   });
 
 const setVideoFromVariantInputSchema = z.object({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
   model: z.string().min(1),
 });
 
 /**
- * Promote a model's video variant to the frame's primary video (#545) — the
+ * Promote a model's video variant to the shot's primary video (#545) — the
  * motion analog of `setImageFromVariantFn`. Copies the variant's url/path into
- * `frames.video*` so the player and exports use it, non-destructively (the
+ * `shots.video*` so the player and exports use it, non-destructively (the
  * variant row is retained, so the viewer can switch back). Unlike the image
  * version there is nothing downstream to invalidate — video is the terminal
  * artifact.
  */
 export const setVideoFromVariantFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
+  .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(setVideoFromVariantInputSchema))
   .handler(async ({ context, data }) => {
-    const { frame } = context;
+    const { shot } = context;
 
-    const variant = await context.scopedDb.frameVariants.getByFrameAndModel(
-      frame.id,
+    const variant = await context.scopedDb.shotVariants.getByShotAndModel(
+      shot.id,
       'video',
       data.model
     );
@@ -541,7 +541,7 @@ export const setVideoFromVariantFn = createServerFn({ method: 'POST' })
       throw new Error('No completed video variant found for this model');
     }
 
-    await context.scopedDb.frames.update(frame.id, {
+    await context.scopedDb.shots.update(shot.id, {
       videoUrl: variant.url,
       videoPath: variant.storagePath,
       videoStatus: 'completed',
@@ -552,5 +552,5 @@ export const setVideoFromVariantFn = createServerFn({ method: 'POST' })
       motionModel: data.model,
     });
 
-    return { frameId: frame.id, videoUrl: variant.url };
+    return { shotId: shot.id, videoUrl: variant.url };
   });

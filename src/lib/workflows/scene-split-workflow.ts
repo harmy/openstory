@@ -40,7 +40,7 @@ import type { Microdollars } from '@/lib/billing/money';
 import type { TokenUsage } from '@tanstack/ai';
 import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import { aspectRatioToImageSize } from '@/lib/constants/aspect-ratios';
-import type { NewFrame } from '@/lib/db/schema';
+import type { NewShot } from '@/lib/db/schema';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { getChatPrompt } from '@/lib/prompts';
 import { buildPreviewPrompt } from '@/lib/prompts/poster-prompt';
@@ -71,13 +71,13 @@ const LOG_METADATA = { phase: PHASE.number, phaseName: PHASE.name };
 /**
  * Shape produced by the streaming step (post JSON round-trip). Mirrors the
  * QStash `streamResult` value — note `projectMetadata` is preserved so the
- * reconcile step can extract the title, and `frameMapping` reflects only the
- * frames written inline during streaming.
+ * reconcile step can extract the title, and `shotMapping` reflects only the
+ * shots written inline during streaming.
  */
 type StreamResult = {
   scenes: SceneSplittingResult['scenes'];
   projectMetadata: SceneSplittingResult['projectMetadata'];
-  frameMapping: Array<{ sceneId: string; frameId: string }>;
+  shotMapping: Array<{ sceneId: string; shotId: string }>;
   characterBible: SceneSplittingResult['characterBible'];
   locationBible: SceneSplittingResult['locationBible'];
   elementBible: SceneSplittingResult['elementBible'];
@@ -102,8 +102,8 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
 
     // Gap C: this single `step.do` owns the prompt fetch + the entire
     // streaming session. Inside, the partial-JSON parser, per-chunk DB writes
-    // (upsertFrame), per-chunk realtime event emissions
-    // (`generation.scene:new`, `generation.frame:created`,
+    // (upsertShot), per-chunk realtime event emissions
+    // (`generation.scene:new`, `generation.shot:created`,
     // `generation.scene:updated`, `generation.updated`,
     // `generation.phase:start`) and per-chunk fire-and-forget preview-image
     // triggers all run inline. On step failure the engine replays the whole
@@ -153,11 +153,11 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
         );
 
         const parser = createStreamingSceneParser();
-        const frameMapping: Array<{ sceneId: string; frameId: string }> = [];
+        const shotMapping: Array<{ sceneId: string; shotId: string }> = [];
         let finalText = '';
         let chunkCount = 0;
         let prevScene: SceneSplittingScene | undefined = undefined;
-        let prevFrameId: string | undefined = undefined;
+        let prevShotId: string | undefined = undefined;
         let parsedResult: SceneSplittingResult | undefined;
         let capturedUsage: TokenUsage | undefined;
 
@@ -185,7 +185,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
 
           if (chunkCount % 20 === 0) {
             logger.info(
-              `[SceneSplitWorkflow:cf] [Stream:${LOG_NAME}] chunk #${chunkCount} | ${finalText.length} chars | ${frameMapping.length} frames so far`
+              `[SceneSplitWorkflow:cf] [Stream:${LOG_NAME}] chunk #${chunkCount} | ${finalText.length} chars | ${shotMapping.length} shots so far`
             );
           }
 
@@ -221,7 +221,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
               );
 
               if (sequenceId) {
-                await scopedDb.frames.upsert({
+                await scopedDb.shots.upsert({
                   sequenceId,
                   // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                   description: ev.scene.originalScript?.extract || '',
@@ -233,7 +233,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
                   ),
                   thumbnailStatus: 'generating',
                   videoStatus: 'pending',
-                } satisfies NewFrame);
+                } satisfies NewShot);
               }
 
               await getGenerationChannel(sequenceId).emit(
@@ -272,7 +272,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
               );
 
               if (sequenceId) {
-                const frame = await scopedDb.frames.upsert({
+                const shot = await scopedDb.shots.upsert({
                   sequenceId,
                   // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                   description: ev.scene.originalScript?.extract || '',
@@ -284,26 +284,26 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
                   ),
                   thumbnailStatus: 'generating',
                   videoStatus: 'pending',
-                } satisfies NewFrame);
+                } satisfies NewShot);
 
                 logger.info(
-                  `[SceneSplitWorkflow:cf] [Stream:${LOG_NAME}] Frame created: ${frame.id} for scene "${ev.scene.sceneId}"`
+                  `[SceneSplitWorkflow:cf] [Stream:${LOG_NAME}] Shot created: ${shot.id} for scene "${ev.scene.sceneId}"`
                 );
 
-                frameMapping.push({
+                shotMapping.push({
                   sceneId: ev.scene.sceneId,
-                  frameId: frame.id,
+                  shotId: shot.id,
                 });
 
                 await getGenerationChannel(sequenceId).emit(
-                  'generation.frame:created',
+                  'generation.shot:created',
                   {
-                    frameId: frame.id,
+                    shotId: shot.id,
                     sceneId: ev.scene.sceneId,
                     orderIndex: ev.index,
                   }
                 );
-                if (prevScene && prevFrameId) {
+                if (prevScene && prevShotId) {
                   const sceneText =
                     // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                     prevScene.originalScript?.extract ??
@@ -327,20 +327,20 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
                       model: PREVIEW_IMAGE_MODEL,
                       imageSize: aspectRatioToImageSize(aspectRatio),
                       numImages: 1,
-                      frameId: prevFrameId,
+                      shotId: prevShotId,
                       skipStorage: true,
                     } satisfies ImageWorkflowInput,
                     {
                       label: buildWorkflowLabel(sequenceId),
                       deduplicationId: previewImageDedupId(
                         event.instanceId,
-                        prevFrameId
+                        prevShotId
                       ),
                     }
                   );
                 }
 
-                prevFrameId = frame.id;
+                prevShotId = shot.id;
               }
               prevScene = ev.scene;
             }
@@ -348,7 +348,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
         }
 
         // Trigger preview for the last scene (the loop only triggers N-1).
-        if (prevScene && prevFrameId && sequenceId) {
+        if (prevScene && prevShotId && sequenceId) {
           const sceneText =
             // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
             prevScene.originalScript?.extract ??
@@ -367,14 +367,14 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
               model: PREVIEW_IMAGE_MODEL,
               imageSize: aspectRatioToImageSize(aspectRatio),
               numImages: 1,
-              frameId: prevFrameId,
+              shotId: prevShotId,
               skipStorage: true,
             } satisfies ImageWorkflowInput,
             {
               label: buildWorkflowLabel(sequenceId),
               deduplicationId: previewImageDedupId(
                 event.instanceId,
-                prevFrameId
+                prevShotId
               ),
             }
           );
@@ -384,7 +384,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
           throw new NonRetryableError(
             `[SceneSplitWorkflow:cf] [Stream:${LOG_NAME}] Stream ended without a validated structured-output payload. ` +
               `chunks=${chunkCount} chars=${finalText.length} ` +
-              `streamedScenes=${frameMapping.length} model=${modelId}. ` +
+              `streamedScenes=${shotMapping.length} model=${modelId}. ` +
               `Likely cause: provider did not honor responseFormat:json_schema.`
           );
         }
@@ -400,7 +400,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
         const streamResult: StreamResult = {
           scenes: parsed.scenes,
           projectMetadata: parsed.projectMetadata,
-          frameMapping,
+          shotMapping,
           characterBible: parsed.characterBible,
           locationBible: parsed.locationBible,
           elementBible: parsed.elementBible,
@@ -415,7 +415,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
     const streamResult: StreamResult = JSON.parse(streamResultJson);
     if (
       !Array.isArray(streamResult.scenes) ||
-      !Array.isArray(streamResult.frameMapping)
+      !Array.isArray(streamResult.shotMapping)
     ) {
       throw new NonRetryableError(
         'scene-splitting-stream returned a malformed result from cache',
@@ -423,9 +423,9 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
       );
     }
 
-    // Step 3: Reconcile — ensure all frames exist (handles cached step replay).
+    // Step 3: Reconcile — ensure all shots exist (handles cached step replay).
     const reconcileJson = await step.do(
-      'reconcile-frames',
+      'reconcile-shots',
       async (): Promise<string> => {
         const { scenes, projectMetadata } = streamResult;
         // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
@@ -435,17 +435,17 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
           return JSON.stringify({
             scenes,
             title: resolvedTitle,
-            frameMapping: streamResult.frameMapping,
+            shotMapping: streamResult.shotMapping,
             characterBible: streamResult.characterBible,
             locationBible: streamResult.locationBible,
             elementBible: streamResult.elementBible,
           } satisfies SceneSplitWorkflowResult);
         }
 
-        // Bulk upsert all frames to catch any missed during streaming
+        // Bulk upsert all shots to catch any missed during streaming
         // (e.g., a retry replays the streaming step's cached result without
         // re-firing its inline side effects).
-        const frameInserts = scenes.map(
+        const shotInserts = scenes.map(
           (scene, index) =>
             ({
               sequenceId,
@@ -459,14 +459,14 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
               ),
               thumbnailStatus: 'generating',
               videoStatus: 'pending',
-            }) satisfies NewFrame
+            }) satisfies NewShot
         );
 
-        const reconciledFrames = await scopedDb.frames.bulkUpsert(frameInserts);
-        const reconciledMapping = reconciledFrames.map((f) => ({
+        const reconciledShots = await scopedDb.shots.bulkUpsert(shotInserts);
+        const reconciledMapping = reconciledShots.map((f) => ({
           // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: metadata is JSONB, can be null despite Drizzle types
           sceneId: f.metadata?.sceneId || '',
-          frameId: f.id,
+          shotId: f.id,
         }));
 
         // Ensure title and workflow are set (status stays 'processing'
@@ -477,17 +477,17 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
           'analyze-script-shorter-prompts-batch-size-1'
         );
 
-        // Emit frame:created for any frames the streaming step didn't cover.
+        // Emit shot:created for any shots the streaming step didn't cover.
         const streamedSceneIds = new Set(
-          streamResult.frameMapping.map((f) => f.sceneId)
+          streamResult.shotMapping.map((f) => f.sceneId)
         );
-        for (const { sceneId: sId, frameId } of reconciledMapping) {
+        for (const { sceneId: sId, shotId } of reconciledMapping) {
           if (!streamedSceneIds.has(sId)) {
             const scene = scenes.find((s) => s.sceneId === sId);
             await getGenerationChannel(sequenceId).emit(
-              'generation.frame:created',
+              'generation.shot:created',
               {
-                frameId,
+                shotId,
                 sceneId: sId,
                 orderIndex: scene?.sceneNumber ? scene.sceneNumber - 1 : 0,
               }
@@ -498,7 +498,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
         return JSON.stringify({
           scenes,
           title: resolvedTitle,
-          frameMapping: reconciledMapping,
+          shotMapping: reconciledMapping,
           characterBible: streamResult.characterBible,
           locationBible: streamResult.locationBible,
           elementBible: streamResult.elementBible,
@@ -508,10 +508,10 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
     const reconciled: SceneSplitWorkflowResult = JSON.parse(reconcileJson);
     if (
       !Array.isArray(reconciled.scenes) ||
-      !Array.isArray(reconciled.frameMapping)
+      !Array.isArray(reconciled.shotMapping)
     ) {
       throw new NonRetryableError(
-        'reconcile-frames returned a malformed result from cache',
+        'reconcile-shots returned a malformed result from cache',
         'WorkflowValidationError'
       );
     }

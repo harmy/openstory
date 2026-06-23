@@ -14,13 +14,13 @@
  *     by `step.do`. */
 
 import { computeMotionPromptInputHash } from '@/lib/ai/input-hash';
-import { narrowFramePromptContext } from '@/lib/ai/prompt-context';
+import { narrowShotPromptContext } from '@/lib/ai/prompt-context';
 import {
   motionPromptSchema,
   type MotionPrompt,
 } from '@/lib/ai/scene-analysis.schema';
 import type { ScopedDb } from '@/lib/db/scoped';
-import { getFramePromptChannel, getGenerationChannel } from '@/lib/realtime';
+import { getShotPromptChannel, getGenerationChannel } from '@/lib/realtime';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import type { MotionPromptSceneWorkflowInput } from '@/lib/workflow/types';
 import { durableStreamingLLMCallCf } from '@/lib/workflows/llm-call-helper';
@@ -52,7 +52,7 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
       styleConfig,
       analysisModelId,
       sequenceId,
-      frameId,
+      shotId,
       startingFrameImageUrl,
     } = input;
 
@@ -66,9 +66,9 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
     // into the staleness hash so a re-render re-stales the prompt.
     //
     // CRITICAL: the still arrives as an INPUT (`startingFrameImageUrl`),
-    // snapshotted by the trigger when frame images finished — this workflow
+    // snapshotted by the trigger when shot images finished — this workflow
     // must NOT look it up from the DB. A workflow can run/retry/replay at any
-    // time, and a concurrent re-render could swap `frame.thumbnailUrl` mid-run;
+    // time, and a concurrent re-render could swap `shot.thumbnailUrl` mid-run;
     // reading it here would condition the prompt on an image the trigger never
     // saw. Null/absent → no still, text-only path.
     if (!startingFrameImageUrl) {
@@ -80,7 +80,7 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
     // Narrow the bibles to this scene's entities (via `scene.continuity`, set
     // by scene-split) before the LLM call, so the model and the staleness hash
     // see the same minimal, scene-scoped input. See #867.
-    const narrowed = narrowFramePromptContext({
+    const narrowed = narrowShotPromptContext({
       scene,
       styleConfig,
       characterBible,
@@ -117,7 +117,7 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
         promptVariables,
         modelId: analysisModelId,
         responseSchema: motionPromptSchema,
-        additionalMetadata: { frameId },
+        additionalMetadata: { shotId },
         reasoning: true,
         // Attach the rendered still whenever we have one. The LLM helper owns
         // the vision-routing policy: it runs the call on a vision-capable model
@@ -132,14 +132,14 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
         sequenceId,
         workflowRunId: event.instanceId,
         scopedDb,
-        framePromptStream:
-          input.emitStreaming && frameId
-            ? { frameId, promptType: 'motion' }
+        shotPromptStream:
+          input.emitStreaming && shotId
+            ? { shotId, promptType: 'motion' }
             : undefined,
       }
     );
 
-    if (sequenceId && frameId) {
+    if (sequenceId && shotId) {
       if (!motionPrompt.fullPrompt) {
         throw new Error(
           `Motion prompt generation returned empty fullPrompt for scene ${scene.sceneId}`
@@ -159,23 +159,23 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
       };
 
       await step.do('save-motion-prompt-to-db', async () => {
-        const previous = await scopedDb.framePromptVariants.getLatest(
-          frameId,
+        const previous = await scopedDb.shotPromptVariants.getLatest(
+          shotId,
           'motion'
         );
         const source = previous ? 'regenerated' : 'ai-generated';
 
-        // Clear `frame.motionPrompt` user-override when regenerating; see
+        // Clear `shot.motionPrompt` user-override when regenerating; see
         // the matching note in visual-prompt-scene-workflow.ts. The variant
         // row below preserves the new prompt; the prior user override is
         // restorable from the prompt-history sheet.
-        await scopedDb.frames.update(frameId, {
+        await scopedDb.shots.update(shotId, {
           metadata: enrichedScene,
           motionPrompt: null,
         });
 
-        await scopedDb.framePromptVariants.write({
-          frameId,
+        await scopedDb.shotPromptVariants.write({
+          shotId,
           promptType: 'motion',
           text: motionPrompt.fullPrompt,
           components: motionPrompt.components,
@@ -185,17 +185,14 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
           analysisModel: analysisModelId,
         });
 
-        await getGenerationChannel(sequenceId).emit(
-          'generation.frame:updated',
-          {
-            frameId,
-            updateType: 'motion-prompt',
-            metadata: enrichedScene,
-          }
-        );
+        await getGenerationChannel(sequenceId).emit('generation.shot:updated', {
+          shotId,
+          updateType: 'motion-prompt',
+          metadata: enrichedScene,
+        });
 
         if (input.emitStreaming) {
-          await getFramePromptChannel(frameId).emit('framePrompt.completed', {
+          await getShotPromptChannel(shotId).emit('shotPrompt.completed', {
             promptType: 'motion',
           });
         }
@@ -215,11 +212,11 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
     logger.error('[MotionPromptSceneWorkflow:cf] Failed', { error });
     try {
       const payload = event.payload;
-      if (payload.emitStreaming && payload.frameId) {
-        await getFramePromptChannel(payload.frameId).emit(
-          'framePrompt.failed',
-          { promptType: 'motion', error }
-        );
+      if (payload.emitStreaming && payload.shotId) {
+        await getShotPromptChannel(payload.shotId).emit('shotPrompt.failed', {
+          promptType: 'motion',
+          error,
+        });
       }
     } catch (emitErr) {
       logger.warn('[MotionPromptSceneWorkflow:cf] failed to emit failure', {

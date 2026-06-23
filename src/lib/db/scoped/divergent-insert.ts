@@ -1,7 +1,7 @@
 /**
  * Race-tolerant divergent-insert helper.
  *
- * The `*_sheet_variants` and `frame_variants` tables enforce uniqueness on
+ * The `*_sheet_variants` and `shot_variants` tables enforce uniqueness on
  * `(parent, model, inputHash) WHERE diverged_at IS NOT NULL` via a partial
  * unique index. Drizzle's SQLite `onConflictDoNothing` does not emit the
  * partial-index `WHERE` predicate after the target column list, so it cannot

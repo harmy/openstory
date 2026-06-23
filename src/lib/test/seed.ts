@@ -12,7 +12,7 @@ import { generateId } from '@/lib/db/id';
 import {
   characters,
   credits,
-  frames,
+  shots,
   locationLibrary,
   locationSheets,
   sequences,
@@ -48,7 +48,7 @@ export type CreatedTestSequence = {
   title: string;
 };
 
-export type CreatedTestFrame = {
+export type CreatedTestShot = {
   id: string;
   sequenceId: string;
   orderIndex: number;
@@ -190,7 +190,7 @@ export async function createTestStyle(
 }
 
 /**
- * Create a basic completed test sequence (no frames).
+ * Create a basic completed test sequence (no shots).
  */
 export async function createTestSequence(
   teamId: string,
@@ -217,9 +217,9 @@ export async function createTestSequence(
 }
 
 /**
- * Create a single frame for a sequence (useful for variant tests).
+ * Create a single shot for a sequence (useful for variant tests).
  */
-export async function createTestFrame(
+export async function createTestShot(
   sequenceId: string,
   orderIndex: number,
   options: {
@@ -227,10 +227,10 @@ export async function createTestFrame(
     variantImageUrl?: string | null;
     variantImageStatus?: 'pending' | 'generating' | 'completed' | 'failed';
   } = {}
-): Promise<CreatedTestFrame> {
+): Promise<CreatedTestShot> {
   const db = getDb();
   const now = new Date();
-  const frameId = generateId();
+  const shotId = generateId();
 
   const {
     thumbnailUrl = `http://localhost:3001/api/test/image?w=1024&h=576&label=thumb`,
@@ -238,8 +238,8 @@ export async function createTestFrame(
     variantImageStatus = 'pending',
   } = options;
 
-  await db.insert(frames).values({
-    id: frameId,
+  await db.insert(shots).values({
+    id: shotId,
     sequenceId,
     orderIndex,
     thumbnailUrl,
@@ -250,7 +250,7 @@ export async function createTestFrame(
     updatedAt: now,
   });
 
-  return { id: frameId, sequenceId, orderIndex };
+  return { id: shotId, sequenceId, orderIndex };
 }
 
 /**
@@ -633,9 +633,9 @@ export async function getSystemTalentByName(name: string): Promise<{
 }
 
 /**
- * Get all frames for a sequence (for polling workflow progress).
+ * Get all shots for a sequence (for polling workflow progress).
  */
-export async function getTestSequenceFrames(sequenceId: string): Promise<
+export async function getTestSequenceShots(sequenceId: string): Promise<
   Array<{
     id: string;
     orderIndex: number;
@@ -648,7 +648,7 @@ export async function getTestSequenceFrames(sequenceId: string): Promise<
   }>
 > {
   const db = getDb();
-  const rows = await db.query.frames.findMany({
+  const rows = await db.query.shots.findMany({
     where: { sequenceId },
     columns: {
       id: true,
@@ -665,16 +665,16 @@ export async function getTestSequenceFrames(sequenceId: string): Promise<
 }
 
 /**
- * Get a frame by ID (for verify/poll assertions).
+ * Get a shot by ID (for verify/poll assertions).
  */
-export async function getTestFrame(frameId: string): Promise<{
+export async function getTestShot(shotId: string): Promise<{
   id: string;
   thumbnailUrl: string | null;
   variantImageStatus: string | null;
 } | null> {
   const db = getDb();
-  const result = await db.query.frames.findFirst({
-    where: { id: frameId },
+  const result = await db.query.shots.findFirst({
+    where: { id: shotId },
     columns: {
       id: true,
       thumbnailUrl: true,

@@ -8,9 +8,9 @@ import type { StyleConfig } from '@/lib/db/schema';
 import type { MusicSceneSummary } from '@/lib/workflow/types';
 import {
   computeCharacterSheetInputHash,
-  computeFrameAudioInputHash,
-  computeFrameImageInputHash,
-  computeFrameVideoInputHash,
+  computeShotAudioInputHash,
+  computeShotImageInputHash,
+  computeShotVideoInputHash,
   computeLibraryLocationReferenceInputHash,
   computeLocationSheetInputHash,
   computeMotionPromptInputHash,
@@ -19,15 +19,15 @@ import {
   computeTalentSheetInputHash,
   computeVisualPromptInputHash,
   type CharacterSheetHashInput,
-  type FrameAudioHashInput,
-  type FrameImageHashInput,
-  type FrameVideoHashInput,
+  type ShotAudioHashInput,
+  type ShotImageHashInput,
+  type ShotVideoHashInput,
   type LibraryLocationReferenceHashInput,
   type LocationSheetHashInput,
   type TalentSheetHashInput,
 } from '../input-hash';
 
-const baseThumbnail: FrameImageHashInput = {
+const baseThumbnail: ShotImageHashInput = {
   kind: 'thumbnail',
   visualPrompt: 'A detective in a rainy alley, neon reflections',
   imageModel: 'flux-pro-v1.1',
@@ -41,21 +41,21 @@ const baseThumbnail: FrameImageHashInput = {
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
-describe('computeFrameImageInputHash (thumbnail)', () => {
+describe('computeShotImageInputHash (thumbnail)', () => {
   it('produces a 64-char hex SHA-256 digest', async () => {
-    const hash = await computeFrameImageInputHash(baseThumbnail);
+    const hash = await computeShotImageInputHash(baseThumbnail);
     expect(hash).toMatch(SHA256_HEX);
   });
 
   it('returns the same hash for identical input', async () => {
-    const a = await computeFrameImageInputHash(baseThumbnail);
-    const b = await computeFrameImageInputHash({ ...baseThumbnail });
+    const a = await computeShotImageInputHash(baseThumbnail);
+    const b = await computeShotImageInputHash({ ...baseThumbnail });
     expect(a).toBe(b);
   });
 
   it('is order-insensitive for character sheet refs', async () => {
-    const a = await computeFrameImageInputHash(baseThumbnail);
-    const b = await computeFrameImageInputHash({
+    const a = await computeShotImageInputHash(baseThumbnail);
+    const b = await computeShotImageInputHash({
       ...baseThumbnail,
       characterSheetHashes: ['char-b', 'char-a'],
     });
@@ -63,8 +63,8 @@ describe('computeFrameImageInputHash (thumbnail)', () => {
   });
 
   it('trims free-text prompts', async () => {
-    const a = await computeFrameImageInputHash(baseThumbnail);
-    const b = await computeFrameImageInputHash({
+    const a = await computeShotImageInputHash(baseThumbnail);
+    const b = await computeShotImageInputHash({
       ...baseThumbnail,
       visualPrompt: `   ${baseThumbnail.visualPrompt}\n`,
     });
@@ -72,8 +72,8 @@ describe('computeFrameImageInputHash (thumbnail)', () => {
   });
 
   it('changes when the visual prompt changes', async () => {
-    const a = await computeFrameImageInputHash(baseThumbnail);
-    const b = await computeFrameImageInputHash({
+    const a = await computeShotImageInputHash(baseThumbnail);
+    const b = await computeShotImageInputHash({
       ...baseThumbnail,
       visualPrompt: `${baseThumbnail.visualPrompt} at dawn`,
     });
@@ -81,8 +81,8 @@ describe('computeFrameImageInputHash (thumbnail)', () => {
   });
 
   it('changes when the image model version changes', async () => {
-    const a = await computeFrameImageInputHash(baseThumbnail);
-    const b = await computeFrameImageInputHash({
+    const a = await computeShotImageInputHash(baseThumbnail);
+    const b = await computeShotImageInputHash({
       ...baseThumbnail,
       imageModel: 'flux-pro-v1.2',
     });
@@ -90,16 +90,16 @@ describe('computeFrameImageInputHash (thumbnail)', () => {
   });
 
   it('changes when the aspect ratio, size, or seed changes', async () => {
-    const base = await computeFrameImageInputHash(baseThumbnail);
-    const aspect = await computeFrameImageInputHash({
+    const base = await computeShotImageInputHash(baseThumbnail);
+    const aspect = await computeShotImageInputHash({
       ...baseThumbnail,
       aspectRatio: '9:16',
     });
-    const size = await computeFrameImageInputHash({
+    const size = await computeShotImageInputHash({
       ...baseThumbnail,
       size: '1280x720',
     });
-    const seed = await computeFrameImageInputHash({
+    const seed = await computeShotImageInputHash({
       ...baseThumbnail,
       seed: 99,
     });
@@ -107,8 +107,8 @@ describe('computeFrameImageInputHash (thumbnail)', () => {
   });
 
   it('changes when a referenced character sheet hash changes', async () => {
-    const a = await computeFrameImageInputHash(baseThumbnail);
-    const b = await computeFrameImageInputHash({
+    const a = await computeShotImageInputHash(baseThumbnail);
+    const b = await computeShotImageInputHash({
       ...baseThumbnail,
       characterSheetHashes: ['char-a', 'char-b-NEW'],
     });
@@ -116,12 +116,12 @@ describe('computeFrameImageInputHash (thumbnail)', () => {
   });
 
   it('changes when location or element refs change', async () => {
-    const a = await computeFrameImageInputHash(baseThumbnail);
-    const loc = await computeFrameImageInputHash({
+    const a = await computeShotImageInputHash(baseThumbnail);
+    const loc = await computeShotImageInputHash({
       ...baseThumbnail,
       locationSheetHashes: ['loc-2'],
     });
-    const el = await computeFrameImageInputHash({
+    const el = await computeShotImageInputHash({
       ...baseThumbnail,
       elementReferenceHashes: ['el-y'],
     });
@@ -129,12 +129,12 @@ describe('computeFrameImageInputHash (thumbnail)', () => {
   });
 
   it('treats null and missing optional scalars identically', async () => {
-    const explicitNulls = await computeFrameImageInputHash({
+    const explicitNulls = await computeShotImageInputHash({
       ...baseThumbnail,
       size: null,
       seed: null,
     });
-    const omitted = await computeFrameImageInputHash({
+    const omitted = await computeShotImageInputHash({
       kind: baseThumbnail.kind,
       visualPrompt: baseThumbnail.visualPrompt,
       imageModel: baseThumbnail.imageModel,
@@ -147,10 +147,10 @@ describe('computeFrameImageInputHash (thumbnail)', () => {
   });
 });
 
-describe('computeFrameImageInputHash (variant-image)', () => {
+describe('computeShotImageInputHash (variant-image)', () => {
   it('is distinct from the thumbnail hash for the same input', async () => {
-    const thumb = await computeFrameImageInputHash(baseThumbnail);
-    const variant = await computeFrameImageInputHash({
+    const thumb = await computeShotImageInputHash(baseThumbnail);
+    const variant = await computeShotImageInputHash({
       ...baseThumbnail,
       kind: 'variant-image',
     });
@@ -159,13 +159,13 @@ describe('computeFrameImageInputHash (variant-image)', () => {
   });
 
   it('is stable and sensitive to model change', async () => {
-    const variantBase: FrameImageHashInput = {
+    const variantBase: ShotImageHashInput = {
       ...baseThumbnail,
       kind: 'variant-image',
     };
-    const a = await computeFrameImageInputHash(variantBase);
-    const same = await computeFrameImageInputHash({ ...variantBase });
-    const different = await computeFrameImageInputHash({
+    const a = await computeShotImageInputHash(variantBase);
+    const same = await computeShotImageInputHash({ ...variantBase });
+    const different = await computeShotImageInputHash({
       ...variantBase,
       imageModel: 'sdxl-v1',
     });
@@ -174,8 +174,8 @@ describe('computeFrameImageInputHash (variant-image)', () => {
   });
 });
 
-describe('computeFrameVideoInputHash', () => {
-  const base: FrameVideoHashInput = {
+describe('computeShotVideoInputHash', () => {
+  const base: ShotVideoHashInput = {
     sourceImage: { kind: 'variantHash', hash: 'sha-source-image' },
     motionPrompt: 'Slow dolly forward',
     motionModel: 'kling-v2.5-turbo-pro',
@@ -185,14 +185,14 @@ describe('computeFrameVideoInputHash', () => {
   };
 
   it('is stable for identical input', async () => {
-    expect(await computeFrameVideoInputHash(base)).toBe(
-      await computeFrameVideoInputHash({ ...base })
+    expect(await computeShotVideoInputHash(base)).toBe(
+      await computeShotVideoInputHash({ ...base })
     );
   });
 
   it('changes when the motion model version changes', async () => {
-    const a = await computeFrameVideoInputHash(base);
-    const b = await computeFrameVideoInputHash({
+    const a = await computeShotVideoInputHash(base);
+    const b = await computeShotVideoInputHash({
       ...base,
       motionModel: 'kling-v2.6-turbo-pro',
     });
@@ -201,25 +201,25 @@ describe('computeFrameVideoInputHash', () => {
 
   it('reacts to every tracked field', async () => {
     const variants = await Promise.all([
-      computeFrameVideoInputHash(base),
-      computeFrameVideoInputHash({
+      computeShotVideoInputHash(base),
+      computeShotVideoInputHash({
         ...base,
         sourceImage: { kind: 'variantHash', hash: 'sha-other' },
       }),
-      computeFrameVideoInputHash({ ...base, motionPrompt: 'Pan left' }),
-      computeFrameVideoInputHash({ ...base, durationSeconds: 8 }),
-      computeFrameVideoInputHash({ ...base, fps: 60 }),
-      computeFrameVideoInputHash({ ...base, aspectRatio: '9:16' }),
+      computeShotVideoInputHash({ ...base, motionPrompt: 'Pan left' }),
+      computeShotVideoInputHash({ ...base, durationSeconds: 8 }),
+      computeShotVideoInputHash({ ...base, fps: 60 }),
+      computeShotVideoInputHash({ ...base, aspectRatio: '9:16' }),
     ]);
     expect(new Set(variants).size).toBe(variants.length);
   });
 
   it('distinguishes variantHash from url even when the string matches', async () => {
-    const fromHash = await computeFrameVideoInputHash({
+    const fromHash = await computeShotVideoInputHash({
       ...base,
       sourceImage: { kind: 'variantHash', hash: 'shared-string' },
     });
-    const fromUrl = await computeFrameVideoInputHash({
+    const fromUrl = await computeShotVideoInputHash({
       ...base,
       sourceImage: { kind: 'url', url: 'shared-string' },
     });
@@ -227,8 +227,8 @@ describe('computeFrameVideoInputHash', () => {
   });
 });
 
-describe('computeFrameAudioInputHash', () => {
-  const base: FrameAudioHashInput = {
+describe('computeShotAudioInputHash', () => {
+  const base: ShotAudioHashInput = {
     musicPrompt: 'Tense orchestral build',
     tags: ['cinematic', 'tension'],
     durationSeconds: 5,
@@ -236,8 +236,8 @@ describe('computeFrameAudioInputHash', () => {
   };
 
   it('is order-insensitive for tags', async () => {
-    const a = await computeFrameAudioInputHash(base);
-    const b = await computeFrameAudioInputHash({
+    const a = await computeShotAudioInputHash(base);
+    const b = await computeShotAudioInputHash({
       ...base,
       tags: ['tension', 'cinematic'],
     });
@@ -245,16 +245,16 @@ describe('computeFrameAudioInputHash', () => {
   });
 
   it('reacts to prompt, duration, and model', async () => {
-    const a = await computeFrameAudioInputHash(base);
-    const prompt = await computeFrameAudioInputHash({
+    const a = await computeShotAudioInputHash(base);
+    const prompt = await computeShotAudioInputHash({
       ...base,
       musicPrompt: 'Soft piano',
     });
-    const dur = await computeFrameAudioInputHash({
+    const dur = await computeShotAudioInputHash({
       ...base,
       durationSeconds: 9,
     });
-    const model = await computeFrameAudioInputHash({
+    const model = await computeShotAudioInputHash({
       ...base,
       audioModel: 'cassette-v2',
     });
@@ -409,15 +409,15 @@ describe('computeTalentSheetInputHash', () => {
 
 describe('artifact discrimination', () => {
   it('returns different hashes for different artifact types with the same input shape', async () => {
-    // Frame audio and video share several scalar fields; the artifact tag in
+    // Shot audio and video share several scalar fields; the artifact tag in
     // the canonical body keeps them distinct.
-    const audio = await computeFrameAudioInputHash({
+    const audio = await computeShotAudioInputHash({
       musicPrompt: '',
       tags: [],
       durationSeconds: 5,
       audioModel: 'shared',
     });
-    const video = await computeFrameVideoInputHash({
+    const video = await computeShotVideoInputHash({
       sourceImage: { kind: 'url', url: '' },
       motionPrompt: '',
       motionModel: 'shared',
@@ -467,7 +467,7 @@ describe('canonical serialization', () => {
 
   it('rejects non-finite numbers rather than collapsing them to null', () => {
     expect(
-      computeFrameAudioInputHash({
+      computeShotAudioInputHash({
         musicPrompt: 'test',
         tags: [],
         durationSeconds: Number.NaN,
@@ -475,7 +475,7 @@ describe('canonical serialization', () => {
       })
     ).rejects.toThrow(/non-finite/);
     expect(
-      computeFrameAudioInputHash({
+      computeShotAudioInputHash({
         musicPrompt: 'test',
         tags: [],
         durationSeconds: Number.POSITIVE_INFINITY,
@@ -563,7 +563,7 @@ describe('prompt input hashes', () => {
     expect(withReRenderedImage).not.toBe(withImage);
   });
 
-  it('omitting startingFrameImageUrl equals passing null (legacy frames)', async () => {
+  it('omitting startingFrameImageUrl equals passing null (legacy shots)', async () => {
     const omitted = await computeMotionPromptInputHash(sceneCtx);
     const explicitNull = await computeMotionPromptInputHash({
       ...sceneCtx,

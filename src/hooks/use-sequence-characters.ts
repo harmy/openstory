@@ -4,7 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  getFrameIdsForCharacterFn,
+  getShotIdsForCharacterFn,
   getSequenceCharactersFn,
   recastCharacterFn,
 } from '@/functions/sequence-characters';
@@ -15,8 +15,8 @@ export const sequenceCharacterKeys = {
   all: ['sequence-characters'] as const,
   list: (sequenceId: string) =>
     [...sequenceCharacterKeys.all, 'list', sequenceId] as const,
-  framesForCharacter: (sequenceId: string, characterId: string) =>
-    [...sequenceCharacterKeys.all, 'frames', sequenceId, characterId] as const,
+  shotsForCharacter: (sequenceId: string, characterId: string) =>
+    [...sequenceCharacterKeys.all, 'shots', sequenceId, characterId] as const,
 };
 
 export function useSequenceCharacters(sequenceId: string) {
@@ -47,17 +47,17 @@ export function useAddCharacterToLibrary() {
 }
 
 /**
- * Hook to get the count of frames containing a character
- * Used to show affected frames before recasting
+ * Hook to get the count of shots containing a character
+ * Used to show affected shots before recasting
  */
-export function useFrameIdsForCharacter(
+export function useShotIdsForCharacter(
   sequenceId: string,
   characterId: string
 ) {
   return useQuery({
-    queryKey: sequenceCharacterKeys.framesForCharacter(sequenceId, characterId),
+    queryKey: sequenceCharacterKeys.shotsForCharacter(sequenceId, characterId),
     queryFn: () =>
-      getFrameIdsForCharacterFn({ data: { sequenceId, characterId } }),
+      getShotIdsForCharacterFn({ data: { sequenceId, characterId } }),
     enabled: !!sequenceId && !!characterId,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -77,8 +77,8 @@ export function useRecastCharacter() {
       void queryClient.invalidateQueries({
         queryKey: sequenceCharacterKeys.all,
       });
-      // Invalidate frames that contain this character
-      void queryClient.invalidateQueries({ queryKey: ['frames'] });
+      // Invalidate shots that contain this character
+      void queryClient.invalidateQueries({ queryKey: ['shots'] });
     },
   });
 }

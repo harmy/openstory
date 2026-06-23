@@ -16,9 +16,9 @@
  *     the `context.snapshot.*` extension.
  *   - The chained `location-sheet` child invocation now uses Pattern 3
  *     (`spawnAndAwaitChild`) against the CF `LocationSheetWorkflow`.
- *   - The chained `regenerate-frames` child invocation is stubbed pending
+ *   - The chained `regenerate-shots` child invocation is stubbed pending
  *     its own CF port (Wave 3 batch). The `build-regenerate-snapshot` step
- *     lives in `regenerateFramesIfNeeded` for diff parity with the QStash
+ *     lives in `regenerateShotsIfNeeded` for diff parity with the QStash
  *     original; the stub fires immediately after the snapshot step so the
  *     workflow falls back to QStash via the registry switch. */
 
@@ -32,12 +32,12 @@ import type {
   LocationSheetWorkflowInput,
   LocationSheetWorkflowResult,
   RecastLocationWorkflowInput,
-  RegenerateFramesWorkflowInput,
+  RegenerateShotsWorkflowInput,
 } from '@/lib/workflow/types';
 import {
-  buildRegenerateFrameSnapshot,
-  computeRegenerateFramesBatchHash,
-} from '@/lib/workflows/regenerate-frames-snapshot';
+  buildRegenerateShotSnapshot,
+  computeRegenerateShotsBatchHash,
+} from '@/lib/workflows/regenerate-shots-snapshot';
 import {
   computeLocationSheetHashFromDto,
   resolveLibraryLocationReferenceHash,
@@ -50,37 +50,37 @@ const logger = getLogger(['openstory', 'workflow', 'recast-location']);
 
 type RecastLocationWorkflowResult = {
   referenceImageUrl: string;
-  framesRegenerated: number;
-  framesFailed: number;
+  shotsRegenerated: number;
+  shotsFailed: number;
 };
 
 /**
- * Build the regenerate-frames snapshot and (eventually) invoke the
- * `regenerate-frames` child. Today the invoke is stubbed inside a `step.do`
+ * Build the regenerate-shots snapshot and (eventually) invoke the
+ * `regenerate-shots` child. Today the invoke is stubbed inside a `step.do`
  * with a `NonRetryableError` — Pattern 3 will wire up the real child spawn
- * once the CF port of `regenerate-frames-workflow` lands.
+ * once the CF port of `regenerate-shots-workflow` lands.
  *
  * Lives in its own helper to mirror the QStash original's flow: snapshot
  * building runs as its own step before the child kicks off.
  */
-async function regenerateFramesIfNeeded(
+async function regenerateShotsIfNeeded(
   step: WorkflowStep,
   env: CloudflareEnv,
   parentInstanceId: string,
   scopedDb: ScopedDb,
   input: RecastLocationWorkflowInput
-): Promise<{ framesRegenerated: number; framesFailed: number }> {
-  if (input.affectedFrameIds.length === 0) {
-    return { framesRegenerated: 0, framesFailed: 0 };
+): Promise<{ shotsRegenerated: number; shotsFailed: number }> {
+  if (input.affectedShotIds.length === 0) {
+    return { shotsRegenerated: 0, shotsFailed: 0 };
   }
 
   const regenerateBody = await step.do(
     'build-regenerate-snapshot',
-    async (): Promise<RegenerateFramesWorkflowInput> => {
+    async (): Promise<RegenerateShotsWorkflowInput> => {
       const sequenceId = input.sequenceId;
       if (!sequenceId) {
         throw new NonRetryableError(
-          '[RecastLocationWorkflow:cf] sequenceId is required to regenerate frames',
+          '[RecastLocationWorkflow:cf] sequenceId is required to regenerate shots',
           'WorkflowValidationError'
         );
       }
@@ -91,24 +91,24 @@ async function regenerateFramesIfNeeded(
           `[RecastLocationWorkflow:cf] Sequence ${sequenceId} not found`
         );
       }
-      const [characters, locations, elements, frames] = await Promise.all([
+      const [characters, locations, elements, shots] = await Promise.all([
         scopedDb.characters.listWithSheets(sequenceId),
         scopedDb.sequenceLocations.listWithReferences(sequenceId),
         scopedDb.sequenceElements.list(sequenceId),
-        scopedDb.frames.getByIds(input.affectedFrameIds),
+        scopedDb.shots.getByIds(input.affectedShotIds),
       ]);
-      if (frames.length !== input.affectedFrameIds.length) {
-        const found = new Set(frames.map((f) => f.id));
-        const missing = input.affectedFrameIds.filter((id) => !found.has(id));
+      if (shots.length !== input.affectedShotIds.length) {
+        const found = new Set(shots.map((f) => f.id));
+        const missing = input.affectedShotIds.filter((id) => !found.has(id));
         throw new Error(
-          `[RecastLocationWorkflow:cf] Missing frames for ${input.locationName}: ${missing.join(', ')}`
+          `[RecastLocationWorkflow:cf] Missing shots for ${input.locationName}: ${missing.join(', ')}`
         );
       }
       const aspectRatio = sequence.aspectRatio;
-      const frameSnapshots = await Promise.all(
-        frames.map((frame) =>
-          buildRegenerateFrameSnapshot({
-            frame,
+      const shotSnapshots = await Promise.all(
+        shots.map((shot) =>
+          buildRegenerateShotSnapshot({
+            shot,
             characters,
             locations,
             elements,
@@ -117,36 +117,36 @@ async function regenerateFramesIfNeeded(
           })
         )
       );
-      const partial = { sequenceId, imageModel, aspectRatio, frameSnapshots };
-      const snapshotInputHash = await computeRegenerateFramesBatchHash(partial);
+      const partial = { sequenceId, imageModel, aspectRatio, shotSnapshots };
+      const snapshotInputHash = await computeRegenerateShotsBatchHash(partial);
       return {
         userId: input.userId,
         teamId: input.teamId,
         sequenceId,
-        frameIds: input.affectedFrameIds,
+        shotIds: input.affectedShotIds,
         triggerKind: 'location' as const,
         triggerId: input.locationDbId,
         imageModel,
         aspectRatio,
-        frameSnapshots,
+        shotSnapshots,
         snapshotInputHash,
       };
     }
   );
 
-  await spawnAndAwaitChild<RegenerateFramesWorkflowInput, unknown>(step, {
-    binding: env.REGENERATE_FRAMES_WORKFLOW,
+  await spawnAndAwaitChild<RegenerateShotsWorkflowInput, unknown>(step, {
+    binding: env.REGENERATE_SHOTS_WORKFLOW,
     parentBindingName: 'RECAST_LOCATION_WORKFLOW',
     parentInstanceId,
-    childId: `regenerate-frames:location:${input.locationDbId}`,
+    childId: `regenerate-shots:location:${input.locationDbId}`,
     childPayload: regenerateBody,
-    spawnStepName: 'spawn-regenerate-frames',
-    awaitStepName: 'await-regenerate-frames',
+    spawnStepName: 'spawn-regenerate-shots',
+    awaitStepName: 'await-regenerate-shots',
   });
 
   return {
-    framesRegenerated: input.affectedFrameIds.length,
-    framesFailed: 0,
+    shotsRegenerated: input.affectedShotIds.length,
+    shotsFailed: 0,
   };
 }
 
@@ -159,7 +159,7 @@ export class RecastLocationWorkflow extends OpenStoryWorkflowEntrypoint<RecastLo
     const input = event.payload;
 
     logger.info(
-      `[RecastLocationWorkflow:cf] Starting recast for ${input.locationName} with ${input.affectedFrameIds.length} affected frames`
+      `[RecastLocationWorkflow:cf] Starting recast for ${input.locationName} with ${input.affectedShotIds.length} affected shots`
     );
 
     // Step 1: Generate new location reference image with library reference.
@@ -214,11 +214,11 @@ export class RecastLocationWorkflow extends OpenStoryWorkflowEntrypoint<RecastLo
     }
 
     logger.info(
-      `[RecastLocationWorkflow:cf] Location reference generated for ${input.locationName}, regenerating ${input.affectedFrameIds.length} frames`
+      `[RecastLocationWorkflow:cf] Location reference generated for ${input.locationName}, regenerating ${input.affectedShotIds.length} shots`
     );
 
-    // Step 2: Regenerate affected frames via Pattern 3 spawn.
-    const { framesRegenerated, framesFailed } = await regenerateFramesIfNeeded(
+    // Step 2: Regenerate affected shots via Pattern 3 spawn.
+    const { shotsRegenerated, shotsFailed } = await regenerateShotsIfNeeded(
       step,
       this.env,
       event.instanceId,
@@ -226,16 +226,16 @@ export class RecastLocationWorkflow extends OpenStoryWorkflowEntrypoint<RecastLo
       input
     );
 
-    if (input.affectedFrameIds.length > 0) {
+    if (input.affectedShotIds.length > 0) {
       logger.info(
-        `[RecastLocationWorkflow:cf] Regenerated ${framesRegenerated} frames for ${input.locationName}`
+        `[RecastLocationWorkflow:cf] Regenerated ${shotsRegenerated} shots for ${input.locationName}`
       );
     }
 
     return {
       referenceImageUrl: sheetResult.referenceImageUrl,
-      framesRegenerated,
-      framesFailed,
+      shotsRegenerated,
+      shotsFailed,
     };
   }
 

@@ -1,7 +1,7 @@
 /**
  * Orchestrator for `POST /api/v1/scripts/enhance`. Resolves the public,
  * human-friendly input (style by ref, elements by URL) into the shared
- * {@link streamScriptEnhancement} generator, then frames its deltas as
+ * {@link streamScriptEnhancement} generator, then shots its deltas as
  * Server-Sent Events.
  *
  *   resolve style → build EnhanceScriptInput → stream deltas as SSE
@@ -79,7 +79,7 @@ export async function buildEnhanceGenerator(
 }
 
 /**
- * The HAL affordance catalog for the terminal `done` frame — the SSE analogue
+ * The HAL affordance catalog for the terminal `done` shot — the SSE analogue
  * of the `_links` every JSON response carries. The natural next action is
  * creating a sequence from the just-enhanced script, so `create-sequence`
  * embeds a ready-to-POST example body (with `enhance: 'off'`, since the script
@@ -107,17 +107,17 @@ const SSE_HEADERS = {
 } as const;
 
 /**
- * Frame an already-started enhancement generator as an SSE stream. `first` is
+ * Shot an already-started enhancement generator as an SSE stream. `first` is
  * the result of the caller's initial `gen.next()` — pulled before this is called
  * so pre-stream failures (billing, an unresolvable model) surface as a JSON
  * error with the right status, rather than a 200 stream that immediately errors.
  *
- * Wire format (matches the OpenAPI doc): each delta is an unnamed `data:` frame
- * `{ "delta": "…" }`; a terminal `event: done` frame carries the full
+ * Wire format (matches the OpenAPI doc): each delta is an unnamed `data:` shot
+ * `{ "delta": "…" }`; a terminal `event: done` shot carries the full
  * `{ "enhancedScript": "…", "_links": {…} }` — the `_links` catalog of next
- * actions every other v1 response carries, attached to the one frame that
+ * actions every other v1 response carries, attached to the one shot that
  * represents the completed resource. A mid-stream failure (headers already
- * sent) becomes an `event: error` frame `{ code, message }`.
+ * sent) becomes an `event: error` shot `{ code, message }`.
  */
 export function enhanceSseResponse(
   first: IteratorResult<{ delta: string }>,

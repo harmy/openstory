@@ -38,7 +38,7 @@ import { createServerFn, createServerOnlyFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 import { zodValidator } from '@tanstack/zod-adapter';
 import { z } from 'zod';
-import { authWithTeamMiddleware, frameAccessMiddleware } from './middleware';
+import { authWithTeamMiddleware, shotAccessMiddleware } from './middleware';
 
 import { getLogger } from '@/lib/observability/logger';
 
@@ -201,7 +201,7 @@ const clampDuration = (n: number) =>
 
 const estimateSceneDurationInputSchema = z.object({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
   extract: z
     .string()
     .min(1, 'Scene script is empty')
@@ -209,7 +209,7 @@ const estimateSceneDurationInputSchema = z.object({
 });
 
 export const estimateSceneDurationFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
+  .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(estimateSceneDurationInputSchema))
   .handler(async ({ data, context }) => {
     enforceRateLimit(sceneDurationEstimationRateLimiter, getClientIP());
@@ -222,10 +222,10 @@ export const estimateSceneDurationFn = createServerFn({ method: 'POST' })
     const { llmKey, deduct } = await prepareBilling(
       context.scopedDb,
       `Scene duration estimate (${analysisModel})`,
-      { model: analysisModel, frameId: context.frame.id }
+      { model: analysisModel, shotId: context.shot.id }
     );
 
-    const sceneMetadata = context.frame.metadata?.metadata;
+    const sceneMetadata = context.shot.metadata?.metadata;
     const userPrompt = [
       sceneMetadata?.title && `Title: ${sceneMetadata.title}`,
       sceneMetadata?.location && `Location: ${sceneMetadata.location}`,

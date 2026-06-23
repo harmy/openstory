@@ -6,8 +6,8 @@ import { DEFAULT_VIDEO_MODEL, type ImageToVideoModel } from './models';
  *
  * Guarantees a non-empty, deduplicated result. Mirrors
  * {@link resolveImageModels} — the first element is treated as the primary
- * model (the one whose output also lands in the legacy `frames.video*`
- * columns); the rest are alternates stored only in `frame_variants`.
+ * model (the one whose output also lands in the legacy `shots.video*`
+ * columns); the rest are alternates stored only in `shot_variants`.
  */
 export function resolveVideoModels(
   videoModels: ImageToVideoModel[] | undefined,

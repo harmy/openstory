@@ -12,9 +12,9 @@ import { teamInvitations, teamMembers, teams } from './teams';
 
 import { sequences } from './sequences';
 
-import { frames } from './frames';
+import { shots } from './shots';
 
-import { frameVariants } from './frame-variants';
+import { shotVariants } from './shot-variants';
 
 import { characterSheetVariants } from './character-sheet-variants';
 
@@ -22,7 +22,7 @@ import { locationSheetVariants } from './location-sheet-variants';
 
 import { talentSheetVariants } from './talent-sheet-variants';
 
-import { framePromptVariants } from './frame-prompt-variants';
+import { shotPromptVariants } from './shot-prompt-variants';
 
 import { sequenceMusicPromptVariants } from './sequence-music-prompt-variants';
 
@@ -78,15 +78,15 @@ export { sequences };
 
 export type { NewSequence, Sequence } from './sequences';
 
-// Frames
-export { frames };
+// Shots
+export { shots };
 
-export type { Frame, NewFrame } from './frames';
+export type { NewShot, Shot } from './shots';
 
-// Frame Variants
-export { frameVariants };
+// Shot Variants
+export { shotVariants };
 
-export type { FrameVariant, NewFrameVariant } from './frame-variants';
+export type { ShotVariant, NewShotVariant } from './shot-variants';
 
 // Sheet Variants (Stage 2: divergent character/location/talent sheet outputs)
 export { characterSheetVariants };
@@ -111,17 +111,17 @@ export type {
   TalentSheetVariant,
 } from './talent-sheet-variants';
 
-// Frame Prompt Variants (visual/motion prompt history)
-export { framePromptVariants };
+// Shot Prompt Variants (visual/motion prompt history)
+export { shotPromptVariants };
 
-export { FRAME_PROMPT_TYPES } from './frame-prompt-variants';
+export { SHOT_PROMPT_TYPES } from './shot-prompt-variants';
 
 export type {
-  FramePromptType,
-  FramePromptVariant,
-  FramePromptVariantComponents,
+  ShotPromptType,
+  ShotPromptVariant,
+  ShotPromptVariantComponents,
   PromptVariantSource,
-} from './frame-prompt-variants';
+} from './shot-prompt-variants';
 
 // Sequence Music Prompt Variants (music prompt history)
 export { sequenceMusicPromptVariants };
@@ -244,12 +244,12 @@ export const schema = {
 
   // Sequences
   sequences,
-  frames,
-  frameVariants,
+  shots,
+  shotVariants,
   characterSheetVariants,
   locationSheetVariants,
   talentSheetVariants,
-  framePromptVariants,
+  shotPromptVariants,
   sequenceMusicPromptVariants,
   sequenceMusicVariants,
   sequenceExports,

@@ -1,10 +1,10 @@
 /**
  * In-memory DB tests for the sequence-elements scoped module.
  *
- * getFrameCountsByElement — pins the two invariants the elements grid relies on:
- *   - Elements with zero matching frames appear in the result map with `0`
+ * getShotCountsByElement — pins the two invariants the elements grid relies on:
+ *   - Elements with zero matching shots appear in the result map with `0`
  *     (otherwise the badge reads `undefined`).
- *   - A frame that references N elements increments every matched element's
+ *   - A shot that references N elements increments every matched element's
  *     count (no first-match short-circuit).
  *
  * ensureUniqueToken / cascadeRename — pins the workflow-retry idempotency of
@@ -20,9 +20,9 @@ import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import type { Database } from '@/lib/db/client';
 import { generateId } from '@/lib/db/id';
-import type { Frame } from '@/lib/db/schema';
+import type { Shot } from '@/lib/db/schema';
 import {
-  frames,
+  shots,
   sequenceElements,
   sequences,
   styles,
@@ -37,7 +37,7 @@ let teamId = '';
 let sequenceId = '';
 
 async function seed() {
-  await db.delete(frames);
+  await db.delete(shots);
   await db.delete(sequenceElements);
   await db.delete(sequences);
   await db.delete(styles);
@@ -85,11 +85,11 @@ beforeEach(async () => {
   await seed();
 });
 
-function frameMetadata(args: {
+function shotMetadata(args: {
   sceneId: string;
   elementTags: string[];
   extract: string;
-}): NonNullable<Frame['metadata']> {
+}): NonNullable<Shot['metadata']> {
   return {
     sceneId: args.sceneId,
     sceneNumber: 1,
@@ -105,14 +105,14 @@ function frameMetadata(args: {
   };
 }
 
-describe('getFrameCountsByElement', () => {
+describe('getShotCountsByElement', () => {
   it('returns an empty object when no elements exist', async () => {
     const methods = createSequenceElementsMethods(db);
-    const result = await methods.getFrameCountsByElement(sequenceId);
+    const result = await methods.getShotCountsByElement(sequenceId);
     expect(result).toEqual({});
   });
 
-  it('seeds a zero entry for every element, even those with no matching frames', async () => {
+  it('seeds a zero entry for every element, even those with no matching shots', async () => {
     const methods = createSequenceElementsMethods(db);
 
     const [unused] = await db
@@ -127,12 +127,12 @@ describe('getFrameCountsByElement', () => {
       .returning();
     if (!unused) throw new Error('test setup: element insert returned nothing');
 
-    const result = await methods.getFrameCountsByElement(sequenceId);
-    expect(result[unused.id]?.frameCount).toBe(0);
+    const result = await methods.getShotCountsByElement(sequenceId);
+    expect(result[unused.id]?.shotCount).toBe(0);
     expect(result[unused.id]?.videoCount).toBe(0);
   });
 
-  it('counts a frame against every matched element (multi-tag frame increments each)', async () => {
+  it('counts a shot against every matched element (multi-tag shot increments each)', async () => {
     const methods = createSequenceElementsMethods(db);
 
     const [logo] = await db
@@ -169,32 +169,32 @@ describe('getFrameCountsByElement', () => {
       throw new Error('test setup: element insert returned nothing');
     }
 
-    // Frame referencing both LOGO and BOTTLE via continuity.elementTags.
-    await db.insert(frames).values({
+    // Shot referencing both LOGO and BOTTLE via continuity.elementTags.
+    await db.insert(shots).values({
       sequenceId,
       orderIndex: 0,
-      metadata: frameMetadata({
+      metadata: shotMetadata({
         sceneId: 's1',
         elementTags: ['LOGO', 'BOTTLE'],
         extract: 'scene script',
       }),
     });
 
-    // Frame referencing only LOGO via script-text fallback (no elementTags).
-    await db.insert(frames).values({
+    // Shot referencing only LOGO via script-text fallback (no elementTags).
+    await db.insert(shots).values({
       sequenceId,
       orderIndex: 1,
-      metadata: frameMetadata({
+      metadata: shotMetadata({
         sceneId: 's2',
         elementTags: [],
         extract: 'The LOGO appears on screen.',
       }),
     });
 
-    const result = await methods.getFrameCountsByElement(sequenceId);
-    expect(result[logo.id]?.frameCount).toBe(2);
-    expect(result[bottle.id]?.frameCount).toBe(1);
-    expect(result[orphan.id]?.frameCount).toBe(0);
+    const result = await methods.getShotCountsByElement(sequenceId);
+    expect(result[logo.id]?.shotCount).toBe(2);
+    expect(result[bottle.id]?.shotCount).toBe(1);
+    expect(result[orphan.id]?.shotCount).toBe(0);
   });
 });
 
@@ -240,7 +240,7 @@ describe('ensureUniqueToken', () => {
 });
 
 describe('cascadeRename', () => {
-  it('rewrites element + script + frames, and a replay yields zero deltas', async () => {
+  it('rewrites element + script + shots, and a replay yields zero deltas', async () => {
     const methods = createSequenceElementsMethods(db);
     const element = await insertElement('LOGO');
 
@@ -249,19 +249,19 @@ describe('cascadeRename', () => {
       .set({ script: 'The LOGO appears. Pan across the LOGO.' })
       .where(eq(sequences.id, sequenceId));
 
-    await db.insert(frames).values({
+    await db.insert(shots).values({
       sequenceId,
       orderIndex: 0,
-      metadata: frameMetadata({
+      metadata: shotMetadata({
         sceneId: 's1',
         elementTags: ['LOGO'],
         extract: 'The LOGO appears on screen.',
       }),
     });
-    await db.insert(frames).values({
+    await db.insert(shots).values({
       sequenceId,
       orderIndex: 1,
-      metadata: frameMetadata({
+      metadata: shotMetadata({
         sceneId: 's2',
         elementTags: [],
         extract: 'No element here.',
@@ -276,7 +276,7 @@ describe('cascadeRename', () => {
     });
     expect(first.element.token).toBe('BRAND');
     expect(first.scriptUpdated).toBe(true);
-    expect(first.framesUpdated).toBe(1);
+    expect(first.shotsUpdated).toBe(1);
 
     const [seq] = await db
       .select({ script: sequences.script })
@@ -294,7 +294,7 @@ describe('cascadeRename', () => {
     });
     expect(replay.element.token).toBe('BRAND');
     expect(replay.scriptUpdated).toBe(false);
-    expect(replay.framesUpdated).toBe(0);
+    expect(replay.shotsUpdated).toBe(0);
   });
 
   it('short-circuits when oldToken === newToken', async () => {
@@ -308,7 +308,7 @@ describe('cascadeRename', () => {
       newToken: 'LOGO',
     });
     expect(result.element.token).toBe('LOGO');
-    expect(result.framesUpdated).toBe(0);
+    expect(result.shotsUpdated).toBe(0);
     expect(result.scriptUpdated).toBe(false);
   });
 });

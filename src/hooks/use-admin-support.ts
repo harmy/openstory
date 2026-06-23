@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { useInfiniteQuery, useQueries } from '@tanstack/react-query';
 import {
-  getAdminFramesFn,
+  getAdminShotsFn,
   getAllAdminSequencesFn,
 } from '@/functions/admin-support';
-import type { SequenceWithFrames } from './use-sequences-with-frames';
-import type { Frame, Sequence } from '@/types/database';
+import type { SequenceWithShots } from './use-sequences-with-shots';
+import type { Shot, Sequence } from '@/types/database';
 
 const PAGE_SIZE = 50;
 
@@ -13,16 +13,16 @@ const adminSupportKeys = {
   all: ['admin-support'] as const,
   sequences: (search?: string) =>
     [...adminSupportKeys.all, 'sequences', search ?? ''] as const,
-  frames: (sequenceId: string) =>
-    [...adminSupportKeys.all, 'frames', sequenceId] as const,
+  shots: (sequenceId: string) =>
+    [...adminSupportKeys.all, 'shots', sequenceId] as const,
 };
 
-export type AdminSequenceWithFrames = SequenceWithFrames & {
+export type AdminSequenceWithShots = SequenceWithShots & {
   creatorName: string | null;
   creatorEmail: string | null;
 };
 
-export function useAdminAllSequencesWithFrames(
+export function useAdminAllSequencesWithShots(
   enabled: boolean,
   search?: string
 ) {
@@ -57,18 +57,18 @@ export function useAdminAllSequencesWithFrames(
     [infiniteData]
   );
 
-  const framesQueries = useQueries({
+  const shotsQueries = useQueries({
     queries: allSequences.map((seq: Sequence) => ({
-      queryKey: adminSupportKeys.frames(seq.id),
-      queryFn: async (): Promise<Frame[]> => {
-        return getAdminFramesFn({ data: { sequenceId: seq.id } });
+      queryKey: adminSupportKeys.shots(seq.id),
+      queryFn: async (): Promise<Shot[]> => {
+        return getAdminShotsFn({ data: { sequenceId: seq.id } });
       },
       staleTime: 60_000,
       enabled: allSequences.length > 0,
     })),
   });
 
-  const data = useMemo<AdminSequenceWithFrames[]>(() => {
+  const data = useMemo<AdminSequenceWithShots[]>(() => {
     if (allSequences.length === 0) return [];
     return allSequences.map(
       (
@@ -79,26 +79,26 @@ export function useAdminAllSequencesWithFrames(
         i: number
       ) => ({
         ...seq,
-        frames: framesQueries[i]?.data ?? [],
+        shots: shotsQueries[i]?.data ?? [],
       })
     );
-  }, [allSequences, framesQueries]);
+  }, [allSequences, shotsQueries]);
 
-  const framesLoadingMap = useMemo<Record<string, boolean>>(() => {
+  const shotsLoadingMap = useMemo<Record<string, boolean>>(() => {
     const map: Record<string, boolean> = {};
     allSequences.forEach((seq, i) => {
-      const q = framesQueries[i];
+      const q = shotsQueries[i];
       map[seq.id] = Boolean(q?.isLoading);
     });
     return map;
-  }, [allSequences, framesQueries]);
+  }, [allSequences, shotsQueries]);
 
-  const error = seqError || framesQueries.find((q) => q.error)?.error;
+  const error = seqError || shotsQueries.find((q) => q.error)?.error;
 
   return {
     data,
     isLoading: seqLoading,
-    framesLoadingMap,
+    shotsLoadingMap,
     error,
     fetchNextPage,
     hasNextPage,

@@ -80,7 +80,7 @@ describe('extractContinuityFromPrompt', () => {
   it('matches a character by characterId', () => {
     const result = extractContinuityFromPrompt({
       ...baseArgs,
-      promptText: 'char_001 walks into frame.',
+      promptText: 'char_001 walks into shot.',
       characters: [
         { name: 'Jack', characterId: 'char_001', consistencyTag: null },
       ],

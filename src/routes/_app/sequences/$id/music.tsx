@@ -6,7 +6,7 @@ import {
 } from '@/functions/prompt-variants';
 import { generateMusicFn } from '@/functions/sequences';
 import { useActiveAudioModel } from '@/hooks/use-active-audio-model';
-import { useFramesBySequence } from '@/hooks/use-frames';
+import { useShotsBySequence } from '@/hooks/use-shots';
 import {
   useSequence,
   useSequenceAudioVariants,
@@ -45,7 +45,7 @@ function MusicPage() {
   const { id: sequenceId } = Route.useParams();
 
   const { data: sequence, isLoading } = useSequence(sequenceId);
-  const { data: frames } = useFramesBySequence(sequenceId, {
+  const { data: shots } = useShotsBySequence(sequenceId, {
     refetchInterval: false,
   });
   // Resolve the music tab through the viewer's active audio model (#546). When
@@ -56,7 +56,7 @@ function MusicPage() {
   const { data: audioVariants } = useSequenceAudioVariants(sequenceId);
   const resolvedSequence = useMemo<Sequence | undefined>(() => {
     if (!sequence || !activeAudioModel || !audioVariants) return sequence;
-    // Player-only remap (mirrors scenes-view's playerFrames): swap ONLY the
+    // Player-only remap (mirrors scenes-view's playerShots): swap ONLY the
     // playback URL to the pinned model's completed track. Status / error /
     // prompt / tags stay sourced from the live sequence so a regeneration of
     // the pinned model still surfaces the generating spinner + failure UI and
@@ -110,16 +110,16 @@ function MusicPage() {
   const queryClient = useQueryClient();
   const posthog = usePostHog();
 
-  // Compute total video duration from frames (same logic as generateMusicFn)
+  // Compute total video duration from shots (same logic as generateMusicFn)
   const videoDuration = useMemo(() => {
-    if (!frames?.length) return undefined;
-    return frames.reduce((sum, frame) => {
-      const seconds = frame.durationMs
-        ? frame.durationMs / 1000
-        : (frame.metadata?.metadata?.durationSeconds ?? 10);
+    if (!shots?.length) return undefined;
+    return shots.reduce((sum, shot) => {
+      const seconds = shot.durationMs
+        ? shot.durationMs / 1000
+        : (shot.metadata?.metadata?.durationSeconds ?? 10);
       return sum + seconds;
     }, 0);
-  }, [frames]);
+  }, [shots]);
 
   // Subscribe to realtime events (audio:progress updates sequence cache)
   useGenerationStream(sequenceId);

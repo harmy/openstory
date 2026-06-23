@@ -16,7 +16,7 @@
 
 import { computeVisualPromptInputHash } from '@/lib/ai/input-hash';
 import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS } from '@/lib/ai/models';
-import { loadNarrowFramePromptContext } from '@/lib/ai/prompt-context';
+import { loadNarrowShotPromptContext } from '@/lib/ai/prompt-context';
 import { ZERO_MICROS } from '@/lib/billing/money';
 import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import { DEFAULT_IMAGE_SIZE } from '@/lib/constants/aspect-ratios';
@@ -50,7 +50,7 @@ const logger = getLogger(['openstory', 'workflow', 'image']);
 
 type ImageWorkflowResult = {
   imageUrl: string;
-  frameId?: string;
+  shotId?: string;
   sequenceId?: string;
 };
 
@@ -60,7 +60,17 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     step: WorkflowStep,
     scopedDb: ScopedDb
   ): Promise<ImageWorkflowResult> {
-    const input = event.payload;
+    const rawInput = event.payload;
+    // Back-compat: accept shotId or shotId from in-flight instances serialized before #906
+    // TODO(#906): remove shotId shim one release after deploy
+    const input = {
+      ...rawInput,
+      shotId:
+        rawInput.shotId ??
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- back-compat shim for in-flight CF Workflow instances serialized before #906
+        (rawInput as { shotId?: string }).shotId ??
+        undefined,
+    };
     const workflowRunId = event.instanceId;
 
     if (input.sceneSnapshot) {
@@ -95,16 +105,16 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
 
         const model = input.model ?? DEFAULT_IMAGE_MODEL;
 
-        if (input.frameId) {
+        if (input.shotId) {
           // Variant-only (#547) must not touch the live primary columns — read
-          // the frame instead of stamping `imageModel`/`thumbnailStatus`, so
+          // the shot instead of stamping `imageModel`/`thumbnailStatus`, so
           // adding a model can't flip the primary or trip staleness. The
-          // per-model `frame_variants` row (opened below) carries the in-flight
+          // per-model `shot_variants` row (opened below) carries the in-flight
           // state instead.
-          const frame = input.variantOnly
-            ? await scopedDb.frames.getById(input.frameId)
-            : await scopedDb.frames.update(
-                input.frameId,
+          const shot = input.variantOnly
+            ? await scopedDb.shots.getById(input.shotId)
+            : await scopedDb.shots.update(
+                input.shotId,
                 {
                   thumbnailStatus: 'generating',
                   thumbnailWorkflowRunId: workflowRunId,
@@ -113,9 +123,9 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
                 { throwOnMissing: false }
               );
 
-          if (!frame) {
+          if (!shot) {
             logger.info(
-              `[ImageWorkflow:cf] Frame ${input.frameId} was deleted, skipping`
+              `[ImageWorkflow:cf] Shot ${input.shotId} was deleted, skipping`
             );
             return null;
           }
@@ -124,18 +134,18 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
             shouldRecordUserEdit({
               userEditedPrompt: input.userEditedPrompt,
               prompt: input.prompt,
-              currentPrompt: frame.imagePrompt,
+              currentPrompt: shot.imagePrompt,
             })
           ) {
             let userEditInputHash: string | null = null;
             let userEditAnalysisModel: string | null = null;
             try {
-              if (frame.metadata && input.sequenceId) {
+              if (shot.metadata && input.sequenceId) {
                 const sequence = await scopedDb.sequences.getById(
                   input.sequenceId
                 );
                 if (sequence) {
-                  const ctx = await loadNarrowFramePromptContext({
+                  const ctx = await loadNarrowShotPromptContext({
                     scopedDb,
                     sequence: {
                       id: sequence.id,
@@ -143,7 +153,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
                       aspectRatio: sequence.aspectRatio,
                       analysisModel: sequence.analysisModel,
                     },
-                    scene: frame.metadata,
+                    scene: shot.metadata,
                   });
                   userEditInputHash = await computeVisualPromptInputHash(ctx);
                   userEditAnalysisModel = ctx.analysisModel;
@@ -151,15 +161,15 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
               }
             } catch (err) {
               logger.warn(
-                `[ImageWorkflow:cf] Could not compute upstream hash for user-edit on frame ${input.frameId}; recording with null hash`,
+                `[ImageWorkflow:cf] Could not compute upstream hash for user-edit on shot ${input.shotId}; recording with null hash`,
                 {
                   err,
                 }
               );
             }
 
-            await scopedDb.framePromptVariants.write({
-              frameId: input.frameId,
+            await scopedDb.shotPromptVariants.write({
+              shotId: input.shotId,
               promptType: 'visual',
               text: input.prompt,
               source: 'user-edit',
@@ -170,8 +180,8 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
           }
 
           if (input.sequenceId) {
-            await scopedDb.frameVariants.upsert({
-              frameId: input.frameId,
+            await scopedDb.shotVariants.upsert({
+              shotId: input.shotId,
               sequenceId: input.sequenceId,
               variantType: 'image',
               model,
@@ -183,10 +193,10 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
           await getGenerationChannel(input.sequenceId).emit(
             'generation.image:progress',
             {
-              frameId: input.frameId,
+              shotId: input.shotId,
               status: 'generating',
               model,
-              // Variant-only (#547): don't flip the primary frame to
+              // Variant-only (#547): don't flip the primary shot to
               // "generating" in cache — this run only fills a variant row.
               variantOnly: input.variantOnly,
             }
@@ -207,7 +217,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
             input.referenceImages?.map(
               (ref: ReferenceImageDescription) => ref.referenceImageUrl
             ) ?? [],
-          traceName: 'frame-image',
+          traceName: 'shot-image',
         } satisfies ImageGenerationParams;
       }
     );
@@ -215,7 +225,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     if (!generationParams) {
       return {
         imageUrl: '',
-        frameId: input.frameId,
+        shotId: input.shotId,
         sequenceId: input.sequenceId,
       };
     }
@@ -223,22 +233,22 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     // Generate the image. CF's default per-step retry handles content-flag and
     // transient errors (#881): a stochastic rejection clears on a fresh
     // same-model call; a deterministic content-checker hit exhausts the retries
-    // and fails with its real message — recorded on the frame by onFailure and
+    // and fails with its real message — recorded on the shot by onFailure and
     // surfaced in the failure banner.
     const imageResult = await step.do('generate-image', async (ctx) => {
       logger.info(
-        `[ImageWorkflow:cf] Generating image ${input.frameId} with model ${generationParams.model} (attempt ${ctx.attempt})`
+        `[ImageWorkflow:cf] Generating image ${input.shotId} with model ${generationParams.model} (attempt ${ctx.attempt})`
       );
       // `ctx.attempt` is 1 on the first run and increments on each CF retry —
       // surface that as in-flight retry state so the scenes UI shows
       // "Retrying…" instead of an indistinguishable hung spinner (#882). No
       // fixed denominator: this leans on CF's default retry budget (above), so
       // `maxAttempts` reflects the resolved config when present, else is omitted.
-      if (ctx.attempt > 1 && input.frameId && input.sequenceId) {
+      if (ctx.attempt > 1 && input.shotId && input.sequenceId) {
         await getGenerationChannel(input.sequenceId).emit(
           'generation.image:progress',
           {
-            frameId: input.frameId,
+            shotId: input.shotId,
             status: 'generating',
             phase: 'retrying',
             attempt: ctx.attempt,
@@ -254,7 +264,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     });
 
     const imageCostMicros = imageResult.metadata.cost ?? ZERO_MICROS;
-    const { teamId, frameId, sequenceId } = input;
+    const { teamId, shotId, sequenceId } = input;
     if (imageCostMicros > 0 && teamId && !imageResult.metadata.usedOwnKey) {
       await step.do('deduct-credits', async () => {
         await deductWorkflowCredits({
@@ -265,7 +275,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
           idempotencyKey: `${event.instanceId}:image`,
           metadata: {
             model: generationParams.model,
-            frameId: input.frameId,
+            shotId: input.shotId,
             sequenceId: input.sequenceId,
           },
           workflowName: 'ImageWorkflow:cf',
@@ -279,13 +289,13 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     }
     let imageUrl: string = generatedImageUrl;
 
-    if (imageUrl && frameId && sequenceId && teamId && !input.skipStorage) {
+    if (imageUrl && shotId && sequenceId && teamId && !input.skipStorage) {
       const upload = await step.do('upload-image', async () => {
         return uploadImageToStorage({
           imageUrl,
           teamId,
           sequenceId,
-          frameId,
+          shotId,
         });
       });
 
@@ -299,7 +309,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
 
         const outcome = await persistImageResult({
           scopedDb,
-          frameId,
+          shotId,
           sequenceId,
           model,
           upload,
@@ -312,16 +322,16 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
           },
         });
 
-        if (outcome.status === 'frame-deleted') {
+        if (outcome.status === 'shot-deleted') {
           logger.info(
-            `[ImageWorkflow:cf] Frame ${frameId} was deleted, skipping persist`
+            `[ImageWorkflow:cf] Shot ${shotId} was deleted, skipping persist`
           );
           return null;
         }
 
         if (outcome.status === 'divergent' && snapshotHash) {
           logger.info(
-            `[ImageWorkflow:cf] Diverged frame ${frameId}: snapshot=${snapshotHash.slice(0, 8)} current=${currentHash?.slice(0, 8)}; routed alternate to frame_variants`
+            `[ImageWorkflow:cf] Diverged shot ${shotId}: snapshot=${snapshotHash.slice(0, 8)} current=${currentHash?.slice(0, 8)}; routed alternate to shot_variants`
           );
         } else {
           logger.info(`[ImageWorkflow:cf] Uploaded to storage: ${upload.path}`);
@@ -330,10 +340,10 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
         return { imageUrl: outcome.imageUrl };
       });
       if (writeResult) imageUrl = writeResult.imageUrl;
-    } else if (imageUrl && frameId && input.skipStorage) {
+    } else if (imageUrl && shotId && input.skipStorage) {
       await step.do('store-preview-url', async () => {
-        const updatedFrame = await scopedDb.frames.update(
-          frameId,
+        const updatedShot = await scopedDb.shots.update(
+          shotId,
           {
             previewThumbnailUrl: imageUrl,
             thumbnailGeneratedAt: new Date(),
@@ -342,9 +352,9 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
           { throwOnMissing: false }
         );
 
-        if (!updatedFrame) {
+        if (!updatedShot) {
           logger.info(
-            `[ImageWorkflow:cf] Frame ${frameId} was deleted, skipping preview update`
+            `[ImageWorkflow:cf] Shot ${shotId} was deleted, skipping preview update`
           );
           return;
         }
@@ -352,13 +362,13 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
         if (sequenceId) {
           await getGenerationChannel(sequenceId).emit(
             'generation.image:progress',
-            { frameId, previewThumbnailUrl: imageUrl }
+            { shotId, previewThumbnailUrl: imageUrl }
           );
         }
       });
     }
 
-    return { imageUrl, frameId, sequenceId };
+    return { imageUrl, shotId, sequenceId };
   }
 
   protected override async onFailure({
@@ -374,13 +384,13 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     const previewMode = input.skipStorage;
     if (previewMode) return;
 
-    if (!input.frameId || !input.teamId) return;
+    if (!input.shotId || !input.teamId) return;
 
     // Variant-only (#547): leave the primary columns untouched on failure too —
     // only this model's variant row is flipped to `failed` below.
     if (!input.variantOnly) {
-      await scopedDb.frames.update(
-        input.frameId,
+      await scopedDb.shots.update(
+        input.shotId,
         { thumbnailStatus: 'failed', thumbnailError: error },
         { throwOnMissing: false }
       );
@@ -388,8 +398,8 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
 
     const model = input.model ?? DEFAULT_IMAGE_MODEL;
     if (input.sequenceId) {
-      await scopedDb.frameVariants.updateByFrameAndModel(
-        input.frameId,
+      await scopedDb.shotVariants.updateByShotAndModel(
+        input.shotId,
         'image',
         model,
         { status: 'failed', error }
@@ -399,7 +409,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
         await getGenerationChannel(input.sequenceId).emit(
           'generation.image:progress',
           {
-            frameId: input.frameId,
+            shotId: input.shotId,
             status: 'failed',
             model,
             // Carry the reason so the cache updater writes `thumbnailError`
@@ -415,7 +425,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
         );
       } catch (emitError) {
         logger.error(
-          `[ImageWorkflow:cf] Failed to emit failure event for sequence ${input.sequenceId} frame ${input.frameId}:`,
+          `[ImageWorkflow:cf] Failed to emit failure event for sequence ${input.sequenceId} shot ${input.shotId}:`,
           {
             err: emitError,
           }
@@ -425,12 +435,12 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
 
     if (isContentRejectionError(error)) {
       logger.warn(
-        `[ImageWorkflow:cf] frame ${input.frameId} failed a content checker`,
+        `[ImageWorkflow:cf] shot ${input.shotId} failed a content checker`,
         {
           event: CONTENT_REJECTION_EVENT,
           kind: 'image',
           model,
-          frameId: input.frameId,
+          shotId: input.shotId,
           sequenceId: input.sequenceId,
           error,
         }
@@ -438,7 +448,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     }
 
     logger.error(
-      `[ImageWorkflow:cf] Image generation failed for frame ${input.frameId}: ${error}`
+      `[ImageWorkflow:cf] Image generation failed for shot ${input.shotId}: ${error}`
     );
   }
 }

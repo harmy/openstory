@@ -9,14 +9,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFrameDownloadUrl } from '@/hooks/use-frame-download-url';
+import { useShotDownloadUrl } from '@/hooks/use-shot-download-url';
 import {
   type AspectRatio,
   aspectRatioToDimensions,
   getAspectRatioClassName,
 } from '@/lib/constants/aspect-ratios';
 import { cn } from '@/lib/utils';
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import { AppImage } from '@/components/ui/app-image';
 import {
   AlertCircle,
@@ -32,22 +32,22 @@ import { VideoPlayer } from './video-player';
 import { VideoStateOverlay } from './video-state-overlay';
 
 type ScenePlayerProps = {
-  frames?: Frame[];
-  selectedFrameId?: string;
+  shots?: Shot[];
+  selectedShotId?: string;
   aspectRatio: AspectRatio;
   /**
    * Accepted but unused: the player no longer auto-advances between scenes
    * (single-scene review shouldn't roll into the next clip — use Theatre for
-   * continuous playback). Frame selection is driven by the scene list.
+   * continuous playback). Shot selection is driven by the scene list.
    */
-  onSelectFrame?: (frameId: string) => void;
+  onSelectShot?: (shotId: string) => void;
   className?: string;
   wrapperClassName?: string;
   selectedTab?: TabValue;
   overrideImageUrl?: string | null;
   /**
    * Per-scene video-variant preview (#545). When set (motion tab), the player
-   * plays this url for the current frame instead of its primary video — the
+   * plays this url for the current shot instead of its primary video — the
    * motion analog of `overrideImageUrl`.
    */
   overrideVideoUrl?: string | null;
@@ -60,7 +60,7 @@ type ScenePlayerProps = {
   modelMismatchLabel?: string | null;
   progressMessage?: string;
   /**
-   * In-flight retry state for the selected frame (#882) — rendered as
+   * In-flight retry state for the selected shot (#882) — rendered as
    * "Retrying (N/M)…" (or "Retrying…") in the player overlay.
    */
   retry?: { attempt: number; maxAttempts?: number };
@@ -70,10 +70,10 @@ type ScenePlayerProps = {
 };
 
 export const ScenePlayer: React.FC<ScenePlayerProps> = ({
-  frames,
+  shots,
   className,
   wrapperClassName,
-  selectedFrameId,
+  selectedShotId,
   aspectRatio,
   selectedTab,
   overrideImageUrl,
@@ -89,38 +89,38 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
   const [shouldAutoPlay, setShouldAutoPlay] = useState(false);
 
   const imageDimensions = aspectRatioToDimensions(aspectRatio);
-  // Get current frame and next frame
-  const [currentFrameIndex, setCurrentFrameIndex] = useState(
-    frames?.findIndex((frame) => frame.id === selectedFrameId) ?? -1
+  // Get current shot and next shot
+  const [currentShotIndex, setCurrentShotIndex] = useState(
+    shots?.findIndex((shot) => shot.id === selectedShotId) ?? -1
   );
   useEffect(() => {
-    // We could use a useMemo here, but we want to support not having to have a callback to set the selected frame id
-    setCurrentFrameIndex(
-      frames?.findIndex((frame) => frame.id === selectedFrameId) ?? -1
+    // We could use a useMemo here, but we want to support not having to have a callback to set the selected shot id
+    setCurrentShotIndex(
+      shots?.findIndex((shot) => shot.id === selectedShotId) ?? -1
     );
-  }, [selectedFrameId, frames]);
+  }, [selectedShotId, shots]);
 
-  const currentFrame =
-    frames && currentFrameIndex >= 0 ? frames[currentFrameIndex] : undefined;
-  const nextFrame =
-    frames && currentFrameIndex < frames.length - 1
-      ? frames.find(
-          (frame, index) =>
-            frame.videoStatus === 'completed' &&
-            frame.videoUrl &&
-            index > currentFrameIndex,
-          currentFrameIndex + 1
+  const currentShot =
+    shots && currentShotIndex >= 0 ? shots[currentShotIndex] : undefined;
+  const nextShot =
+    shots && currentShotIndex < shots.length - 1
+      ? shots.find(
+          (shot, index) =>
+            shot.videoStatus === 'completed' &&
+            shot.videoUrl &&
+            index > currentShotIndex,
+          currentShotIndex + 1
         )
       : undefined;
 
   const handleCopyImageUrl = useCallback(async () => {
-    if (!currentFrame?.thumbnailUrl) return;
+    if (!currentShot?.thumbnailUrl) return;
     try {
       // Stored media URLs are origin-relative (#894) — absolutize against the
       // current origin so the copied link is usable when pasted elsewhere. The
       // worker's public /r2 route serves it (redirecting to the CDN in prod).
       const absoluteUrl = new URL(
-        currentFrame.thumbnailUrl,
+        currentShot.thumbnailUrl,
         window.location.origin
       ).href;
       await navigator.clipboard.writeText(absoluteUrl);
@@ -128,30 +128,30 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
     } catch {
       toast.error('Failed to copy URL');
     }
-  }, [currentFrame?.thumbnailUrl]);
+  }, [currentShot?.thumbnailUrl]);
 
   const handleCopyVideoUrl = useCallback(async () => {
-    if (!currentFrame?.videoUrl) return;
+    if (!currentShot?.videoUrl) return;
     try {
-      const absoluteUrl = new URL(currentFrame.videoUrl, window.location.origin)
+      const absoluteUrl = new URL(currentShot.videoUrl, window.location.origin)
         .href;
       await navigator.clipboard.writeText(absoluteUrl);
       toast.success('Video URL copied');
     } catch {
       toast.error('Failed to copy URL');
     }
-  }, [currentFrame?.videoUrl]);
+  }, [currentShot?.videoUrl]);
 
   // Check video status
   const hasCompletedVideo =
-    currentFrame &&
-    currentFrame.videoStatus === 'completed' &&
-    currentFrame.videoUrl;
-  const hasFailedVideo = currentFrame && currentFrame.videoStatus === 'failed';
+    currentShot &&
+    currentShot.videoStatus === 'completed' &&
+    currentShot.videoUrl;
+  const hasFailedVideo = currentShot && currentShot.videoStatus === 'failed';
 
   // Fetch signed download URL with Content-Disposition header (forces browser download)
-  const { data: downloadData } = useFrameDownloadUrl(
-    { frameId: currentFrame?.id, sequenceId: currentFrame?.sequenceId },
+  const { data: downloadData } = useShotDownloadUrl(
+    { shotId: currentShot?.id, sequenceId: currentShot?.sequenceId },
     !!hasCompletedVideo
   );
 
@@ -161,11 +161,11 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
     a.href = downloadData.downloadUrl;
     a.download =
       downloadData.filename ||
-      `scene-${currentFrame?.id ?? 'unknown'}_openstory.mp4`;
+      `scene-${currentShot?.id ?? 'unknown'}_openstory.mp4`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  }, [downloadData, currentFrame?.id]);
+  }, [downloadData, currentShot?.id]);
 
   // Handle video pause - disable autoplay when user manually pauses
   const handlePause = useCallback(() => {
@@ -181,7 +181,7 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
   }, [onEnded]);
 
   // Show blob loader during generation, skeleton otherwise
-  if (!frames || frames.length === 0) {
+  if (!shots || shots.length === 0) {
     if (progressMessage) {
       return (
         <div className={cn('flex w-full flex-col', wrapperClassName)}>
@@ -254,35 +254,35 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
     );
   }
 
-  if (!currentFrame) {
+  if (!currentShot) {
     return (
       <EmptyState
         icon={<VideoIcon />}
-        title={'No selected frame'}
-        description={'Please select a frame to play.'}
+        title={'No selected shot'}
+        description={'Please select a shot to play.'}
       />
     );
   }
 
   // Get scene title for alt text — match scene-list-item fallback
   const sceneNumber =
-    currentFrame.metadata?.sceneNumber ??
-    (currentFrameIndex >= 0 ? currentFrameIndex + 1 : undefined);
+    currentShot.metadata?.sceneNumber ??
+    (currentShotIndex >= 0 ? currentShotIndex + 1 : undefined);
   const title =
-    currentFrame.metadata?.metadata?.title ??
+    currentShot.metadata?.metadata?.title ??
     (sceneNumber ? `Scene ${sceneNumber}` : undefined);
 
   // Best available image: override (variant preview) → final thumbnail → fast preview → sequence poster
   const displayImage =
     overrideImageUrl ??
-    currentFrame.thumbnailUrl ??
-    currentFrame.previewThumbnailUrl ??
+    currentShot.thumbnailUrl ??
+    currentShot.previewThumbnailUrl ??
     posterUrl ??
     null;
   const isPreviewImage =
-    !!currentFrame.previewThumbnailUrl && !currentFrame.thumbnailUrl;
+    !!currentShot.previewThumbnailUrl && !currentShot.thumbnailUrl;
   const isVariantPreview =
-    !!overrideImageUrl && overrideImageUrl !== currentFrame.thumbnailUrl;
+    !!overrideImageUrl && overrideImageUrl !== currentShot.thumbnailUrl;
 
   // The image-focused tabs (the still image + the shot-variant grid) keep
   // showing the image; every other tab (script, motion, cast, location,
@@ -291,14 +291,14 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
     selectedTab === 'image-prompt' || selectedTab === 'scene-variants';
 
   // Per-scene video-variant preview (#545): on the motion tab, play the
-  // override variant for this frame instead of its primary video.
+  // override variant for this shot instead of its primary video.
   const isVariantVideoPreview =
     !!overrideVideoUrl &&
     !showsStillImage &&
-    overrideVideoUrl !== currentFrame.videoUrl;
+    overrideVideoUrl !== currentShot.videoUrl;
   const playbackVideoUrl = showsStillImage
     ? ''
-    : (overrideVideoUrl ?? currentFrame.videoUrl ?? '');
+    : (overrideVideoUrl ?? currentShot.videoUrl ?? '');
 
   return (
     <div className={cn('flex w-full flex-col', wrapperClassName)}>
@@ -315,7 +315,7 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
           {/* Show best available image as background */}
           {displayImage && (
             <a
-              href={currentFrame.thumbnailUrl ?? displayImage}
+              href={currentShot.thumbnailUrl ?? displayImage}
               target="_blank"
               rel="noopener noreferrer"
               className="block w-full h-full"
@@ -331,7 +331,7 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
           )}
 
           {/* Share dropdown */}
-          {currentFrame.thumbnailUrl && (
+          {currentShot.thumbnailUrl && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -375,7 +375,7 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
           )}
         >
           {/* Share dropdown */}
-          {(currentFrame.thumbnailUrl || currentFrame.videoUrl) && (
+          {(currentShot.thumbnailUrl || currentShot.videoUrl) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -388,13 +388,13 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {currentFrame.thumbnailUrl && (
+                {currentShot.thumbnailUrl && (
                   <DropdownMenuItem onClick={() => void handleCopyImageUrl()}>
                     <Link className="h-4 w-4" />
                     Copy scene image URL
                   </DropdownMenuItem>
                 )}
-                {currentFrame.videoUrl && (
+                {currentShot.videoUrl && (
                   <DropdownMenuItem onClick={() => void handleCopyVideoUrl()}>
                     <VideoIcon className="h-4 w-4" />
                     Copy scene video URL
@@ -440,7 +440,7 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
             videoStatus={
               isVariantVideoPreview
                 ? 'completed'
-                : (currentFrame.videoStatus ?? null)
+                : (currentShot.videoStatus ?? null)
             }
             progressMessage={progressMessage}
             retry={retry}
@@ -474,12 +474,12 @@ export const ScenePlayer: React.FC<ScenePlayerProps> = ({
         Fast preview — may not match the final image.
       </p>
       {/* Preload next video in background if it's completed */}
-      {nextFrame?.videoUrl && nextFrame.videoStatus === 'completed' && (
+      {nextShot?.videoUrl && nextShot.videoStatus === 'completed' && (
         <div className="hidden">
           {/* eslint-disable-next-line jsx-a11y/media-has-caption -- preload only, not user-facing */}
           <video
-            key={nextFrame.videoUrl}
-            src={nextFrame.videoUrl}
+            key={nextShot.videoUrl}
+            src={nextShot.videoUrl}
             preload="auto"
           />
         </div>

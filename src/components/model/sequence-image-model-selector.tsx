@@ -14,7 +14,7 @@ import { useActiveImageModel } from '@/hooks/use-active-image-model';
 import {
   useSequenceImageModels,
   useSequenceImageVariants,
-} from '@/hooks/use-frames';
+} from '@/hooks/use-shots';
 import { IMAGE_MODELS, isValidTextToImageModel } from '@/lib/ai/models';
 import { computeSequenceModelCoverage } from '@/lib/model/sequence-model-coverage';
 import { ChevronDown } from 'lucide-react';
@@ -26,7 +26,7 @@ function imageModelName(model: string): string {
 
 /**
  * Top-level image-model switcher for the sequence header. Lists the distinct
- * image models that have generated for this sequence (frame_variants) and lets
+ * image models that have generated for this sequence (shot_variants) and lets
  * the viewer pick which model's image the scenes view shows; also hosts the
  * "Add a model" picker (#547). "Mixed" when more than one model has output and
  * none is pinned. Replaces the read-only ImageModelBadge.

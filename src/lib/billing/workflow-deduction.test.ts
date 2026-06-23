@@ -35,13 +35,13 @@ describe('deductWorkflowCredits', () => {
       usedOwnKey: false,
       description: 'Image generation (test-model)',
       idempotencyKey: 'env_image_abc123:image',
-      metadata: { frameId: 'f1' },
+      metadata: { shotId: 'f1' },
     });
 
     expect(deductCredits).toHaveBeenCalledTimes(1);
     expect(deductCredits).toHaveBeenCalledWith(micros(2_000_000), {
       description: 'Image generation (test-model)',
-      metadata: { frameId: 'f1' },
+      metadata: { shotId: 'f1' },
       idempotencyKey: 'env_image_abc123:image',
     });
   });

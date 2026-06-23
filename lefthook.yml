@@ -26,6 +26,8 @@ pre-commit:
       exclude:
         - src/routeTree.gen.ts
         - public/mockServiceWorker.js
+        - worker-configuration.d.ts
+        - gen.types.ts
       run: bun run --bun oxfmt --write {staged_files}
       stage_fixed: true
     typecheck:

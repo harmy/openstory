@@ -103,9 +103,9 @@ export class StoryboardWorkflow extends OpenStoryWorkflowEntrypoint<StoryboardWo
         throw new NonRetryableError('No style found');
       }
 
-      const existingFrames = await scopedDb.frames.listBySequence(sequenceId);
+      const existingShots = await scopedDb.shots.listBySequence(sequenceId);
       await Promise.all(
-        existingFrames.map((frame) => scopedDb.frames.delete(frame.id))
+        existingShots.map((shot) => scopedDb.shots.delete(shot.id))
       );
 
       await seq.updateStatus('processing');
@@ -188,7 +188,7 @@ export class StoryboardWorkflow extends OpenStoryWorkflowEntrypoint<StoryboardWo
       awaitStepName: 'await-analyze-script',
       // Must exceed the child's own await budget: analyze-script's phases run
       // sequentially — scene-split (45m) + matching (45m) + bibles/visual
-      // prompts (60m) + frame-images (90m) + motion-batch (90m) ≈ 5.5 hours
+      // prompts (60m) + shot-images (90m) + motion-batch (90m) ≈ 5.5 hours
       // worst case — a shorter parent wait here times out first and leaves
       // the still-running child notifying a terminal parent
       // (`instance.in_finite_state`, the #801/#839 burst failures).

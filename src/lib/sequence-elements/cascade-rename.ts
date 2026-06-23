@@ -1,8 +1,8 @@
 /**
  * Cascade an element token rename through every place the old token can be
- * referenced: sequence script text, per-frame metadata (continuity tags,
+ * referenced: sequence script text, per-shot metadata (continuity tags,
  * original script extract, prompt strings), and the user-edited
- * imagePrompt/motionPrompt overrides on the frame row.
+ * imagePrompt/motionPrompt overrides on the shot row.
  *
  * The rewrite is whole-word and case-insensitive on the haystack side (so a
  * lowercase mention inside script prose is still rewritten), but always emits
@@ -11,7 +11,7 @@
  */
 
 import type { Scene } from '@/lib/ai/scene-analysis.schema';
-import type { Frame } from '@/lib/db/schema';
+import type { Shot } from '@/lib/db/schema';
 
 /** Whole-token regex. Boundaries are anything that isn't `[A-Za-z0-9_]`. */
 function tokenRegex(token: string): RegExp {
@@ -35,7 +35,7 @@ function textContainsToken(text: string, token: string): boolean {
   return tokenRegex(token).test(text);
 }
 
-/** Pure rewrite of one frame's Scene metadata. Returns null if nothing changed. */
+/** Pure rewrite of one shot's Scene metadata. Returns null if nothing changed. */
 function renameTokenInScene(
   scene: Scene,
   oldToken: string,
@@ -113,46 +113,46 @@ function renameTokenInScene(
   return changed ? next : null;
 }
 
-export type FrameRenameDelta = {
-  frameId: string;
+export type ShotRenameDelta = {
+  shotId: string;
   metadata?: Scene;
   imagePrompt?: string;
   motionPrompt?: string;
 };
 
-/** Compute per-frame deltas for a token rename. Frames with no references return null. */
-export function buildFrameRenameDeltas(
-  frames: Frame[],
+/** Compute per-shot deltas for a token rename. Shots with no references return null. */
+export function buildShotRenameDeltas(
+  shots: Shot[],
   oldToken: string,
   newToken: string
-): FrameRenameDelta[] {
+): ShotRenameDelta[] {
   if (oldToken === newToken) return [];
 
-  const deltas: FrameRenameDelta[] = [];
-  for (const frame of frames) {
-    const delta: FrameRenameDelta = { frameId: frame.id };
+  const deltas: ShotRenameDelta[] = [];
+  for (const shot of shots) {
+    const delta: ShotRenameDelta = { shotId: shot.id };
     let touched = false;
 
-    if (frame.metadata) {
-      const rewritten = renameTokenInScene(frame.metadata, oldToken, newToken);
+    if (shot.metadata) {
+      const rewritten = renameTokenInScene(shot.metadata, oldToken, newToken);
       if (rewritten) {
         delta.metadata = rewritten;
         touched = true;
       }
     }
 
-    if (frame.imagePrompt && textContainsToken(frame.imagePrompt, oldToken)) {
+    if (shot.imagePrompt && textContainsToken(shot.imagePrompt, oldToken)) {
       delta.imagePrompt = replaceTokenInText(
-        frame.imagePrompt,
+        shot.imagePrompt,
         oldToken,
         newToken
       );
       touched = true;
     }
 
-    if (frame.motionPrompt && textContainsToken(frame.motionPrompt, oldToken)) {
+    if (shot.motionPrompt && textContainsToken(shot.motionPrompt, oldToken)) {
       delta.motionPrompt = replaceTokenInText(
-        frame.motionPrompt,
+        shot.motionPrompt,
         oldToken,
         newToken
       );

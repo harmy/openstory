@@ -4,7 +4,7 @@ import { mediaUrlSchema } from './media-url.schemas';
 describe('mediaUrlSchema', () => {
   it('accepts origin-relative stored and derived URLs', () => {
     expect(
-      mediaUrlSchema.safeParse('/r2/thumbnails/team/frame.png').success
+      mediaUrlSchema.safeParse('/r2/thumbnails/team/shot.png').success
     ).toBe(true);
     expect(
       mediaUrlSchema.safeParse('/cdn-cgi/image/trim=0;1;2;3/r2/x.png').success

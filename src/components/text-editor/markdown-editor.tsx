@@ -210,7 +210,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   // from the incoming value. When mentions are on, we tagify the value first
   // so bare slugs in the incoming string land as mention nodes.
   //
-  // Defer the write to the next frame so a burst of value changes (LLM
+  // Defer the write to the next shot so a burst of value changes (LLM
   // streaming the script chunk-by-chunk) collapses to one setContent with
   // the latest value. Each setContent is a full markdown re-parse + doc
   // rebuild and freezes the renderer if applied per-chunk at ~30Hz+.

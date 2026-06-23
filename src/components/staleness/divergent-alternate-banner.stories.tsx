@@ -28,7 +28,7 @@ const meta: Meta<typeof DivergentAlternateBanner> = {
     entityType: {
       control: 'select',
       options: [
-        'frame',
+        'shot',
         'character',
         'location',
         'library-location',
@@ -44,7 +44,7 @@ const meta: Meta<typeof DivergentAlternateBanner> = {
   args: {
     variantId: 'variant_01HZK7P3X8Q2J4',
     artifact: 'thumbnail',
-    entityType: 'frame',
+    entityType: 'shot',
   },
 };
 
@@ -55,7 +55,7 @@ export const DivergentWithAlternateInline: Story = {
   args: {
     density: 'inline',
     artifact: 'thumbnail',
-    entityType: 'frame',
+    entityType: 'shot',
   },
   decorators: [
     (Story) => (
@@ -70,7 +70,7 @@ export const DivergentWithAlternateInlineVideo: Story = {
   args: {
     density: 'inline',
     artifact: 'video',
-    entityType: 'frame',
+    entityType: 'shot',
   },
   decorators: [
     (Story) => (
@@ -85,7 +85,7 @@ export const DivergentWithAlternateCornerDot: Story = {
   args: {
     density: 'corner-dot',
     artifact: 'thumbnail',
-    entityType: 'frame',
+    entityType: 'shot',
   },
   render: (args) => (
     <Card className="relative w-72">
@@ -119,7 +119,7 @@ export const BothStatesCoexisting: Story = {
           <DivergentAlternateBanner
             variantId="variant_01HZK7P3X8Q2J4"
             artifact="thumbnail"
-            entityType="frame"
+            entityType="shot"
             onCompare={() => {}}
             onPromote={() => {}}
             onDiscard={() => {}}
@@ -127,7 +127,7 @@ export const BothStatesCoexisting: Story = {
         ) : isStale ? (
           <StalenessIndicator
             artifact="thumbnail"
-            entityType="frame"
+            entityType="shot"
             onRegenerate={() => {}}
           />
         ) : null}

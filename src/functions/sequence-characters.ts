@@ -40,16 +40,16 @@ export const getSequenceCharactersFn = createServerFn({ method: 'GET' })
     return context.scopedDb.characters.listWithTalent(context.sequence.id);
   });
 
-/** Get frame IDs for all frames containing a specific character */
-export const getFrameIdsForCharacterFn = createServerFn({ method: 'GET' })
+/** Get shot IDs for all shots containing a specific character */
+export const getShotIdsForCharacterFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
   .inputValidator(zodValidator(z.object({ characterId: z.string().min(1) })))
   .handler(async ({ context, data }) => {
-    const frameIds = await context.scopedDb.characters.getFrameIdsForCharacter(
+    const shotIds = await context.scopedDb.characters.getShotIdsForCharacter(
       context.sequence.id,
       data.characterId
     );
-    return { frameIds, count: frameIds.length };
+    return { shotIds, count: shotIds.length };
   });
 
 /** Recast a character with different talent, triggering sheet regeneration */
@@ -132,8 +132,8 @@ export const recastCharacterFn = createServerFn({ method: 'POST' })
       }
     );
 
-    const affectedFrameIds =
-      await context.scopedDb.characters.getFrameIdsForCharacter(
+    const affectedShotIds =
+      await context.scopedDb.characters.getShotIdsForCharacter(
         character.sequenceId,
         data.characterId
       );
@@ -167,7 +167,7 @@ export const recastCharacterFn = createServerFn({ method: 'POST' })
       talentDescription:
         `This character must look exactly like ${talentWithSheets.name}. ${talentWithSheets.description ?? ''}`.trim(),
       imageModel: safeTextToImageModel(sequence.imageModel),
-      affectedFrameIds,
+      affectedShotIds,
       styleConfig,
     };
 
@@ -181,6 +181,6 @@ export const recastCharacterFn = createServerFn({ method: 'POST' })
       character: updatedCharacter,
       talentId: data.talentId,
       sheetWorkflowRunId: workflowRunId,
-      affectedFrameIds,
+      affectedShotIds,
     };
   });

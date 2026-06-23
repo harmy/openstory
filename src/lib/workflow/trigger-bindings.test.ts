@@ -7,7 +7,7 @@
  * same logical trigger (a `step.do` replay re-running its closure), so the
  * trigger must succeed and return the deterministic id — otherwise a
  * multi-create step can never complete once one sibling fails (issue #846
- * RC3). But dedup ids are not always run-scoped (`framePromptDedupId` is
+ * RC3). But dedup ids are not always run-scoped (`shotPromptDedupId` is
  * stable across user requests), so the swallow is gated on the existing
  * instance's status: alive-or-complete reuses it; errored/terminated/unknown/
  * unverifiable rethrows so a dead instance can't masquerade as "enqueued".
@@ -87,14 +87,14 @@ describe('triggerCfWorkflow', () => {
       triggerPath: '/image',
       body,
       env,
-      deduplicationId: 'preview-frame1-h4sh',
+      deduplicationId: 'preview-shot1-h4sh',
     });
     const b = await triggerCfWorkflow({
       binding,
       triggerPath: '/image',
       body,
       env,
-      deduplicationId: 'preview-frame1-h4sh',
+      deduplicationId: 'preview-shot1-h4sh',
     });
 
     expect(create).toHaveBeenCalledTimes(2);
@@ -144,7 +144,7 @@ describe('triggerCfWorkflow', () => {
     }
   );
 
-  // A request-stable dedup id (e.g. framePromptDedupId) colliding with a
+  // A request-stable dedup id (e.g. shotPromptDedupId) colliding with a
   // FAILED prior instance must stay loud: returning the dead instance's id
   // would clear staleness banners while no workflow ever runs (#846 review).
   test.each(['errored', 'terminated', 'unknown'] as const)(
@@ -197,7 +197,7 @@ describe('triggerCfWorkflow', () => {
         triggerPath: '/image',
         body,
         env,
-        deduplicationId: 'preview-frame1-h4sh',
+        deduplicationId: 'preview-shot1-h4sh',
       })
     ).rejects.toThrow('network down');
   });

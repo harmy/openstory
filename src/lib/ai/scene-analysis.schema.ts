@@ -322,7 +322,7 @@ const promptsSchema = z.object({
 });
 
 // ============================================================================
-// Music Design Schema (replaces audioDesign for new frames)
+// Music Design Schema (replaces audioDesign for new shots)
 // ============================================================================
 
 export const musicDesignSchema = z.object({
@@ -343,7 +343,7 @@ export const musicDesignSchema = z.object({
 });
 
 // ============================================================================
-// Audio Design Schemas (deprecated — kept for backward compat with old frames)
+// Audio Design Schemas (deprecated — kept for backward compat with old shots)
 // ============================================================================
 
 const musicSchema = z.object({
@@ -501,8 +501,8 @@ export const sceneSchema = z.object({
   }),
   musicDesign: musicDesignSchema
     .optional()
-    .meta({ description: 'Music classification for this scene (new frames)' }),
-  /** @deprecated Kept for backward compat with old frames — use musicDesign */
+    .meta({ description: 'Music classification for this scene (new shots)' }),
+  /** @deprecated Kept for backward compat with old shots — use musicDesign */
   audioDesign: audioDesignSchema
     .optional()
     .meta({ description: 'Audio and sound design specs (deprecated)' }),

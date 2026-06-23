@@ -1,4 +1,4 @@
-import { getFrameStalenessFn } from '@/functions/frames';
+import { getShotStalenessFn } from '@/functions/shots';
 import { useQuery } from '@tanstack/react-query';
 
 /**
@@ -11,31 +11,31 @@ import { useQuery } from '@tanstack/react-query';
  */
 type ArtifactStaleness = 'stale' | 'fresh' | 'untracked';
 
-export type FrameStaleness = {
+export type ShotStaleness = {
   thumbnail: ArtifactStaleness;
   visualPrompt: ArtifactStaleness;
   motionPrompt: ArtifactStaleness;
 };
 
-export const frameStalenessKey = (frameId: string | undefined) =>
-  ['frame-staleness', frameId] as const;
+export const shotStalenessKey = (shotId: string | undefined) =>
+  ['shot-staleness', shotId] as const;
 
 /**
- * Shared query for frame staleness — consumers must use this hook rather
+ * Shared query for shot staleness — consumers must use this hook rather
  * than an inline `useQuery` so cache invalidation hits one entry.
  */
-export function useFrameStaleness(args: {
+export function useShotStaleness(args: {
   sequenceId: string;
-  frameId: string | undefined;
+  shotId: string | undefined;
 }) {
-  const { sequenceId, frameId } = args;
-  return useQuery<FrameStaleness>({
-    queryKey: frameStalenessKey(frameId),
+  const { sequenceId, shotId } = args;
+  return useQuery<ShotStaleness>({
+    queryKey: shotStalenessKey(shotId),
     queryFn: () => {
-      if (!frameId) throw new Error('frameId required');
-      return getFrameStalenessFn({ data: { sequenceId, frameId } });
+      if (!shotId) throw new Error('shotId required');
+      return getShotStalenessFn({ data: { sequenceId, shotId } });
     },
-    enabled: !!frameId,
+    enabled: !!shotId,
     staleTime: 30_000,
   });
 }

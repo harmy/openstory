@@ -25,7 +25,7 @@ import {
   PROMPT_REASONING,
 } from '@/lib/ai/llm-client';
 import { getContextWindow } from '@/lib/ai/models.config';
-import { narrowFramePromptContext } from '@/lib/ai/prompt-context';
+import { narrowShotPromptContext } from '@/lib/ai/prompt-context';
 import {
   type VisualPrompt,
   type VisualPromptResult,
@@ -37,7 +37,7 @@ import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { getLogger } from '@/lib/observability/logger';
 import { getChatPrompt } from '@/lib/prompts';
-import { getFramePromptChannel, getGenerationChannel } from '@/lib/realtime';
+import { getShotPromptChannel, getGenerationChannel } from '@/lib/realtime';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import type { VisualPromptSceneWorkflowInput } from '@/lib/workflow/types';
@@ -71,7 +71,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
       elementBible = [],
       styleConfig,
       analysisModelId,
-      frameId,
+      shotId,
       sequenceId,
       userId,
       emitStreaming,
@@ -82,7 +82,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
     // LLM and the staleness hash then consume the same minimal, scene-scoped
     // input — no full-bible pass for the model to wade through, and the stored
     // hash matches the verify-time recompute by construction. See #867.
-    const narrowed = narrowFramePromptContext({
+    const narrowed = narrowShotPromptContext({
       scene,
       styleConfig,
       characterBible,
@@ -93,14 +93,14 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
     });
 
     const streamConfig =
-      emitStreaming && frameId
-        ? { frameId, promptType: 'visual' as const, flushIntervalMs: 80 }
+      emitStreaming && shotId
+        ? { shotId, promptType: 'visual' as const, flushIntervalMs: 80 }
         : undefined;
 
     const logMetadata = {
       phase: PHASE.number,
       phaseName: PHASE.name,
-      frameId,
+      shotId,
     };
 
     // Step 1: Prepare — fetch prompt from Langfuse.
@@ -167,7 +167,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
             messageCount: messages.length,
             ...(streamConfig
               ? {
-                  frameId: streamConfig.frameId,
+                  shotId: streamConfig.shotId,
                   promptType: streamConfig.promptType,
                 }
               : {}),
@@ -237,7 +237,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
           }
 
           // Streaming path — emit visible `fullPrompt` deltas while accumulating.
-          const channel = getFramePromptChannel(streamConfig.frameId);
+          const channel = getShotPromptChannel(streamConfig.shotId);
           let accumulated = '';
           let lastExtracted = '';
           let pendingDelta = '';
@@ -248,7 +248,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
             const delta = pendingDelta;
             pendingDelta = '';
             lastEmitAt = Date.now();
-            await channel.emit('framePrompt.streaming', {
+            await channel.emit('shotPrompt.streaming', {
               promptType: streamConfig.promptType,
               delta,
             });
@@ -346,7 +346,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
       });
     });
 
-    if (sequenceId && frameId) {
+    if (sequenceId && shotId) {
       if (!result.visual.fullPrompt) {
         throw new WorkflowValidationError(
           `Visual prompt generation returned empty fullPrompt for scene ${scene.sceneId}`
@@ -369,26 +369,26 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
       const inputHash = await computeVisualPromptInputHash(narrowed);
 
       await step.do('save-visual-prompt-to-db', async () => {
-        const previous = await scopedDb.framePromptVariants.getLatest(
-          frameId,
+        const previous = await scopedDb.shotPromptVariants.getLatest(
+          shotId,
           'visual'
         );
         const source = previous ? 'regenerated' : 'ai-generated';
 
-        // Clear `frame.imagePrompt` user-override when regenerating. The
+        // Clear `shot.imagePrompt` user-override when regenerating. The
         // override would otherwise mask the freshly regenerated prompt in
         // every downstream read (effective-prompt fallback chain), so a
-        // regen-prompt click on a previously user-edited frame would do
+        // regen-prompt click on a previously user-edited shot would do
         // nothing visible. The variant row above preserves the new prompt;
         // the user's prior override is still in the prompt-history sheet
         // and can be restored from there.
-        await scopedDb.frames.update(frameId, {
+        await scopedDb.shots.update(shotId, {
           metadata: enrichedScene,
           imagePrompt: null,
         });
 
-        await scopedDb.framePromptVariants.write({
-          frameId,
+        await scopedDb.shotPromptVariants.write({
+          shotId,
           promptType: 'visual',
           text: result.visual.fullPrompt,
           components: result.visual.components,
@@ -397,19 +397,16 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
           analysisModel: analysisModelId,
         });
 
-        await getGenerationChannel(sequenceId).emit(
-          'generation.frame:updated',
-          {
-            frameId,
-            updateType: 'visual-prompt',
-            metadata: enrichedScene,
-          }
-        );
+        await getGenerationChannel(sequenceId).emit('generation.shot:updated', {
+          shotId,
+          updateType: 'visual-prompt',
+          metadata: enrichedScene,
+        });
 
-        // Signal end-of-stream to the per-frame channel so the UI can swap
+        // Signal end-of-stream to the per-shot channel so the UI can swap
         // out the streamed-deltas buffer for the persisted prompt.
         if (emitStreaming) {
-          await getFramePromptChannel(frameId).emit('framePrompt.completed', {
+          await getShotPromptChannel(shotId).emit('shotPrompt.completed', {
             promptType: 'visual',
           });
         }
@@ -432,14 +429,14 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
       workflowRunId: event.instanceId,
       error,
     });
-    // Surface the failure on the per-frame channel so an actively-viewing
+    // Surface the failure on the per-shot channel so an actively-viewing
     // client can clear its streaming state and toast. Best-effort.
     try {
-      if (payload.emitStreaming && payload.frameId) {
-        await getFramePromptChannel(payload.frameId).emit(
-          'framePrompt.failed',
-          { promptType: 'visual', error }
-        );
+      if (payload.emitStreaming && payload.shotId) {
+        await getShotPromptChannel(payload.shotId).emit('shotPrompt.failed', {
+          promptType: 'visual',
+          error,
+        });
       }
     } catch (emitErr) {
       logger.warn('[VisualPromptSceneWorkflow:cf] failed to emit failure', {

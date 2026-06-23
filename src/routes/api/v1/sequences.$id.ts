@@ -1,7 +1,7 @@
 /**
  * GET /api/v1/sequences/$id — sequence status (HAL + optional long-poll).
  *
- * Returns the shared state document (overall status, per-frame image/video
+ * Returns the shared state document (overall status, per-shot image/video
  * status + URLs, music, poster, counts) derived from the DB, with a `_links`
  * affordance catalog attached. Team-scoped via the API key's owner, so a key can
  * only read its own team's sequences.

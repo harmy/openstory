@@ -58,7 +58,7 @@ export function decideSheetDivergence(
 ): SheetDivergenceDecision {
   // Either side missing → can't prove divergence; treat as convergent. Matches
   // the project-wide "null hash = unknown, never stale" policy applied to
-  // pre-hash-tracking rows (see workflow/types.ts on `RegenerateFrameSnapshot`).
+  // pre-hash-tracking rows (see workflow/types.ts on `RegenerateShotSnapshot`).
   if (!snapshotInputHash || !currentInputHash) {
     return { kind: 'convergent' };
   }

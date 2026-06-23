@@ -11,12 +11,12 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  listFramePromptVariantsFn,
+  listShotPromptVariantsFn,
   listSequenceMusicPromptVariantsFn,
-  restoreFramePromptVariantFn,
+  restoreShotPromptVariantFn,
   restoreSequenceMusicPromptVariantFn,
 } from '@/functions/prompt-variants';
-import { frameKeys } from '@/hooks/use-frames';
+import { shotKeys } from '@/hooks/use-shots';
 import { sequenceKeys } from '@/hooks/use-sequences';
 import type { PromptVariantSource } from '@/lib/db/schema';
 import { cn } from '@/lib/utils';
@@ -33,10 +33,10 @@ type SharedProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-type FrameProps = SharedProps & {
+type ShotProps = SharedProps & {
   mode: 'visual' | 'motion';
   sequenceId: string;
-  frameId: string;
+  shotId: string;
   /** Current cached prompt — diff target. */
   currentText: string;
 };
@@ -48,7 +48,7 @@ type MusicProps = SharedProps & {
   currentText: string;
 };
 
-export type PromptHistorySheetProps = FrameProps | MusicProps;
+export type PromptHistorySheetProps = ShotProps | MusicProps;
 
 const SOURCE_LABEL: Record<PromptVariantSource, string> = {
   'ai-generated': 'AI',
@@ -93,14 +93,14 @@ export const PromptHistorySheet: React.FC<PromptHistorySheetProps> = (
   props
 ) => {
   const { open, onOpenChange, mode, currentText, sequenceId } = props;
-  const frameId = props.mode === 'music' ? null : props.frameId;
+  const shotId = props.mode === 'music' ? null : props.shotId;
   const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const queryKey =
     mode === 'music'
       ? (['prompt-variants', 'music', sequenceId] as const)
-      : (['prompt-variants', mode, frameId] as const);
+      : (['prompt-variants', mode, shotId] as const);
 
   const {
     data: rows,
@@ -123,9 +123,9 @@ export const PromptHistorySheet: React.FC<PromptHistorySheetProps> = (
           inputHash: v.inputHash,
         }));
       }
-      if (!frameId) return [];
-      const variants = await listFramePromptVariantsFn({
-        data: { sequenceId, frameId, promptType: mode },
+      if (!shotId) return [];
+      const variants = await listShotPromptVariantsFn({
+        data: { sequenceId, shotId: shotId, promptType: mode },
       });
       return variants.map((v) => ({
         id: v.id,
@@ -147,9 +147,9 @@ export const PromptHistorySheet: React.FC<PromptHistorySheetProps> = (
           data: { sequenceId, variantId },
         });
       }
-      if (!frameId) throw new Error('frameId required');
-      return await restoreFramePromptVariantFn({
-        data: { sequenceId, frameId, variantId },
+      if (!shotId) throw new Error('shotId required');
+      return await restoreShotPromptVariantFn({
+        data: { sequenceId, shotId: shotId, variantId },
       });
     },
     onSuccess: async () => {
@@ -159,12 +159,12 @@ export const PromptHistorySheet: React.FC<PromptHistorySheetProps> = (
         await queryClient.invalidateQueries({
           queryKey: sequenceKeys.detail(sequenceId),
         });
-      } else if (frameId) {
+      } else if (shotId) {
         await queryClient.invalidateQueries({
-          queryKey: frameKeys.detail(frameId),
+          queryKey: shotKeys.detail(shotId),
         });
         await queryClient.invalidateQueries({
-          queryKey: frameKeys.list(sequenceId),
+          queryKey: shotKeys.list(sequenceId),
         });
       }
     },

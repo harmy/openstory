@@ -16,26 +16,26 @@
 import { simpleHash } from '@/lib/utils/hash';
 
 /**
- * Preview image spawned by SceneSplitWorkflow for a freshly upserted frame.
- * `frameId` is replay-stable (frames upsert on `(sequenceId, orderIndex)`);
+ * Preview image spawned by SceneSplitWorkflow for a freshly upserted shot.
+ * `shotId` is replay-stable (shots upsert on `(sequenceId, orderIndex)`);
  * the parent-instance hash scopes per run so a re-split still gets fresh
  * previews while a step retry can't re-spawn paid image jobs.
  */
 export function previewImageDedupId(
   parentInstanceId: string,
-  frameId: string
+  shotId: string
 ): string {
-  return `preview-${simpleHash(parentInstanceId)}-${frameId}`;
+  return `preview-${simpleHash(parentInstanceId)}-${shotId}`;
 }
 
 /**
- * Shot-variant grid spawned by FrameImagesWorkflow, one per (frame, model) —
- * keyed on the scene id instead when no frame matched the scene.
+ * Shot-variant grid spawned by ShotImagesWorkflow, one per (shot, model) —
+ * keyed on the scene id instead when no shot matched the scene.
  */
 export function shotVariantDedupId(
   parentInstanceId: string,
-  frameOrSceneId: string,
+  shotOrSceneId: string,
   model: string
 ): string {
-  return `variant-${simpleHash(parentInstanceId)}-${frameOrSceneId}-${model}`;
+  return `variant-${simpleHash(parentInstanceId)}-${shotOrSceneId}-${model}`;
 }

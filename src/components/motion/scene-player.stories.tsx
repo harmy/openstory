@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Storybook mock data uses intentional type assertions */
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import type { Meta, StoryObj } from '@storybook/react';
 import { ScenePlayer } from './scene-player';
 
@@ -14,7 +14,7 @@ const meta: Meta<typeof ScenePlayer> = {
 export default meta;
 type Story = StoryObj<typeof ScenePlayer>;
 
-const mockFrameBase = {
+const mockShotBase = {
   sequenceId: 'seq-1',
   orderIndex: 0,
   description: 'A scene from the storyboard',
@@ -120,10 +120,10 @@ const mockFrameBase = {
   updatedAt: new Date(),
 };
 
-// Mock frames with scene metadata
-const mockFrames: Frame[] = [
+// Mock shots with scene metadata
+const mockShots: Shot[] = [
   {
-    ...mockFrameBase,
+    ...mockShotBase,
     id: '1',
     orderIndex: 0,
     thumbnailUrl: 'https://picsum.photos/seed/scene1/1280/720',
@@ -136,13 +136,13 @@ const mockFrames: Frame[] = [
     videoStatus: 'completed',
     variantImageStatus: 'completed',
     metadata: {
-      ...mockFrameBase.metadata,
+      ...mockShotBase.metadata,
       sceneNumber: 1,
-      metadata: { ...mockFrameBase.metadata.metadata, title: 'Opening Scene' },
-    } as unknown as Frame['metadata'],
+      metadata: { ...mockShotBase.metadata.metadata, title: 'Opening Scene' },
+    } as unknown as Shot['metadata'],
   },
   {
-    ...mockFrameBase,
+    ...mockShotBase,
     id: '2',
     orderIndex: 1,
     thumbnailUrl: 'https://picsum.photos/seed/scene2/1280/720',
@@ -155,13 +155,13 @@ const mockFrames: Frame[] = [
     videoStatus: 'completed',
     variantImageStatus: 'completed',
     metadata: {
-      ...mockFrameBase.metadata,
+      ...mockShotBase.metadata,
       sceneNumber: 2,
-      metadata: { ...mockFrameBase.metadata.metadata, title: 'The Journey' },
-    } as unknown as Frame['metadata'],
+      metadata: { ...mockShotBase.metadata.metadata, title: 'The Journey' },
+    } as unknown as Shot['metadata'],
   },
   {
-    ...mockFrameBase,
+    ...mockShotBase,
     id: '3',
     orderIndex: 2,
     thumbnailUrl: 'https://picsum.photos/seed/scene3/1280/720',
@@ -173,22 +173,22 @@ const mockFrames: Frame[] = [
     videoStatus: 'pending',
     variantImageStatus: 'pending',
     metadata: {
-      ...mockFrameBase.metadata,
+      ...mockShotBase.metadata,
       sceneNumber: 3,
-      metadata: { ...mockFrameBase.metadata.metadata, title: 'Climax' },
-    } as unknown as Frame['metadata'],
+      metadata: { ...mockShotBase.metadata.metadata, title: 'Climax' },
+    } as unknown as Shot['metadata'],
   },
 ];
 
-// Note: This component now shows ALL frames with completed thumbnails, not just completed videos.
-// Frames with pending/generating/failed video status show poster frame with status overlay.
+// Note: This component now shows ALL shots with completed thumbnails, not just completed videos.
+// Shots with pending/generating/failed video status show poster frame with status overlay.
 
 export const WithMockSequence: Story = {
   args: {
-    selectedFrameId: '1',
-    frames: mockFrames,
+    selectedShotId: '1',
+    shots: mockShots,
     aspectRatio: '16:9',
-    onSelectFrame: () => {},
+    onSelectShot: () => {},
   },
   parameters: {
     docs: {
@@ -202,12 +202,12 @@ export const WithMockSequence: Story = {
 
 export const AllVideoStates: Story = {
   args: {
-    selectedFrameId: '1',
+    selectedShotId: '1',
     aspectRatio: '16:9',
-    onSelectFrame: () => {},
-    frames: [
+    onSelectShot: () => {},
+    shots: [
       {
-        ...mockFrameBase,
+        ...mockShotBase,
         id: '1',
         orderIndex: 0,
         thumbnailUrl: 'https://picsum.photos/seed/state1/1280/720',
@@ -220,16 +220,16 @@ export const AllVideoStates: Story = {
         videoStatus: 'completed',
         variantImageStatus: 'completed',
         metadata: {
-          ...mockFrameBase.metadata,
+          ...mockShotBase.metadata,
           sceneNumber: 1,
           metadata: {
-            ...mockFrameBase.metadata.metadata,
+            ...mockShotBase.metadata.metadata,
             title: 'Completed Video',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
-        ...mockFrameBase,
+        ...mockShotBase,
         id: '2',
         orderIndex: 1,
         thumbnailUrl: 'https://picsum.photos/seed/state2/1280/720',
@@ -241,16 +241,16 @@ export const AllVideoStates: Story = {
         videoStatus: 'pending',
         variantImageStatus: 'pending',
         metadata: {
-          ...mockFrameBase.metadata,
+          ...mockShotBase.metadata,
           sceneNumber: 2,
           metadata: {
-            ...mockFrameBase.metadata.metadata,
+            ...mockShotBase.metadata.metadata,
             title: 'Pending Video',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
-        ...mockFrameBase,
+        ...mockShotBase,
         id: '3',
         orderIndex: 2,
         thumbnailUrl: 'https://picsum.photos/seed/state3/1280/720',
@@ -262,16 +262,16 @@ export const AllVideoStates: Story = {
         videoStatus: 'generating',
         variantImageStatus: 'generating',
         metadata: {
-          ...mockFrameBase.metadata,
+          ...mockShotBase.metadata,
           sceneNumber: 3,
           metadata: {
-            ...mockFrameBase.metadata.metadata,
+            ...mockShotBase.metadata.metadata,
             title: 'Generating Video',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
-        ...mockFrameBase,
+        ...mockShotBase,
         id: '4',
         orderIndex: 3,
         thumbnailUrl: 'https://picsum.photos/seed/state4/1280/720',
@@ -283,13 +283,13 @@ export const AllVideoStates: Story = {
         videoStatus: 'failed',
         variantImageStatus: 'failed',
         metadata: {
-          ...mockFrameBase.metadata,
+          ...mockShotBase.metadata,
           sceneNumber: 4,
           metadata: {
-            ...mockFrameBase.metadata.metadata,
+            ...mockShotBase.metadata.metadata,
             title: 'Failed Video',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
   },
@@ -305,12 +305,12 @@ export const AllVideoStates: Story = {
 
 export const OnlyPendingVideos: Story = {
   args: {
-    selectedFrameId: '1',
+    selectedShotId: '1',
     aspectRatio: '16:9',
-    onSelectFrame: () => {},
-    frames: [
+    onSelectShot: () => {},
+    shots: [
       {
-        ...mockFrameBase,
+        ...mockShotBase,
         id: '1',
         orderIndex: 0,
         thumbnailUrl: 'https://picsum.photos/seed/pending1/1280/720',
@@ -323,16 +323,16 @@ export const OnlyPendingVideos: Story = {
         videoStatus: 'pending',
         variantImageStatus: 'pending',
         metadata: {
-          ...mockFrameBase.metadata,
+          ...mockShotBase.metadata,
           sceneNumber: 1,
           metadata: {
-            ...mockFrameBase.metadata.metadata,
+            ...mockShotBase.metadata.metadata,
             title: 'Pending Scene 1',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
-        ...mockFrameBase,
+        ...mockShotBase,
         id: '2',
         orderIndex: 1,
         thumbnailUrl: 'https://picsum.photos/seed/pending2/1280/720',
@@ -345,13 +345,13 @@ export const OnlyPendingVideos: Story = {
         videoStatus: 'pending',
         variantImageStatus: 'pending',
         metadata: {
-          ...mockFrameBase.metadata,
+          ...mockShotBase.metadata,
           sceneNumber: 2,
           metadata: {
-            ...mockFrameBase.metadata.metadata,
+            ...mockShotBase.metadata.metadata,
             title: 'Pending Scene 2',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
   },
@@ -359,7 +359,7 @@ export const OnlyPendingVideos: Story = {
     docs: {
       description: {
         story:
-          'All frames have completed thumbnails but pending videos. Shows how the player handles a sequence where no videos are ready yet.',
+          'All shots have completed thumbnails but pending videos. Shows how the player handles a sequence where no videos are ready yet.',
       },
     },
   },
@@ -367,12 +367,12 @@ export const OnlyPendingVideos: Story = {
 
 export const FailedVideoWithThumbnail: Story = {
   args: {
-    selectedFrameId: '1',
+    selectedShotId: '1',
     aspectRatio: '16:9',
-    onSelectFrame: () => {},
-    frames: [
+    onSelectShot: () => {},
+    shots: [
       {
-        ...mockFrameBase,
+        ...mockShotBase,
         id: '1',
         orderIndex: 0,
         thumbnailUrl: 'https://picsum.photos/seed/failed-thumb/1280/720',
@@ -385,13 +385,13 @@ export const FailedVideoWithThumbnail: Story = {
         videoError: 'Model generation timeout',
         variantImageStatus: 'completed',
         metadata: {
-          ...mockFrameBase.metadata,
+          ...mockShotBase.metadata,
           sceneNumber: 1,
           metadata: {
-            ...mockFrameBase.metadata.metadata,
+            ...mockShotBase.metadata.metadata,
             title: 'Failed Video Generation',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
   },
@@ -407,12 +407,12 @@ export const FailedVideoWithThumbnail: Story = {
 
 export const PreviewMode: Story = {
   args: {
-    selectedFrameId: '1',
+    selectedShotId: '1',
     aspectRatio: '16:9',
-    onSelectFrame: () => {},
-    frames: [
+    onSelectShot: () => {},
+    shots: [
       {
-        ...mockFrameBase,
+        ...mockShotBase,
         id: '1',
         orderIndex: 0,
         thumbnailUrl: null,
@@ -424,16 +424,16 @@ export const PreviewMode: Story = {
         videoStatus: 'pending',
         variantImageStatus: 'pending',
         metadata: {
-          ...mockFrameBase.metadata,
+          ...mockShotBase.metadata,
           sceneNumber: 1,
           metadata: {
-            ...mockFrameBase.metadata.metadata,
+            ...mockShotBase.metadata.metadata,
             title: 'Preview - Generating Full Image',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
-        ...mockFrameBase,
+        ...mockShotBase,
         id: '2',
         orderIndex: 1,
         thumbnailUrl: null,
@@ -445,16 +445,16 @@ export const PreviewMode: Story = {
         videoStatus: 'pending',
         variantImageStatus: 'pending',
         metadata: {
-          ...mockFrameBase.metadata,
+          ...mockShotBase.metadata,
           sceneNumber: 2,
           metadata: {
-            ...mockFrameBase.metadata.metadata,
+            ...mockShotBase.metadata.metadata,
             title: 'Preview - Still Processing',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
       {
-        ...mockFrameBase,
+        ...mockShotBase,
         id: '3',
         orderIndex: 2,
         thumbnailUrl: 'https://picsum.photos/seed/final3/1280/720',
@@ -466,13 +466,13 @@ export const PreviewMode: Story = {
         videoStatus: 'pending',
         variantImageStatus: 'pending',
         metadata: {
-          ...mockFrameBase.metadata,
+          ...mockShotBase.metadata,
           sceneNumber: 3,
           metadata: {
-            ...mockFrameBase.metadata.metadata,
+            ...mockShotBase.metadata.metadata,
             title: 'Final Image Ready',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
   },
@@ -488,12 +488,12 @@ export const PreviewMode: Story = {
 
 export const FailedVideoWithoutThumbnail: Story = {
   args: {
-    selectedFrameId: '1',
+    selectedShotId: '1',
     aspectRatio: '16:9',
-    onSelectFrame: () => {},
-    frames: [
+    onSelectShot: () => {},
+    shots: [
       {
-        ...mockFrameBase,
+        ...mockShotBase,
         id: '1',
         orderIndex: 0,
         thumbnailUrl: null,
@@ -507,13 +507,13 @@ export const FailedVideoWithoutThumbnail: Story = {
         variantImageStatus: 'pending',
         videoError: 'Cannot generate video without thumbnail',
         metadata: {
-          ...mockFrameBase.metadata,
+          ...mockShotBase.metadata,
           sceneNumber: 1,
           metadata: {
-            ...mockFrameBase.metadata.metadata,
+            ...mockShotBase.metadata.metadata,
             title: 'Complete Failure',
           },
-        } as unknown as Frame['metadata'],
+        } as unknown as Shot['metadata'],
       },
     ],
   },

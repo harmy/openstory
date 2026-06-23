@@ -51,43 +51,43 @@ export const relations = defineRelations(schema, (r) => ({
       alias: 'sequences_updatedBy_users_id',
     }),
     style: r.one.styles({ from: r.sequences.styleId, to: r.styles.id }),
-    frames: r.many.frames(),
+    shots: r.many.shots(),
     characters: r.many.characters(),
     locations: r.many.sequenceLocations(),
     elements: r.many.sequenceElements(),
     musicPromptVariants: r.many.sequenceMusicPromptVariants(),
   },
 
-  // ---- Frames ----
-  frames: {
+  // ---- Shots ----
+  shots: {
     sequence: r.one.sequences({
-      from: r.frames.sequenceId,
+      from: r.shots.sequenceId,
       to: r.sequences.id,
     }),
-    variants: r.many.frameVariants(),
-    promptVariants: r.many.framePromptVariants(),
+    variants: r.many.shotVariants(),
+    promptVariants: r.many.shotPromptVariants(),
   },
 
-  // ---- Frame Variants ----
-  frameVariants: {
-    frame: r.one.frames({
-      from: r.frameVariants.frameId,
-      to: r.frames.id,
+  // ---- Shot Variants ----
+  shotVariants: {
+    shot: r.one.shots({
+      from: r.shotVariants.shotId,
+      to: r.shots.id,
     }),
     sequence: r.one.sequences({
-      from: r.frameVariants.sequenceId,
+      from: r.shotVariants.sequenceId,
       to: r.sequences.id,
     }),
   },
 
-  // ---- Frame Prompt Variants ----
-  framePromptVariants: {
-    frame: r.one.frames({
-      from: r.framePromptVariants.frameId,
-      to: r.frames.id,
+  // ---- Shot Prompt Variants ----
+  shotPromptVariants: {
+    shot: r.one.shots({
+      from: r.shotPromptVariants.shotId,
+      to: r.shots.id,
     }),
     createdByUser: r.one.user({
-      from: r.framePromptVariants.createdBy,
+      from: r.shotPromptVariants.createdBy,
       to: r.user.id,
     }),
   },

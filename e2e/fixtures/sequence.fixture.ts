@@ -1,6 +1,6 @@
 /**
  * Sequence Fixture for E2E Tests
- * Creates pre-seeded sequences with frames and characters for testing
+ * Creates pre-seeded sequences with shots and characters for testing
  */
 
 import { z } from 'zod';
@@ -12,7 +12,7 @@ export type TestSequence = {
   title: string;
 };
 
-export type TestFrame = {
+export type TestShot = {
   id: string;
   sequenceId: string;
   orderIndex: number;
@@ -75,9 +75,9 @@ export async function createTestSequence(
 }
 
 /**
- * Create a test frame with a thumbnail (for variant testing)
+ * Create a test shot with a thumbnail (for variant testing)
  */
-export async function createTestFrame(
+export async function createTestShot(
   sequenceId: string,
   orderIndex: number,
   options: {
@@ -85,15 +85,15 @@ export async function createTestFrame(
     variantImageUrl?: string;
     variantImageStatus?: 'pending' | 'generating' | 'completed' | 'failed';
   } = {}
-): Promise<TestFrame> {
-  const res = await fetch('http://localhost:3001/api/test/frame', {
+): Promise<TestShot> {
+  const res = await fetch('http://localhost:3001/api/test/shot', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sequenceId, orderIndex, ...options }),
   });
 
   if (!res.ok) {
-    throw new Error(`Failed to create test frame via API: ${res.status}`);
+    throw new Error(`Failed to create test shot via API: ${res.status}`);
   }
 
   const created = z
@@ -143,11 +143,11 @@ export async function createTestCharacter(
 }
 
 /**
- * Get all frames for a sequence ordered by orderIndex.
- * Used by the full-sequence spec to poll until every frame has its
+ * Get all shots for a sequence ordered by orderIndex.
+ * Used by the full-sequence spec to poll until every shot has its
  * thumbnail/video/music URLs set during the e2e workflow run.
  */
-export async function getTestSequenceFrames(sequenceId: string): Promise<
+export async function getTestSequenceShots(sequenceId: string): Promise<
   Array<{
     id: string;
     orderIndex: number;
@@ -160,11 +160,11 @@ export async function getTestSequenceFrames(sequenceId: string): Promise<
   }>
 > {
   const res = await fetch(
-    `http://localhost:3001/api/test/frame?sequenceId=${encodeURIComponent(sequenceId)}`
+    `http://localhost:3001/api/test/shot?sequenceId=${encodeURIComponent(sequenceId)}`
   );
   if (!res.ok) {
     throw new Error(
-      `Failed to get frames for sequence ${sequenceId}: ${res.status}`
+      `Failed to get shots for sequence ${sequenceId}: ${res.status}`
     );
   }
   return z
@@ -184,15 +184,15 @@ export async function getTestSequenceFrames(sequenceId: string): Promise<
 }
 
 /**
- * Get a frame by ID to verify test assertions
+ * Get a shot by ID to verify test assertions
  */
-export async function getTestFrame(frameId: string): Promise<{
+export async function getTestShot(shotId: string): Promise<{
   id: string;
   thumbnailUrl: string | null;
   variantImageStatus: string | null;
 } | null> {
   const res = await fetch(
-    `http://localhost:3001/api/test/frame?id=${encodeURIComponent(frameId)}`
+    `http://localhost:3001/api/test/shot?id=${encodeURIComponent(shotId)}`
   );
   if (!res.ok) return null;
   return z
@@ -229,8 +229,8 @@ export async function getTestCharacter(characterId: string): Promise<{
 
 /**
  * Get sequence-level music status. Music is generated once per sequence
- * (not per frame — see src/lib/workflows/music-workflow.ts:133 TODO).
- * Per-frame video completion is checked via getTestSequenceFrames; final
+ * (not per shot — see src/lib/workflows/music-workflow.ts:133 TODO).
+ * Per-shot video completion is checked via getTestSequenceShots; final
  * composition is now client-side via Mediabunny, so no merged-video row
  * is written.
  */

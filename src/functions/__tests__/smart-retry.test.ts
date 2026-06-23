@@ -12,11 +12,11 @@
  *     lying-status class this PR exists to kill.
  *
  * Failure *detection* lives in `analyzeFailures` (its own test file); the
- * real implementation is used here, driven by frame/sequence fixtures.
+ * real implementation is used here, driven by shot/sequence fixtures.
  */
 
 import { describe, expect, test, vi } from 'vitest';
-import type { Frame, Sequence } from '@/lib/db/schema';
+import type { Shot, Sequence } from '@/lib/db/schema';
 import type { ScopedDb } from '@/lib/db/scoped';
 
 const assertNoActiveStoryboardMock = vi.fn();
@@ -87,9 +87,9 @@ function makeSequence(overrides: Partial<Sequence> = {}): Sequence {
   };
 }
 
-function makeFrame(overrides: Partial<Frame> = {}): Frame {
+function makeShot(overrides: Partial<Shot> = {}): Shot {
   return {
-    id: 'frame-1',
+    id: 'shot-1',
     sequenceId: 'seq_1',
     orderIndex: 0,
     description: 'A scene',
@@ -136,13 +136,13 @@ function makeFrame(overrides: Partial<Frame> = {}): Frame {
   };
 }
 
-function makeContext(sequence: Sequence, frames: Frame[]) {
+function makeContext(sequence: Sequence, shots: Shot[]) {
   const updateStatus = vi.fn();
   const updateMusicFields = vi.fn();
-  const listBySequence = vi.fn(async () => frames);
+  const listBySequence = vi.fn(async () => shots);
   const listWithSheets = vi.fn(async () => []);
   const stub = {
-    frames: { listBySequence },
+    shots: { listBySequence },
     characters: { listWithSheets },
     sequence: vi.fn(() => ({ updateStatus, updateMusicFields })),
   };
@@ -168,7 +168,7 @@ function resetMocks() {
 }
 
 describe('executeSmartRetry — generation mutex (#839)', () => {
-  test('live storyboard run → rejects before reading frames or triggering anything', async () => {
+  test('live storyboard run → rejects before reading shots or triggering anything', async () => {
     resetMocks();
     assertNoActiveStoryboardMock.mockRejectedValue(
       new GenerationInProgressError()
@@ -191,7 +191,7 @@ describe('executeSmartRetry — generation mutex (#839)', () => {
 describe('executeSmartRetry — full retry fallback', () => {
   test('delegates to triggerStoryboard, which owns the mutex and status writes', async () => {
     resetMocks();
-    // No frames + failed sequence → analyzeFailures says full retry.
+    // No shots + failed sequence → analyzeFailures says full retry.
     const { context, scopedDb, updateStatus } = makeContext(makeSequence(), []);
 
     const result = await executeSmartRetry(context);
@@ -216,13 +216,13 @@ describe('executeSmartRetry — partial retry status reset', () => {
     resetMocks();
     // A failed image with no prompt anywhere (imagePrompt, metadata,
     // description all empty) is detected as a failure but can't be retried.
-    const frame = makeFrame({
+    const shot = makeShot({
       thumbnailStatus: 'failed',
       imagePrompt: null,
       metadata: null,
       description: '',
     });
-    const { context, updateStatus } = makeContext(makeSequence(), [frame]);
+    const { context, updateStatus } = makeContext(makeSequence(), [shot]);
 
     await expect(executeSmartRetry(context)).rejects.toThrow(
       /regenerate the sequence/
@@ -231,13 +231,13 @@ describe('executeSmartRetry — partial retry status reset', () => {
     expect(updateStatus).not.toHaveBeenCalled();
   });
 
-  test('retried images → triggers /image per frame and clears the failed flag', async () => {
+  test('retried images → triggers /image per shot and clears the failed flag', async () => {
     resetMocks();
-    const frame = makeFrame({
+    const shot = makeShot({
       thumbnailStatus: 'failed',
       imagePrompt: 'A cinematic shot of the lab',
     });
-    const { context, updateStatus } = makeContext(makeSequence(), [frame]);
+    const { context, updateStatus } = makeContext(makeSequence(), [shot]);
 
     const result = await executeSmartRetry(context);
 
@@ -245,7 +245,7 @@ describe('executeSmartRetry — partial retry status reset', () => {
     expect(triggerWorkflowMock).toHaveBeenCalledWith(
       '/image',
       expect.objectContaining({
-        frameId: 'frame-1',
+        shotId: 'shot-1',
         prompt: 'A cinematic shot of the lab',
         sequenceId: 'seq_1',
       }),
@@ -258,18 +258,18 @@ describe('executeSmartRetry — partial retry status reset', () => {
     });
   });
 
-  test('mixed frames: skipped prompt-less frame is not counted as retried', async () => {
+  test('mixed shots: skipped prompt-less shot is not counted as retried', async () => {
     resetMocks();
     // The counting regression #839's review flagged: reporting
-    // failedImageFrames.length would claim "2 image(s)" here even though
-    // only one frame is actually retriable.
-    const retriable = makeFrame({
-      id: 'frame-1',
+    // failedImageShots.length would claim "2 image(s)" here even though
+    // only one shot is actually retriable.
+    const retriable = makeShot({
+      id: 'shot-1',
       thumbnailStatus: 'failed',
       imagePrompt: 'A cinematic shot of the lab',
     });
-    const skipped = makeFrame({
-      id: 'frame-2',
+    const skipped = makeShot({
+      id: 'shot-2',
       orderIndex: 1,
       thumbnailStatus: 'failed',
       imagePrompt: null,
@@ -286,7 +286,7 @@ describe('executeSmartRetry — partial retry status reset', () => {
     expect(triggerWorkflowMock).toHaveBeenCalledTimes(1);
     expect(triggerWorkflowMock).toHaveBeenCalledWith(
       '/image',
-      expect.objectContaining({ frameId: 'frame-1' }),
+      expect.objectContaining({ shotId: 'shot-1' }),
       expect.objectContaining({ label: expect.any(String) })
     );
     expect(result).toEqual({
@@ -298,14 +298,14 @@ describe('executeSmartRetry — partial retry status reset', () => {
 
   test('failed motion → triggers /motion with image url, prompt and duration', async () => {
     resetMocks();
-    const frame = makeFrame({
+    const shot = makeShot({
       videoStatus: 'failed',
       thumbnailStatus: 'completed',
       thumbnailUrl: 'https://cdn/thumb.jpg',
       motionPrompt: 'slow pan across the lab',
       durationMs: 5000,
     });
-    const { context, updateStatus } = makeContext(makeSequence(), [frame]);
+    const { context, updateStatus } = makeContext(makeSequence(), [shot]);
 
     const result = await executeSmartRetry(context);
 
@@ -313,7 +313,7 @@ describe('executeSmartRetry — partial retry status reset', () => {
     expect(triggerWorkflowMock).toHaveBeenCalledWith(
       '/motion',
       expect.objectContaining({
-        frameId: 'frame-1',
+        shotId: 'shot-1',
         sequenceId: 'seq_1',
         imageUrl: 'https://cdn/thumb.jpg',
         prompt: 'slow pan across the lab',
@@ -330,13 +330,13 @@ describe('executeSmartRetry — partial retry status reset', () => {
 
   test('sequence not marked failed → no status write after retrying', async () => {
     resetMocks();
-    const frame = makeFrame({
+    const shot = makeShot({
       thumbnailStatus: 'failed',
       imagePrompt: 'A cinematic shot of the lab',
     });
     const { context, updateStatus } = makeContext(
       makeSequence({ status: 'completed', statusError: null }),
-      [frame]
+      [shot]
     );
 
     await executeSmartRetry(context);
@@ -348,7 +348,7 @@ describe('executeSmartRetry — partial retry status reset', () => {
     resetMocks();
     const { context } = makeContext(
       makeSequence({ status: 'completed', statusError: null }),
-      [makeFrame()]
+      [makeShot()]
     );
 
     await expect(executeSmartRetry(context)).rejects.toThrow(

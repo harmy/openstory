@@ -1,8 +1,8 @@
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { FrameVariant } from '@/lib/db/schema';
+import type { ShotVariant } from '@/lib/db/schema';
 import {
-  getFramesFn,
+  getShotsFn,
   getDivergentVariantsFn,
   promoteVariantFn,
   discardVariantFn,
@@ -11,35 +11,35 @@ import {
   getSequenceImageVariantsFn,
   getSequenceVideoModelsFn,
   getSequenceVideoVariantsFn,
-} from '@/functions/frames';
+} from '@/functions/shots';
 import {
-  generateFrameVariantsFn,
-  selectFrameVariantFn,
+  generateShotVariantsFn,
+  selectShotVariantFn,
   setImageFromVariantFn,
   setVideoFromVariantFn,
-} from '@/functions/frame-image';
-import type { GenerateVariantInput as SchemaGenerateVariantInput } from '@/lib/schemas/frame.schemas';
+} from '@/functions/shot-image';
+import type { GenerateVariantInput as SchemaGenerateVariantInput } from '@/lib/schemas/shot.schemas';
 
 type GenerateVariantInput = SchemaGenerateVariantInput & {
   sequenceId: string;
-  frameId: string;
+  shotId: string;
 };
 
 type SelectVariantInput = {
   sequenceId: string;
-  frameId: string;
+  shotId: string;
   variantIndex: number;
 };
 
 // Query keys
-export const frameKeys = {
-  all: ['frames'] as const,
-  lists: () => [...frameKeys.all, 'list'] as const,
-  list: (sequenceId: string) => [...frameKeys.lists(), sequenceId] as const,
-  details: () => [...frameKeys.all, 'detail'] as const,
-  detail: (id: string) => [...frameKeys.details(), id] as const,
+export const shotKeys = {
+  all: ['shots'] as const,
+  lists: () => [...shotKeys.all, 'list'] as const,
+  list: (sequenceId: string) => [...shotKeys.lists(), sequenceId] as const,
+  details: () => [...shotKeys.all, 'detail'] as const,
+  detail: (id: string) => [...shotKeys.details(), id] as const,
   divergentVariants: (sequenceId: string) =>
-    [...frameKeys.all, 'divergent-variants', sequenceId] as const,
+    [...shotKeys.all, 'divergent-variants', sequenceId] as const,
 };
 
 // Distinct image models that have generated a variant for this sequence.
@@ -72,10 +72,10 @@ export function useSequenceVideoModels(sequenceId?: string) {
   });
 }
 
-// All video FrameVariant rows for a sequence (#545). Used by the scenes view to
-// resolve each frame's displayed video through the active model's variant.
+// All video ShotVariant rows for a sequence (#545). Used by the scenes view to
+// resolve each shot's displayed video through the active model's variant.
 export function useSequenceVideoVariants(sequenceId?: string) {
-  return useQuery<FrameVariant[]>({
+  return useQuery<ShotVariant[]>({
     queryKey: ['sequence-video-variants', sequenceId ?? ''],
     queryFn: async () => {
       if (!sequenceId) throw new Error('sequenceId is required');
@@ -86,12 +86,12 @@ export function useSequenceVideoVariants(sequenceId?: string) {
   });
 }
 
-// All image FrameVariant rows for a sequence (#547). Used by the header image
+// All image ShotVariant rows for a sequence (#547). Used by the header image
 // dropdown for sequence-wide per-model coverage, and by the scenes view to
-// resolve each frame's displayed image through the active model's variant. Key
+// resolve each shot's displayed image through the active model's variant. Key
 // matches the scenes-view query + the image:progress cache invalidation.
 export function useSequenceImageVariants(sequenceId?: string) {
-  return useQuery<FrameVariant[]>({
+  return useQuery<ShotVariant[]>({
     queryKey: ['sequence-image-variants', sequenceId ?? ''],
     queryFn: async () => {
       if (!sequenceId) throw new Error('sequenceId is required');
@@ -103,13 +103,13 @@ export function useSequenceImageVariants(sequenceId?: string) {
 }
 
 // Hook to fetch the live (non-discarded) divergent alternates for a sequence.
-// The corner-dot indicator and inline banner both filter this list per frame.
+// The corner-dot indicator and inline banner both filter this list per shot.
 export function useDivergentVariants(
   sequenceId?: string,
   options?: { refetchInterval?: number | false }
 ) {
-  return useQuery<FrameVariant[]>({
-    queryKey: frameKeys.divergentVariants(sequenceId ?? ''),
+  return useQuery<ShotVariant[]>({
+    queryKey: shotKeys.divergentVariants(sequenceId ?? ''),
     queryFn: async () => {
       if (!sequenceId) throw new Error('sequenceId is required');
       return getDivergentVariantsFn({ data: { sequenceId } });
@@ -124,22 +124,22 @@ export function useDivergentVariants(
 export function usePromoteVariantToPrimary() {
   const queryClient = useQueryClient();
   return useMutation<
-    { frame: Frame; variantId: string },
+    { shot: Shot; variantId: string },
     Error,
-    { sequenceId: string; frameId: string; variantId: string }
+    { sequenceId: string; shotId: string; variantId: string }
   >({
     mutationFn: async (input) => {
       const result = await promoteVariantFn({ data: input });
       return result;
     },
-    onSuccess: async ({ frame }, { sequenceId }) => {
-      queryClient.setQueryData(frameKeys.detail(frame.id), frame);
+    onSuccess: async ({ shot }, { sequenceId }) => {
+      queryClient.setQueryData(shotKeys.detail(shot.id), shot);
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: frameKeys.list(sequenceId),
+          queryKey: shotKeys.list(sequenceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: frameKeys.divergentVariants(sequenceId),
+          queryKey: shotKeys.divergentVariants(sequenceId),
         }),
         queryClient.invalidateQueries({
           queryKey: ['sequence-image-variants', sequenceId],
@@ -156,12 +156,12 @@ export function useDiscardVariant() {
   return useMutation<
     { variantId: string; discardedAt: Date },
     Error,
-    { sequenceId: string; frameId: string; variantId: string }
+    { sequenceId: string; shotId: string; variantId: string }
   >({
     mutationFn: async (input) => discardVariantFn({ data: input }),
     onSuccess: async (_, { sequenceId }) => {
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.divergentVariants(sequenceId),
+        queryKey: shotKeys.divergentVariants(sequenceId),
       });
     },
   });
@@ -172,30 +172,30 @@ export function useUndiscardVariant() {
   return useMutation<
     { variantId: string },
     Error,
-    { sequenceId: string; frameId: string; variantId: string }
+    { sequenceId: string; shotId: string; variantId: string }
   >({
     mutationFn: async (input) => undiscardVariantFn({ data: input }),
     onSuccess: async (_, { sequenceId }) => {
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.divergentVariants(sequenceId),
+        queryKey: shotKeys.divergentVariants(sequenceId),
       });
     },
   });
 }
 
-// Hook for listing frames by sequence with optional auto-refresh
-export function useFramesBySequence(
+// Hook for listing shots by sequence with optional auto-refresh
+export function useShotsBySequence(
   sequenceId?: string,
   options?: {
     refetchInterval?: number | false;
     staleTime?: number;
   }
 ) {
-  return useQuery<Frame[]>({
-    queryKey: frameKeys.list(sequenceId ?? ''),
+  return useQuery<Shot[]>({
+    queryKey: shotKeys.list(sequenceId ?? ''),
     queryFn: async () => {
       if (!sequenceId) throw new Error('sequenceId is required');
-      const data = await getFramesFn({ data: { sequenceId } });
+      const data = await getShotsFn({ data: { sequenceId } });
       return data;
     },
     staleTime: options?.staleTime ?? 30_000, // Realtime events update the cache; polling is a fallback
@@ -209,18 +209,18 @@ export function useFramesBySequence(
   });
 }
 
-// Hook for generating variant images for a frame
+// Hook for generating variant images for a shot
 export function useGenerateVariants() {
   const queryClient = useQueryClient();
 
   return useMutation<{ workflowRunId: string }, Error, GenerateVariantInput>({
     mutationFn: async (input: GenerateVariantInput) => {
-      const { sequenceId, frameId, model, imageSize, numImages, seed } = input;
+      const { sequenceId, shotId, model, imageSize, numImages, seed } = input;
 
-      const result = await generateFrameVariantsFn({
+      const result = await generateShotVariantsFn({
         data: {
           sequenceId,
-          frameId,
+          shotId,
           model,
           imageSize,
           numImages,
@@ -230,22 +230,22 @@ export function useGenerateVariants() {
 
       return { workflowRunId: result.workflowRunId };
     },
-    onSuccess: async (_, { sequenceId, frameId }) => {
-      // Optimistically update frame status to 'generating'
-      queryClient.setQueryData<Frame>(frameKeys.detail(frameId), (oldFrame) => {
-        if (!oldFrame) return oldFrame;
+    onSuccess: async (_, { sequenceId, shotId }) => {
+      // Optimistically update shot status to 'generating'
+      queryClient.setQueryData<Shot>(shotKeys.detail(shotId), (oldShot) => {
+        if (!oldShot) return oldShot;
         return {
-          ...oldFrame,
+          ...oldShot,
           variantImageStatus: 'generating' as const,
         };
       });
 
-      queryClient.setQueryData<Frame[]>(
-        frameKeys.list(sequenceId),
-        (oldFrames) => {
-          if (!oldFrames) return oldFrames;
-          return oldFrames.map((f) =>
-            f.id === frameId
+      queryClient.setQueryData<Shot[]>(
+        shotKeys.list(sequenceId),
+        (oldShots) => {
+          if (!oldShots) return oldShots;
+          return oldShots.map((f) =>
+            f.id === shotId
               ? {
                   ...f,
                   variantImageStatus: 'generating' as const,
@@ -257,11 +257,11 @@ export function useGenerateVariants() {
 
       // Invalidate queries to pick up server updates
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.detail(frameId),
+        queryKey: shotKeys.detail(shotId),
       });
 
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.list(sequenceId),
+        queryKey: shotKeys.list(sequenceId),
       });
     },
   });
@@ -272,43 +272,43 @@ export function useSelectVariant() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    { frameId: string; thumbnailUrl: string; variantIndex: number },
+    { shotId: string; thumbnailUrl: string; variantIndex: number },
     Error,
     SelectVariantInput
   >({
     mutationFn: async (input: SelectVariantInput) => {
-      const { sequenceId, frameId, variantIndex } = input;
-      const result = await selectFrameVariantFn({
+      const { sequenceId, shotId, variantIndex } = input;
+      const result = await selectShotVariantFn({
         data: {
           sequenceId,
-          frameId,
+          shotId,
           variantIndex,
         },
       });
 
       return {
-        frameId: result.frameId,
+        shotId: result.shotId,
         thumbnailUrl: result.thumbnailUrl,
         variantIndex: result.variantIndex,
       };
     },
-    onSuccess: async (data, { sequenceId, frameId }) => {
-      // Update frame queries with new thumbnail
-      queryClient.setQueryData<Frame>(frameKeys.detail(frameId), (oldFrame) => {
-        if (!oldFrame) return oldFrame;
+    onSuccess: async (data, { sequenceId, shotId }) => {
+      // Update shot queries with new thumbnail
+      queryClient.setQueryData<Shot>(shotKeys.detail(shotId), (oldShot) => {
+        if (!oldShot) return oldShot;
         return {
-          ...oldFrame,
+          ...oldShot,
           thumbnailUrl: data.thumbnailUrl,
           thumbnailStatus: 'generating' as const, // Upscale is running
         };
       });
 
-      queryClient.setQueryData<Frame[]>(
-        frameKeys.list(sequenceId),
-        (oldFrames) => {
-          if (!oldFrames) return oldFrames;
-          return oldFrames.map((f) =>
-            f.id === frameId
+      queryClient.setQueryData<Shot[]>(
+        shotKeys.list(sequenceId),
+        (oldShots) => {
+          if (!oldShots) return oldShots;
+          return oldShots.map((f) =>
+            f.id === shotId
               ? {
                   ...f,
                   thumbnailUrl: data.thumbnailUrl,
@@ -321,41 +321,41 @@ export function useSelectVariant() {
 
       // Invalidate queries to ensure consistency
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.detail(frameId),
+        queryKey: shotKeys.detail(shotId),
       });
 
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.list(sequenceId),
+        queryKey: shotKeys.list(sequenceId),
       });
     },
   });
 }
 
-// Hook for setting a frame's image from an existing variant
+// Hook for setting a shot's image from an existing variant
 export function useSetImageFromVariant() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    { frameId: string; thumbnailUrl: string },
+    { shotId: string; thumbnailUrl: string },
     Error,
-    { sequenceId: string; frameId: string; model: string }
+    { sequenceId: string; shotId: string; model: string }
   >({
     mutationFn: async (input) => {
       return setImageFromVariantFn({ data: input });
     },
-    onMutate: async ({ sequenceId, frameId }) => {
+    onMutate: async ({ sequenceId, shotId }) => {
       await queryClient.cancelQueries({
-        queryKey: frameKeys.detail(frameId),
+        queryKey: shotKeys.detail(shotId),
       });
       await queryClient.cancelQueries({
-        queryKey: frameKeys.list(sequenceId),
+        queryKey: shotKeys.list(sequenceId),
       });
     },
-    onSuccess: async (data, { sequenceId, frameId, model }) => {
-      queryClient.setQueryData<Frame>(frameKeys.detail(frameId), (oldFrame) => {
-        if (!oldFrame) return oldFrame;
+    onSuccess: async (data, { sequenceId, shotId, model }) => {
+      queryClient.setQueryData<Shot>(shotKeys.detail(shotId), (oldShot) => {
+        if (!oldShot) return oldShot;
         return {
-          ...oldFrame,
+          ...oldShot,
           thumbnailUrl: data.thumbnailUrl,
           thumbnailStatus: 'completed' as const,
           imageModel: model,
@@ -364,12 +364,12 @@ export function useSetImageFromVariant() {
         };
       });
 
-      queryClient.setQueryData<Frame[]>(
-        frameKeys.list(sequenceId),
-        (oldFrames) => {
-          if (!oldFrames) return oldFrames;
-          return oldFrames.map((f) =>
-            f.id === frameId
+      queryClient.setQueryData<Shot[]>(
+        shotKeys.list(sequenceId),
+        (oldShots) => {
+          if (!oldShots) return oldShots;
+          return oldShots.map((f) =>
+            f.id === shotId
               ? {
                   ...f,
                   thumbnailUrl: data.thumbnailUrl,
@@ -384,54 +384,54 @@ export function useSetImageFromVariant() {
       );
 
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.detail(frameId),
+        queryKey: shotKeys.detail(shotId),
       });
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.list(sequenceId),
+        queryKey: shotKeys.list(sequenceId),
       });
     },
   });
 }
 
-// Hook for setting a frame's video from an existing variant (#545) — the
+// Hook for setting a shot's video from an existing variant (#545) — the
 // motion analog of useSetImageFromVariant. Promotes a model's video variant to
-// the primary frames.video* columns and refreshes the video-variant cache.
+// the primary shots.video* columns and refreshes the video-variant cache.
 export function useSetVideoFromVariant() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    { frameId: string; videoUrl: string },
+    { shotId: string; videoUrl: string },
     Error,
-    { sequenceId: string; frameId: string; model: string }
+    { sequenceId: string; shotId: string; model: string }
   >({
     mutationFn: async (input) => {
       return setVideoFromVariantFn({ data: input });
     },
-    onMutate: async ({ sequenceId, frameId }) => {
+    onMutate: async ({ sequenceId, shotId }) => {
       await queryClient.cancelQueries({
-        queryKey: frameKeys.detail(frameId),
+        queryKey: shotKeys.detail(shotId),
       });
       await queryClient.cancelQueries({
-        queryKey: frameKeys.list(sequenceId),
+        queryKey: shotKeys.list(sequenceId),
       });
     },
-    onSuccess: async (data, { sequenceId, frameId, model }) => {
-      queryClient.setQueryData<Frame>(frameKeys.detail(frameId), (oldFrame) => {
-        if (!oldFrame) return oldFrame;
+    onSuccess: async (data, { sequenceId, shotId, model }) => {
+      queryClient.setQueryData<Shot>(shotKeys.detail(shotId), (oldShot) => {
+        if (!oldShot) return oldShot;
         return {
-          ...oldFrame,
+          ...oldShot,
           videoUrl: data.videoUrl,
           videoStatus: 'completed' as const,
           motionModel: model,
         };
       });
 
-      queryClient.setQueryData<Frame[]>(
-        frameKeys.list(sequenceId),
-        (oldFrames) => {
-          if (!oldFrames) return oldFrames;
-          return oldFrames.map((f) =>
-            f.id === frameId
+      queryClient.setQueryData<Shot[]>(
+        shotKeys.list(sequenceId),
+        (oldShots) => {
+          if (!oldShots) return oldShots;
+          return oldShots.map((f) =>
+            f.id === shotId
               ? {
                   ...f,
                   videoUrl: data.videoUrl,
@@ -444,10 +444,10 @@ export function useSetVideoFromVariant() {
       );
 
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.detail(frameId),
+        queryKey: shotKeys.detail(shotId),
       });
       await queryClient.invalidateQueries({
-        queryKey: frameKeys.list(sequenceId),
+        queryKey: shotKeys.list(sequenceId),
       });
       await queryClient.invalidateQueries({
         queryKey: ['sequence-video-variants', sequenceId],

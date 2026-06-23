@@ -220,7 +220,7 @@ export const createSequences = createServerOnlyFn(
           imageModels,
           videoModels,
           options: {
-            framesPerScene: 3,
+            shotsPerScene: 3,
             generateThumbnails: true,
             generateDescriptions: true,
             aiProvider: 'openrouter',

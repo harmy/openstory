@@ -1,26 +1,26 @@
 /**
- * Snapshot DTO builders + hashers for `regenerateFramesWorkflow`.
+ * Snapshot DTO builders + hashers for `regenerateShotsWorkflow`.
  *
  * The workflow opts into the snapshot pattern (see
  * docs/architecture/workflow-snapshots-and-content-hash-staleness.md):
- * a per-frame DTO is resolved at trigger time, hashed, and inlined into the
- * QStash payload. Here we own (1) building the per-frame DTO from the live
+ * a per-shot DTO is resolved at trigger time, hashed, and inlined into the
+ * QStash payload. Here we own (1) building the per-shot DTO from the live
  * scoped DB and (2) computing the batch hash that gates the start-time
  * tamper check.
  */
 
 import {
-  computeFrameImageInputHash,
+  computeShotImageInputHash,
   sha256Hex,
-  type FrameImageHashInput,
+  type ShotImageHashInput,
 } from '@/lib/ai/input-hash';
 import type { TextToImageModel } from '@/lib/ai/models';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import type {
   Character,
-  Frame,
-  NewFrame,
-  NewFrameVariant,
+  Shot,
+  NewShot,
+  NewShotVariant,
   SequenceElement,
   SequenceLocation,
 } from '@/lib/db/schema';
@@ -29,24 +29,24 @@ import { buildCharacterReferenceImages } from '@/lib/prompts/character-prompt';
 import { buildLocationReferenceImages } from '@/lib/prompts/location-prompt';
 import { getGenerationChannel } from '@/lib/realtime';
 import type {
-  RegenerateFrameSnapshot,
-  RegenerateFramesWorkflowInput,
+  RegenerateShotSnapshot,
+  RegenerateShotsWorkflowInput,
 } from '@/lib/workflow/types';
-import { resolveSceneFrameImageReferences } from './sheet-snapshots';
+import { resolveSceneShotImageReferences } from './sheet-snapshots';
 
 /**
- * Build one frame's snapshot DTO from the live scoped state. Used at trigger
+ * Build one shot's snapshot DTO from the live scoped state. Used at trigger
  * time and (with current-state inputs) at write time for divergence checks.
  */
-export async function buildRegenerateFrameSnapshot(params: {
-  frame: Pick<Frame, 'id' | 'imagePrompt' | 'metadata'>;
+export async function buildRegenerateShotSnapshot(params: {
+  shot: Pick<Shot, 'id' | 'imagePrompt' | 'metadata'>;
   characters: Character[];
   locations: SequenceLocation[];
   elements: SequenceElement[];
   imageModel: TextToImageModel;
   aspectRatio: AspectRatio;
-}): Promise<RegenerateFrameSnapshot> {
-  const { frame, characters, locations, elements, imageModel, aspectRatio } =
+}): Promise<RegenerateShotSnapshot> {
+  const { shot, characters, locations, elements, imageModel, aspectRatio } =
     params;
 
   // Effective prompt: user-override column wins over the AI-generated prompt
@@ -55,22 +55,22 @@ export async function buildRegenerateFrameSnapshot(params: {
   // produces a different hash than the prior thumbnail's stored hash. See #713
   // for the longer-term single-source-of-truth refactor.
   const effectivePrompt =
-    frame.imagePrompt || frame.metadata?.prompts?.visual?.fullPrompt;
+    shot.imagePrompt || shot.metadata?.prompts?.visual?.fullPrompt;
 
   // Reject empty prompts at the snapshot boundary so trigger-time data
   // errors fail loudly at the call site instead of being absorbed as
-  // per-frame failures inside the workflow.
+  // per-shot failures inside the workflow.
   if (!effectivePrompt || effectivePrompt.length === 0) {
-    throw new Error(`Frame ${frame.id} has no visual prompt; cannot snapshot`);
+    throw new Error(`Shot ${shot.id} has no visual prompt; cannot snapshot`);
   }
 
   // Resolve the scene's character / location / element references exactly the
   // way image generation does (`computeImageWorkflowHashCurrent`) — same
   // matchers, same reference-hash sets — so this verify-time hash equals the
   // thumbnail hash stamped at generation. Omitting the element/location sets
-  // here made every product-/location-bearing frame report stale. See #867.
-  const refs = resolveSceneFrameImageReferences({
-    scene: frame.metadata,
+  // here made every product-/location-bearing shot report stale. See #867.
+  const refs = resolveSceneShotImageReferences({
+    scene: shot.metadata,
     characters,
     locations,
     elements,
@@ -79,7 +79,7 @@ export async function buildRegenerateFrameSnapshot(params: {
   const characterRefs = buildCharacterReferenceImages(refs.characters);
   const locationRefs = buildLocationReferenceImages(refs.locations);
 
-  const hashInput: FrameImageHashInput = {
+  const hashInput: ShotImageHashInput = {
     kind: 'thumbnail',
     visualPrompt: effectivePrompt,
     imageModel,
@@ -89,10 +89,10 @@ export async function buildRegenerateFrameSnapshot(params: {
     elementReferenceHashes: refs.elementReferenceHashes,
   };
 
-  const snapshotInputHash = await computeFrameImageInputHash(hashInput);
+  const snapshotInputHash = await computeShotImageInputHash(hashInput);
 
   return {
-    frameId: frame.id,
+    shotId: shot.id,
     imagePrompt: effectivePrompt,
     characterSheetHashes: refs.characterSheetHashes,
     locationSheetHashes: refs.locationSheetHashes,
@@ -109,25 +109,25 @@ export async function buildRegenerateFrameSnapshot(params: {
  * and `locationRefs` URLs — so a payload that preserves only `snapshotInputHash`
  * cannot smuggle replaced reference images past validation.
  */
-export async function computeRegenerateFramesBatchHash(
+export async function computeRegenerateShotsBatchHash(
   input: Pick<
-    RegenerateFramesWorkflowInput,
-    'aspectRatio' | 'imageModel' | 'frameSnapshots' | 'sequenceId'
+    RegenerateShotsWorkflowInput,
+    'aspectRatio' | 'imageModel' | 'shotSnapshots' | 'sequenceId'
   >
 ): Promise<string> {
   return sha256Hex({
-    artifact: 'regenerate-frames:batch',
+    artifact: 'regenerate-shots:batch',
     sequenceId: input.sequenceId ?? null,
     imageModel: input.imageModel ?? null,
     aspectRatio: input.aspectRatio,
-    frames: [...input.frameSnapshots].sort((a, b) =>
-      a.frameId < b.frameId ? -1 : 1
+    shots: [...input.shotSnapshots].sort((a, b) =>
+      a.shotId < b.shotId ? -1 : 1
     ),
   });
 }
 
 type RecastEventPayload =
-  | { event: 'start'; triggerId: string; frameCount: number }
+  | { event: 'start'; triggerId: string; shotCount: number }
   | {
       event: 'complete';
       triggerId: string;
@@ -154,7 +154,7 @@ export async function emitRecastEvent(
     if (args.event === 'start') {
       await channel.emit('generation.recast:start', {
         characterId: args.triggerId,
-        frameCount: args.frameCount,
+        shotCount: args.shotCount,
       });
       return;
     }
@@ -175,7 +175,7 @@ export async function emitRecastEvent(
   if (args.event === 'start') {
     await channel.emit('generation.recast-location:start', {
       locationId: args.triggerId,
-      frameCount: args.frameCount,
+      shotCount: args.shotCount,
     });
     return;
   }
@@ -194,23 +194,23 @@ export async function emitRecastEvent(
 }
 
 /**
- * Writes to apply when the per-frame hash matches between trigger and write
+ * Writes to apply when the per-shot hash matches between trigger and write
  * time. `image-workflow` already wrote the primary; record the input-hash on
  * both rows so downstream staleness reads compare against this snapshot.
  */
 export function buildConvergentWrites(snapshotInputHash: string): {
-  frame: Partial<NewFrame>;
-  variant: Partial<NewFrameVariant>;
+  shot: Partial<NewShot>;
+  variant: Partial<NewShotVariant>;
 } {
   return {
-    frame: { thumbnailInputHash: snapshotInputHash },
+    shot: { thumbnailInputHash: snapshotInputHash },
     variant: { inputHash: snapshotInputHash, divergedAt: null },
   };
 }
 
 /**
  * `divergentRow` is a partial payload for an INSERT that preserves the
- * diverged result as an alternate. The workflow supplies frameId, sequenceId,
+ * diverged result as an alternate. The workflow supplies shotId, sequenceId,
  * variantType, model, and the speculative url; this helper supplies the
  * divergence-specific fields so the alternate is identifiable in the
  * divergent partial unique index.
@@ -219,9 +219,9 @@ export function buildDivergentWrites(
   snapshotInputHash: string,
   divergedAt: Date
 ): {
-  frame: Partial<NewFrame>;
-  primaryRevert: Partial<NewFrameVariant>;
-  divergentRow: Partial<NewFrameVariant> & {
+  shot: Partial<NewShot>;
+  primaryRevert: Partial<NewShotVariant>;
+  divergentRow: Partial<NewShotVariant> & {
     inputHash: string;
     divergedAt: Date;
   };

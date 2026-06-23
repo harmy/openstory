@@ -4,10 +4,10 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  matchLocationsToFrame,
+  matchLocationsToShot,
   locationMatchesTag,
 } from '@/lib/db/scoped/sequence-locations';
-import type { Frame, SequenceLocation } from '@/lib/db/schema';
+import type { Shot, SequenceLocation } from '@/lib/db/schema';
 
 // Mock location data - using full SequenceLocation type
 const mockLocations: [SequenceLocation, SequenceLocation, SequenceLocation] = [
@@ -94,13 +94,13 @@ const mockLocations: [SequenceLocation, SequenceLocation, SequenceLocation] = [
   },
 ];
 
-// Helper to create a partial mock frame with just the fields needed for matching
-function createMockFrame(
+// Helper to create a partial mock shot with just the fields needed for matching
+function createMockShot(
   environmentTag: string,
   location: string
-): Pick<Frame, 'metadata'> {
+): Pick<Shot, 'metadata'> {
   // Create a complete Scene object with all required fields
-  const metadata: NonNullable<Frame['metadata']> = {
+  const metadata: NonNullable<Shot['metadata']> = {
     sceneId: 'test-scene',
     sceneNumber: 1,
     originalScript: { extract: '', dialogue: [] },
@@ -155,10 +155,10 @@ describe('sequence-locations helpers', () => {
     });
   });
 
-  describe('matchLocationsToFrame', () => {
+  describe('matchLocationsToShot', () => {
     it('should match locations by environment tag', () => {
-      const frame = createMockFrame('office_modern_glass', 'INT. OFFICE');
-      const matched = matchLocationsToFrame(frame, mockLocations);
+      const shot = createMockShot('office_modern_glass', 'INT. OFFICE');
+      const matched = matchLocationsToShot(shot, mockLocations);
       expect(matched).toHaveLength(1);
       const [first] = matched;
       if (!first) throw new Error('expected matched location');
@@ -166,8 +166,8 @@ describe('sequence-locations helpers', () => {
     });
 
     it('should match by location metadata', () => {
-      const frame = createMockFrame('', 'INT. OFFICE - DAY');
-      const matched = matchLocationsToFrame(frame, mockLocations);
+      const shot = createMockShot('', 'INT. OFFICE - DAY');
+      const matched = matchLocationsToShot(shot, mockLocations);
       expect(matched).toHaveLength(1);
       const [first] = matched;
       if (!first) throw new Error('expected matched location');
@@ -175,8 +175,8 @@ describe('sequence-locations helpers', () => {
     });
 
     it('should match by street location', () => {
-      const frame = createMockFrame('city_street_night', '');
-      const matched = matchLocationsToFrame(frame, mockLocations);
+      const shot = createMockShot('city_street_night', '');
+      const matched = matchLocationsToShot(shot, mockLocations);
       expect(matched).toHaveLength(1);
       const [first] = matched;
       if (!first) throw new Error('expected matched location');
@@ -184,20 +184,20 @@ describe('sequence-locations helpers', () => {
     });
 
     it('should return empty array when no matches', () => {
-      const frame = createMockFrame('nonexistent_location', '');
-      const matched = matchLocationsToFrame(frame, mockLocations);
+      const shot = createMockShot('nonexistent_location', '');
+      const matched = matchLocationsToShot(shot, mockLocations);
       expect(matched).toHaveLength(0);
     });
 
     it('should return empty array when no environment tag or location', () => {
-      const frame = createMockFrame('', '');
-      const matched = matchLocationsToFrame(frame, mockLocations);
+      const shot = createMockShot('', '');
+      const matched = matchLocationsToShot(shot, mockLocations);
       expect(matched).toHaveLength(0);
     });
 
     it('should match by partial name in location metadata', () => {
-      const frame = createMockFrame('', 'street');
-      const matched = matchLocationsToFrame(frame, mockLocations);
+      const shot = createMockShot('', 'street');
+      const matched = matchLocationsToShot(shot, mockLocations);
       expect(matched).toHaveLength(1);
       const [first] = matched;
       if (!first) throw new Error('expected matched location');

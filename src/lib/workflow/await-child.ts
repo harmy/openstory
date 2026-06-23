@@ -12,7 +12,7 @@
  *     binding: env.IMAGE_WORKFLOW,
  *     parentBinding: env.STORYBOARD_WORKFLOW,
  *     parentInstanceId: event.instanceId,
- *     childId: 'image:seq-123:frame-7',
+ *     childId: 'image:seq-123:shot-7',
  *     childPayload: { ...input, _parent: { ... } },
  *     name: 'spawn-image-7',
  *     timeout: '30 minutes',
@@ -48,7 +48,7 @@ const MAX_INSTANCE_ID_LENGTH = 100;
 
 /**
  * Cloudflare Workflows enforces `^[a-zA-Z0-9_-]+$` on instance IDs. Callers
- * typically pass semantic ids like `image:seq-123:frame-7` with colons —
+ * typically pass semantic ids like `image:seq-123:shot-7` with colons —
  * normalise to underscores so `binding.create({ id })` doesn't throw
  * "Workflow instance has invalid id". Truncate to 100 chars (CF limit).
  */
@@ -60,7 +60,7 @@ function sanitizeChildId(raw: string): string {
  * Build the instance id CF creates the child under. Two distinct uniqueness
  * requirements:
  *
- *   1. **Per sibling** — `semanticChildId` already carries the frame/scene id,
+ *   1. **Per sibling** — `semanticChildId` already carries the shot/scene id,
  *      so two fan-out children of the same parent run never collide.
  *   2. **Per parent run** — without this, regenerating (a *fresh* parent run
  *      reusing the same semantic `childId`) calls `binding.create({ id })` with
@@ -161,7 +161,7 @@ export async function spawnAndAwaitChild<TInput, TOutput>(
       `[spawnAndAwaitChild] workflow binding missing on env for childId '${args.childId}'; check the workflows[] blocks in wrangler.jsonc`
     );
   }
-  // Event type is keyed off the *semantic* sibling id (frame/scene) — it only
+  // Event type is keyed off the *semantic* sibling id (shot/scene) — it only
   // has to disambiguate siblings within one parent, since each send targets a
   // specific parent instance. The create() id additionally needs a per-run
   // discriminator so a regenerate doesn't reuse a prior run's instance id.

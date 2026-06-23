@@ -1,4 +1,4 @@
-import type { Frame } from '@/lib/db/schema/frames';
+import type { Shot } from '@/lib/db/schema/shots';
 import type { Style } from '@/lib/db/schema/libraries';
 import type { Sequence } from '@/lib/db/schema/sequences';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -45,9 +45,9 @@ const build = (
   origin = TEST_ORIGIN
 ) => buildSequenceStateRaw(deps, sequence, origin);
 
-function makeFrame(overrides: Partial<Frame> = {}): Frame {
+function makeShot(overrides: Partial<Shot> = {}): Shot {
   return {
-    id: 'frame-1',
+    id: 'shot-1',
     sequenceId: 'seq-1',
     orderIndex: 0,
     description: 'A scene',
@@ -168,9 +168,9 @@ function makeStyle(overrides: Partial<Style> = {}): Style {
   };
 }
 
-function depsWithFrames(frames: Frame[], style: Style | null = makeStyle()) {
+function depsWithShots(shots: Shot[], style: Style | null = makeStyle()) {
   return {
-    frames: { listBySequence: async () => frames },
+    shots: { listBySequence: async () => shots },
     styles: { getById: async () => style },
   };
 }
@@ -183,7 +183,7 @@ describe('buildSequenceState', () => {
       musicUrl: 'https://cdn/music.mp3',
       statusError: null,
     });
-    const state = await build(depsWithFrames([]), sequence);
+    const state = await build(depsWithShots([]), sequence);
 
     expect(state).toMatchObject({
       id: 'seq-1',
@@ -202,7 +202,7 @@ describe('buildSequenceState', () => {
     });
     expect(state.createdAt).toBe('2026-01-01T00:00:00.000Z');
     expect(state.counts).toEqual({
-      frames: 0,
+      shots: 0,
       imagesReady: 0,
       videosReady: 0,
       videosFailed: 0,
@@ -213,7 +213,7 @@ describe('buildSequenceState', () => {
   it('keeps the style id but nulls the name and logs when the style fails to resolve', async () => {
     loggerErrorMock.mockClear();
     const state = await build(
-      depsWithFrames([], null),
+      depsWithShots([], null),
       makeSequence({ styleId: 'style-deleted', musicModel: 'elevenlabs_music' })
     );
     expect(state.style).toEqual({ id: 'style-deleted', name: null });
@@ -227,33 +227,33 @@ describe('buildSequenceState', () => {
 
   it('null poster and falls back to pending music status', async () => {
     const state = await build(
-      depsWithFrames([]),
+      depsWithShots([]),
       makeSequence({ posterUrl: null, musicStatus: null })
     );
     expect(state.poster).toBeNull();
     expect(state.music.status).toBe('pending');
   });
 
-  it('derives per-frame image/video status and counts, ordered by index', async () => {
-    const frames = [
-      makeFrame({
+  it('derives per-shot image/video status and counts, ordered by index', async () => {
+    const shots = [
+      makeShot({
         id: 'f2',
         orderIndex: 1,
         videoUrl: 'https://cdn/v2.mp4',
         videoStatus: 'completed',
       }),
-      makeFrame({
+      makeShot({
         id: 'f1',
         orderIndex: 0,
         thumbnailUrl: 'https://cdn/t1.png',
       }),
     ];
-    const state = await build(depsWithFrames(frames), makeSequence());
+    const state = await build(depsWithShots(shots), makeSequence());
 
     // ordered by orderIndex
-    expect(state.frames.map((f) => f.id)).toEqual(['f1', 'f2']);
+    expect(state.shots.map((f) => f.id)).toEqual(['f1', 'f2']);
 
-    const [first, second] = state.frames;
+    const [first, second] = state.shots;
     expect(first).toMatchObject({
       id: 'f1',
       image: { status: 'completed', url: 'https://cdn/t1.png' },
@@ -268,7 +268,7 @@ describe('buildSequenceState', () => {
     expect(first?.title).toBeNull();
 
     expect(state.counts).toEqual({
-      frames: 2,
+      shots: 2,
       imagesReady: 1,
       videosReady: 1,
       videosFailed: 0,
@@ -277,15 +277,15 @@ describe('buildSequenceState', () => {
 
   it('treats a preview thumbnail as an available image', async () => {
     const state = await build(
-      depsWithFrames([
-        makeFrame({
+      depsWithShots([
+        makeShot({
           thumbnailUrl: null,
           previewThumbnailUrl: 'https://cdn/p.png',
         }),
       ]),
       makeSequence()
     );
-    expect(state.frames[0]?.image).toEqual({
+    expect(state.shots[0]?.image).toEqual({
       status: 'completed',
       url: 'https://cdn/p.png',
     });
@@ -293,9 +293,9 @@ describe('buildSequenceState', () => {
 
   it('counts failed videos so a terminal-but-partial result is legible', async () => {
     const state = await build(
-      depsWithFrames([
-        makeFrame({ id: 'f1', videoStatus: 'failed' }),
-        makeFrame({
+      depsWithShots([
+        makeShot({ id: 'f1', videoStatus: 'failed' }),
+        makeShot({
           id: 'f2',
           orderIndex: 1,
           videoStatus: 'completed',
@@ -305,7 +305,7 @@ describe('buildSequenceState', () => {
       makeSequence()
     );
     expect(state.counts).toEqual({
-      frames: 2,
+      shots: 2,
       imagesReady: 0,
       videosReady: 1,
       videosFailed: 1,
@@ -317,8 +317,8 @@ describe('buildSequenceState', () => {
     // request origin. Stored rows are `/r2/...` (#894); the API must hand
     // off-origin clients a usable absolute URL.
     const state = await build(
-      depsWithFrames([
-        makeFrame({
+      depsWithShots([
+        makeShot({
           id: 'f1',
           thumbnailUrl: '/r2/thumbnails/team/t1.png',
           videoStatus: 'completed',
@@ -338,18 +338,18 @@ describe('buildSequenceState', () => {
     expect(state.music.url).toBe(
       'https://api.example.com/r2/audio/team/music.mp3'
     );
-    expect(state.frames[0]?.image.url).toBe(
+    expect(state.shots[0]?.image.url).toBe(
       'https://api.example.com/r2/thumbnails/team/t1.png'
     );
-    expect(state.frames[0]?.video.url).toBe(
+    expect(state.shots[0]?.video.url).toBe(
       'https://api.example.com/r2/videos/team/v1.mp4'
     );
   });
 
   it('passes through already-absolute (external / legacy) media URLs', async () => {
     const state = await build(
-      depsWithFrames([
-        makeFrame({
+      depsWithShots([
+        makeShot({
           videoStatus: 'completed',
           videoUrl: 'https://v3.fal.media/files/b/abc/out.mp4',
         }),
@@ -359,7 +359,7 @@ describe('buildSequenceState', () => {
     expect(state.poster?.url).toBe(
       'https://storage.openstory.so/old/poster.png'
     );
-    expect(state.frames[0]?.video.url).toBe(
+    expect(state.shots[0]?.video.url).toBe(
       'https://v3.fal.media/files/b/abc/out.mp4'
     );
   });
@@ -368,14 +368,14 @@ describe('buildSequenceState', () => {
 describe('isTerminalSequenceState', () => {
   it('treats completed / failed / archived as terminal', async () => {
     for (const status of ['completed', 'failed', 'archived'] as const) {
-      const state = await build(depsWithFrames([]), makeSequence({ status }));
+      const state = await build(depsWithShots([]), makeSequence({ status }));
       expect(isTerminalSequenceState(state)).toBe(true);
     }
   });
 
   it('treats draft / processing as non-terminal', async () => {
     for (const status of ['draft', 'processing'] as const) {
-      const state = await build(depsWithFrames([]), makeSequence({ status }));
+      const state = await build(depsWithShots([]), makeSequence({ status }));
       expect(isTerminalSequenceState(state)).toBe(false);
     }
   });
@@ -391,23 +391,23 @@ describe('sequenceStateCursor', () => {
 
   it('is stable for identical state', async () => {
     const seq = makeSequence({ updatedAt });
-    const a = await build(depsWithFrames([]), seq);
-    const b = await build(depsWithFrames([]), seq);
+    const a = await build(depsWithShots([]), seq);
+    const b = await build(depsWithShots([]), seq);
     expect(sequenceStateCursor(a)).toBe(sequenceStateCursor(b));
   });
 
   it('changes when each polled field advances independently', async () => {
     const baseline = sequenceStateCursor(
-      await build(depsWithFrames([]), makeSequence({ updatedAt }))
+      await build(depsWithShots([]), makeSequence({ updatedAt }))
     );
 
     const cursorFor = async (
-      frames: Parameters<typeof depsWithFrames>[0],
+      shots: Parameters<typeof depsWithShots>[0],
       seqOverrides: Parameters<typeof makeSequence>[0]
     ) =>
       sequenceStateCursor(
         await build(
-          depsWithFrames(frames),
+          depsWithShots(shots),
           makeSequence({ updatedAt, ...seqOverrides })
         )
       );
@@ -424,13 +424,13 @@ describe('sequenceStateCursor', () => {
     );
     // an image becomes ready
     expect(
-      await cursorFor([makeFrame({ thumbnailUrl: 'https://cdn/t.png' })], {})
+      await cursorFor([makeShot({ thumbnailUrl: 'https://cdn/t.png' })], {})
     ).not.toBe(baseline);
     // a video becomes ready
     expect(
       await cursorFor(
         [
-          makeFrame({
+          makeShot({
             videoStatus: 'completed',
             videoUrl: 'https://cdn/v.mp4',
           }),
@@ -439,8 +439,8 @@ describe('sequenceStateCursor', () => {
       )
     ).not.toBe(baseline);
     // a video fails — must wake the poll, not stall it until the deadline
-    expect(
-      await cursorFor([makeFrame({ videoStatus: 'failed' })], {})
-    ).not.toBe(baseline);
+    expect(await cursorFor([makeShot({ videoStatus: 'failed' })], {})).not.toBe(
+      baseline
+    );
   });
 });

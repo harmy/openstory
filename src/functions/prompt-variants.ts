@@ -8,12 +8,12 @@ import {
   getAnalysisModelById,
 } from '@/lib/ai/models.config';
 import {
-  loadFramePromptContext,
-  narrowFramePromptContext,
+  loadShotPromptContext,
+  narrowShotPromptContext,
 } from '@/lib/ai/prompt-context';
 import {
-  FRAME_PROMPT_TYPES,
-  type FramePromptVariant,
+  SHOT_PROMPT_TYPES,
+  type ShotPromptVariant,
   type SequenceMusicPromptVariant,
 } from '@/lib/db/schema';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
@@ -29,39 +29,39 @@ import { buildMusicSceneSummaries } from '@/lib/workflows/music-scene-summaries'
 import { createServerFn } from '@tanstack/react-start';
 import { zodValidator } from '@tanstack/zod-adapter';
 import { z } from 'zod';
-import { frameAccessMiddleware, sequenceAccessMiddleware } from './middleware';
+import { shotAccessMiddleware, sequenceAccessMiddleware } from './middleware';
 
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'serverFn', 'prompt-variants']);
 
-const promptTypeSchema = z.enum(FRAME_PROMPT_TYPES);
+const promptTypeSchema = z.enum(SHOT_PROMPT_TYPES);
 
 /**
- * Stable deduplication ID for frame-prompt regeneration. Workflow retries with
+ * Stable deduplication ID for shot-prompt regeneration. Workflow retries with
  * the same upstream context must collapse to a single run, so this string
  * cannot include timestamps or random suffixes.
  */
-export function framePromptDedupId(
+export function shotPromptDedupId(
   promptType: 'visual' | 'motion',
-  frameId: string,
+  shotId: string,
   liveHash: string
 ): string {
-  return `prompt-${promptType}-${frameId}-${liveHash}`;
+  return `prompt-${promptType}-${shotId}-${liveHash}`;
 }
 
 /**
  * Unique deduplication ID for an explicit user-driven force-regeneration.
- * Distinct from `framePromptDedupId` because the user is asking for a fresh
+ * Distinct from `shotPromptDedupId` because the user is asking for a fresh
  * LLM completion regardless of whether upstream inputs changed — collapsing
  * repeat clicks to one run would silently swallow the regeneration.
  */
-export function framePromptForceDedupId(
+export function shotPromptForceDedupId(
   promptType: 'visual' | 'motion',
-  frameId: string,
+  shotId: string,
   nonce: string
 ): string {
-  return `prompt-${promptType}-${frameId}-force-${nonce}`;
+  return `prompt-${promptType}-${shotId}-force-${nonce}`;
 }
 
 /** Stable deduplication ID for music-prompt regeneration — see above. */
@@ -80,26 +80,26 @@ export function isPromptUpToDate(
   return storedHash !== null && storedHash === liveHash;
 }
 
-export type FramePromptVariantWithAuthor = FramePromptVariant & {
+export type ShotPromptVariantWithAuthor = ShotPromptVariant & {
   createdByName: string | null;
 };
 
 export type SequenceMusicPromptVariantWithAuthor =
   SequenceMusicPromptVariant & { createdByName: string | null };
 
-const frameListInput = z.object({
+const shotListInput = z.object({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
   promptType: promptTypeSchema,
 });
 
-export const listFramePromptVariantsFn = createServerFn({ method: 'GET' })
-  .middleware([frameAccessMiddleware])
-  .inputValidator(zodValidator(frameListInput))
+export const listShotPromptVariantsFn = createServerFn({ method: 'GET' })
+  .middleware([shotAccessMiddleware])
+  .inputValidator(zodValidator(shotListInput))
   .handler(
-    async ({ context, data }): Promise<FramePromptVariantWithAuthor[]> => {
-      return await context.scopedDb.framePromptVariants.listByFrameWithAuthor(
-        data.frameId,
+    async ({ context, data }): Promise<ShotPromptVariantWithAuthor[]> => {
+      return await context.scopedDb.shotPromptVariants.listByShotWithAuthor(
+        data.shotId,
         data.promptType
       );
     }
@@ -126,26 +126,26 @@ export const listSequenceMusicPromptVariantsFn = createServerFn({
 // Restore carries the source variant's input_hash forward so staleness keeps
 // tracking the upstream context — restoring an old AI prompt without the hash
 // would short-circuit the staleness check to "fresh" forever.
-const frameRestoreInput = z.object({
+const shotRestoreInput = z.object({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
   variantId: ulidSchema,
 });
 
-export const restoreFramePromptVariantFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
-  .inputValidator(zodValidator(frameRestoreInput))
+export const restoreShotPromptVariantFn = createServerFn({ method: 'POST' })
+  .middleware([shotAccessMiddleware])
+  .inputValidator(zodValidator(shotRestoreInput))
   .handler(async ({ context, data }) => {
-    const chosen = await context.scopedDb.framePromptVariants.getByIdForFrame(
+    const chosen = await context.scopedDb.shotPromptVariants.getByIdForShot(
       data.variantId,
-      data.frameId
+      data.shotId
     );
     if (!chosen) {
-      throw new Error('Prompt variant not found for this frame');
+      throw new Error('Prompt variant not found for this shot');
     }
 
-    const inserted = await context.scopedDb.framePromptVariants.write({
-      frameId: data.frameId,
+    const inserted = await context.scopedDb.shotPromptVariants.write({
+      shotId: data.shotId,
       promptType: chosen.promptType,
       text: chosen.text,
       components: chosen.components,
@@ -190,9 +190,9 @@ export const restoreSequenceMusicPromptVariantFn = createServerFn({
     return { variantId: inserted.id };
   });
 
-const frameRegenerateInput = z.object({
+const shotRegenerateInput = z.object({
   sequenceId: ulidSchema,
-  frameId: ulidSchema,
+  shotId: ulidSchema,
   promptType: promptTypeSchema,
   // `force: true` bypasses the up-to-date short-circuit so the user can roll
   // the dice on a fresh non-deterministic LLM completion even when no upstream
@@ -200,51 +200,51 @@ const frameRegenerateInput = z.object({
   force: z.boolean().optional(),
 });
 
-export const regenerateFramePromptFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
-  .inputValidator(zodValidator(frameRegenerateInput))
+export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
+  .middleware([shotAccessMiddleware])
+  .inputValidator(zodValidator(shotRegenerateInput))
   .handler(async ({ context, data }) => {
-    const { frame, sequence, scopedDb, user, teamId } = context;
+    const { shot, sequence, scopedDb, user, teamId } = context;
 
-    if (!frame.metadata) {
-      throw new Error('Frame has no scene metadata to regenerate from');
+    if (!shot.metadata) {
+      throw new Error('Shot has no scene metadata to regenerate from');
     }
 
-    const ctx = await loadFramePromptContext({
+    const ctx = await loadShotPromptContext({
       scopedDb,
       sequence,
-      scene: frame.metadata,
+      scene: shot.metadata,
       // Motion prompts are conditioned on the rendered still (#929); feeding
       // its URL here keeps this regen-bail check in lockstep with the
       // generation-time stamp and the staleness verify. No-op for visual.
-      startingFrameImageUrl: frame.thumbnailUrl,
+      startingFrameImageUrl: shot.thumbnailUrl,
     });
 
     // Bail if the cached input hash already matches the live recompute —
     // otherwise every double-click enqueues a duplicate workflow run and
     // appends a no-op `'regenerated'` history row. Hash inputs are narrowed
-    // to what this frame's continuity actually references; the workflow
+    // to what this shot's continuity actually references; the workflow
     // downstream still gets the full bibles for LLM context.
     //
     // `force` skips this bail so an explicit user click always reaches the
     // LLM — there's no other way to get a fresh non-deterministic completion
     // when upstream inputs are unchanged.
-    const narrowed = narrowFramePromptContext(ctx);
+    const narrowed = narrowShotPromptContext(ctx);
     const liveHash =
       data.promptType === 'visual'
         ? await computeVisualPromptInputHash(narrowed)
         : await computeMotionPromptInputHash(narrowed);
     const storedHash =
       data.promptType === 'visual'
-        ? frame.visualPromptInputHash
-        : frame.motionPromptInputHash;
+        ? shot.visualPromptInputHash
+        : shot.motionPromptInputHash;
     if (!data.force && isPromptUpToDate(storedHash, liveHash)) {
       return { workflowRunId: null, alreadyUpToDate: true } as const;
     }
 
     // Stream incremental deltas only on the explicit force-regen path — the
-    // user is actively watching the frame in that case. The auto-staleness
-    // path can land later when the user isn't viewing this frame, so we skip
+    // user is actively watching the shot in that case. The auto-staleness
+    // path can land later when the user isn't viewing this shot, so we skip
     // the realtime publishes to avoid burning Redis ops for a stream nobody
     // is consuming.
     const baseInput:
@@ -253,8 +253,8 @@ export const regenerateFramePromptFn = createServerFn({ method: 'POST' })
       userId: user.id,
       teamId,
       sequenceId: sequence.id,
-      frameId: frame.id,
-      scene: frame.metadata,
+      shotId: shot.id,
+      scene: shot.metadata,
       aspectRatio: sequence.aspectRatio,
       characterBible: ctx.characterBible,
       locationBible: ctx.locationBible,
@@ -265,10 +265,10 @@ export const regenerateFramePromptFn = createServerFn({ method: 'POST' })
       emitStreaming: data.force === true,
       // Snapshot the rendered still at trigger time (#929) — the motion
       // workflow must NOT look it up mid-run, or a concurrent re-render could
-      // swap it. No-op for the visual path. `frame` was loaded at the top of
+      // swap it. No-op for the visual path. `shot` was loaded at the top of
       // this handler, so this is the image as it exists right now.
       ...(data.promptType === 'motion' && {
-        startingFrameImageUrl: frame.thumbnailUrl,
+        startingFrameImageUrl: shot.thumbnailUrl,
       }),
     };
 
@@ -282,12 +282,12 @@ export const regenerateFramePromptFn = createServerFn({ method: 'POST' })
     // another LLM completion. The auto-staleness path keeps the stable
     // hash-based ID so genuine retries collapse to one run.
     const deduplicationId = data.force
-      ? framePromptForceDedupId(
+      ? shotPromptForceDedupId(
           data.promptType,
-          frame.id,
+          shot.id,
           `${Date.now()}-${crypto.randomUUID()}`
         )
-      : framePromptDedupId(data.promptType, frame.id, liveHash);
+      : shotPromptDedupId(data.promptType, shot.id, liveHash);
 
     const workflowRunId = await triggerWorkflow(urlPath, baseInput, {
       deduplicationId,
@@ -305,8 +305,8 @@ export const regenerateMusicPromptFn = createServerFn({ method: 'POST' })
   .handler(async ({ context }) => {
     const { sequence, scopedDb, user, teamId } = context;
 
-    const frames = await scopedDb.frames.listBySequence(sequence.id);
-    const scenes = frames
+    const shots = await scopedDb.shots.listBySequence(sequence.id);
+    const scenes = shots
       .map((f) => f.metadata)
       .filter((m): m is NonNullable<typeof m> => m !== null);
     if (scenes.length === 0) {
@@ -364,8 +364,8 @@ export const getMusicPromptStalenessFn = createServerFn({ method: 'GET' })
     }
 
     try {
-      const frames = await scopedDb.frames.listBySequence(sequence.id);
-      const scenes = frames
+      const shots = await scopedDb.shots.listBySequence(sequence.id);
+      const scenes = shots
         .map((f) => f.metadata)
         .filter((m): m is NonNullable<typeof m> => m !== null);
       if (scenes.length === 0) {
@@ -420,9 +420,7 @@ export const getDivergentVariantPromptDiffFn = createServerFn({
   .middleware([sequenceAccessMiddleware])
   .inputValidator(zodValidator(variantPromptDiffInput))
   .handler(async ({ context, data }): Promise<VariantPromptDiff> => {
-    const variant = await context.scopedDb.frameVariants.getById(
-      data.variantId
-    );
+    const variant = await context.scopedDb.shotVariants.getById(data.variantId);
     if (!variant) return null;
     // Auth boundary: don't silently collapse cross-sequence access into a
     // 'no diff' return — that would mask an authorization bug.
@@ -436,8 +434,8 @@ export const getDivergentVariantPromptDiffFn = createServerFn({
 
     const promptType = variant.variantType === 'image' ? 'visual' : 'motion';
     const candidates =
-      await context.scopedDb.framePromptVariants.listCandidatesAtOrBefore(
-        variant.frameId,
+      await context.scopedDb.shotPromptVariants.listCandidatesAtOrBefore(
+        variant.shotId,
         promptType,
         variant.createdAt
       );
@@ -453,18 +451,16 @@ export const getDivergentVariantPromptDiffFn = createServerFn({
       return null;
     }
 
-    const [frameRow] = await context.scopedDb.frames.getByIds([
-      variant.frameId,
-    ]);
-    if (!frameRow) {
-      // FK invariant violation — variant references a frame that no longer
+    const [shotRow] = await context.scopedDb.shots.getByIds([variant.shotId]);
+    if (!shotRow) {
+      // FK invariant violation — variant references a shot that no longer
       // exists.
       throw new Error(
-        `Frame ${variant.frameId} missing for variant ${variant.id}`
+        `Shot ${variant.shotId} missing for variant ${variant.id}`
       );
     }
     const live =
-      promptType === 'visual' ? frameRow.imagePrompt : frameRow.motionPrompt;
+      promptType === 'visual' ? shotRow.imagePrompt : shotRow.motionPrompt;
     if (!live) return null;
     if (live === matched.text) return null;
 

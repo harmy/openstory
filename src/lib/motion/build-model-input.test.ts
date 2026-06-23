@@ -10,7 +10,7 @@ import type { GenerateMotionOptions } from './motion-generation';
 
 const baseOptions: GenerateMotionOptions = {
   prompt: 'Camera dolly forward slowly',
-  imageUrl: 'https://example.com/frame.jpg',
+  imageUrl: 'https://example.com/shot.jpg',
   duration: 5,
   aspectRatio: '16:9',
 };

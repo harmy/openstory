@@ -61,7 +61,7 @@ export class MotionMusicPromptsWorkflow extends OpenStoryWorkflowEntrypoint<Moti
       locationBible,
       elementBible,
       styleConfig,
-      frameMapping,
+      shotMapping,
       startingFrameImageUrls,
     } = input;
 
@@ -112,7 +112,7 @@ export class MotionMusicPromptsWorkflow extends OpenStoryWorkflowEntrypoint<Moti
           elementBible,
           styleConfig,
           analysisModelId,
-          frameMapping,
+          shotMapping,
           startingFrameImageUrls,
         },
         spawnStepName: 'spawn-motion-prompts',
@@ -176,7 +176,7 @@ export class MotionMusicPromptsWorkflow extends OpenStoryWorkflowEntrypoint<Moti
     );
 
     // `aspectRatio`, `characterBible`, `locationBible`, `elementBible`,
-    // `styleConfig`, and `frameMapping` are passed through to the stubbed
+    // `styleConfig`, and `shotMapping` are passed through to the stubbed
     // motion-prompts child once the Pattern 3 batch ports it. They're left
     // off this orchestrator's destructure for now to keep tsgo happy.
     return {

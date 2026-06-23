@@ -1,9 +1,9 @@
 /**
  * Failure Analysis Utility
- * Analyzes frames + sequence to determine what failed and whether smart retry is possible.
+ * Analyzes shots + sequence to determine what failed and whether smart retry is possible.
  */
 
-import type { Frame } from '@/lib/db/schema/frames';
+import type { Shot } from '@/lib/db/schema/shots';
 import type { Sequence } from '@/lib/db/schema/sequences';
 
 type FailureCategory =
@@ -13,8 +13,8 @@ type FailureCategory =
   | 'motion-prompts'
   | 'music-prompt';
 
-type FrameFailure = {
-  frameId: string;
+type ShotFailure = {
+  shotId: string;
   orderIndex: number;
   sceneTitle: string;
   error: string | null;
@@ -23,7 +23,7 @@ type FrameFailure = {
 type FailureGroup = {
   category: FailureCategory;
   label: string;
-  frames: FrameFailure[];
+  shots: ShotFailure[];
   error?: string | null;
 };
 
@@ -36,8 +36,8 @@ export type FailureSummary = {
   error?: string | null;
 };
 
-function getSceneTitle(frame: Frame): string {
-  return frame.metadata?.metadata?.title || `Scene ${frame.orderIndex + 1}`;
+function getSceneTitle(shot: Shot): string {
+  return shot.metadata?.metadata?.title || `Scene ${shot.orderIndex + 1}`;
 }
 
 function buildHeadline(
@@ -65,11 +65,11 @@ function buildHeadline(
   for (const group of groups) {
     if (group.category === 'image') {
       parts.push(
-        `${group.frames.length} image${group.frames.length !== 1 ? 's' : ''} failed`
+        `${group.shots.length} image${group.shots.length !== 1 ? 's' : ''} failed`
       );
     } else if (group.category === 'motion') {
       parts.push(
-        `${group.frames.length} motion video${group.frames.length !== 1 ? 's' : ''} failed`
+        `${group.shots.length} motion video${group.shots.length !== 1 ? 's' : ''} failed`
       );
     } else if (group.category === 'music') {
       parts.push('music generation failed');
@@ -82,14 +82,14 @@ function buildHeadline(
 }
 
 export function analyzeFailures(
-  frames: Frame[],
+  shots: Shot[],
   sequence: Sequence
 ): FailureSummary {
   const groups: FailureGroup[] = [];
   let requiresFullRetry = false;
 
-  // No frames → script analysis failed → full retry
-  if (frames.length === 0 && sequence.status === 'failed') {
+  // No shots → script analysis failed → full retry
+  if (shots.length === 0 && sequence.status === 'failed') {
     return {
       requiresFullRetry: true,
       headline: 'Generation failed \u2014 full retry required',
@@ -101,15 +101,13 @@ export function analyzeFailures(
   }
 
   // Failed images
-  const failedImageFrames = frames.filter(
-    (f) => f.thumbnailStatus === 'failed'
-  );
-  if (failedImageFrames.length > 0) {
+  const failedImageShots = shots.filter((f) => f.thumbnailStatus === 'failed');
+  if (failedImageShots.length > 0) {
     groups.push({
       category: 'image',
-      label: `${failedImageFrames.length} of ${frames.length} images failed`,
-      frames: failedImageFrames.map((f) => ({
-        frameId: f.id,
+      label: `${failedImageShots.length} of ${shots.length} images failed`,
+      shots: failedImageShots.map((f) => ({
+        shotId: f.id,
         orderIndex: f.orderIndex,
         sceneTitle: getSceneTitle(f),
         error: f.thumbnailError,
@@ -117,16 +115,16 @@ export function analyzeFailures(
     });
   }
 
-  // Failed motion (only frames with thumbnails AND motionPrompt)
-  const failedMotionFrames = frames.filter(
+  // Failed motion (only shots with thumbnails AND motionPrompt)
+  const failedMotionShots = shots.filter(
     (f) => f.videoStatus === 'failed' && f.thumbnailUrl && f.motionPrompt
   );
-  if (failedMotionFrames.length > 0) {
+  if (failedMotionShots.length > 0) {
     groups.push({
       category: 'motion',
-      label: `${failedMotionFrames.length} of ${frames.length} motion videos failed`,
-      frames: failedMotionFrames.map((f) => ({
-        frameId: f.id,
+      label: `${failedMotionShots.length} of ${shots.length} motion videos failed`,
+      shots: failedMotionShots.map((f) => ({
+        shotId: f.id,
         orderIndex: f.orderIndex,
         sceneTitle: getSceneTitle(f),
         error: f.videoError,
@@ -135,19 +133,19 @@ export function analyzeFailures(
   }
 
   // Detect missing motion prompts (images completed but no motionPrompt)
-  const framesWithImageButNoMotionPrompt = frames.filter(
+  const shotsWithImageButNoMotionPrompt = shots.filter(
     (f) => f.thumbnailStatus === 'completed' && !f.motionPrompt
   );
   if (
-    framesWithImageButNoMotionPrompt.length > 0 &&
+    shotsWithImageButNoMotionPrompt.length > 0 &&
     sequence.status === 'failed'
   ) {
     requiresFullRetry = true;
     groups.push({
       category: 'motion-prompts',
       label: 'Motion prompts were not generated',
-      frames: framesWithImageButNoMotionPrompt.map((f) => ({
-        frameId: f.id,
+      shots: shotsWithImageButNoMotionPrompt.map((f) => ({
+        shotId: f.id,
         orderIndex: f.orderIndex,
         sceneTitle: getSceneTitle(f),
         error: null,
@@ -160,19 +158,19 @@ export function analyzeFailures(
     groups.push({
       category: 'music',
       label: 'Music generation failed',
-      frames: [],
+      shots: [],
       error: sequence.musicError,
     });
   }
 
   // Detect missing music prompt
   if (sequence.status === 'failed' && !sequence.musicPrompt) {
-    // Only flag as needing full retry if we have frames (otherwise already caught above)
-    if (frames.length > 0 && sequence.musicStatus !== 'completed') {
+    // Only flag as needing full retry if we have shots (otherwise already caught above)
+    if (shots.length > 0 && sequence.musicStatus !== 'completed') {
       groups.push({
         category: 'music-prompt',
         label: 'Music prompt was not generated',
-        frames: [],
+        shots: [],
       });
     }
   }
@@ -191,7 +189,7 @@ export function analyzeFailures(
   }
 
   const totalFailures = groups.reduce(
-    (sum, g) => sum + Math.max(g.frames.length, 1),
+    (sum, g) => sum + Math.max(g.shots.length, 1),
     0
   );
 

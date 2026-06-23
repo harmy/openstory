@@ -27,7 +27,7 @@ import { NotFoundError } from '@/lib/errors';
 import { getLogger, toErrorPayload } from '@/lib/observability/logger';
 import { withTraceContextAsync } from '@/lib/observability/tracer';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
-import type { Frame, Sequence } from '@/types/database';
+import type { Shot, Sequence } from '@/types/database';
 import { createMiddleware } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 import { zodValidator } from '@tanstack/zod-adapter';
@@ -62,7 +62,7 @@ export type SequenceContext = TeamContext & {
 };
 
 /**
- * Partial sequence type returned by getFrameWithSequence
+ * Partial sequence type returned by getShotWithSequence
  * Contains only the fields selected by the query
  */
 type PartialSequence = {
@@ -76,8 +76,8 @@ type PartialSequence = {
   analysisModel: string;
 };
 
-export type FrameContext = TeamContext & {
-  frame: Omit<Frame, 'sequence'>;
+export type ShotContext = TeamContext & {
+  shot: Omit<Shot, 'sequence'>;
   sequence: PartialSequence;
 };
 
@@ -500,36 +500,34 @@ export const sequenceAccessMiddleware = createMiddleware({ type: 'function' })
   });
 
 /**
- * Frame access middleware
- * Loads frame with its sequence and verifies team access
- * Requires sequenceId and frameId in input data
+ * Shot access middleware
+ * Loads shot with its sequence and verifies team access
+ * Requires sequenceId and shotId in input data
  */
-export const frameAccessMiddleware = createMiddleware({ type: 'function' })
+export const shotAccessMiddleware = createMiddleware({ type: 'function' })
   .middleware([authWithTeamMiddleware])
   .inputValidator(
-    zodValidator(z.looseObject({ sequenceId: ulidSchema, frameId: ulidSchema }))
+    zodValidator(z.looseObject({ sequenceId: ulidSchema, shotId: ulidSchema }))
   )
   .server(async ({ next, context, data }) => {
-    const frameData = await context.scopedDb.frames.getWithSequence(
-      data.frameId
-    );
+    const shotData = await context.scopedDb.shots.getWithSequence(data.shotId);
 
-    if (!frameData || frameData.sequenceId !== data.sequenceId) {
-      throw new NotFoundError('Frame not found in this sequence');
+    if (!shotData || shotData.sequenceId !== data.sequenceId) {
+      throw new NotFoundError('Shot not found in this sequence');
     }
 
     let { teamId, scopedDb } = context;
 
-    if (frameData.sequence.teamId !== context.teamId) {
+    if (shotData.sequence.teamId !== context.teamId) {
       if (!isSystemAdmin(context.user.email)) {
-        throw new NotFoundError('Frame not found in this sequence');
+        throw new NotFoundError('Shot not found in this sequence');
       }
-      teamId = frameData.sequence.teamId;
-      scopedDb = createScopedDb(frameData.sequence.teamId, context.user.id);
+      teamId = shotData.sequence.teamId;
+      scopedDb = createScopedDb(shotData.sequence.teamId, context.user.id);
     }
 
-    // Extract sequence from frame data (using the partial sequence from the query)
-    const { sequence: rawSequence, ...frame } = frameData;
+    // Extract sequence from shot data (using the partial sequence from the query)
+    const { sequence: rawSequence, ...shot } = shotData;
 
     // Type assertion needed because Drizzle's nested relation inference loses the $type<AspectRatio>() annotation
     const sequence: PartialSequence = {
@@ -539,7 +537,7 @@ export const frameAccessMiddleware = createMiddleware({ type: 'function' })
 
     return next({
       context: {
-        frame,
+        shot,
         sequence,
         teamId,
         scopedDb,

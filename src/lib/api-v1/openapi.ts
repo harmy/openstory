@@ -8,11 +8,11 @@
  * schemas are hand-authored to mirror the `SequenceState` / one-shot result
  * documents in `state.ts` / `create.ts`.
  *
- * Frame and music generation statuses reuse `FRAME_GENERATION_STATUSES` (their
+ * Shot and music generation statuses reuse `SHOT_GENERATION_STATUSES` (their
  * value sets are identical); the sequence status set is declared locally.
  */
 
-import { FRAME_GENERATION_STATUSES } from '@/lib/db/schema/frames';
+import { SHOT_GENERATION_STATUSES } from '@/lib/db/schema/shots';
 import { apiEnhanceScriptSchema } from './enhance-input-schema';
 import { API_V1_BASE } from './hal';
 import { apiCreateSequenceSchema } from './input-schema';
@@ -27,7 +27,7 @@ type JsonValue =
   | { [key: string]: JsonValue };
 type JsonObject = { [key: string]: JsonValue };
 
-const GEN_STATUSES: JsonValue[] = [...FRAME_GENERATION_STATUSES];
+const GEN_STATUSES: JsonValue[] = [...SHOT_GENERATION_STATUSES];
 const SEQUENCE_STATUSES: JsonValue[] = [
   'draft',
   'processing',
@@ -110,15 +110,15 @@ const genStatusObject: JsonObject = {
 };
 const countsObject: JsonObject = {
   type: 'object',
-  required: ['frames', 'imagesReady', 'videosReady', 'videosFailed'],
+  required: ['shots', 'imagesReady', 'videosReady', 'videosFailed'],
   properties: {
-    frames: { type: 'integer' },
+    shots: { type: 'integer' },
     imagesReady: { type: 'integer' },
     videosReady: { type: 'integer' },
     videosFailed: {
       type: 'integer',
       description:
-        'Frames whose video generation failed. Can be > 0 even when `status` is "completed".',
+        'Shots whose video generation failed. Can be > 0 even when `status` is "completed".',
     },
   },
 };
@@ -141,8 +141,8 @@ const modelsObject: JsonObject = {
   required: ['analysis', 'image', 'video', 'music'],
   properties: {
     analysis: { type: 'string', description: 'Script-analysis model id.' },
-    image: { type: 'string', description: 'Per-frame image model id.' },
-    video: { type: 'string', description: 'Per-frame video model id.' },
+    image: { type: 'string', description: 'Per-shot image model id.' },
+    video: { type: 'string', description: 'Per-shot video model id.' },
     music: { ...nullableString, description: 'Music model id, if any.' },
   },
 };
@@ -232,7 +232,7 @@ export function buildOpenApiDocument(): JsonObject {
           tags: ['sequences'],
           summary: "List this team's sequences",
           description:
-            "List the API key team's sequences, most recent first (by updatedAt). Each entry is a compact summary — status-document scalars plus a `counts` block, without the per-frame array — and carries a HAL `self` link to its full status document. Archived sequences are excluded. Page with ?limit (default 20, max 100) and the opaque ?cursor returned in the response's `next` link.",
+            "List the API key team's sequences, most recent first (by updatedAt). Each entry is a compact summary — status-document scalars plus a `counts` block, without the per-shot array — and carries a HAL `self` link to its full status document. Archived sequences are excluded. Page with ?limit (default 20, max 100) and the opaque ?cursor returned in the response's `next` link.",
           parameters: [
             {
               name: 'limit',
@@ -309,7 +309,7 @@ export function buildOpenApiDocument(): JsonObject {
           tags: ['scripts'],
           summary: 'Enhance a script (streaming)',
           description:
-            'Enhance/expand a script WITHOUT creating a sequence, using the enhancement-relevant inputs (style, aspect ratio, target duration, elements). Streams the result as Server-Sent Events: unnamed `data:` frames each carry `{ "delta": "..." }`; a terminal `event: done` frame carries the full `{ "enhancedScript": "...", "_links": {...} }` — a HAL catalog whose `create-sequence` affordance embeds a ready-to-POST example body using the enhanced script. A failure after streaming starts arrives as an `event: error` frame `{ code, message }`. Pre-stream failures (invalid body, unresolvable style, billing) return the JSON error envelope instead.',
+            'Enhance/expand a script WITHOUT creating a sequence, using the enhancement-relevant inputs (style, aspect ratio, target duration, elements). Streams the result as Server-Sent Events: unnamed `data:` shots each carry `{ "delta": "..." }`; a terminal `event: done` shot carries the full `{ "enhancedScript": "...", "_links": {...} }` — a HAL catalog whose `create-sequence` affordance embeds a ready-to-POST example body using the enhanced script. A failure after streaming starts arrives as an `event: error` shot `{ code, message }`. Pre-stream failures (invalid body, unresolvable style, billing) return the JSON error envelope instead.',
           requestBody: {
             required: true,
             content: {
@@ -322,7 +322,7 @@ export function buildOpenApiDocument(): JsonObject {
           responses: {
             '200': {
               description:
-                'An SSE stream of the enhanced script. Delta frames, then a terminal `done` frame with the full text and a HAL `_links` catalog of next actions.',
+                'An SSE stream of the enhanced script. Delta shots, then a terminal `done` shot with the full text and a HAL `_links` catalog of next actions.',
               content: {
                 'text/event-stream': {
                   schema: { type: 'string' },
@@ -344,7 +344,7 @@ export function buildOpenApiDocument(): JsonObject {
           tags: ['sequences'],
           summary: 'Get sequence status',
           description:
-            'DB-derived status document: overall status, per-frame image/video status + URLs, music, poster, and ready/failed counts, plus a HAL `_links` catalog. With ?wait, long-polls until the sequence changes or reaches a terminal state.',
+            'DB-derived status document: overall status, per-shot image/video status + URLs, music, poster, and ready/failed counts, plus a HAL `_links` catalog. With ?wait, long-polls until the sequence changes or reaches a terminal state.',
           parameters: [
             {
               name: 'id',
@@ -434,7 +434,7 @@ export function buildOpenApiDocument(): JsonObject {
             },
           },
         },
-        SequenceStateFrame: {
+        SequenceStateShot: {
           type: 'object',
           required: ['id', 'orderIndex', 'title', 'image', 'video'],
           properties: {
@@ -459,7 +459,7 @@ export function buildOpenApiDocument(): JsonObject {
             'updatedAt',
             'poster',
             'music',
-            'frames',
+            'shots',
             'counts',
             '_links',
           ],
@@ -475,9 +475,9 @@ export function buildOpenApiDocument(): JsonObject {
             updatedAt: { type: 'string', format: 'date-time' },
             poster: posterObject,
             music: genStatusObject,
-            frames: {
+            shots: {
               type: 'array',
-              items: { $ref: '#/components/schemas/SequenceStateFrame' },
+              items: { $ref: '#/components/schemas/SequenceStateShot' },
             },
             counts: countsObject,
             _links: { $ref: '#/components/schemas/HalLinks' },
@@ -486,7 +486,7 @@ export function buildOpenApiDocument(): JsonObject {
         SequenceListItem: {
           type: 'object',
           description:
-            'A compact sequence summary (status-document scalars + style, models, and counts, without the frame array) as returned in a list page.',
+            'A compact sequence summary (status-document scalars + style, models, and counts, without the shot array) as returned in a list page.',
           required: [
             'id',
             'title',

@@ -24,7 +24,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const GeneratingFrame: Story = {
+export const GeneratingShot: Story = {
   args: {
     thumbnailUrl: null,
     videoStatus: 'pending',
@@ -33,7 +33,7 @@ export const GeneratingFrame: Story = {
     docs: {
       description: {
         story:
-          'Shows when the frame (thumbnail) is still being generated. Video generation will start after frame is ready.',
+          'Shows when the shot (thumbnail) is still being generated. Video generation will start after shot is ready.',
       },
     },
   },

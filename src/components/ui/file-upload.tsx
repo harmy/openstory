@@ -408,11 +408,11 @@ function FileUpload(props: FileUploadProps) {
   );
 
   const onProgress = useLazyRef(() => {
-    let frame = 0;
+    let shot = 0;
     return (file: File, progress: number) => {
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
+      if (shot) return;
+      shot = requestAnimationFrame(() => {
+        shot = 0;
         store.dispatch({
           type: 'SET_PROGRESS',
           file,

@@ -1,17 +1,17 @@
 /**
  * Scoped Sequence Locations Sub-module
- * Location CRUD, reference images, and frame-location matching.
+ * Location CRUD, reference images, and shot-location matching.
  */
 
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Database } from '@/lib/db/client';
 import type {
-  Frame,
+  Shot,
   NewSequenceLocation,
   ReferenceStatus,
   SequenceLocation,
 } from '@/lib/db/schema';
-import { frames, sequenceLocations, sequences } from '@/lib/db/schema';
+import { shots, sequenceLocations, sequences } from '@/lib/db/schema';
 
 // ============================================================================
 // Pure utility functions (exported separately, not in factory)
@@ -43,15 +43,15 @@ export function locationMatchesTag(
 }
 
 /**
- * Match locations to a frame based on metadata
- * Used when generating frame images to include location references
+ * Match locations to a shot based on metadata
+ * Used when generating shot images to include location references
  */
-export function matchLocationsToFrame(
-  frame: Pick<Frame, 'metadata'>,
+export function matchLocationsToShot(
+  shot: Pick<Shot, 'metadata'>,
   allLocations: SequenceLocation[]
 ): SequenceLocation[] {
-  const environmentTag = frame.metadata?.continuity?.environmentTag ?? '';
-  const sceneLocation = frame.metadata?.metadata?.location ?? '';
+  const environmentTag = shot.metadata?.continuity?.environmentTag ?? '';
+  const sceneLocation = shot.metadata?.metadata?.location ?? '';
 
   if (!environmentTag && !sceneLocation) return [];
 
@@ -308,10 +308,10 @@ export function createSequenceLocationsMethods(db: Database) {
         );
     },
 
-    getFramesForLocation: async (
+    getShotsForLocation: async (
       sequenceId: string,
       locationId: string
-    ): Promise<Frame[]> => {
+    ): Promise<Shot[]> => {
       // Get the location to extract matching patterns
       const locResult = await db
         .select()
@@ -323,16 +323,16 @@ export function createSequenceLocationsMethods(db: Database) {
         return [];
       }
 
-      // Get all frames for the sequence
-      const allFrames = await db
+      // Get all shots for the sequence
+      const allShots = await db
         .select()
-        .from(frames)
-        .where(eq(frames.sequenceId, sequenceId));
+        .from(shots)
+        .where(eq(shots.sequenceId, sequenceId));
 
-      // Filter frames that are at this location
-      return (allFrames as Frame[]).filter((frame) => {
-        const environmentTag = frame.metadata?.continuity?.environmentTag ?? '';
-        const sceneLocation = frame.metadata?.metadata?.location ?? '';
+      // Filter shots that are at this location
+      return (allShots as Shot[]).filter((shot) => {
+        const environmentTag = shot.metadata?.continuity?.environmentTag ?? '';
+        const sceneLocation = shot.metadata?.metadata?.location ?? '';
 
         return (
           (environmentTag && locationMatchesTag(location, environmentTag)) ||
@@ -341,7 +341,7 @@ export function createSequenceLocationsMethods(db: Database) {
       });
     },
 
-    getFrameIdsForLocation: async (
+    getShotIdsForLocation: async (
       sequenceId: string,
       locationId: string
     ): Promise<string[]> => {
@@ -356,18 +356,18 @@ export function createSequenceLocationsMethods(db: Database) {
         return [];
       }
 
-      // Get all frames for the sequence
-      const allFrames = await db
+      // Get all shots for the sequence
+      const allShots = await db
         .select()
-        .from(frames)
-        .where(eq(frames.sequenceId, sequenceId));
+        .from(shots)
+        .where(eq(shots.sequenceId, sequenceId));
 
-      // Filter frames and return IDs
-      return (allFrames as Frame[])
-        .filter((frame) => {
+      // Filter shots and return IDs
+      return (allShots as Shot[])
+        .filter((shot) => {
           const environmentTag =
-            frame.metadata?.continuity?.environmentTag ?? '';
-          const sceneLocation = frame.metadata?.metadata?.location ?? '';
+            shot.metadata?.continuity?.environmentTag ?? '';
+          const sceneLocation = shot.metadata?.metadata?.location ?? '';
 
           return (
             (environmentTag && locationMatchesTag(location, environmentTag)) ||

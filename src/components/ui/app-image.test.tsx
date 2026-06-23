@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AppImage, isTransformableUrl } from './app-image';
 
-const REMOTE_SRC = 'https://assets.openstory.so/sequences/abc/frame-1.png';
+const REMOTE_SRC = 'https://assets.openstory.so/sequences/abc/shot-1.png';
 
 function renderImg(src: string) {
   return renderToStaticMarkup(

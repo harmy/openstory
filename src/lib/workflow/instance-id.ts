@@ -33,7 +33,7 @@ export function getEnvironmentSlug(env: { VITE_APP_URL?: string }): string {
  * Build an instance ID of the form `${envSlug}_${workflowName}_${suffix}`.
  *
  * The suffix is whatever the caller wants to deduplicate on
- * (e.g. `${sequenceId}_${frameId}` for image-workflow). The envSlug prefix
+ * (e.g. `${sequenceId}_${shotId}` for image-workflow). The envSlug prefix
  * is what isolates PR-preview deployments from each other and from prod.
  *
  * Cloudflare Workflows enforces `^[a-zA-Z0-9_-]+$` on instance IDs — no

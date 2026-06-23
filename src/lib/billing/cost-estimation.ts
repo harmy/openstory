@@ -77,21 +77,21 @@ const DEFAULT_ESTIMATED_SCENE_COUNT = 8;
 
 /**
  * Estimate the total cost of a storyboard workflow.
- * Includes: LLM analysis, character/location sheet images, per-frame images,
- * and optionally per-frame motion generation.
+ * Includes: LLM analysis, character/location sheet images, per-shot images,
+ * and optionally per-shot motion generation.
  */
 export function estimateStoryboardCost(opts: {
   imageModel: TextToImageModel;
-  /** Number of image models selected (multiplies per-frame image cost) */
+  /** Number of image models selected (multiplies per-shot image cost) */
   imageModelCount?: number;
   aspectRatio: AspectRatio;
   estimatedSceneCount?: number;
   autoGenerateMotion?: boolean;
   /**
-   * Video models selected for per-frame motion (#545). Each model is priced
+   * Video models selected for per-shot motion (#545). Each model is priced
    * individually from its own parameters — fal returns no cost, so a uniform
    * per-model multiplier would mis-estimate a mixed (e.g. cheap + audio-capable)
-   * selection. First is primary; all are billed once per frame.
+   * selection. First is primary; all are billed once per shot.
    */
   videoModels?: ImageToVideoModel[];
   videoDurationSeconds?: number;
@@ -119,28 +119,28 @@ export function estimateStoryboardCost(opts: {
   // Location sheets (~3 locations on average, landscape_16_9)
   const locationSheetCost = estimateImageCost(opts.imageModel, '16:9', 3);
 
-  // Per-frame images (multiplied by number of selected image models)
-  const frameCost = multiplyMicros(
+  // Per-shot images (multiplied by number of selected image models)
+  const shotCost = multiplyMicros(
     estimateImageCost(opts.imageModel, opts.aspectRatio, sceneCount),
     imageModelCount
   );
 
   let totalCost = addMicros(
     addMicros(addMicros(llmCost, characterSheetCost), locationSheetCost),
-    frameCost
+    shotCost
   );
 
-  // Optional motion generation for all frames. Each selected video model
-  // produces its own video per frame, so sum each model's own per-frame cost
+  // Optional motion generation for all shots. Each selected video model
+  // produces its own video per shot, so sum each model's own per-shot cost
   // (priced from its parameters) rather than scaling one model's rate by a
   // count — a mixed selection has genuinely different per-model costs.
   if (opts.autoGenerateMotion && opts.videoModels?.length) {
     const duration = opts.videoDurationSeconds ?? 5;
     for (const model of opts.videoModels) {
-      const perFrameMotion = estimateVideoCost(model, duration);
+      const perShotMotion = estimateVideoCost(model, duration);
       totalCost = addMicros(
         totalCost,
-        multiplyMicros(perFrameMotion, sceneCount)
+        multiplyMicros(perShotMotion, sceneCount)
       );
     }
   }

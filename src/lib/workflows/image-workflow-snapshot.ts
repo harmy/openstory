@@ -5,7 +5,7 @@
  * tamper check. `computeCurrent` re-resolves the live character / location /
  * element sheet hashes from the scoped DB so the workflow can detect upstream
  * drift between trigger and write time and route divergent results into
- * `frame_variants` instead of overwriting the primary thumbnail.
+ * `shot_variants` instead of overwriting the primary thumbnail.
  *
  * See docs/architecture/workflow-snapshots-and-content-hash-staleness.md
  * § "Pillar 3: Divergence-on-completion".
@@ -14,21 +14,21 @@
 import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
 import type {
   CharacterMinimal,
-  NewFrame,
-  NewFrameVariant,
+  NewShot,
+  NewShotVariant,
   SequenceElementMinimal,
   SequenceLocationMinimal,
 } from '@/lib/db/schema';
-import type { VariantType } from '@/lib/db/schema/frame-variants';
+import type { VariantType } from '@/lib/db/schema/shot-variants';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import type {
-  FrameImageSceneSnapshot,
+  ShotImageSceneSnapshot,
   ImageWorkflowInput,
 } from '@/lib/workflow/types';
 import { buildDivergentRevertWrites } from './divergence-writes';
 import {
-  computeFrameImageSceneHash,
-  resolveSceneFrameImageReferences,
+  computeShotImageSceneHash,
+  resolveSceneShotImageReferences,
 } from './sheet-snapshots';
 
 export type ImageStorageResult = { url: string; path: string };
@@ -56,7 +56,7 @@ export type SceneForHash = {
  * literal objects against this type without casting.
  */
 export type ImageHashScopedDb = {
-  frames: {
+  shots: {
     getById: (id: string) => Promise<{ metadata: SceneForHash | null } | null>;
   };
   characters: {
@@ -75,22 +75,22 @@ export type ImageHashScopedDb = {
  * `ImageHashScopedDb` — production `ScopedDb` satisfies it structurally.
  */
 export type PersistImageScopedDb = {
-  frames: {
+  shots: {
     update: (
       id: string,
-      data: Partial<NewFrame>,
+      data: Partial<NewShot>,
       opts?: { throwOnMissing?: boolean }
     ) => Promise<{ id: string } | undefined>;
   };
-  frameVariants: {
-    updateByFrameAndModel: (
-      frameId: string,
+  shotVariants: {
+    updateByShotAndModel: (
+      shotId: string,
       type: VariantType,
       model: string,
-      data: Partial<NewFrameVariant>
+      data: Partial<NewShotVariant>
     ) => Promise<{ id: string } | null>;
     insertDivergent: (
-      data: NewFrameVariant & { inputHash: string; divergedAt: Date }
+      data: NewShotVariant & { inputHash: string; divergedAt: Date }
     ) => Promise<{ id: string }>;
   };
 };
@@ -114,7 +114,7 @@ export function computeImageWorkflowHashFromDto(
   if (!input.sceneSnapshot) {
     return input.snapshotInputHash ?? NO_SNAPSHOT_SENTINEL;
   }
-  return computeFrameImageSceneHash(
+  return computeShotImageSceneHash(
     input.sceneSnapshot,
     input.model ?? DEFAULT_IMAGE_MODEL,
     requireAspectRatio(input)
@@ -131,20 +131,20 @@ export async function computeImageWorkflowHashCurrent(
   const model = input.model ?? DEFAULT_IMAGE_MODEL;
   const aspectRatio = requireAspectRatio(input);
 
-  if (!input.sequenceId || !input.frameId) {
-    return computeFrameImageSceneHash(input.sceneSnapshot, model, aspectRatio);
+  if (!input.sequenceId || !input.shotId) {
+    return computeShotImageSceneHash(input.sceneSnapshot, model, aspectRatio);
   }
 
-  const frame = await scopedDb.frames.getById(input.frameId);
+  const shot = await scopedDb.shots.getById(input.shotId);
   // Deleted mid-flight: collapse to convergent so the workflow's
-  // deleted-frame short-circuit handles the cleanup. Distinct from a frame
+  // deleted-shot short-circuit handles the cleanup. Distinct from a shot
   // that exists with null metadata, which is data corruption — refuse.
-  if (!frame) {
-    return computeFrameImageSceneHash(input.sceneSnapshot, model, aspectRatio);
+  if (!shot) {
+    return computeShotImageSceneHash(input.sceneSnapshot, model, aspectRatio);
   }
-  if (!frame.metadata) {
+  if (!shot.metadata) {
     throw new WorkflowValidationError(
-      `Frame ${input.frameId} exists but has null metadata; snapshot recompute requires scene metadata`
+      `Shot ${input.shotId} exists but has null metadata; snapshot recompute requires scene metadata`
     );
   }
 
@@ -154,14 +154,14 @@ export async function computeImageWorkflowHashCurrent(
     scopedDb.sequenceElements.list(input.sequenceId),
   ]);
 
-  const refs = resolveSceneFrameImageReferences({
-    scene: frame.metadata,
+  const refs = resolveSceneShotImageReferences({
+    scene: shot.metadata,
     characters,
     locations,
     elements,
   });
 
-  const currentSnapshot: FrameImageSceneSnapshot = {
+  const currentSnapshot: ShotImageSceneSnapshot = {
     sceneId: input.sceneSnapshot.sceneId,
     visualPrompt: input.sceneSnapshot.visualPrompt,
     characterSheetHashes: refs.characterSheetHashes,
@@ -169,7 +169,7 @@ export async function computeImageWorkflowHashCurrent(
     elementReferenceHashes: refs.elementReferenceHashes,
   };
 
-  return computeFrameImageSceneHash(currentSnapshot, model, aspectRatio);
+  return computeShotImageSceneHash(currentSnapshot, model, aspectRatio);
 }
 
 /**
@@ -183,12 +183,12 @@ export function buildImageConvergentWrites(opts: {
   promptHash: string | null;
   generatedAt: Date;
 }): {
-  frame: Partial<NewFrame>;
-  variant: Partial<NewFrameVariant>;
+  shot: Partial<NewShot>;
+  variant: Partial<NewShotVariant>;
 } {
   const { upload, snapshotHash, promptHash, generatedAt } = opts;
   return {
-    frame: {
+    shot: {
       thumbnailPath: upload.path,
       thumbnailUrl: upload.url,
       thumbnailStatus: 'completed',
@@ -217,9 +217,9 @@ export function buildImageConvergentWrites(opts: {
 
 /**
  * `divergentRow` is the full INSERT payload for the divergent alternate. The
- * caller supplies frameId/sequenceId/variantType/model; this helper supplies
+ * caller supplies shotId/sequenceId/variantType/model; this helper supplies
  * the content fields including the `inputHash` + `divergedAt` keys that match
- * the `frame_variants` divergent partial unique index.
+ * the `shot_variants` divergent partial unique index.
  */
 export function buildImageDivergentWrites(opts: {
   upload: ImageStorageResult;
@@ -227,9 +227,9 @@ export function buildImageDivergentWrites(opts: {
   promptHash: string | null;
   divergedAt: Date;
 }): {
-  frame: Partial<NewFrame>;
-  primaryRevert: Partial<NewFrameVariant>;
-  divergentRow: Partial<NewFrameVariant> & {
+  shot: Partial<NewShot>;
+  primaryRevert: Partial<NewShotVariant>;
+  divergentRow: Partial<NewShotVariant> & {
     url: string;
     storagePath: string;
     inputHash: string;
@@ -257,7 +257,7 @@ export type PersistImageOutcome =
   | { status: 'divergent'; imageUrl: string; snapshotHash: string }
   | { status: 'convergent'; imageUrl: string }
   | { status: 'variant-only'; imageUrl: string }
-  | { status: 'frame-deleted' };
+  | { status: 'shot-deleted' };
 
 /**
  * Pulled out of the workflow body so the call sequence is testable without
@@ -266,13 +266,13 @@ export type PersistImageOutcome =
  * `context.snapshot.computeCurrent()` so retries re-resolve live state
  * cheaply without re-running this orchestration on a successful step.
  *
- * Idempotent on retry: `frames.update` and
- * `frameVariants.updateByFrameAndModel` are last-write-wins, and
- * `frameVariants.insertDivergent` pre-checks `(frame, type, model, hash)`.
+ * Idempotent on retry: `shots.update` and
+ * `shotVariants.updateByShotAndModel` are last-write-wins, and
+ * `shotVariants.insertDivergent` pre-checks `(shot, type, model, hash)`.
  */
 export async function persistImageResult(opts: {
   scopedDb: PersistImageScopedDb;
-  frameId: string;
+  shotId: string;
   sequenceId: string;
   model: string;
   upload: ImageStorageResult;
@@ -282,7 +282,7 @@ export async function persistImageResult(opts: {
   emit: (
     event: 'generation.image:progress',
     payload: {
-      frameId: string;
+      shotId: string;
       status: 'pending' | 'completed';
       model: string;
       thumbnailUrl?: string;
@@ -290,8 +290,8 @@ export async function persistImageResult(opts: {
     }
   ) => Promise<void>;
   /**
-   * Variant-only (#547): write only this model's `frame_variants` row, never
-   * the primary `frames.*`. Skips divergence detection — with no primary to
+   * Variant-only (#547): write only this model's `shot_variants` row, never
+   * the primary `shots.*`. Skips divergence detection — with no primary to
    * protect, there is nothing to diverge from.
    */
   variantOnly?: boolean;
@@ -299,7 +299,7 @@ export async function persistImageResult(opts: {
 }): Promise<PersistImageOutcome> {
   const {
     scopedDb,
-    frameId,
+    shotId,
     sequenceId,
     model,
     upload,
@@ -313,8 +313,8 @@ export async function persistImageResult(opts: {
 
   if (variantOnly) {
     // Reuse the convergent variant payload (url/path/status/hashes), but apply
-    // it ONLY to the variant row — the primary `frames.*` stay exactly as they
-    // were. A null update means the frame (and its cascade-deleted variant) is
+    // it ONLY to the variant row — the primary `shots.*` stay exactly as they
+    // were. A null update means the shot (and its cascade-deleted variant) is
     // gone.
     const { variant } = buildImageConvergentWrites({
       upload,
@@ -322,16 +322,16 @@ export async function persistImageResult(opts: {
       promptHash,
       generatedAt: now(),
     });
-    const updated = await scopedDb.frameVariants.updateByFrameAndModel(
-      frameId,
+    const updated = await scopedDb.shotVariants.updateByShotAndModel(
+      shotId,
       'image',
       model,
       variant
     );
-    if (!updated) return { status: 'frame-deleted' };
+    if (!updated) return { status: 'shot-deleted' };
 
     await emit('generation.image:progress', {
-      frameId,
+      shotId,
       status: 'completed',
       thumbnailUrl: upload.url,
       model,
@@ -350,20 +350,20 @@ export async function persistImageResult(opts: {
       divergedAt: now(),
     });
 
-    const updatedFrame = await scopedDb.frames.update(frameId, writes.frame, {
+    const updatedShot = await scopedDb.shots.update(shotId, writes.shot, {
       throwOnMissing: false,
     });
-    if (!updatedFrame) return { status: 'frame-deleted' };
+    if (!updatedShot) return { status: 'shot-deleted' };
 
-    await scopedDb.frameVariants.updateByFrameAndModel(
-      frameId,
+    await scopedDb.shotVariants.updateByShotAndModel(
+      shotId,
       'image',
       model,
       writes.primaryRevert
     );
 
-    await scopedDb.frameVariants.insertDivergent({
-      frameId,
+    await scopedDb.shotVariants.insertDivergent({
+      shotId,
       sequenceId,
       variantType: 'image',
       model,
@@ -371,7 +371,7 @@ export async function persistImageResult(opts: {
     });
 
     await emit('generation.image:progress', {
-      frameId,
+      shotId,
       status: 'pending',
       model,
     });
@@ -386,20 +386,20 @@ export async function persistImageResult(opts: {
     generatedAt: now(),
   });
 
-  const updatedFrame = await scopedDb.frames.update(frameId, writes.frame, {
+  const updatedShot = await scopedDb.shots.update(shotId, writes.shot, {
     throwOnMissing: false,
   });
-  if (!updatedFrame) return { status: 'frame-deleted' };
+  if (!updatedShot) return { status: 'shot-deleted' };
 
-  await scopedDb.frameVariants.updateByFrameAndModel(
-    frameId,
+  await scopedDb.shotVariants.updateByShotAndModel(
+    shotId,
     'image',
     model,
     writes.variant
   );
 
   await emit('generation.image:progress', {
-    frameId,
+    shotId,
     status: 'completed',
     thumbnailUrl: upload.url,
     model,

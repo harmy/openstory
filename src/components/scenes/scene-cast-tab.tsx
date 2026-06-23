@@ -1,18 +1,18 @@
 /**
  * Scene Cast Tab
- * Displays characters appearing in the current frame with a cinematic/editorial design
+ * Displays characters appearing in the current shot with a cinematic/editorial design
  */
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSequenceCharacters } from '@/hooks/use-sequence-characters';
 import type { Character } from '@/lib/db/schema';
 import { matchCharactersToScene } from '@/lib/workflows/scene-matching';
-import type { Frame } from '@/types/database';
+import type { Shot } from '@/types/database';
 import { Link } from '@tanstack/react-router';
 import { Film, User } from 'lucide-react';
 
 type SceneCastTabProps = {
-  frame?: Frame;
+  shot?: Shot;
   sequenceId: string;
 };
 
@@ -88,16 +88,16 @@ const CastCardSkeleton: React.FC = () => (
 );
 
 export const SceneCastTab: React.FC<SceneCastTabProps> = ({
-  frame,
+  shot,
   sequenceId,
 }) => {
   const { data: characters, isLoading } = useSequenceCharacters(sequenceId);
 
-  // Get character tags from frame metadata
-  const characterTags = frame?.metadata?.continuity?.characterTags ?? [];
+  // Get character tags from shot metadata
+  const characterTags = shot?.metadata?.continuity?.characterTags ?? [];
 
-  // Match characters to this frame
-  const frameCast = characters
+  // Match characters to this shot
+  const shotCast = characters
     ? matchCharactersToScene(characters, characterTags)
     : [];
 
@@ -113,7 +113,7 @@ export const SceneCastTab: React.FC<SceneCastTabProps> = ({
   }
 
   // Empty state - no characters in this scene
-  if (frameCast.length === 0) {
+  if (shotCast.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <div className="rounded-full bg-muted p-4 mb-4">
@@ -137,13 +137,13 @@ export const SceneCastTab: React.FC<SceneCastTabProps> = ({
         <span>Scene Cast</span>
         <span className="text-muted-foreground/50">·</span>
         <span>
-          {frameCast.length} character{frameCast.length > 1 ? 's' : ''}
+          {shotCast.length} character{shotCast.length > 1 ? 's' : ''}
         </span>
       </div>
 
       {/* Cast grid */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        {frameCast.map((character) => (
+        {shotCast.map((character) => (
           <CastCard
             key={character.id}
             character={character}

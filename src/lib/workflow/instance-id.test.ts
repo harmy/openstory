@@ -41,16 +41,16 @@ describe('buildInstanceId', () => {
       buildInstanceId({
         env: { VITE_APP_URL: 'https://openstory.so' },
         workflowName: 'image',
-        suffix: 'seq-123-frame-7',
+        suffix: 'seq-123-shot-7',
       })
-    ).toBe('openstory-so_image_seq-123-frame-7');
+    ).toBe('openstory-so_image_seq-123-shot-7');
   });
 
   test('every generated ID matches CFs ^[a-zA-Z0-9_-]+$ rule', () => {
     const id = buildInstanceId({
       env: { VITE_APP_URL: 'https://pr-42.openstory.dev' },
       workflowName: 'analyze-script',
-      suffix: '01KS23834FEGDBN8074VVPR3Q8:frame:7',
+      suffix: '01KS23834FEGDBN8074VVPR3Q8:shot:7',
     });
     expect(id).toMatch(CF_VALID);
   });
@@ -59,12 +59,12 @@ describe('buildInstanceId', () => {
     const prod = buildInstanceId({
       env: { VITE_APP_URL: 'https://openstory.so' },
       workflowName: 'image',
-      suffix: 'seq-123-frame-7',
+      suffix: 'seq-123-shot-7',
     });
     const preview = buildInstanceId({
       env: { VITE_APP_URL: 'https://pr-123.openstory.dev' },
       workflowName: 'image',
-      suffix: 'seq-123-frame-7',
+      suffix: 'seq-123-shot-7',
     });
     expect(prod).not.toBe(preview);
   });
@@ -74,9 +74,9 @@ describe('buildInstanceId', () => {
       buildInstanceId({
         env: { VITE_APP_URL: 'https://openstory.so' },
         workflowName: 'image',
-        suffix: 'seq 123 / frame*7:variant.0',
+        suffix: 'seq 123 / shot*7:variant.0',
       })
-    ).toBe('openstory-so_image_seq-123-frame-7-variant-0');
+    ).toBe('openstory-so_image_seq-123-shot-7-variant-0');
   });
 
   test('truncates suffix to keep ID under 100 chars', () => {
@@ -94,7 +94,7 @@ describe('buildInstanceId', () => {
       buildInstanceId({
         env: { VITE_APP_URL: `https://${'x'.repeat(120)}.example.com` },
         workflowName: 'image',
-        suffix: 'frame-7',
+        suffix: 'shot-7',
       })
     ).toThrow(/exceeds the 100-char limit/);
   });

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveFrameDuration } from './resolve-frame-duration';
+import { resolveShotDuration } from './resolve-shot-duration';
 
 // kling_v3_pro accepts integer seconds 1..15 (one entry per integer).
 // veo3_1 accepts only {4, 6, 8} — useful for asserting snap behavior.
 
-describe('resolveFrameDuration', () => {
+describe('resolveShotDuration', () => {
   it('uses explicit duration when present, snapped to the model', () => {
-    const result = resolveFrameDuration({
+    const result = resolveShotDuration({
       explicit: 7,
       durationMs: 3000,
       metadataSeconds: 4,
@@ -18,7 +18,7 @@ describe('resolveFrameDuration', () => {
   });
 
   it('falls back to durationMs/1000 when explicit is undefined', () => {
-    const result = resolveFrameDuration({
+    const result = resolveShotDuration({
       durationMs: 5000,
       metadataSeconds: 9,
       model: 'kling_v3_pro',
@@ -27,7 +27,7 @@ describe('resolveFrameDuration', () => {
   });
 
   it('treats durationMs of 0 as unset and falls through to metadataSeconds', () => {
-    const result = resolveFrameDuration({
+    const result = resolveShotDuration({
       durationMs: 0,
       metadataSeconds: 7,
       model: 'kling_v3_pro',
@@ -36,7 +36,7 @@ describe('resolveFrameDuration', () => {
   });
 
   it('falls back to metadataSeconds when durationMs is null', () => {
-    const result = resolveFrameDuration({
+    const result = resolveShotDuration({
       durationMs: null,
       metadataSeconds: 9,
       model: 'kling_v3_pro',
@@ -45,13 +45,13 @@ describe('resolveFrameDuration', () => {
   });
 
   it('falls back to a valid model duration when nothing is stored', () => {
-    const result = resolveFrameDuration({ model: 'veo3_1' });
+    const result = resolveShotDuration({ model: 'veo3_1' });
     expect([4, 6, 8]).toContain(result);
   });
 
   it('snaps onto the model duration set even when the source was valid for a different model', () => {
     // 12s is valid for kling_v3_pro but not for veo3_1
-    const result = resolveFrameDuration({
+    const result = resolveShotDuration({
       durationMs: 12000,
       model: 'veo3_1',
     });
