@@ -9,7 +9,7 @@
  *   - the per-variantType promote update (`buildSequencePromoteUpdate`),
  *   - the duplicate-model guard (`assertModelNotAlreadyAdded`) — a failed add
  *     must be re-addable,
- *   - the video eligibility filter (`selectEligibleVideoFrames`).
+ *   - the video eligibility filter (`selectEligibleVideoShots`).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -18,9 +18,9 @@ import {
   assertModelNotAlreadyAdded,
   buildAddAudioMusicInput,
   buildSequencePromoteUpdate,
-  selectEligibleVideoFrames,
+  selectEligibleVideoShots,
   selectPromotableVariants,
-  sumFrameDurationsSeconds,
+  sumShotDurationsSeconds,
 } from '@/functions/sequences';
 
 const NOW = new Date('2026-06-03T00:00:00.000Z');
@@ -28,12 +28,12 @@ const NOW = new Date('2026-06-03T00:00:00.000Z');
 function makeVariant(overrides: Partial<ShotVariant> = {}): ShotVariant {
   return {
     id: 'variant-1',
-    shotId: 'frame-1',
+    shotId: 'shot-1',
     sequenceId: 'seq-1',
     variantType: 'image',
     model: 'flux_pro',
     url: 'https://cdn/variant.png',
-    storagePath: 'sequences/seq-1/frame-1/flux_pro.png',
+    storagePath: 'sequences/seq-1/shot-1/flux_pro.png',
     previewUrl: null,
     shotVariantUrl: null,
     shotVariantPath: null,
@@ -54,9 +54,9 @@ function makeVariant(overrides: Partial<ShotVariant> = {}): ShotVariant {
   };
 }
 
-function makeFrame(overrides: Partial<Shot> = {}): Shot {
+function makeShot(overrides: Partial<Shot> = {}): Shot {
   return {
-    id: 'frame-1',
+    id: 'shot-1',
     sequenceId: 'seq-1',
     orderIndex: 0,
     description: 'A scene',
@@ -250,63 +250,63 @@ describe('assertModelNotAlreadyAdded (#547)', () => {
   });
 });
 
-describe('selectEligibleVideoFrames (#547)', () => {
-  it('includes frames with a completed image', () => {
-    const frames = [makeFrame()];
-    expect(selectEligibleVideoFrames(frames)).toHaveLength(1);
+describe('selectEligibleVideoShots (#547)', () => {
+  it('includes shots with a completed image', () => {
+    const shots = [makeShot()];
+    expect(selectEligibleVideoShots(shots)).toHaveLength(1);
   });
 
-  it('excludes frames whose image is not completed', () => {
-    const frames = [
-      makeFrame({ id: 'pending', thumbnailStatus: 'pending' }),
-      makeFrame({ id: 'generating', thumbnailStatus: 'generating' }),
-      makeFrame({ id: 'failed', thumbnailStatus: 'failed' }),
+  it('excludes shots whose image is not completed', () => {
+    const shots = [
+      makeShot({ id: 'pending', thumbnailStatus: 'pending' }),
+      makeShot({ id: 'generating', thumbnailStatus: 'generating' }),
+      makeShot({ id: 'failed', thumbnailStatus: 'failed' }),
     ];
-    expect(selectEligibleVideoFrames(frames)).toEqual([]);
+    expect(selectEligibleVideoShots(shots)).toEqual([]);
   });
 
-  it('excludes frames completed but missing a thumbnail url', () => {
-    const frames = [
-      makeFrame({ id: 'null-url', thumbnailUrl: null }),
-      makeFrame({ id: 'empty-url', thumbnailUrl: '' }),
+  it('excludes shots completed but missing a thumbnail url', () => {
+    const shots = [
+      makeShot({ id: 'null-url', thumbnailUrl: null }),
+      makeShot({ id: 'empty-url', thumbnailUrl: '' }),
     ];
-    expect(selectEligibleVideoFrames(frames)).toEqual([]);
+    expect(selectEligibleVideoShots(shots)).toEqual([]);
   });
 
-  it('returns only the eligible frames from a mixed set', () => {
-    const frames = [
-      makeFrame({ id: 'ok-1' }),
-      makeFrame({ id: 'no-image', thumbnailStatus: 'pending' }),
-      makeFrame({ id: 'ok-2' }),
+  it('returns only the eligible shots from a mixed set', () => {
+    const shots = [
+      makeShot({ id: 'ok-1' }),
+      makeShot({ id: 'no-image', thumbnailStatus: 'pending' }),
+      makeShot({ id: 'ok-2' }),
     ];
-    expect(selectEligibleVideoFrames(frames).map((f) => f.id)).toEqual([
+    expect(selectEligibleVideoShots(shots).map((f) => f.id)).toEqual([
       'ok-1',
       'ok-2',
     ]);
   });
 });
 
-describe('sumFrameDurationsSeconds (#547)', () => {
-  it('sums durationMs (ms → seconds) across frames', () => {
-    const frames = [
-      makeFrame({ id: 'f1', durationMs: 3000 }),
-      makeFrame({ id: 'f2', durationMs: 4500 }),
+describe('sumShotDurationsSeconds (#547)', () => {
+  it('sums durationMs (ms → seconds) across shots', () => {
+    const shots = [
+      makeShot({ id: 'f1', durationMs: 3000 }),
+      makeShot({ id: 'f2', durationMs: 4500 }),
     ];
-    expect(sumFrameDurationsSeconds(frames)).toBe(7.5);
+    expect(sumShotDurationsSeconds(shots)).toBe(7.5);
   });
 
-  it('falls back to 10s per frame when durationMs and metadata are absent', () => {
-    const frames = [
-      makeFrame({ id: 'unknown-1', durationMs: null, metadata: null }),
-      makeFrame({ id: 'unknown-2', durationMs: null, metadata: null }),
+  it('falls back to 10s per shot when durationMs and metadata are absent', () => {
+    const shots = [
+      makeShot({ id: 'unknown-1', durationMs: null, metadata: null }),
+      makeShot({ id: 'unknown-2', durationMs: null, metadata: null }),
     ];
-    expect(sumFrameDurationsSeconds(frames)).toBe(20);
+    expect(sumShotDurationsSeconds(shots)).toBe(20);
   });
 
   it('returns 0 for an empty sequence (so the caller `|| 30` floor applies)', () => {
-    expect(sumFrameDurationsSeconds([])).toBe(0);
+    expect(sumShotDurationsSeconds([])).toBe(0);
     // Mirrors the add-audio / generate-music call sites.
-    expect(sumFrameDurationsSeconds([]) || 30).toBe(30);
+    expect(sumShotDurationsSeconds([]) || 30).toBe(30);
   });
 });
 

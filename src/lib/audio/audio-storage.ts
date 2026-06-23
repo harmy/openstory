@@ -87,7 +87,7 @@ export async function uploadAudioToStorage(
     const sceneSlug = sceneTitle ? slugify(sceneTitle) : 'track';
     const filename = `${sequenceSlug}_${sceneSlug}_${shortHash}_openstory.${extension}`;
 
-    // Store under frame path if per-scene, otherwise under sequence
+    // Store under shot path if per-scene, otherwise under sequence
     const storagePath = shotId
       ? `teams/${teamId}/sequences/${sequenceId}/frames/${shotId}/${filename}`
       : `teams/${teamId}/sequences/${sequenceId}/music/${filename}`;

@@ -72,7 +72,7 @@ const VARIANTS_KEY: Record<VariantType, (id: string) => string[]> = {
 };
 
 // Add a new model to an existing sequence (#547): generates its output for
-// every frame (image/video) or the whole sequence (audio) using existing
+// every shot (image/video) or the whole sequence (audio) using existing
 // prompts. Invalidates the matching model-list + variants queries so the new
 // model surfaces in the header dropdown immediately (pre-stamped pending).
 export function useAddModelToSequence() {
@@ -99,8 +99,8 @@ export function useAddModelToSequence() {
 /**
  * Promote a model to the live primary across the whole sequence (#547) — the
  * sequence-wide "Set". Invalidates the model list + variants (so the dropdown's
- * ⊙ primary marker moves) and the frames list (the primary image/video changed,
- * and an image Set also reset each frame's video).
+ * ⊙ primary marker moves) and the shots list (the primary image/video changed,
+ * and an image Set also reset each shot's video).
  */
 export function useSetSequenceModel() {
   const queryClient = useQueryClient();

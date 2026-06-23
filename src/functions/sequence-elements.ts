@@ -257,7 +257,7 @@ export const renameSequenceElementTokenFn = createServerFn({ method: 'POST' })
     if (cleaned === element.token) {
       return {
         element,
-        framesUpdated: 0,
+        shotsUpdated: 0,
         scriptUpdated: false,
       };
     }
@@ -287,15 +287,15 @@ export const renameSequenceElementTokenFn = createServerFn({ method: 'POST' })
 // Shot IDs / Replace
 // ============================================================================
 
-/** Get frame IDs for all frames that reference an element by token */
-export const getFrameIdsForElementFn = createServerFn({ method: 'GET' })
+/** Get shot IDs for all shots that reference an element by token */
+export const getShotIdsForElementFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
   .inputValidator(
     zodValidator(z.object({ sequenceId: ulidSchema, elementId: ulidSchema }))
   )
   .handler(async ({ context, data }) => {
     const shotIds =
-      await context.scopedDb.sequenceElements.getFrameIdsForElement(
+      await context.scopedDb.sequenceElements.getShotIdsForElement(
         context.sequence.id,
         data.elementId
       );
@@ -303,14 +303,14 @@ export const getFrameIdsForElementFn = createServerFn({ method: 'GET' })
   });
 
 /**
- * Batched frame counts for every element in the sequence. Use this from the
- * elements grid to avoid the N+1 where each card fetched its own frame IDs.
+ * Batched shot counts for every element in the sequence. Use this from the
+ * elements grid to avoid the N+1 where each card fetched its own shot IDs.
  */
-export const getFrameCountsByElementFn = createServerFn({ method: 'GET' })
+export const getShotCountsByElementFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
   .inputValidator(zodValidator(z.object({ sequenceId: ulidSchema })))
   .handler(async ({ context }) => {
-    return await context.scopedDb.sequenceElements.getFrameCountsByElement(
+    return await context.scopedDb.sequenceElements.getShotCountsByElement(
       context.sequence.id
     );
   });
@@ -318,8 +318,8 @@ export const getFrameCountsByElementFn = createServerFn({ method: 'GET' })
 /**
  * Replace an element's image. Persists the new image on the element row,
  * then triggers the `replace-element` workflow which re-runs vision on the
- * new image and edits each affected frame to swap the element while keeping
- * the rest of the frame intact.
+ * new image and edits each affected shot to swap the element while keeping
+ * the rest of the shot intact.
  */
 export const replaceSequenceElementFn = createServerFn({ method: 'POST' })
   .middleware([sequenceAccessMiddleware])
@@ -365,7 +365,7 @@ export const replaceSequenceElementFn = createServerFn({ method: 'POST' })
     );
 
     const affectedShotIds =
-      await context.scopedDb.sequenceElements.getFrameIdsForElement(
+      await context.scopedDb.sequenceElements.getShotIdsForElement(
         context.sequence.id,
         data.elementId
       );

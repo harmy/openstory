@@ -7,7 +7,7 @@ import {
   useSequencesWithShots,
   type SequenceWithShots,
 } from '@/hooks/use-sequences-with-shots';
-import { useAdminAllSequencesWithFrames } from '@/hooks/use-admin-support';
+import { useAdminAllSequencesWithShots } from '@/hooks/use-admin-support';
 import { useTeamDivergentSequenceVariants } from '@/hooks/use-sequence-variants';
 import { useStyles } from '@/hooks/use-styles';
 import { isSystemAdminFn } from '@/functions/gift-tokens';
@@ -99,7 +99,7 @@ export const EvalView: React.FC<EvalViewProps> = ({ initialUserFilter }) => {
   );
 
   const ownData = useSequencesWithShots();
-  const adminData = useAdminAllSequencesWithFrames(
+  const adminData = useAdminAllSequencesWithShots(
     supportMode,
     supportMode ? filters.search : undefined
   );

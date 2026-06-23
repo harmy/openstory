@@ -46,7 +46,7 @@ export type SequenceExportState = {
 export function useSequenceExport(sequence: Sequence): SequenceExportState {
   const posthog = usePostHog();
   const queryClient = useQueryClient();
-  const { data: frames } = useShotsBySequence(sequence.id);
+  const { data: shots } = useShotsBySequence(sequence.id);
 
   const { data: exports } = useQuery({
     queryKey: sequenceExportKeys.list(sequence.id),
@@ -60,10 +60,10 @@ export function useSequenceExport(sequence: Sequence): SequenceExportState {
 
   const exportMutation = useMutation({
     mutationFn: async (signal: AbortSignal) => {
-      if (!frames || frames.length === 0) {
-        throw new Error('This sequence has no frames yet.');
+      if (!shots || shots.length === 0) {
+        throw new Error('This sequence has no shots yet.');
       }
-      const scenes = frames
+      const scenes = shots
         .filter((f): f is typeof f & { videoUrl: string } =>
           Boolean(f.videoUrl)
         )
@@ -71,9 +71,9 @@ export function useSequenceExport(sequence: Sequence): SequenceExportState {
       if (scenes.length === 0) {
         throw new Error('No scene videos are ready yet.');
       }
-      if (scenes.length !== frames.length) {
+      if (scenes.length !== shots.length) {
         throw new Error(
-          `${frames.length - scenes.length} of ${frames.length} scenes are still generating.`
+          `${shots.length - scenes.length} of ${shots.length} scenes are still generating.`
         );
       }
 

@@ -6,7 +6,7 @@ import {
   type GenerationStreamState,
 } from './generation-stream.reducer';
 
-const FRAME_ID = 'frame-1';
+const SHOT_ID = 'shot-1';
 
 function apply(
   state: GenerationStreamState,
@@ -15,53 +15,53 @@ function apply(
   return actions.reduce(generationStreamReducer, state);
 }
 
-function withCreatedFrame(): GenerationStreamState {
+function withCreatedShot(): GenerationStreamState {
   return apply(createInitialState(), {
-    type: 'FRAME_CREATED',
-    payload: { shotId: FRAME_ID, sceneId: 'scene-1', orderIndex: 0 },
+    type: 'SHOT_CREATED',
+    payload: { shotId: SHOT_ID, sceneId: 'scene-1', orderIndex: 0 },
   });
 }
 
-describe('generationStreamReducer — frame retry tracking (#882)', () => {
+describe('generationStreamReducer — shot retry tracking (#882)', () => {
   it('records image retry state from an IMAGE_PROGRESS retry signal', () => {
-    const state = apply(withCreatedFrame(), {
+    const state = apply(withCreatedShot(), {
       type: 'IMAGE_PROGRESS',
       payload: {
-        shotId: FRAME_ID,
+        shotId: SHOT_ID,
         status: 'generating',
         retry: { attempt: 2, maxAttempts: 3 },
       },
     });
 
-    expect(state.frameRetries.get(FRAME_ID)).toEqual({
+    expect(state.shotRetries.get(SHOT_ID)).toEqual({
       image: { attempt: 2, maxAttempts: 3 },
     });
   });
 
-  it('tracks retry even without a preceding FRAME_CREATED (regenerating an existing frame)', () => {
+  it('tracks retry even without a preceding SHOT_CREATED (regenerating an existing shot)', () => {
     const state = apply(createInitialState(), {
       type: 'IMAGE_PROGRESS',
       payload: {
-        shotId: FRAME_ID,
+        shotId: SHOT_ID,
         status: 'generating',
         retry: { attempt: 2, maxAttempts: 3 },
       },
     });
 
-    // Shot isn't in the frames map, but its retry state is still surfaced.
-    expect(state.frames.has(FRAME_ID)).toBe(false);
-    expect(state.frameRetries.get(FRAME_ID)).toEqual({
+    // Shot isn't in the shots map, but its retry state is still surfaced.
+    expect(state.shots.has(SHOT_ID)).toBe(false);
+    expect(state.shotRetries.get(SHOT_ID)).toEqual({
       image: { attempt: 2, maxAttempts: 3 },
     });
   });
 
   it('clears image retry state on a terminal IMAGE_PROGRESS', () => {
     const state = apply(
-      withCreatedFrame(),
+      withCreatedShot(),
       {
         type: 'IMAGE_PROGRESS',
         payload: {
-          shotId: FRAME_ID,
+          shotId: SHOT_ID,
           status: 'generating',
           retry: { attempt: 2, maxAttempts: 3 },
         },
@@ -69,24 +69,24 @@ describe('generationStreamReducer — frame retry tracking (#882)', () => {
       {
         type: 'IMAGE_PROGRESS',
         payload: {
-          shotId: FRAME_ID,
+          shotId: SHOT_ID,
           status: 'completed',
           thumbnailUrl: 'https://example.com/i.jpg',
         },
       }
     );
 
-    expect(state.frameRetries.has(FRAME_ID)).toBe(false);
-    expect(state.frames.get(FRAME_ID)?.imageStatus).toBe('completed');
+    expect(state.shotRetries.has(SHOT_ID)).toBe(false);
+    expect(state.shots.get(SHOT_ID)?.imageStatus).toBe('completed');
   });
 
   it('keeps image and video retry state independent', () => {
     const state = apply(
-      withCreatedFrame(),
+      withCreatedShot(),
       {
         type: 'IMAGE_PROGRESS',
         payload: {
-          shotId: FRAME_ID,
+          shotId: SHOT_ID,
           status: 'generating',
           retry: { attempt: 2, maxAttempts: 3 },
         },
@@ -94,14 +94,14 @@ describe('generationStreamReducer — frame retry tracking (#882)', () => {
       {
         type: 'VIDEO_PROGRESS',
         payload: {
-          shotId: FRAME_ID,
+          shotId: SHOT_ID,
           status: 'generating',
           retry: { attempt: 3, maxAttempts: 3 },
         },
       }
     );
 
-    expect(state.frameRetries.get(FRAME_ID)).toEqual({
+    expect(state.shotRetries.get(SHOT_ID)).toEqual({
       image: { attempt: 2, maxAttempts: 3 },
       video: { attempt: 3, maxAttempts: 3 },
     });
@@ -109,53 +109,53 @@ describe('generationStreamReducer — frame retry tracking (#882)', () => {
     // Clearing the video retry leaves the image retry intact.
     const next = apply(state, {
       type: 'VIDEO_PROGRESS',
-      payload: { shotId: FRAME_ID, status: 'completed' },
+      payload: { shotId: SHOT_ID, status: 'completed' },
     });
-    expect(next.frameRetries.get(FRAME_ID)).toEqual({
+    expect(next.shotRetries.get(SHOT_ID)).toEqual({
       image: { attempt: 2, maxAttempts: 3 },
     });
   });
 
   it('no-ops (returns same state) on a non-retry update with no prior retry', () => {
-    const base = withCreatedFrame();
+    const base = withCreatedShot();
     const next = apply(base, {
       type: 'IMAGE_PROGRESS',
-      payload: { shotId: FRAME_ID, status: 'generating' },
+      payload: { shotId: SHOT_ID, status: 'generating' },
     });
-    // frames map updates, but frameRetries reference is unchanged.
-    expect(next.frameRetries).toBe(base.frameRetries);
+    // shots map updates, but shotRetries reference is unchanged.
+    expect(next.shotRetries).toBe(base.shotRetries);
   });
 
   it('records a retry with no maxAttempts (image side leans on CF default budget)', () => {
-    const state = apply(withCreatedFrame(), {
+    const state = apply(withCreatedShot(), {
       type: 'IMAGE_PROGRESS',
       payload: {
-        shotId: FRAME_ID,
+        shotId: SHOT_ID,
         status: 'generating',
         retry: { attempt: 2 },
       },
     });
 
-    expect(state.frameRetries.get(FRAME_ID)).toEqual({
+    expect(state.shotRetries.get(SHOT_ID)).toEqual({
       image: { attempt: 2 },
     });
   });
 
   it('clears all retry state on PREVIEW_REPLACED', () => {
-    const state = apply(withCreatedFrame(), {
+    const state = apply(withCreatedShot(), {
       type: 'IMAGE_PROGRESS',
       payload: {
-        shotId: FRAME_ID,
+        shotId: SHOT_ID,
         status: 'generating',
         retry: { attempt: 2, maxAttempts: 3 },
       },
     });
-    expect(state.frameRetries.size).toBe(1);
+    expect(state.shotRetries.size).toBe(1);
 
     const cleared = apply(state, {
       type: 'PREVIEW_REPLACED',
       payload: { newSceneCount: 4 },
     });
-    expect(cleared.frameRetries.size).toBe(0);
+    expect(cleared.shotRetries.size).toBe(0);
   });
 });

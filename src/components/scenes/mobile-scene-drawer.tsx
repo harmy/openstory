@@ -28,7 +28,7 @@ import { SceneThumbnail } from './scene-thumbnail';
 
 type MobileSceneDrawerProps = {
   shots?: Shot[];
-  selectedFrameId?: string;
+  selectedShotId?: string;
   aspectRatio: AspectRatio;
   onSelectShot: (shotId: string) => void;
   regeneratingImages: Set<string>;
@@ -45,15 +45,15 @@ type MobileSceneDrawerProps = {
   styleCategory?: string;
 };
 
-const isCompleted = (frame: Shot) => {
+const isCompleted = (shot: Shot) => {
   return (
-    frame.thumbnailStatus === 'completed' && frame.videoStatus === 'completed'
+    shot.thumbnailStatus === 'completed' && shot.videoStatus === 'completed'
   );
 };
 
 export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
   shots,
-  selectedFrameId,
+  selectedShotId,
   aspectRatio,
   onSelectShot,
   regeneratingImages,
@@ -94,15 +94,15 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
 
   const totalShots = shots?.length ?? 0;
 
-  // Get the currently selected frame
-  const selectedFrame = useMemo(
-    () => shots?.find((f) => f.id === selectedFrameId),
-    [shots, selectedFrameId]
+  // Get the currently selected shot
+  const selectedShot = useMemo(
+    () => shots?.find((f) => f.id === selectedShotId),
+    [shots, selectedShotId]
   );
 
-  // Calculate eligible frames for motion generation
+  // Calculate eligible shots for motion generation
   // Include 'generating' status to allow retrying stuck jobs
-  const eligibleFrames = useMemo(() => {
+  const eligibleShots = useMemo(() => {
     if (!shots) return [];
     return shots.filter(
       (f) =>
@@ -113,21 +113,21 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
     );
   }, [shots]);
 
-  const handleSelectFrame = (shotId: string) => {
+  const handleSelectShot = (shotId: string) => {
     onSelectShot(shotId);
     setIsOpen(false);
   };
 
-  // Check if all eligible frames have motion prompts ready
+  // Check if all eligible shots have motion prompts ready
   const motionPromptsReady = useMemo(() => {
-    if (!eligibleFrames.length) return true;
-    return eligibleFrames.every(
+    if (!eligibleShots.length) return true;
+    return eligibleShots.every(
       (f) => f.motionPrompt || f.metadata?.prompts?.motion?.fullPrompt
     );
-  }, [eligibleFrames]);
+  }, [eligibleShots]);
 
   const handleGenerateMotion = async () => {
-    if (!onBatchGenerateMotion || eligibleFrames.length === 0) return;
+    if (!onBatchGenerateMotion || eligibleShots.length === 0) return;
 
     setIsGenerating(true);
     try {
@@ -144,19 +144,18 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
 
   // Extract scene info for the collapsed bar
   const sceneNumber =
-    selectedFrame?.metadata?.sceneNumber ??
-    (selectedFrame?.orderIndex ?? 0) + 1;
+    selectedShot?.metadata?.sceneNumber ?? (selectedShot?.orderIndex ?? 0) + 1;
   const sceneTitle =
-    selectedFrame?.metadata?.metadata?.title ?? `Scene ${sceneNumber}`;
+    selectedShot?.metadata?.metadata?.title ?? `Scene ${sceneNumber}`;
 
-  const hasEligibleFrames = eligibleFrames.length > 0;
+  const hasEligibleShots = eligibleShots.length > 0;
   const isMotionInProgress = regeneratingMotion.size > 0;
   const showFooter =
-    !hideBatchButton && hasEligibleFrames && !isMotionInProgress;
+    !hideBatchButton && hasEligibleShots && !isMotionInProgress;
   const isButtonDisabled =
     isGenerating ||
     isMotionInProgress ||
-    eligibleFrames.length === 0 ||
+    eligibleShots.length === 0 ||
     !motionPromptsReady ||
     (includeMusic && !musicPromptsReady);
 
@@ -173,15 +172,15 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
         )}
       >
         <SceneThumbnail
-          thumbnailUrl={selectedFrame?.thumbnailUrl}
-          previewThumbnailUrl={selectedFrame?.previewThumbnailUrl}
-          thumbnailStatus={selectedFrame?.thumbnailStatus || undefined}
+          thumbnailUrl={selectedShot?.thumbnailUrl}
+          previewThumbnailUrl={selectedShot?.previewThumbnailUrl}
+          thumbnailStatus={selectedShot?.thumbnailStatus || undefined}
           alt={sceneTitle}
           aspectRatio={aspectRatio}
           className="h-10 w-10 shrink-0 rounded object-cover"
         />
         <span className="flex-1 truncate text-left text-sm font-medium">
-          {selectedFrame ? sceneTitle : 'Select a scene'}
+          {selectedShot ? sceneTitle : 'Select a scene'}
         </span>
         <ChevronUp className="h-5 w-5 shrink-0 text-muted-foreground" />
       </button>
@@ -203,8 +202,8 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
               {(shots === undefined || shots.length === 0) &&
                 [1, 2, 3].map((i) => (
                   <SceneListItem
-                    key={`frame-skeleton-${i}`}
-                    frame={undefined}
+                    key={`shot-skeleton-${i}`}
+                    shot={undefined}
                     aspectRatio={aspectRatio}
                     isActive={false}
                     isCompleted={false}
@@ -212,16 +211,16 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
                   />
                 ))}
 
-              {shots?.map((frame) => (
+              {shots?.map((shot) => (
                 <SceneListItem
-                  key={frame.id}
-                  frame={frame}
+                  key={shot.id}
+                  shot={shot}
                   aspectRatio={aspectRatio}
-                  isActive={frame.id === selectedFrameId}
-                  isCompleted={isCompleted(frame)}
-                  onSelect={() => handleSelectFrame(frame.id)}
-                  isRegeneratingImage={regeneratingImages.has(frame.id)}
-                  isRegeneratingMotion={regeneratingMotion.has(frame.id)}
+                  isActive={shot.id === selectedShotId}
+                  isCompleted={isCompleted(shot)}
+                  onSelect={() => handleSelectShot(shot.id)}
+                  isRegeneratingImage={regeneratingImages.has(shot.id)}
+                  isRegeneratingMotion={regeneratingMotion.has(shot.id)}
                 />
               ))}
             </div>
@@ -276,7 +275,7 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
                 ) : (
                   <>
                     <Video className="mr-2 h-4 w-4" />
-                    Generate {eligibleFrames.length} / {totalShots}{' '}
+                    Generate {eligibleShots.length} / {totalShots}{' '}
                     {totalShots === 1 ? 'shot' : 'shots'}
                   </>
                 )}

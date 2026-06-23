@@ -15,7 +15,7 @@ import { memo } from 'react';
 import { SceneThumbnail } from './scene-thumbnail';
 
 type SceneListItemProps = {
-  frame?: Shot | undefined;
+  shot?: Shot | undefined;
   aspectRatio: AspectRatio;
   isActive?: boolean;
   isCompleted?: boolean;
@@ -24,7 +24,7 @@ type SceneListItemProps = {
   isRegeneratingImage?: boolean;
   isRegeneratingMotion?: boolean;
   /**
-   * Set when the frame has a divergent alternate thumbnail awaiting review.
+   * Set when the shot has a divergent alternate thumbnail awaiting review.
    * Takes precedence over the staleness dot per the divergence-resolution
    * spec — promoting the alternate resolves both states.
    */
@@ -37,7 +37,7 @@ type SceneListItemProps = {
 };
 
 const SceneListItemComponent: React.FC<SceneListItemProps> = ({
-  frame,
+  shot,
   aspectRatio,
   isActive = false,
   isCompleted = false,
@@ -55,28 +55,26 @@ const SceneListItemComponent: React.FC<SceneListItemProps> = ({
   const showStatusIndicator =
     !showDivergentDot &&
     (isCompleted ||
-      (frame && (isRegeneratingImage || isRegeneratingMotion || !isCompleted)));
-  // Extract scene data from frame metadata
-  const metadata = frame?.metadata;
+      (shot && (isRegeneratingImage || isRegeneratingMotion || !isCompleted)));
+  // Extract scene data from shot metadata
+  const metadata = shot?.metadata;
 
-  const sceneNumber = metadata?.sceneNumber ?? (frame?.orderIndex ?? 0) + 1;
-  const title = !frame
+  const sceneNumber = metadata?.sceneNumber ?? (shot?.orderIndex ?? 0) + 1;
+  const title = !shot
     ? undefined
     : (metadata?.metadata?.title ?? `Scene ${sceneNumber}`);
-  const scriptPreview = !frame
+  const scriptPreview = !shot
     ? undefined
-    : stripMarkdown(
-        metadata?.originalScript.extract ?? frame.description ?? ''
-      );
+    : stripMarkdown(metadata?.originalScript.extract ?? shot.description ?? '');
 
-  // Skeleton state (no frame): suppress click handling and pointer cursor so
+  // Skeleton state (no shot): suppress click handling and pointer cursor so
   // a click during the loading window does not invoke the (now-undefined)
   // onSelect callback or appear interactive.
-  const isSkeleton = !frame;
+  const isSkeleton = !shot;
   return (
     <Card
       data-testid="scene-list-item"
-      data-frame-id={frame?.id}
+      data-shot-id={shot?.id}
       className={cn(
         '@container/scene relative transition-all',
         isSkeleton ? 'pointer-events-none' : 'cursor-pointer',
@@ -118,7 +116,7 @@ const SceneListItemComponent: React.FC<SceneListItemProps> = ({
         />
       )}
       {showStatusIndicator &&
-        frame &&
+        shot &&
         !isCompleted &&
         (isRegeneratingImage || isRegeneratingMotion) && (
           <Loader2
@@ -129,7 +127,7 @@ const SceneListItemComponent: React.FC<SceneListItemProps> = ({
           />
         )}
       {showStatusIndicator &&
-        frame &&
+        shot &&
         !isCompleted &&
         !isRegeneratingImage &&
         !isRegeneratingMotion && (
@@ -161,9 +159,9 @@ const SceneListItemComponent: React.FC<SceneListItemProps> = ({
             )}
           >
             <SceneThumbnail
-              thumbnailUrl={frame?.thumbnailUrl}
-              previewThumbnailUrl={frame?.previewThumbnailUrl}
-              thumbnailStatus={frame?.thumbnailStatus || undefined}
+              thumbnailUrl={shot?.thumbnailUrl}
+              previewThumbnailUrl={shot?.previewThumbnailUrl}
+              thumbnailStatus={shot?.thumbnailStatus || undefined}
               alt={title ?? 'Scene thumbnail'}
               aspectRatio={aspectRatio}
               className="w-full rounded-md"
@@ -217,54 +215,54 @@ const areEqual = (
     return false;
   }
 
-  // If both frames are undefined, they're equal
-  if (!prevProps.frame && !nextProps.frame) {
+  // If both shots are undefined, they're equal
+  if (!prevProps.shot && !nextProps.shot) {
     return true;
   }
 
   // If one is undefined and the other isn't, they're not equal
-  if (!prevProps.frame || !nextProps.frame) {
+  if (!prevProps.shot || !nextProps.shot) {
     return false;
   }
 
-  // Compare frame fields that affect rendering
-  const prevFrame = prevProps.frame;
-  const nextFrame = nextProps.frame;
+  // Compare shot fields that affect rendering
+  const prevShot = prevProps.shot;
+  const nextShot = nextProps.shot;
 
-  // Check if frame identity changed
-  if (prevFrame.id !== nextFrame.id) {
+  // Check if shot identity changed
+  if (prevShot.id !== nextShot.id) {
     return false;
   }
 
   // Check thumbnail-related fields
   if (
-    prevFrame.thumbnailUrl !== nextFrame.thumbnailUrl ||
-    prevFrame.previewThumbnailUrl !== nextFrame.previewThumbnailUrl ||
-    prevFrame.thumbnailStatus !== nextFrame.thumbnailStatus
+    prevShot.thumbnailUrl !== nextShot.thumbnailUrl ||
+    prevShot.previewThumbnailUrl !== nextShot.previewThumbnailUrl ||
+    prevShot.thumbnailStatus !== nextShot.thumbnailStatus
   ) {
     return false;
   }
 
   // Check video-related fields (for skeleton/completion state)
   if (
-    prevFrame.videoUrl !== nextFrame.videoUrl ||
-    prevFrame.videoStatus !== nextFrame.videoStatus
+    prevShot.videoUrl !== nextShot.videoUrl ||
+    prevShot.videoStatus !== nextShot.videoStatus
   ) {
     return false;
   }
 
   // Check metadata fields used in render
-  if (prevFrame.orderIndex !== nextFrame.orderIndex) {
+  if (prevShot.orderIndex !== nextShot.orderIndex) {
     return false;
   }
 
-  if (prevFrame.description !== nextFrame.description) {
+  if (prevShot.description !== nextShot.description) {
     return false;
   }
 
   // Check metadata object (scene data)
-  const prevMetadata = prevFrame.metadata;
-  const nextMetadata = nextFrame.metadata;
+  const prevMetadata = prevShot.metadata;
+  const nextMetadata = nextShot.metadata;
 
   if (!prevMetadata && !nextMetadata) {
     return true;

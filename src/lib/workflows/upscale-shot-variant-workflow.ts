@@ -36,7 +36,7 @@ import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'upscale-shot-variant']);
 
-const UPSCALE_PROMPT = `Upscale this image to a clean, high-resolution frame suitable for animation.
+const UPSCALE_PROMPT = `Upscale this image to a clean, high-resolution shot suitable for animation.
 
 RENDERING RULES
 - Keep the original scene, pose, framing and camera angle IDENTICAL.
@@ -68,14 +68,14 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
     scopedDb: ScopedDb
   ): Promise<UpscaleShotVariantWorkflowResult> {
     const rawInput = event.payload;
-    // Back-compat: accept shotId or frameId from in-flight instances serialized before #906
-    // TODO(#906): remove frameId shim one release after deploy
+    // Back-compat: accept shotId or shotId from in-flight instances serialized before #906
+    // TODO(#906): remove shotId shim one release after deploy
     const input = {
       ...rawInput,
       shotId:
         rawInput.shotId ??
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- back-compat shim for in-flight CF Workflow instances serialized before #906
-        (rawInput as { frameId?: string }).frameId ??
+        (rawInput as { shotId?: string }).shotId ??
         undefined,
     };
     const workflowRunId = event.instanceId;
@@ -86,7 +86,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
     }
 
     logger.info(
-      `[UpscaleShotVariantWorkflow:cf] Starting upscale for frame ${shotId}`
+      `[UpscaleShotVariantWorkflow:cf] Starting upscale for shot ${shotId}`
     );
 
     const upscaleResult = await step.do('upscale-image', async () => {
@@ -95,7 +95,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
         status: 'generating',
       });
 
-      const frame = await scopedDb.shots.update(
+      const shot = await scopedDb.shots.update(
         shotId,
         {
           thumbnailStatus: 'generating',
@@ -104,9 +104,9 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
         { throwOnMissing: false }
       );
 
-      if (!frame) {
+      if (!shot) {
         logger.info(
-          `[UpscaleShotVariantWorkflow:cf] Frame ${shotId} was deleted, skipping workflow`
+          `[UpscaleShotVariantWorkflow:cf] Shot ${shotId} was deleted, skipping workflow`
         );
         return null;
       }
@@ -187,8 +187,8 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
       return { url: result.url, path: result.path };
     });
 
-    await step.do('update-frame', async () => {
-      const updatedFrame = await scopedDb.shots.update(
+    await step.do('update-shot', async () => {
+      const updatedShot = await scopedDb.shots.update(
         input.shotId,
         {
           thumbnailUrl: storageResult.url,
@@ -199,9 +199,9 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
         { throwOnMissing: false }
       );
 
-      if (!updatedFrame) {
+      if (!updatedShot) {
         logger.info(
-          `[UpscaleShotVariantWorkflow:cf] Frame ${input.shotId} was deleted, skipping final update`
+          `[UpscaleShotVariantWorkflow:cf] Shot ${input.shotId} was deleted, skipping final update`
         );
         return;
       }
@@ -216,7 +216,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
       );
 
       logger.info(
-        `[UpscaleShotVariantWorkflow:cf] Upscale completed for frame ${input.shotId}`
+        `[UpscaleShotVariantWorkflow:cf] Upscale completed for shot ${input.shotId}`
       );
     });
 
@@ -238,7 +238,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
     const input = event.payload;
 
     logger.error(
-      `[UpscaleShotVariantWorkflow:cf] Upscale failed for frame ${input.shotId}: ${error}`
+      `[UpscaleShotVariantWorkflow:cf] Upscale failed for shot ${input.shotId}: ${error}`
     );
 
     if (input.shotId && input.teamId) {

@@ -1,6 +1,6 @@
 /**
  * Scoped Characters Sub-module
- * Character CRUD, sheet generation, talent assignment, and frame-character matching.
+ * Character CRUD, sheet generation, talent assignment, and shot-character matching.
  */
 
 import { and, eq, inArray } from 'drizzle-orm';
@@ -13,7 +13,7 @@ import type {
   SheetStatus,
 } from '@/lib/db/schema';
 import { characters, shots, talent } from '@/lib/db/schema';
-import { matchCharacterToFrameTags } from '@/lib/workflows/scene-matching';
+import { matchCharacterToShotTags } from '@/lib/workflows/scene-matching';
 
 export function createCharactersMethods(db: Database) {
   // Private update helper used by updateSheetStatus and updateSheet
@@ -247,7 +247,7 @@ export function createCharactersMethods(db: Database) {
       return currentHash !== stored;
     },
 
-    getFramesForCharacter: async (
+    getShotsForCharacter: async (
       sequenceId: string,
       characterId: string
     ): Promise<Shot[]> => {
@@ -261,20 +261,20 @@ export function createCharactersMethods(db: Database) {
         return [];
       }
 
-      // Get all frames for the sequence
-      const allFrames = await db
+      // Get all shots for the sequence
+      const allShots = await db
         .select()
         .from(shots)
         .where(eq(shots.sequenceId, sequenceId));
 
-      // Filter frames that contain this character
-      return (allFrames as Shot[]).filter((frame) => {
-        const characterTags = frame.metadata?.continuity?.characterTags ?? [];
-        return matchCharacterToFrameTags(character, characterTags);
+      // Filter shots that contain this character
+      return (allShots as Shot[]).filter((shot) => {
+        const characterTags = shot.metadata?.continuity?.characterTags ?? [];
+        return matchCharacterToShotTags(character, characterTags);
       });
     },
 
-    getFrameIdsForCharacter: async (
+    getShotIdsForCharacter: async (
       sequenceId: string,
       characterId: string
     ): Promise<string[]> => {
@@ -288,17 +288,17 @@ export function createCharactersMethods(db: Database) {
         return [];
       }
 
-      // Get all frames for the sequence
-      const allFrames = await db
+      // Get all shots for the sequence
+      const allShots = await db
         .select()
         .from(shots)
         .where(eq(shots.sequenceId, sequenceId));
 
-      // Filter frames that contain this character and return IDs
-      return (allFrames as Shot[])
-        .filter((frame) => {
-          const characterTags = frame.metadata?.continuity?.characterTags ?? [];
-          return matchCharacterToFrameTags(character, characterTags);
+      // Filter shots that contain this character and return IDs
+      return (allShots as Shot[])
+        .filter((shot) => {
+          const characterTags = shot.metadata?.continuity?.characterTags ?? [];
+          return matchCharacterToShotTags(character, characterTags);
         })
         .map((f) => f.id);
     },

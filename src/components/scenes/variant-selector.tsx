@@ -164,7 +164,7 @@ export function VariantSelector({
           <DialogHeader>
             <DialogTitle>Select this variant?</DialogTitle>
             <DialogDescription>
-              This will replace the current frame image. The video will need to
+              This will replace the current shot image. The video will need to
               be regenerated.
             </DialogDescription>
           </DialogHeader>

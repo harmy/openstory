@@ -1,7 +1,7 @@
 /**
  * Scene Elements Tab
  * Displays user-uploaded reference elements (logos, products) referenced in
- * the current frame by UPPERCASE token.
+ * the current shot by UPPERCASE token.
  */
 
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,18 +13,18 @@ import { Link } from '@tanstack/react-router';
 import { ImagePlus, Loader2 } from 'lucide-react';
 
 type SceneElementsTabProps = {
-  frame?: Shot;
+  shot?: Shot;
   sequenceId: string;
 };
 
 export const SceneElementsTab: React.FC<SceneElementsTabProps> = ({
-  frame,
+  shot,
   sequenceId,
 }) => {
   const { data: elements = [], isLoading } = useSequenceElements(sequenceId);
 
-  const elementTags = frame?.metadata?.continuity?.elementTags ?? [];
-  const sceneScript = frame?.metadata?.originalScript.extract ?? '';
+  const elementTags = shot?.metadata?.continuity?.elementTags ?? [];
+  const sceneScript = shot?.metadata?.originalScript.extract ?? '';
 
   const matchedIds = new Set(
     matchElementsToScene(elements, elementTags, sceneScript).map((el) => el.id)

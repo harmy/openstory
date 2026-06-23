@@ -86,7 +86,7 @@ export const PROCESS_STEPS = [
     number: '03',
     title: 'Generate & Refine',
     description:
-      'Generate AI frames for every shot. Swap models, try variations, regenerate until every shot is right.',
+      'Generate AI shots for every shot. Swap models, try variations, regenerate until every shot is right.',
   },
   {
     number: '04',

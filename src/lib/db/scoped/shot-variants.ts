@@ -16,7 +16,7 @@ import { and, eq, sql } from 'drizzle-orm';
 
 export function createShotVariantsMethods(db: Database) {
   return {
-    getByFrameAndModel: async (
+    getByShotAndModel: async (
       shotId: string,
       variantType: VariantType,
       model: string
@@ -39,7 +39,7 @@ export function createShotVariantsMethods(db: Database) {
       return result[0] ?? null;
     },
 
-    listByFrame: async (
+    listByShot: async (
       shotId: string,
       variantType?: VariantType
     ): Promise<ShotVariant[]> => {
@@ -136,7 +136,7 @@ export function createShotVariantsMethods(db: Database) {
       return variant;
     },
 
-    updateByFrameAndModel: async (
+    updateByShotAndModel: async (
       shotId: string,
       variantType: VariantType,
       model: string,
@@ -222,7 +222,7 @@ export function createShotVariantsMethods(db: Database) {
      * have not been discarded. Ordered oldest-first by divergedAt so the UI
      * surfaces the longest-pending alternate consistently.
      */
-    listDivergentByFrame: async (
+    listDivergentByShot: async (
       shotId: string,
       variantType?: VariantType
     ): Promise<ShotVariant[]> => {
@@ -287,9 +287,9 @@ export function createShotVariantsMethods(db: Database) {
      */
     promoteAtomically: async (
       shotId: string,
-      frameUpdate: Partial<NewShot>,
+      shotUpdate: Partial<NewShot>,
       variantId: string
-    ): Promise<{ frame: Shot; discardedAt: Date }> => {
+    ): Promise<{ shot: Shot; discardedAt: Date }> => {
       const [existingShot] = await db
         .select({ id: shots.id })
         .from(shots)
@@ -308,7 +308,7 @@ export function createShotVariantsMethods(db: Database) {
       const now = new Date();
       const updateShot = db
         .update(shots)
-        .set({ ...frameUpdate, updatedAt: now })
+        .set({ ...shotUpdate, updatedAt: now })
         .where(eq(shots.id, shotId))
         .returning();
       const discardVariant = db
@@ -331,7 +331,7 @@ export function createShotVariantsMethods(db: Database) {
       if (variantRows.length === 0) {
         throw new Error(`ShotVariant ${variantId} disappeared during promote`);
       }
-      return { frame: promotedShot, discardedAt: now };
+      return { shot: promotedShot, discardedAt: now };
     },
 
     /**
@@ -362,7 +362,7 @@ export function createShotVariantsMethods(db: Database) {
       return result[0] ?? null;
     },
 
-    deleteByFrame: async (shotId: string): Promise<number> => {
+    deleteByShot: async (shotId: string): Promise<number> => {
       const result = await db
         .delete(shotVariants)
         .where(eq(shotVariants.shotId, shotId));

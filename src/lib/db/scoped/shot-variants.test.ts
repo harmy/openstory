@@ -3,10 +3,10 @@
  *
  * The schema lays down two unique indexes keyed on `divergedAt IS NULL` vs.
  * `divergedAt IS NOT NULL`, so:
- *   - At most one primary row may exist per (frame, type, model).
+ *   - At most one primary row may exist per (shot, type, model).
  *   - Multiple divergent alternates may coexist as long as they have distinct
  *     `inputHash` values.
- * Plus the scoped wrappers (`getByFrameAndModel`, `insertDivergent`) must
+ * Plus the scoped wrappers (`getByShotAndModel`, `insertDivergent`) must
  * respect that split: the getter returns the primary, the inserter is
  * idempotent on retry.
  */
@@ -94,8 +94,8 @@ beforeEach(async () => {
   await seed();
 });
 
-describe('frame_variants partial-index uniqueness', () => {
-  it('allows one primary plus N divergent alternates for the same (frame, type, model)', async () => {
+describe('shot_variants partial-index uniqueness', () => {
+  it('allows one primary plus N divergent alternates for the same (shot, type, model)', async () => {
     // Primary: divergedAt IS NULL.
     await db.insert(shotVariants).values({
       shotId,
@@ -137,7 +137,7 @@ describe('frame_variants partial-index uniqueness', () => {
     expect(rows.filter((r) => r.divergedAt !== null)).toHaveLength(2);
   });
 
-  it('rejects a second primary row for the same (frame, type, model)', async () => {
+  it('rejects a second primary row for the same (shot, type, model)', async () => {
     await db.insert(shotVariants).values({
       shotId,
       sequenceId,
@@ -163,7 +163,7 @@ describe('frame_variants partial-index uniqueness', () => {
     expect(threw).toBe(true);
   });
 
-  it('rejects a second divergent row with the same (frame, type, model, inputHash)', async () => {
+  it('rejects a second divergent row with the same (shot, type, model, inputHash)', async () => {
     const divergedAt = new Date('2026-04-29T00:00:00Z');
     await db.insert(shotVariants).values({
       shotId,
@@ -196,7 +196,7 @@ describe('frame_variants partial-index uniqueness', () => {
 });
 
 describe('createShotVariantsMethods', () => {
-  it('getByFrameAndModel returns the primary row even when divergent alternates exist', async () => {
+  it('getByShotAndModel returns the primary row even when divergent alternates exist', async () => {
     const methods = createShotVariantsMethods(db);
 
     await db.insert(shotVariants).values({
@@ -218,7 +218,7 @@ describe('createShotVariantsMethods', () => {
       divergedAt: new Date('2026-04-29T00:00:00Z'),
     });
 
-    const result = await methods.getByFrameAndModel(
+    const result = await methods.getByShotAndModel(
       shotId,
       'image',
       'nano_banana_2'
@@ -229,7 +229,7 @@ describe('createShotVariantsMethods', () => {
     expect(result?.divergedAt).toBeNull();
   });
 
-  it('insertDivergent is idempotent on the same (frame, type, model, inputHash)', async () => {
+  it('insertDivergent is idempotent on the same (shot, type, model, inputHash)', async () => {
     const methods = createShotVariantsMethods(db);
 
     // Primary must exist first — image-workflow's dual-write writes it.
@@ -276,7 +276,7 @@ describe('createShotVariantsMethods', () => {
   });
 });
 
-describe('frame_variants discard / undiscard / listDivergent', () => {
+describe('shot_variants discard / undiscard / listDivergent', () => {
   async function insertDivergent(opts: {
     inputHash: string;
     divergedAt: Date;
@@ -322,7 +322,7 @@ describe('frame_variants discard / undiscard / listDivergent', () => {
     expect(restored?.discardedAt).toBeNull();
   });
 
-  it('listDivergentByFrame excludes discarded rows and orders by divergedAt', async () => {
+  it('listDivergentByShot excludes discarded rows and orders by divergedAt', async () => {
     const a = await insertDivergent({
       inputHash: 'h-a',
       divergedAt: new Date('2026-04-29T00:00:00Z'),
@@ -338,7 +338,7 @@ describe('frame_variants discard / undiscard / listDivergent', () => {
     });
 
     const methods = createShotVariantsMethods(db);
-    const rows = await methods.listDivergentByFrame(shotId, 'image');
+    const rows = await methods.listDivergentByShot(shotId, 'image');
     const ids = rows.map((r) => r.id);
     expect(ids).toEqual([a.id, b.id]);
     expect(ids).not.toContain(c.id);

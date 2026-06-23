@@ -1,7 +1,7 @@
 /**
- * Builds the per-frame `ImageWorkflowInput` for an image generation — the
+ * Builds the per-shot `ImageWorkflowInput` for an image generation — the
  * reference-image attachment + per-scene snapshot hash that both the
- * single-frame regenerate (`generateShotImageFn`) and the bulk add-model
+ * single-shot regenerate (`generateShotImageFn`) and the bulk add-model
  * (`addModelToSequenceFn`, #547) paths need. Extracted so the two callers stay
  * consistent: same prompt fallback chain, same character/location/element
  * matching, same snapshot hash.
@@ -22,7 +22,7 @@ import { buildElementReferenceImages } from '@/lib/prompts/element-prompt';
 import { buildLocationReferenceImages } from '@/lib/prompts/location-prompt';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import type {
-  FrameImageSceneSnapshot,
+  ShotImageSceneSnapshot,
   ImageWorkflowInput,
 } from '@/lib/workflow/types';
 import {
@@ -30,7 +30,7 @@ import {
   matchElementsToScene,
   matchLocationsToScene,
 } from '@/lib/workflows/scene-matching';
-import { computeFrameImageSceneHash } from '@/lib/workflows/sheet-snapshots';
+import { computeShotImageSceneHash } from '@/lib/workflows/sheet-snapshots';
 
 function sortedHashes(
   values: ReadonlyArray<string | null | undefined>
@@ -55,8 +55,8 @@ function getSceneLocationReferenceImages(
   return buildLocationReferenceImages(matched);
 }
 
-export async function buildFrameImageWorkflowInput(opts: {
-  frame: Shot;
+export async function buildShotImageWorkflowInput(opts: {
+  shot: Shot;
   model: TextToImageModel;
   userId: string;
   teamId: string;
@@ -66,21 +66,21 @@ export async function buildFrameImageWorkflowInput(opts: {
   locations: SequenceLocation[];
   elements: SequenceElement[];
   /**
-   * Continuity to match references against. Defaults to the frame's stored
+   * Continuity to match references against. Defaults to the shot's stored
    * continuity; callers that just edited a prompt pass a rescanned one.
    */
   continuity?: Scene['continuity'];
-  /** Prompt override (e.g. a user edit). Defaults to the frame's prompt chain. */
+  /** Prompt override (e.g. a user edit). Defaults to the shot's prompt chain. */
   prompt?: string;
   userEditedPrompt?: boolean;
   /**
    * Variant-only (#547): the resulting `/image` run writes only this model's
-   * `frame_variants` row, never the primary columns. Set by the add-model path.
+   * `shot_variants` row, never the primary columns. Set by the add-model path.
    */
   variantOnly?: boolean;
 }): Promise<ImageWorkflowInput | null> {
   const {
-    frame,
+    shot,
     model,
     userId,
     teamId,
@@ -94,12 +94,12 @@ export async function buildFrameImageWorkflowInput(opts: {
   // Priority: provided > stored > AI-generated > description.
   const prompt =
     opts.prompt ||
-    frame.imagePrompt ||
-    frame.metadata?.prompts?.visual?.fullPrompt ||
-    frame.description;
+    shot.imagePrompt ||
+    shot.metadata?.prompts?.visual?.fullPrompt ||
+    shot.description;
   if (!prompt) return null;
 
-  const continuity = opts.continuity ?? frame.metadata?.continuity;
+  const continuity = opts.continuity ?? shot.metadata?.continuity;
 
   const matchedCharacters = matchCharactersToScene(
     characters,
@@ -108,7 +108,7 @@ export async function buildFrameImageWorkflowInput(opts: {
   const characterReferences = buildCharacterReferenceImages(matchedCharacters);
 
   const environmentTag = continuity?.environmentTag ?? '';
-  const sceneLocation = frame.metadata?.metadata?.location ?? '';
+  const sceneLocation = shot.metadata?.metadata?.location ?? '';
   const matchedLocations = matchLocationsToScene(
     locations,
     environmentTag,
@@ -123,12 +123,12 @@ export async function buildFrameImageWorkflowInput(opts: {
   const matchedElements = matchElementsToScene(
     elements,
     continuity?.elementTags ?? [],
-    frame.metadata?.originalScript.extract ?? ''
+    shot.metadata?.originalScript.extract ?? ''
   );
   const elementReferences = buildElementReferenceImages(matchedElements);
 
-  const sceneSnapshot: FrameImageSceneSnapshot = {
-    sceneId: frame.metadata?.sceneId ?? frame.id,
+  const sceneSnapshot: ShotImageSceneSnapshot = {
+    sceneId: shot.metadata?.sceneId ?? shot.id,
     visualPrompt: prompt,
     characterSheetHashes: sortedHashes(
       matchedCharacters.map((c) => c.sheetInputHash)
@@ -140,7 +140,7 @@ export async function buildFrameImageWorkflowInput(opts: {
       matchedElements.map((e) => e.imageUrl)
     ),
   };
-  const snapshotInputHash = await computeFrameImageSceneHash(
+  const snapshotInputHash = await computeShotImageSceneHash(
     sceneSnapshot,
     model,
     aspectRatio
@@ -153,7 +153,7 @@ export async function buildFrameImageWorkflowInput(opts: {
     model,
     imageSize: aspectRatioToImageSize(aspectRatio),
     numImages: 1,
-    shotId: frame.id,
+    shotId: shot.id,
     sequenceId,
     aspectRatio,
     sceneSnapshot,

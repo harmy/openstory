@@ -132,7 +132,7 @@ export function createAdminMethods(db: Database) {
     }));
   }
 
-  // ---- Support: cross-team sequence/frame access ----
+  // ---- Support: cross-team sequence/shot access ----
 
   type SequenceWithCreator = Sequence & {
     creatorName: string | null;
@@ -175,7 +175,7 @@ export function createAdminMethods(db: Database) {
     }));
   }
 
-  async function getFramesForSequence(sequenceId: string): Promise<Shot[]> {
+  async function getShotsForSequence(sequenceId: string): Promise<Shot[]> {
     return await db
       .select()
       .from(shots)
@@ -259,7 +259,7 @@ export function createAdminMethods(db: Database) {
     createGiftToken,
     listGiftTokens,
     getAllSequences,
-    getFramesForSequence,
+    getShotsForSequence,
     listUserActivity,
   };
 }

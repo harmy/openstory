@@ -2,7 +2,7 @@
  * Scene matching utilities
  *
  * Pure functions for matching characters and locations to scenes
- * by their continuity tags. Used by analyze-script and frame-images workflows.
+ * by their continuity tags. Used by analyze-script and shot-images workflows.
  */
 
 import type {
@@ -42,9 +42,9 @@ function isSubset(needle: string[], haystack: Set<string>): boolean {
  *
  * `name` is the authoritative match key (stable across recast and what
  * the LLM is told to emit). `characterId` and `consistencyTag` are
- * fallbacks for legacy frames whose tags pre-date the prompt fix.
+ * fallbacks for legacy shots whose tags pre-date the prompt fix.
  */
-export function matchCharacterToFrameTags(
+export function matchCharacterToShotTags(
   character: CharacterMatchInput,
   characterTags: string[]
 ): boolean {
@@ -89,7 +89,7 @@ export function matchCharactersToScene<T extends CharacterMatchInput>(
 ): T[] {
   if (characterTags.length === 0) return [];
   return allCharacters.filter((c) =>
-    matchCharacterToFrameTags(c, characterTags)
+    matchCharacterToShotTags(c, characterTags)
   );
 }
 

@@ -16,7 +16,7 @@
  *     the `context.snapshot.*` extension.
  *   - The chained `location-sheet` child invocation now uses Pattern 3
  *     (`spawnAndAwaitChild`) against the CF `LocationSheetWorkflow`.
- *   - The chained `regenerate-frames` child invocation is stubbed pending
+ *   - The chained `regenerate-shots` child invocation is stubbed pending
  *     its own CF port (Wave 3 batch). The `build-regenerate-snapshot` step
  *     lives in `regenerateShotsIfNeeded` for diff parity with the QStash
  *     original; the stub fires immediately after the snapshot step so the
@@ -55,10 +55,10 @@ type RecastLocationWorkflowResult = {
 };
 
 /**
- * Build the regenerate-frames snapshot and (eventually) invoke the
- * `regenerate-frames` child. Today the invoke is stubbed inside a `step.do`
+ * Build the regenerate-shots snapshot and (eventually) invoke the
+ * `regenerate-shots` child. Today the invoke is stubbed inside a `step.do`
  * with a `NonRetryableError` — Pattern 3 will wire up the real child spawn
- * once the CF port of `regenerate-frames-workflow` lands.
+ * once the CF port of `regenerate-shots-workflow` lands.
  *
  * Lives in its own helper to mirror the QStash original's flow: snapshot
  * building runs as its own step before the child kicks off.
@@ -80,7 +80,7 @@ async function regenerateShotsIfNeeded(
       const sequenceId = input.sequenceId;
       if (!sequenceId) {
         throw new NonRetryableError(
-          '[RecastLocationWorkflow:cf] sequenceId is required to regenerate frames',
+          '[RecastLocationWorkflow:cf] sequenceId is required to regenerate shots',
           'WorkflowValidationError'
         );
       }
@@ -91,24 +91,24 @@ async function regenerateShotsIfNeeded(
           `[RecastLocationWorkflow:cf] Sequence ${sequenceId} not found`
         );
       }
-      const [characters, locations, elements, frames] = await Promise.all([
+      const [characters, locations, elements, shots] = await Promise.all([
         scopedDb.characters.listWithSheets(sequenceId),
         scopedDb.sequenceLocations.listWithReferences(sequenceId),
         scopedDb.sequenceElements.list(sequenceId),
         scopedDb.shots.getByIds(input.affectedShotIds),
       ]);
-      if (frames.length !== input.affectedShotIds.length) {
-        const found = new Set(frames.map((f) => f.id));
+      if (shots.length !== input.affectedShotIds.length) {
+        const found = new Set(shots.map((f) => f.id));
         const missing = input.affectedShotIds.filter((id) => !found.has(id));
         throw new Error(
-          `[RecastLocationWorkflow:cf] Missing frames for ${input.locationName}: ${missing.join(', ')}`
+          `[RecastLocationWorkflow:cf] Missing shots for ${input.locationName}: ${missing.join(', ')}`
         );
       }
       const aspectRatio = sequence.aspectRatio;
-      const frameSnapshots = await Promise.all(
-        frames.map((frame) =>
+      const shotSnapshots = await Promise.all(
+        shots.map((shot) =>
           buildRegenerateShotSnapshot({
-            frame,
+            shot,
             characters,
             locations,
             elements,
@@ -117,7 +117,7 @@ async function regenerateShotsIfNeeded(
           })
         )
       );
-      const partial = { sequenceId, imageModel, aspectRatio, frameSnapshots };
+      const partial = { sequenceId, imageModel, aspectRatio, shotSnapshots };
       const snapshotInputHash = await computeRegenerateShotsBatchHash(partial);
       return {
         userId: input.userId,
@@ -128,7 +128,7 @@ async function regenerateShotsIfNeeded(
         triggerId: input.locationDbId,
         imageModel,
         aspectRatio,
-        frameSnapshots,
+        shotSnapshots,
         snapshotInputHash,
       };
     }
@@ -138,10 +138,10 @@ async function regenerateShotsIfNeeded(
     binding: env.REGENERATE_SHOTS_WORKFLOW,
     parentBindingName: 'RECAST_LOCATION_WORKFLOW',
     parentInstanceId,
-    childId: `regenerate-frames:location:${input.locationDbId}`,
+    childId: `regenerate-shots:location:${input.locationDbId}`,
     childPayload: regenerateBody,
-    spawnStepName: 'spawn-regenerate-frames',
-    awaitStepName: 'await-regenerate-frames',
+    spawnStepName: 'spawn-regenerate-shots',
+    awaitStepName: 'await-regenerate-shots',
   });
 
   return {
@@ -159,7 +159,7 @@ export class RecastLocationWorkflow extends OpenStoryWorkflowEntrypoint<RecastLo
     const input = event.payload;
 
     logger.info(
-      `[RecastLocationWorkflow:cf] Starting recast for ${input.locationName} with ${input.affectedShotIds.length} affected frames`
+      `[RecastLocationWorkflow:cf] Starting recast for ${input.locationName} with ${input.affectedShotIds.length} affected shots`
     );
 
     // Step 1: Generate new location reference image with library reference.
@@ -214,10 +214,10 @@ export class RecastLocationWorkflow extends OpenStoryWorkflowEntrypoint<RecastLo
     }
 
     logger.info(
-      `[RecastLocationWorkflow:cf] Location reference generated for ${input.locationName}, regenerating ${input.affectedShotIds.length} frames`
+      `[RecastLocationWorkflow:cf] Location reference generated for ${input.locationName}, regenerating ${input.affectedShotIds.length} shots`
     );
 
-    // Step 2: Regenerate affected frames via Pattern 3 spawn.
+    // Step 2: Regenerate affected shots via Pattern 3 spawn.
     const { shotsRegenerated, shotsFailed } = await regenerateShotsIfNeeded(
       step,
       this.env,

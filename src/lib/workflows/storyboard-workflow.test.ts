@@ -67,7 +67,7 @@ function makeEvent(
       teamId: 't1',
       sequenceId,
       options: {
-        framesPerScene: 3,
+        shotsPerScene: 3,
         generateThumbnails: true,
         generateDescriptions: true,
         aiProvider: 'openrouter',

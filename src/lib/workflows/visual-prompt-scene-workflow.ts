@@ -25,7 +25,7 @@ import {
   PROMPT_REASONING,
 } from '@/lib/ai/llm-client';
 import { getContextWindow } from '@/lib/ai/models.config';
-import { narrowFramePromptContext } from '@/lib/ai/prompt-context';
+import { narrowShotPromptContext } from '@/lib/ai/prompt-context';
 import {
   type VisualPrompt,
   type VisualPromptResult,
@@ -37,7 +37,7 @@ import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { getLogger } from '@/lib/observability/logger';
 import { getChatPrompt } from '@/lib/prompts';
-import { getFramePromptChannel, getGenerationChannel } from '@/lib/realtime';
+import { getShotPromptChannel, getGenerationChannel } from '@/lib/realtime';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import type { VisualPromptSceneWorkflowInput } from '@/lib/workflow/types';
@@ -82,7 +82,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
     // LLM and the staleness hash then consume the same minimal, scene-scoped
     // input — no full-bible pass for the model to wade through, and the stored
     // hash matches the verify-time recompute by construction. See #867.
-    const narrowed = narrowFramePromptContext({
+    const narrowed = narrowShotPromptContext({
       scene,
       styleConfig,
       characterBible,
@@ -237,7 +237,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
           }
 
           // Streaming path — emit visible `fullPrompt` deltas while accumulating.
-          const channel = getFramePromptChannel(streamConfig.shotId);
+          const channel = getShotPromptChannel(streamConfig.shotId);
           let accumulated = '';
           let lastExtracted = '';
           let pendingDelta = '';
@@ -248,7 +248,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
             const delta = pendingDelta;
             pendingDelta = '';
             lastEmitAt = Date.now();
-            await channel.emit('framePrompt.streaming', {
+            await channel.emit('shotPrompt.streaming', {
               promptType: streamConfig.promptType,
               delta,
             });
@@ -375,10 +375,10 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
         );
         const source = previous ? 'regenerated' : 'ai-generated';
 
-        // Clear `frame.imagePrompt` user-override when regenerating. The
+        // Clear `shot.imagePrompt` user-override when regenerating. The
         // override would otherwise mask the freshly regenerated prompt in
         // every downstream read (effective-prompt fallback chain), so a
-        // regen-prompt click on a previously user-edited frame would do
+        // regen-prompt click on a previously user-edited shot would do
         // nothing visible. The variant row above preserves the new prompt;
         // the user's prior override is still in the prompt-history sheet
         // and can be restored from there.
@@ -403,10 +403,10 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
           metadata: enrichedScene,
         });
 
-        // Signal end-of-stream to the per-frame channel so the UI can swap
+        // Signal end-of-stream to the per-shot channel so the UI can swap
         // out the streamed-deltas buffer for the persisted prompt.
         if (emitStreaming) {
-          await getFramePromptChannel(shotId).emit('framePrompt.completed', {
+          await getShotPromptChannel(shotId).emit('shotPrompt.completed', {
             promptType: 'visual',
           });
         }
@@ -429,11 +429,11 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
       workflowRunId: event.instanceId,
       error,
     });
-    // Surface the failure on the per-frame channel so an actively-viewing
+    // Surface the failure on the per-shot channel so an actively-viewing
     // client can clear its streaming state and toast. Best-effort.
     try {
       if (payload.emitStreaming && payload.shotId) {
-        await getFramePromptChannel(payload.shotId).emit('framePrompt.failed', {
+        await getShotPromptChannel(payload.shotId).emit('shotPrompt.failed', {
           promptType: 'visual',
           error,
         });

@@ -13,7 +13,7 @@ const logger = getLogger(['openstory', 'ui', 'use-active-image-model']);
  * {@link useActiveVideoModel} — which model's image the scenes view displays is
  * a per-viewer preference stored in localStorage keyed by sequence, kept in
  * sync within and across tabs via a module store + `useSyncExternalStore`.
- * `null` means "no explicit pick" — fall back to each frame's own image.
+ * `null` means "no explicit pick" — fall back to each shot's own image.
  */
 
 const KEY_PREFIX = 'openstory:active-image-model:';

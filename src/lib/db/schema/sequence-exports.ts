@@ -7,7 +7,7 @@
  * row is just a snapshot at a point in time. The newest row (per sequence) is
  * what the "Download" UI surfaces.
  *
- * `sourceFramesHash` / `sourceMusicVariantId` are recorded so the UI can show
+ * `sourceShotsHash` / `sourceMusicVariantId` are recorded so the UI can show
  * whether the most recent export is still in sync with current inputs.
  */
 
@@ -35,7 +35,7 @@ export const sequenceExports = snakeCase.table(
     durationSeconds: integer(),
 
     // Inputs that produced this snapshot (for staleness display)
-    sourceFramesHash: text(),
+    sourceShotsHash: text(),
     sourceMusicVariantId: text(),
 
     createdAt: integer({ mode: 'timestamp' })

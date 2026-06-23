@@ -1,9 +1,9 @@
 /**
- * Behavioural tests for the regenerate-frames snapshot helpers.
+ * Behavioural tests for the regenerate-shots snapshot helpers.
  *
  * These cover the two critical paths the workflow branches on:
  *   - convergent: trigger-time and write-time hashes match → primary write
- *   - divergent: a character is recast mid-flight → write to frame_variants
+ *   - divergent: a character is recast mid-flight → write to shot_variants
  *
  * The workflow itself orchestrates those writes; we verify here that the
  * helpers correctly detect divergence so the downstream branching is sound.
@@ -55,7 +55,7 @@ function makeCharacter(overrides: Partial<Character> = {}): Character {
 }
 
 function makeShot(overrides: Partial<Shot> = {}): Shot {
-  const frame: Shot = {
+  const shot: Shot = {
     id: 'f1',
     sequenceId: 'seq1',
     orderIndex: 0,
@@ -111,7 +111,7 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     createdAt: NOW,
     updatedAt: NOW,
   };
-  return { ...frame, ...overrides };
+  return { ...shot, ...overrides };
 }
 
 const NO_LOCATIONS: SequenceLocation[] = [];
@@ -143,11 +143,11 @@ function makeElement(
 
 describe('buildRegenerateShotSnapshot', () => {
   it('produces a deterministic snapshotInputHash for identical inputs', async () => {
-    const frame = makeShot();
+    const shot = makeShot();
     const characters = [makeCharacter()];
 
     const snapshotA = await buildRegenerateShotSnapshot({
-      frame,
+      shot,
       characters,
       locations: NO_LOCATIONS,
       elements: NO_ELEMENTS,
@@ -155,7 +155,7 @@ describe('buildRegenerateShotSnapshot', () => {
       aspectRatio: '16:9',
     });
     const snapshotB = await buildRegenerateShotSnapshot({
-      frame,
+      shot,
       characters,
       locations: NO_LOCATIONS,
       elements: NO_ELEMENTS,
@@ -168,9 +168,9 @@ describe('buildRegenerateShotSnapshot', () => {
   });
 
   it('changes the snapshotInputHash when a referenced character sheet hash changes', async () => {
-    const frame = makeShot();
+    const shot = makeShot();
     const before = await buildRegenerateShotSnapshot({
-      frame,
+      shot,
       characters: [makeCharacter({ sheetInputHash: 'jack-hash-v1' })],
       locations: NO_LOCATIONS,
       elements: NO_ELEMENTS,
@@ -178,7 +178,7 @@ describe('buildRegenerateShotSnapshot', () => {
       aspectRatio: '16:9',
     });
     const after = await buildRegenerateShotSnapshot({
-      frame,
+      shot,
       characters: [makeCharacter({ sheetInputHash: 'jack-hash-v2' })],
       locations: NO_LOCATIONS,
       elements: NO_ELEMENTS,
@@ -192,7 +192,7 @@ describe('buildRegenerateShotSnapshot', () => {
   it('changes the snapshotInputHash when the imagePrompt changes', async () => {
     const characters = [makeCharacter()];
     const before = await buildRegenerateShotSnapshot({
-      frame: makeShot({ imagePrompt: 'Original prompt' }),
+      shot: makeShot({ imagePrompt: 'Original prompt' }),
       characters,
       locations: NO_LOCATIONS,
       elements: NO_ELEMENTS,
@@ -200,7 +200,7 @@ describe('buildRegenerateShotSnapshot', () => {
       aspectRatio: '16:9',
     });
     const after = await buildRegenerateShotSnapshot({
-      frame: makeShot({ imagePrompt: 'Edited prompt' }),
+      shot: makeShot({ imagePrompt: 'Edited prompt' }),
       characters,
       locations: NO_LOCATIONS,
       elements: NO_ELEMENTS,
@@ -211,9 +211,9 @@ describe('buildRegenerateShotSnapshot', () => {
   });
 
   it('skips characters whose sheet input_hash is null (legacy rows)', async () => {
-    const frame = makeShot();
+    const shot = makeShot();
     const snapshot = await buildRegenerateShotSnapshot({
-      frame,
+      shot,
       characters: [makeCharacter({ sheetInputHash: null })],
       locations: NO_LOCATIONS,
       elements: NO_ELEMENTS,
@@ -226,7 +226,7 @@ describe('buildRegenerateShotSnapshot', () => {
   it('falls back to metadata.prompts.visual.fullPrompt when imagePrompt is null', async () => {
     const baseMetadata = makeShot().metadata;
     if (!baseMetadata) throw new Error('test setup: base metadata missing');
-    const frame = makeShot({
+    const shot = makeShot({
       imagePrompt: null,
       metadata: {
         ...baseMetadata,
@@ -250,7 +250,7 @@ describe('buildRegenerateShotSnapshot', () => {
       },
     });
     const snapshot = await buildRegenerateShotSnapshot({
-      frame,
+      shot,
       characters: [makeCharacter()],
       locations: NO_LOCATIONS,
       elements: NO_ELEMENTS,
@@ -265,7 +265,7 @@ describe('buildRegenerateShotSnapshot', () => {
     if (!baseMetadata) throw new Error('test setup: base metadata missing');
     const buildWithMetaPrompt = (fullPrompt: string) =>
       buildRegenerateShotSnapshot({
-        frame: makeShot({
+        shot: makeShot({
           imagePrompt: null,
           metadata: {
             ...baseMetadata,
@@ -303,7 +303,7 @@ describe('buildRegenerateShotSnapshot', () => {
   it('throws when both imagePrompt and metadata.prompts are absent', () => {
     expect(
       buildRegenerateShotSnapshot({
-        frame: makeShot({ imagePrompt: null }),
+        shot: makeShot({ imagePrompt: null }),
         characters: [makeCharacter()],
         locations: NO_LOCATIONS,
         elements: NO_ELEMENTS,
@@ -316,7 +316,7 @@ describe('buildRegenerateShotSnapshot', () => {
   it('throws when imagePrompt is empty string and no metadata prompt', () => {
     expect(
       buildRegenerateShotSnapshot({
-        frame: makeShot({ imagePrompt: '' }),
+        shot: makeShot({ imagePrompt: '' }),
         characters: [makeCharacter()],
         locations: NO_LOCATIONS,
         elements: NO_ELEMENTS,
@@ -326,10 +326,10 @@ describe('buildRegenerateShotSnapshot', () => {
     ).rejects.toThrow(/has no visual prompt/);
   });
 
-  // #867 (image): a frame that references a product element must hash that
+  // #867 (image): a shot that references a product element must hash that
   // element's reference — verify previously hard-coded `[]`, so every
-  // element-bearing frame reported permanently stale.
-  const frameMentioning = (token: string): Shot => {
+  // element-bearing shot reported permanently stale.
+  const shotMentioning = (token: string): Shot => {
     const base = makeShot().metadata;
     if (!base) throw new Error('test setup: metadata missing');
     return makeShot({
@@ -342,7 +342,7 @@ describe('buildRegenerateShotSnapshot', () => {
 
   it('includes a referenced element’s reference hash in the snapshot', async () => {
     const snapshot = await buildRegenerateShotSnapshot({
-      frame: frameMentioning('BOTTLE'),
+      shot: shotMentioning('BOTTLE'),
       characters: [makeCharacter()],
       locations: NO_LOCATIONS,
       elements: [makeElement()],
@@ -356,7 +356,7 @@ describe('buildRegenerateShotSnapshot', () => {
 
   it('changes the snapshotInputHash when a referenced element image changes', async () => {
     const opts = {
-      frame: frameMentioning('BOTTLE'),
+      shot: shotMentioning('BOTTLE'),
       characters: [makeCharacter()],
       locations: NO_LOCATIONS,
       imageModel: 'nano_banana_2' as const,
@@ -377,9 +377,9 @@ describe('buildRegenerateShotSnapshot', () => {
     expect(after.snapshotInputHash).not.toBe(before.snapshotInputHash);
   });
 
-  it('ignores elements the frame does not reference', async () => {
+  it('ignores elements the shot does not reference', async () => {
     const snapshot = await buildRegenerateShotSnapshot({
-      frame: makeShot(), // empty script + no elementTags → no element matches
+      shot: makeShot(), // empty script + no elementTags → no element matches
       characters: [makeCharacter()],
       locations: NO_LOCATIONS,
       elements: [makeElement()],
@@ -391,9 +391,9 @@ describe('buildRegenerateShotSnapshot', () => {
 });
 
 describe('computeRegenerateShotsBatchHash', () => {
-  it('matches when frames are identical (regardless of order)', async () => {
-    const frame1 = makeShot({ id: 'f1' });
-    const frame2 = makeShot({ id: 'f2', orderIndex: 1 });
+  it('matches when shots are identical (regardless of order)', async () => {
+    const shot1 = makeShot({ id: 'f1' });
+    const shot2 = makeShot({ id: 'f2', orderIndex: 1 });
     const characters = [makeCharacter()];
     const opts = {
       characters,
@@ -402,29 +402,29 @@ describe('computeRegenerateShotsBatchHash', () => {
       imageModel: 'nano_banana_2' as const,
       aspectRatio: '16:9' as const,
     };
-    const s1 = await buildRegenerateShotSnapshot({ frame: frame1, ...opts });
-    const s2 = await buildRegenerateShotSnapshot({ frame: frame2, ...opts });
+    const s1 = await buildRegenerateShotSnapshot({ shot: shot1, ...opts });
+    const s2 = await buildRegenerateShotSnapshot({ shot: shot2, ...opts });
 
     const hashAB = await computeRegenerateShotsBatchHash({
       sequenceId: 'seq1',
       imageModel: 'nano_banana_2',
       aspectRatio: '16:9',
-      frameSnapshots: [s1, s2],
+      shotSnapshots: [s1, s2],
     });
     const hashBA = await computeRegenerateShotsBatchHash({
       sequenceId: 'seq1',
       imageModel: 'nano_banana_2',
       aspectRatio: '16:9',
-      frameSnapshots: [s2, s1],
+      shotSnapshots: [s2, s1],
     });
 
     expect(hashAB).toBe(hashBA);
   });
 
-  it('diverges when one frame snapshot diverges (character recast mid-flight)', async () => {
-    const frame = makeShot();
+  it('diverges when one shot snapshot diverges (character recast mid-flight)', async () => {
+    const shot = makeShot();
     const opts = {
-      frame,
+      shot,
       locations: NO_LOCATIONS,
       elements: NO_ELEMENTS,
       imageModel: 'nano_banana_2' as const,
@@ -448,13 +448,13 @@ describe('computeRegenerateShotsBatchHash', () => {
       sequenceId: 'seq1',
       imageModel: 'nano_banana_2',
       aspectRatio: '16:9',
-      frameSnapshots: [triggerTimeSnapshot],
+      shotSnapshots: [triggerTimeSnapshot],
     });
     const convergentRecompute = await computeRegenerateShotsBatchHash({
       sequenceId: 'seq1',
       imageModel: 'nano_banana_2',
       aspectRatio: '16:9',
-      frameSnapshots: [triggerTimeSnapshot],
+      shotSnapshots: [triggerTimeSnapshot],
     });
     expect(convergentRecompute).toBe(convergent);
 
@@ -463,22 +463,22 @@ describe('computeRegenerateShotsBatchHash', () => {
       sequenceId: 'seq1',
       imageModel: 'nano_banana_2',
       aspectRatio: '16:9',
-      frameSnapshots: [writeTimeSnapshot],
+      shotSnapshots: [writeTimeSnapshot],
     });
     expect(divergent).not.toBe(convergent);
   });
 
   it('detects tampering with characterRefs even when snapshotInputHash matches', async () => {
-    const frame = makeShot();
+    const shot = makeShot();
     const original = await buildRegenerateShotSnapshot({
-      frame,
+      shot,
       characters: [makeCharacter()],
       locations: NO_LOCATIONS,
       elements: NO_ELEMENTS,
       imageModel: 'nano_banana_2',
       aspectRatio: '16:9',
     });
-    // A tampered payload: same per-frame hash, but characterRefs swapped
+    // A tampered payload: same per-shot hash, but characterRefs swapped
     // for adversarial URLs. The batch hash must reject this.
     const tampered = {
       ...original,
@@ -494,22 +494,22 @@ describe('computeRegenerateShotsBatchHash', () => {
       sequenceId: 'seq1',
       imageModel: 'nano_banana_2',
       aspectRatio: '16:9',
-      frameSnapshots: [original],
+      shotSnapshots: [original],
     });
     const tamperedHash = await computeRegenerateShotsBatchHash({
       sequenceId: 'seq1',
       imageModel: 'nano_banana_2',
       aspectRatio: '16:9',
-      frameSnapshots: [tampered],
+      shotSnapshots: [tampered],
     });
     expect(tamperedHash).not.toBe(honestHash);
   });
 });
 
 describe('buildConvergentWrites', () => {
-  it('records the snapshot hash on the frame and resets variant divergence', () => {
+  it('records the snapshot hash on the shot and resets variant divergence', () => {
     const writes = buildConvergentWrites('hash-abc');
-    expect(writes.frame).toEqual({ thumbnailInputHash: 'hash-abc' });
+    expect(writes.shot).toEqual({ thumbnailInputHash: 'hash-abc' });
     expect(writes.variant).toEqual({
       inputHash: 'hash-abc',
       divergedAt: null,
@@ -518,14 +518,14 @@ describe('buildConvergentWrites', () => {
 });
 
 describe('buildDivergentWrites', () => {
-  it('reverts the speculative primary (frame + variant) and emits an alternate row payload', () => {
+  it('reverts the speculative primary (shot + variant) and emits an alternate row payload', () => {
     const at = new Date('2026-04-30T00:00:00Z');
     const writes = buildDivergentWrites('hash-xyz', at);
 
-    // Frame row: primary thumbnail fully cleared so the next reconciliation
+    // Shot row: primary thumbnail fully cleared so the next reconciliation
     // regenerates from current inputs and the user's live edits keep
     // ownership.
-    expect(writes.frame).toEqual({
+    expect(writes.shot).toEqual({
       thumbnailUrl: null,
       thumbnailPath: null,
       thumbnailStatus: 'pending',
@@ -561,4 +561,4 @@ describe('buildDivergentWrites', () => {
 // `validateSnapshotPayload` lived in the QStash `scoped-workflow` middleware
 // (removed in the Cloudflare Workflows cutover). Cloudflare workflows validate
 // the snapshot hash inline at `runImpl` start — see
-// `regenerate-frames-workflow.ts`.
+// `regenerate-shots-workflow.ts`.

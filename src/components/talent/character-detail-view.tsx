@@ -13,7 +13,7 @@ import {
 import {
   sequenceCharacterKeys,
   useAddCharacterToLibrary,
-  useFrameIdsForCharacter,
+  useShotIdsForCharacter,
   useRecastCharacter,
   useSequenceCharacters,
 } from '@/hooks/use-sequence-characters';
@@ -72,7 +72,7 @@ export const CharacterDetailView: React.FC<CharacterDetailViewProps> = ({
   } = useSequenceCharacters(sequenceId);
   const addToLibrary = useAddCharacterToLibrary();
   const recastCharacter = useRecastCharacter();
-  const { data: frameData } = useFrameIdsForCharacter(sequenceId, characterId);
+  const { data: shotData } = useShotIdsForCharacter(sequenceId, characterId);
 
   // Dialog states
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -380,7 +380,7 @@ export const CharacterDetailView: React.FC<CharacterDetailViewProps> = ({
               onConfirm={handleRecastConfirm}
               characterName={character.name}
               talentName={selectedTalent.name}
-              affectedFrameCount={frameData?.count ?? 0}
+              affectedShotCount={shotData?.count ?? 0}
               isLoading={recastCharacter.isPending}
             />
           )}

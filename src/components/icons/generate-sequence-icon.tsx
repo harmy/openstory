@@ -14,7 +14,7 @@ export const GenerateSequenceIcon: React.FC<GenerateSequenceIconProps> = ({
       xmlns="http://www.w3.org/2000/svg"
       className={className}
     >
-      {/* Layered frames with forward motion */}
+      {/* Layered shots with forward motion */}
       <rect
         x="1"
         y="4"

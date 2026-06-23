@@ -27,7 +27,7 @@ export type BatchGenerateMotionArgs = {
 
 type SceneListProps = {
   shots?: Shot[] | undefined;
-  selectedFrameId?: string;
+  selectedShotId?: string;
   aspectRatio: AspectRatio;
   onSelectShot: (shotId: string) => void;
   regeneratingImages: Set<string>;
@@ -36,7 +36,7 @@ type SceneListProps = {
   musicPromptsReady: boolean;
   /** Hide the batch motion button (e.g. while auto-generate motion is in flight). */
   hideBatchButton?: boolean;
-  /** Live divergent alternates for the current sequence (filtered per-frame). */
+  /** Live divergent alternates for the current sequence (filtered per-shot). */
   divergentVariants?: ShotVariant[];
   onCompareDivergent?: (variant: ShotVariant) => void;
   /** Initial motion model for the batch selector (from `sequence.videoModel`). */
@@ -50,20 +50,20 @@ type SceneListProps = {
    * a "No {model}" badge so the thumbnail (which still shows the primary image)
    * isn't mistaken for the pinned model's output.
    */
-  modelMissingFrameIds?: Set<string>;
+  modelMissingShotIds?: Set<string>;
   /** Name of the pinned image model, for the per-card "No {model}" badge. */
   modelMissingLabel?: string | null;
 };
 
-const isCompleted = (frame: Shot) => {
+const isCompleted = (shot: Shot) => {
   const isFullyGenerated =
-    frame.thumbnailStatus === 'completed' && frame.videoStatus === 'completed';
+    shot.thumbnailStatus === 'completed' && shot.videoStatus === 'completed';
   return isFullyGenerated;
 };
 
 const SceneListComponent: React.FC<SceneListProps> = ({
   shots,
-  selectedFrameId,
+  selectedShotId,
   aspectRatio,
   onSelectShot,
   regeneratingImages,
@@ -76,10 +76,10 @@ const SceneListComponent: React.FC<SceneListProps> = ({
   initialMotionModel,
   initialMusicModel,
   styleCategory,
-  modelMissingFrameIds,
+  modelMissingShotIds,
   modelMissingLabel,
 }) => {
-  const divergentByFrameId = useMemo(() => {
+  const divergentByShotId = useMemo(() => {
     const map = new Map<string, ShotVariant>();
     for (const v of divergentVariants ?? []) {
       // Image variant is what surfaces on the card. Other variant types
@@ -120,7 +120,7 @@ const SceneListComponent: React.FC<SceneListProps> = ({
 
   const totalShots = shots?.length ?? 0;
 
-  // Frames that need to be kicked off (not already generating)
+  // Shots that need to be kicked off (not already generating)
   const notStartedShots = useMemo(() => {
     if (!shots) return [];
     return shots.filter(
@@ -137,7 +137,7 @@ const SceneListComponent: React.FC<SceneListProps> = ({
     );
   }, [shots]);
 
-  // Check if all eligible frames have motion prompts ready
+  // Check if all eligible shots have motion prompts ready
   const motionPromptsReady = useMemo(() => {
     if (!notStartedShots.length) return true;
     return notStartedShots.every(
@@ -185,8 +185,8 @@ const SceneListComponent: React.FC<SceneListProps> = ({
           {(shots === undefined || shots.length === 0) &&
             [1, 2, 3].map((i) => (
               <SceneListItem
-                key={`frame-skeleton-${i}`}
-                frame={undefined}
+                key={`shot-skeleton-${i}`}
+                shot={undefined}
                 aspectRatio={aspectRatio}
                 isActive={false}
                 isCompleted={false}
@@ -194,18 +194,18 @@ const SceneListComponent: React.FC<SceneListProps> = ({
             ))}
 
           {shots &&
-            shots.map((frame) => {
-              const divergent = divergentByFrameId.get(frame.id);
+            shots.map((shot) => {
+              const divergent = divergentByShotId.get(shot.id);
               return (
                 <SceneListItem
-                  key={frame.id}
-                  frame={frame}
+                  key={shot.id}
+                  shot={shot}
                   aspectRatio={aspectRatio}
-                  isActive={frame.id === selectedFrameId}
-                  isCompleted={isCompleted(frame)}
-                  onSelect={() => onSelectShot(frame.id)}
-                  isRegeneratingImage={regeneratingImages.has(frame.id)}
-                  isRegeneratingMotion={regeneratingMotion.has(frame.id)}
+                  isActive={shot.id === selectedShotId}
+                  isCompleted={isCompleted(shot)}
+                  onSelect={() => onSelectShot(shot.id)}
+                  isRegeneratingImage={regeneratingImages.has(shot.id)}
+                  isRegeneratingMotion={regeneratingMotion.has(shot.id)}
                   divergentVariantId={divergent?.id}
                   onCompareDivergent={
                     divergent
@@ -214,7 +214,7 @@ const SceneListComponent: React.FC<SceneListProps> = ({
                   }
                   modelMissing={
                     !!modelMissingLabel &&
-                    (modelMissingFrameIds?.has(frame.id) ?? false)
+                    (modelMissingShotIds?.has(shot.id) ?? false)
                   }
                   modelMissingLabel={modelMissingLabel}
                 />
@@ -311,21 +311,21 @@ const SceneListComponent: React.FC<SceneListProps> = ({
 };
 
 // Custom equality check to prevent unnecessary re-renders during polling
-// Relies on TanStack Query's structural sharing to preserve frame object references
+// Relies on TanStack Query's structural sharing to preserve shot object references
 const areEqual = (
   prevProps: SceneListProps,
   nextProps: SceneListProps
 ): boolean => {
   // Compare primitive props
   if (
-    prevProps.selectedFrameId !== nextProps.selectedFrameId ||
+    prevProps.selectedShotId !== nextProps.selectedShotId ||
     prevProps.aspectRatio !== nextProps.aspectRatio ||
     prevProps.musicPromptsReady !== nextProps.musicPromptsReady ||
     prevProps.initialMotionModel !== nextProps.initialMotionModel ||
     prevProps.initialMusicModel !== nextProps.initialMusicModel ||
     prevProps.styleCategory !== nextProps.styleCategory ||
     prevProps.modelMissingLabel !== nextProps.modelMissingLabel ||
-    prevProps.modelMissingFrameIds !== nextProps.modelMissingFrameIds
+    prevProps.modelMissingShotIds !== nextProps.modelMissingShotIds
   ) {
     return false;
   }
@@ -353,7 +353,7 @@ const areEqual = (
     return false;
   }
 
-  // Compare frames array
+  // Compare shots array
   // TanStack Query's structural sharing should maintain the same array reference
   // if the content hasn't changed, so reference equality check is sufficient
   if (prevProps.shots === nextProps.shots) {
@@ -370,7 +370,7 @@ const areEqual = (
     return false;
   }
 
-  // Check if frame object references have changed (structural sharing preserves refs)
+  // Check if shot object references have changed (structural sharing preserves refs)
   for (let i = 0; i < prevProps.shots.length; i++) {
     if (prevProps.shots[i] !== nextProps.shots[i]) {
       return false;

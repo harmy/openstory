@@ -77,9 +77,7 @@ function isValidMusicStatus(
   );
 }
 
-function isValidFrameStatus(
-  status: unknown
-): status is Shot['thumbnailStatus'] {
+function isValidShotStatus(status: unknown): status is Shot['thumbnailStatus'] {
   return (
     status === 'pending' ||
     status === 'generating' ||
@@ -106,12 +104,12 @@ export function updateQueryCacheFromEvent(
       debouncedInvalidate(
         queryClient,
         shotKeys.list(sequenceId),
-        `frames:${sequenceId}`
+        `shots:${sequenceId}`
       );
       break;
 
     case 'generation.shot:updated': {
-      // Update frame metadata with prompts
+      // Update shot metadata with prompts
       // The metadata is validated by the realtime schema before reaching here
       const metadata = data.metadata;
       if (isSceneMetadata(metadata)) {
@@ -131,8 +129,8 @@ export function updateQueryCacheFromEvent(
       const status = data.status;
       const errorMessage = getOptionalString(data, 'error');
       // Variant-only (#547): an added (alternate) model finished — its output
-      // belongs in `frame_variants`, NOT on the live primary. Skip the
-      // primary frames-list write (which would flip the displayed thumbnail to
+      // belongs in `shot_variants`, NOT on the live primary. Skip the
+      // primary shots-list write (which would flip the displayed thumbnail to
       // the alternate) and only refresh the per-model variant/model-list
       // queries below so the new model appears in the dropdown.
       const variantOnly = data.variantOnly === true;
@@ -145,7 +143,7 @@ export function updateQueryCacheFromEvent(
                   thumbnailUrl: thumbnailUrl ?? f.thumbnailUrl,
                   previewThumbnailUrl:
                     previewThumbnailUrl ?? f.previewThumbnailUrl,
-                  thumbnailStatus: isValidFrameStatus(status)
+                  thumbnailStatus: isValidShotStatus(status)
                     ? status
                     : f.thumbnailStatus,
                   // Surface the failure reason live (#881): set on `failed`,
@@ -154,7 +152,7 @@ export function updateQueryCacheFromEvent(
                   thumbnailError:
                     status === 'failed'
                       ? (errorMessage ?? f.thumbnailError)
-                      : isValidFrameStatus(status)
+                      : isValidShotStatus(status)
                         ? null
                         : f.thumbnailError,
                 }
@@ -187,8 +185,8 @@ export function updateQueryCacheFromEvent(
       const status = data.status;
       const errorMessage = getOptionalString(data, 'error');
       // Variant-only (#547): an added (alternate) video model finished/failed —
-      // its output belongs in `frame_variants`, NOT the live primary. Skip the
-      // primary frames-list write (which would flip the displayed video to the
+      // its output belongs in `shot_variants`, NOT the live primary. Skip the
+      // primary shots-list write (which would flip the displayed video to the
       // alternate) and only refresh the per-model variant/model-list queries
       // below so the new model appears in the dropdown.
       const variantOnly = data.variantOnly === true;
@@ -199,14 +197,14 @@ export function updateQueryCacheFromEvent(
               ? {
                   ...f,
                   videoUrl: videoUrl ?? f.videoUrl,
-                  videoStatus: isValidFrameStatus(status)
+                  videoStatus: isValidShotStatus(status)
                     ? status
                     : f.videoStatus,
                   // Surface the failure reason live (#881) — see image handler.
                   videoError:
                     status === 'failed'
                       ? (errorMessage ?? f.videoError)
-                      : isValidFrameStatus(status)
+                      : isValidShotStatus(status)
                         ? null
                         : f.videoError,
                 }
@@ -243,7 +241,7 @@ export function updateQueryCacheFromEvent(
             ? {
                 ...f,
                 variantImageUrl: variantImageUrl ?? f.variantImageUrl,
-                variantImageStatus: isValidFrameStatus(status)
+                variantImageStatus: isValidShotStatus(status)
                   ? status
                   : f.variantImageStatus,
               }
@@ -283,7 +281,7 @@ export function updateQueryCacheFromEvent(
       }
       // Refresh per-model audio data so the header model dropdown and the
       // music-tab track switcher stay current (#546). Audio is sequence-level
-      // (sequence_music_variants), so these are separate queries from the frame
+      // (sequence_music_variants), so these are separate queries from the shot
       // image/video variant ones.
       if (status === 'completed' || status === 'failed') {
         debouncedInvalidate(
@@ -314,16 +312,16 @@ export function updateQueryCacheFromEvent(
     case 'generation.stale:detected': {
       // A divergent regeneration parked its result in a `*_variants` table.
       // This handler runs on the sequence channel, so it only fires for
-      // entityTypes routed there: `frame`, `character`, `location`. Per-entity
+      // entityTypes routed there: `shot`, `character`, `location`. Per-entity
       // channels handle their own invalidation (`useTalentSheetRealtime`,
       // `useLocationSheetRealtime`) for `talent` and `library-location`.
       const entityType = getString(data, 'entityType');
       const entityId = getString(data, 'entityId');
       if (!entityId) break;
       switch (entityType) {
-        case 'frame':
-          // Frame thumbnail/video divergence: refresh variants list, the frame
-          // itself (status reverts to pending), and per-frame staleness so the
+        case 'shot':
+          // Shot thumbnail/video divergence: refresh variants list, the shot
+          // itself (status reverts to pending), and per-shot staleness so the
           // indicator reappears even if the user just dismissed it.
           debouncedInvalidate(
             queryClient,
@@ -333,12 +331,12 @@ export function updateQueryCacheFromEvent(
           debouncedInvalidate(
             queryClient,
             shotKeys.list(sequenceId),
-            `frames:${sequenceId}`
+            `shots:${sequenceId}`
           );
           debouncedInvalidate(
             queryClient,
-            ['frame-staleness', entityId],
-            `frame-staleness:${entityId}`
+            ['shot-staleness', entityId],
+            `shot-staleness:${entityId}`
           );
           break;
 
@@ -422,7 +420,7 @@ export function updateQueryCacheFromEvent(
       break;
 
     case 'generation.preview:replaced':
-      // Preview frames replaced by AI-analyzed frames — refetch frame list
+      // Preview shots replaced by AI-analyzed shots — refetch shot list
       void queryClient.invalidateQueries({
         queryKey: shotKeys.list(sequenceId),
       });
@@ -443,7 +441,7 @@ export function updateQueryCacheFromEvent(
       break;
 
     case 'generation.error':
-      // Update frame status if shotId present
+      // Update shot status if shotId present
       if (shotId) {
         queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
           old?.map((f) =>
@@ -456,7 +454,7 @@ export function updateQueryCacheFromEvent(
       break;
 
     case 'generation.scene:updated': {
-      // Update frame metadata title in cache by matching sceneId
+      // Update shot metadata title in cache by matching sceneId
       const sceneId = getString(data, 'sceneId');
       const title = getString(data, 'title');
       if (sceneId && title) {
@@ -481,6 +479,6 @@ export function updateQueryCacheFromEvent(
     }
 
     // Phase events don't need cache updates (UI-only via reducer state)
-    // scene:new events don't need cache updates (analysis phase, no frames yet)
+    // scene:new events don't need cache updates (analysis phase, no shots yet)
   }
 }

@@ -58,16 +58,16 @@ export const getTeamLocationsLibraryFn = createServerFn({ method: 'GET' })
     });
   });
 
-const getFrameIdsForLocationInputSchema = z.object({
+const getShotIdsForLocationInputSchema = z.object({
   locationId: z.string().min(1),
 });
 
-export const getFrameIdsForLocationFn = createServerFn({ method: 'GET' })
+export const getShotIdsForLocationFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
-  .inputValidator(zodValidator(getFrameIdsForLocationInputSchema))
+  .inputValidator(zodValidator(getShotIdsForLocationInputSchema))
   .handler(async ({ context, data }) => {
     const shotIds =
-      await context.scopedDb.sequenceLocations.getFrameIdsForLocation(
+      await context.scopedDb.sequenceLocations.getShotIdsForLocation(
         context.sequence.id,
         data.locationId
       );
@@ -83,7 +83,7 @@ const recastLocationInputSchema = z.object({
 
 /**
  * Recast a location with a library location reference.
- * Triggers location reference regeneration and frame regeneration.
+ * Triggers location reference regeneration and shot regeneration.
  */
 export const recastLocationFn = createServerFn({ method: 'POST' })
   .middleware([authWithTeamMiddleware])
@@ -118,7 +118,7 @@ export const recastLocationFn = createServerFn({ method: 'POST' })
     );
 
     const affectedShotIds =
-      await context.scopedDb.sequenceLocations.getFrameIdsForLocation(
+      await context.scopedDb.sequenceLocations.getShotIdsForLocation(
         location.sequenceId,
         data.locationId
       );

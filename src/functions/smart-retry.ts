@@ -87,8 +87,8 @@ export async function executeSmartRetry(context: SmartRetryContext) {
   // so we never race a live pipeline.
   await assertNoActiveStoryboard(context.scopedDb, sequence.id);
 
-  const frames = await context.scopedDb.shots.listBySequence(sequence.id);
-  const summary = analyzeFailures(frames, sequence);
+  const shots = await context.scopedDb.shots.listBySequence(sequence.id);
+  const summary = analyzeFailures(shots, sequence);
 
   if (!summary.hasFailed) {
     throw new Error('No failures found to retry');
@@ -123,7 +123,7 @@ export async function executeSmartRetry(context: SmartRetryContext) {
       teamId,
       sequenceId: sequence.id,
       options: {
-        framesPerScene: 3,
+        shotsPerScene: 3,
         generateThumbnails: true,
         generateDescriptions: true,
         aiProvider: 'openrouter',
@@ -152,35 +152,33 @@ export async function executeSmartRetry(context: SmartRetryContext) {
   );
 
   // Collect failed items and estimate costs
-  const failedImageFrames = frames.filter(
-    (f) => f.thumbnailStatus === 'failed'
-  );
-  const failedMotionFrames = frames.filter(
+  const failedImageShots = shots.filter((f) => f.thumbnailStatus === 'failed');
+  const failedMotionShots = shots.filter(
     (f) => f.videoStatus === 'failed' && f.thumbnailUrl && f.motionPrompt
   );
   const hasMusicFailure =
     sequence.musicStatus === 'failed' && sequence.musicPrompt;
 
   // Calculate total cost
-  if (failedImageFrames.length > 0) {
+  if (failedImageShots.length > 0) {
     totalCost = addMicros(
       totalCost,
       estimateImageCost(
         imageModel,
         sequence.aspectRatio,
-        failedImageFrames.length
+        failedImageShots.length
       )
     );
   }
 
-  if (failedMotionFrames.length > 0) {
+  if (failedMotionShots.length > 0) {
     const { snapDuration } = await import('@/lib/motion/motion-generation');
     const duration = snapDuration(undefined, videoModel);
     totalCost = addMicros(
       totalCost,
       multiplyMicros(
         estimateVideoCost(videoModel, duration),
-        failedMotionFrames.length
+        failedMotionShots.length
       )
     );
   }
@@ -194,23 +192,23 @@ export async function executeSmartRetry(context: SmartRetryContext) {
   }
 
   // 1. Retry failed images
-  if (failedImageFrames.length > 0) {
+  if (failedImageShots.length > 0) {
     const allCharacters = await context.scopedDb.characters.listWithSheets(
       sequence.id
     );
 
-    // Count what we actually trigger — frames skipped below must not be
+    // Count what we actually trigger — shots skipped below must not be
     // reported as retried (and must not clear the failed flag on their own).
     let triggeredImages = 0;
-    for (const frame of failedImageFrames) {
+    for (const shot of failedImageShots) {
       const prompt =
-        frame.imagePrompt ||
-        frame.metadata?.prompts?.visual?.fullPrompt ||
-        frame.description;
+        shot.imagePrompt ||
+        shot.metadata?.prompts?.visual?.fullPrompt ||
+        shot.description;
 
       if (!prompt) continue;
 
-      const characterTags = frame.metadata?.continuity?.characterTags ?? [];
+      const characterTags = shot.metadata?.continuity?.characterTags ?? [];
       const referenceImages = getSceneCharacterReferenceImages(
         allCharacters,
         characterTags
@@ -223,7 +221,7 @@ export async function executeSmartRetry(context: SmartRetryContext) {
         model: imageModel,
         imageSize: aspectRatioToImageSize(sequence.aspectRatio),
         numImages: 1,
-        shotId: frame.id,
+        shotId: shot.id,
         sequenceId: sequence.id,
         referenceImages,
       };
@@ -238,21 +236,21 @@ export async function executeSmartRetry(context: SmartRetryContext) {
   }
 
   // 2. Retry failed motion
-  if (failedMotionFrames.length > 0) {
+  if (failedMotionShots.length > 0) {
     let triggeredMotion = 0;
-    for (const frame of failedMotionFrames) {
-      if (!frame.thumbnailUrl) continue;
+    for (const shot of failedMotionShots) {
+      if (!shot.thumbnailUrl) continue;
 
       const workflowInput: MotionWorkflowInput = {
         userId: user.id,
         teamId,
-        shotId: frame.id,
+        shotId: shot.id,
         sequenceId: sequence.id,
-        imageUrl: frame.thumbnailUrl,
-        prompt: resolveMotionPrompt(frame, videoModel),
+        imageUrl: shot.thumbnailUrl,
+        prompt: resolveMotionPrompt(shot, videoModel),
         model: videoModel,
         aspectRatio: sequence.aspectRatio,
-        duration: frame.durationMs ? frame.durationMs / 1000 : undefined,
+        duration: shot.durationMs ? shot.durationMs / 1000 : undefined,
       };
 
       await triggerWorkflow('/motion', workflowInput, {
@@ -268,11 +266,11 @@ export async function executeSmartRetry(context: SmartRetryContext) {
 
   // 3. Retry failed music
   if (hasMusicFailure && sequence.musicPrompt) {
-    const allFrames = await context.scopedDb.shots.listBySequence(sequence.id);
-    const totalDuration = allFrames.reduce((sum, frame) => {
-      const seconds = frame.durationMs
-        ? frame.durationMs / 1000
-        : (frame.metadata?.metadata?.durationSeconds ?? 10);
+    const allShots = await context.scopedDb.shots.listBySequence(sequence.id);
+    const totalDuration = allShots.reduce((sum, shot) => {
+      const seconds = shot.durationMs
+        ? shot.durationMs / 1000
+        : (shot.metadata?.metadata?.durationSeconds ?? 10);
       return sum + seconds;
     }, 0);
 
@@ -303,12 +301,12 @@ export async function executeSmartRetry(context: SmartRetryContext) {
     sequence.musicStatus !== 'completed' &&
     sequence.status === 'failed'
   ) {
-    const allFrames = await context.scopedDb.shots.listBySequence(sequence.id);
-    const scenes = buildSceneSummaries(allFrames);
-    const totalDuration = allFrames.reduce((sum, frame) => {
-      const seconds = frame.durationMs
-        ? frame.durationMs / 1000
-        : (frame.metadata?.metadata?.durationSeconds ?? 10);
+    const allShots = await context.scopedDb.shots.listBySequence(sequence.id);
+    const scenes = buildSceneSummaries(allShots);
+    const totalDuration = allShots.reduce((sum, shot) => {
+      const seconds = shot.durationMs
+        ? shot.durationMs / 1000
+        : (shot.metadata?.metadata?.durationSeconds ?? 10);
       return sum + seconds;
     }, 0);
 
@@ -329,7 +327,7 @@ export async function executeSmartRetry(context: SmartRetryContext) {
     retried.push('music prompt');
   }
 
-  // Nothing matched a retryable shape (e.g. every failed frame is missing
+  // Nothing matched a retryable shape (e.g. every failed shot is missing
   // the prompt needed to regenerate it). Throw instead of falling through
   // to the status reset — silently flipping the sequence to 'completed'
   // with zero work in flight is exactly the lying-status class #839 is
@@ -342,8 +340,8 @@ export async function executeSmartRetry(context: SmartRetryContext) {
 
   // Clear the sequence-level 'failed' flag now that retries are in flight.
   // 'completed' (not 'processing') is deliberate: partial regeneration
-  // tracks progress at the item level (frame thumbnail/video statuses,
-  // sequence musicStatus) — same as regenerating a single frame from a
+  // tracks progress at the item level (shot thumbnail/video statuses,
+  // sequence musicStatus) — same as regenerating a single shot from a
   // completed sequence — and a 'processing' row would be falsely
   // reconciled against the previous terminal workflowRunId by the cron
   // sweep's sequences.status pass. If a retry fails again, the item-level

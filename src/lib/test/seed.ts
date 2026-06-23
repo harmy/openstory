@@ -48,7 +48,7 @@ export type CreatedTestSequence = {
   title: string;
 };
 
-export type CreatedTestFrame = {
+export type CreatedTestShot = {
   id: string;
   sequenceId: string;
   orderIndex: number;
@@ -190,7 +190,7 @@ export async function createTestStyle(
 }
 
 /**
- * Create a basic completed test sequence (no frames).
+ * Create a basic completed test sequence (no shots).
  */
 export async function createTestSequence(
   teamId: string,
@@ -217,9 +217,9 @@ export async function createTestSequence(
 }
 
 /**
- * Create a single frame for a sequence (useful for variant tests).
+ * Create a single shot for a sequence (useful for variant tests).
  */
-export async function createTestFrame(
+export async function createTestShot(
   sequenceId: string,
   orderIndex: number,
   options: {
@@ -227,7 +227,7 @@ export async function createTestFrame(
     variantImageUrl?: string | null;
     variantImageStatus?: 'pending' | 'generating' | 'completed' | 'failed';
   } = {}
-): Promise<CreatedTestFrame> {
+): Promise<CreatedTestShot> {
   const db = getDb();
   const now = new Date();
   const shotId = generateId();
@@ -633,9 +633,9 @@ export async function getSystemTalentByName(name: string): Promise<{
 }
 
 /**
- * Get all frames for a sequence (for polling workflow progress).
+ * Get all shots for a sequence (for polling workflow progress).
  */
-export async function getTestSequenceFrames(sequenceId: string): Promise<
+export async function getTestSequenceShots(sequenceId: string): Promise<
   Array<{
     id: string;
     orderIndex: number;
@@ -665,9 +665,9 @@ export async function getTestSequenceFrames(sequenceId: string): Promise<
 }
 
 /**
- * Get a frame by ID (for verify/poll assertions).
+ * Get a shot by ID (for verify/poll assertions).
  */
-export async function getTestFrame(shotId: string): Promise<{
+export async function getTestShot(shotId: string): Promise<{
   id: string;
   thumbnailUrl: string | null;
   variantImageStatus: string | null;

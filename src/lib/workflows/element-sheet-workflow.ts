@@ -4,7 +4,7 @@
  * element (#835).
  *
  * Mirrors the character treatment: characters detected in a script get an
- * auto-generated reference sheet that anchors their look across frames;
+ * auto-generated reference sheet that anchors their look across shots;
  * this workflow gives detected elements (the element bible already models
  * them) the same anchor. Each entry is generated from its bible description,
  * uploaded to the ELEMENTS bucket, and ingested as a `sequence_elements` row
@@ -16,7 +16,7 @@
  * All entries run concurrently and every pipeline runs to completion before
  * failures are surfaced: if any entry fails after its durable steps exhaust
  * their retries, the whole run fails (and with it the parent analysis) rather
- * than silently rendering the affected frames unanchored. Entries that
+ * than silently rendering the affected shots unanchored. Entries that
  * completed are already persisted, so a retried run skips them via the
  * idempotency guard.
  */
@@ -71,7 +71,7 @@ export function findMissingElementEntries(
 /**
  * Reduce the per-entry settled outcomes to the generated elements, failing
  * loudly when any entry failed: a dropped reference would silently render the
- * affected frames unanchored, so surface the failure instead of degrading.
+ * affected shots unanchored, so surface the failure instead of degrading.
  */
 export function collectElementResults(
   settled: Array<PromiseSettledResult<SequenceElementMinimal>>,
@@ -156,8 +156,8 @@ export class ElementSheetWorkflow extends OpenStoryWorkflowEntrypoint<ElementShe
         const generationParams: ImageGenerationParams = {
           model: imageModel,
           prompt: buildElementSheetPrompt(entry, styleConfig),
-          // Square reference: the object fills the frame regardless of the
-          // sequence aspect ratio; placement happens at frame-generation time.
+          // Square reference: the object fills the shot regardless of the
+          // sequence aspect ratio; placement happens at shot-generation time.
           imageSize: 'square_hd' as const,
           numImages: 1,
           traceName: 'element-sheet-image',

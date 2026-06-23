@@ -12,7 +12,7 @@ import type {
 } from '@/lib/db/schema';
 import { shots, sequenceElements, sequences } from '@/lib/db/schema';
 import {
-  buildFrameRenameDeltas,
+  buildShotRenameDeltas,
   replaceTokenInText,
 } from '@/lib/sequence-elements/cascade-rename';
 import { matchElementsToScene } from '@/lib/workflows/scene-matching';
@@ -202,17 +202,17 @@ export function createSequenceElementsMethods(db: Database) {
 
     /**
      * Rename an element's token and rewrite every reference to the old token
-     * across the sequence: `sequences.script`, per-frame `metadata` (continuity
+     * across the sequence: `sequences.script`, per-shot `metadata` (continuity
      * tags, originalScript extract, prompt strings) and the user-edit
-     * `imagePrompt`/`motionPrompt` overrides on `frames`.
+     * `imagePrompt`/`motionPrompt` overrides on `shots`.
      *
-     * All writes (element row, script, frame deltas) run in a single
+     * All writes (element row, script, shot deltas) run in a single
      * `db.batch()` — one transaction — so a mid-cascade failure can't leave
      * mixed token references (and a workflow-step retry then renaming the
      * remainder to `TOKEN_2`, splitting element/script/frames).
      *
      * Returns the affected counts so callers can surface a meaningful toast
-     * ("Renamed LOGO → BRAND across 5 frames + script"). The caller is
+     * ("Renamed LOGO → BRAND across 5 shots + script"). The caller is
      * expected to have already validated uniqueness of `newToken` within the
      * sequence — this method does not check collisions.
      */
@@ -223,14 +223,14 @@ export function createSequenceElementsMethods(db: Database) {
       newToken: string;
     }): Promise<{
       element: SequenceElement;
-      framesUpdated: number;
+      shotsUpdated: number;
       scriptUpdated: boolean;
     }> => {
       const { sequenceId, elementId, oldToken, newToken } = args;
 
       if (oldToken === newToken) {
         const element = await update(elementId, { token: newToken });
-        return { element, framesUpdated: 0, scriptUpdated: false };
+        return { element, shotsUpdated: 0, scriptUpdated: false };
       }
 
       const now = new Date();
@@ -266,12 +266,12 @@ export function createSequenceElementsMethods(db: Database) {
                 .where(eq(sequences.id, sequenceId)),
             ];
 
-      const allFrames = (await db
+      const allShots = (await db
         .select()
         .from(shots)
         .where(eq(shots.sequenceId, sequenceId))) as Shot[];
-      const deltas = buildFrameRenameDeltas(allFrames, oldToken, newToken);
-      const frameStatements = deltas.map((delta) => {
+      const deltas = buildShotRenameDeltas(allShots, oldToken, newToken);
+      const shotStatements = deltas.map((delta) => {
         const set: Record<string, unknown> = { updatedAt: now };
         if (delta.metadata !== undefined) set.metadata = delta.metadata;
         if (delta.imagePrompt !== undefined)
@@ -284,14 +284,14 @@ export function createSequenceElementsMethods(db: Database) {
       const [elementRows] = await db.batch([
         elementUpdate,
         ...scriptStatements,
-        ...frameStatements,
+        ...shotStatements,
       ]);
       const element = elementRows[0];
       if (!element) {
         throw new Error(`SequenceElement ${elementId} not found`);
       }
 
-      return { element, framesUpdated: deltas.length, scriptUpdated };
+      return { element, shotsUpdated: deltas.length, scriptUpdated };
     },
 
     delete: async (id: string): Promise<boolean> => {
@@ -302,7 +302,7 @@ export function createSequenceElementsMethods(db: Database) {
       return (result.rowsAffected ?? 0) > 0;
     },
 
-    getFrameIdsForElement: async (
+    getShotIdsForElement: async (
       sequenceId: string,
       elementId: string
     ): Promise<string[]> => {
@@ -316,15 +316,15 @@ export function createSequenceElementsMethods(db: Database) {
         return [];
       }
 
-      const allFrames = await db
+      const allShots = await db
         .select()
         .from(shots)
         .where(eq(shots.sequenceId, sequenceId));
 
-      return (allFrames as Shot[])
-        .filter((frame) => {
-          const elementTags = frame.metadata?.continuity?.elementTags ?? [];
-          const sceneScript = frame.metadata?.originalScript?.extract ?? '';
+      return (allShots as Shot[])
+        .filter((shot) => {
+          const elementTags = shot.metadata?.continuity?.elementTags ?? [];
+          const sceneScript = shot.metadata?.originalScript?.extract ?? '';
           return (
             matchElementsToScene([element], elementTags, sceneScript).length > 0
           );
@@ -333,45 +333,45 @@ export function createSequenceElementsMethods(db: Database) {
     },
 
     /**
-     * Frame counts for *all* elements in a sequence, computed in a single
-     * scan over frames + elements. The elements grid renders N cards, each
-     * of which previously called `getFrameIdsForElement` — an N+1 over the
-     * full frame set. Returns an `elementId → count` map; elements with zero
-     * matches are pre-seeded so the grid can render `Used in 0 frames`
+     * Shot counts for *all* elements in a sequence, computed in a single
+     * scan over shots + elements. The elements grid renders N cards, each
+     * of which previously called `getShotIdsForElement` — an N+1 over the
+     * full shot set. Returns an `elementId → count` map; elements with zero
+     * matches are pre-seeded so the grid can render `Used in 0 shots`
      * instead of `undefined`.
      */
-    getFrameCountsByElement: async (
+    getShotCountsByElement: async (
       sequenceId: string
-    ): Promise<Record<string, { frameCount: number; videoCount: number }>> => {
+    ): Promise<Record<string, { shotCount: number; videoCount: number }>> => {
       const allElements = await db
         .select()
         .from(sequenceElements)
         .where(eq(sequenceElements.sequenceId, sequenceId));
-      const counts: Record<string, { frameCount: number; videoCount: number }> =
+      const counts: Record<string, { shotCount: number; videoCount: number }> =
         {};
       for (const el of allElements) {
-        counts[el.id] = { frameCount: 0, videoCount: 0 };
+        counts[el.id] = { shotCount: 0, videoCount: 0 };
       }
       if (allElements.length === 0) return counts;
 
-      const allFrames = await db
+      const allShots = await db
         .select()
         .from(shots)
         .where(eq(shots.sequenceId, sequenceId));
 
-      for (const frame of allFrames as Shot[]) {
-        const elementTags = frame.metadata?.continuity?.elementTags ?? [];
-        const sceneScript = frame.metadata?.originalScript.extract ?? '';
+      for (const shot of allShots as Shot[]) {
+        const elementTags = shot.metadata?.continuity?.elementTags ?? [];
+        const sceneScript = shot.metadata?.originalScript.extract ?? '';
         const matched = matchElementsToScene(
           allElements,
           elementTags,
           sceneScript
         );
-        const hasVideo = !!frame.videoUrl;
+        const hasVideo = !!shot.videoUrl;
         for (const el of matched) {
           const entry = counts[el.id];
           if (!entry) continue;
-          entry.frameCount += 1;
+          entry.shotCount += 1;
           if (hasVideo) entry.videoCount += 1;
         }
       }

@@ -22,7 +22,7 @@ import {
   matchLocationsToScene,
 } from '@/lib/workflows/scene-matching';
 
-export type FramePromptContext = {
+export type ShotPromptContext = {
   scene: Scene;
   styleConfig: StyleConfig;
   characterBible: CharacterBibleEntry[];
@@ -31,7 +31,7 @@ export type FramePromptContext = {
   aspectRatio: string;
   analysisModel: string;
   /**
-   * URL of the rendered starting-frame image (`frames.thumbnailUrl`), when
+   * URL of the rendered starting-shot image (`shots.thumbnailUrl`), when
    * known. Only the motion-prompt hash consumes it (#929); pass it at sites
    * that stamp or verify `motionPromptInputHash` so a re-rendered image
    * re-stales the motion prompt. Left undefined for visual-only sites.
@@ -39,28 +39,28 @@ export type FramePromptContext = {
   startingFrameImageUrl?: string | null;
 };
 
-export type FramePromptContextSequence = {
+export type ShotPromptContextSequence = {
   id: string;
   styleId: string | null;
   aspectRatio: string;
   analysisModel: string;
 };
 
-export async function loadFramePromptContext(args: {
+export async function loadShotPromptContext(args: {
   scopedDb: Pick<
     ScopedDb,
     'characters' | 'sequenceLocations' | 'sequenceElements' | 'styles'
   >;
-  sequence: FramePromptContextSequence;
+  sequence: ShotPromptContextSequence;
   scene: Scene;
   /** Override analysis model — used when a stored variant pins one. */
   analysisModelOverride?: string | null;
   /**
-   * URL of the frame's rendered starting image, when this context will feed a
-   * motion-prompt hash (#929). Callers pass `frame.thumbnailUrl`.
+   * URL of the shot's rendered starting image, when this context will feed a
+   * motion-prompt hash (#929). Callers pass `shot.thumbnailUrl`.
    */
   startingFrameImageUrl?: string | null;
-}): Promise<FramePromptContext> {
+}): Promise<ShotPromptContext> {
   const {
     scopedDb,
     sequence,
@@ -104,7 +104,7 @@ export async function loadFramePromptContext(args: {
 }
 
 /**
- * Same as `loadFramePromptContext` but narrows the character / location /
+ * Same as `loadShotPromptContext` but narrows the character / location /
  * element bibles down to the entries this scene actually references — i.e. the
  * inputs that would actually change the regenerated prompt. Used when stamping
  * or comparing `visualPromptInputHash` / `motionPromptInputHash` so unrelated
@@ -114,29 +114,29 @@ export async function loadFramePromptContext(args: {
  * generation time (`scene-matching.ts`), so if the hash flips, regeneration
  * really would see different inputs.
  */
-export async function loadNarrowFramePromptContext(args: {
+export async function loadNarrowShotPromptContext(args: {
   scopedDb: Pick<
     ScopedDb,
     'characters' | 'sequenceLocations' | 'sequenceElements' | 'styles'
   >;
-  sequence: FramePromptContextSequence;
+  sequence: ShotPromptContextSequence;
   scene: Scene;
   analysisModelOverride?: string | null;
   startingFrameImageUrl?: string | null;
-}): Promise<FramePromptContext> {
-  const full = await loadFramePromptContext(args);
-  return narrowFramePromptContext(full);
+}): Promise<ShotPromptContext> {
+  const full = await loadShotPromptContext(args);
+  return narrowShotPromptContext(full);
 }
 
 /**
- * Filter an already-built `FramePromptContext` down to the entities this
+ * Filter an already-built `ShotPromptContext` down to the entities this
  * scene's `continuity` references. Pure function — exposed so workflows that
  * already received full bibles as inputs (visual/motion prompt scene workflows)
  * can narrow without re-fetching from the DB.
  */
-export function narrowFramePromptContext(
-  ctx: FramePromptContext
-): FramePromptContext {
+export function narrowShotPromptContext(
+  ctx: ShotPromptContext
+): ShotPromptContext {
   const { scene } = ctx;
   const continuity = scene.continuity;
   if (!continuity) return ctx;

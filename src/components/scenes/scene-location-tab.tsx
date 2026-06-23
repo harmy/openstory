@@ -1,6 +1,6 @@
 /**
  * Scene Location Tab
- * Displays the location for the current frame with reference image and details
+ * Displays the location for the current shot with reference image and details
  */
 
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,12 +11,12 @@ import { Link } from '@tanstack/react-router';
 import { ExternalLink, MapPin } from 'lucide-react';
 
 type SceneLocationTabProps = {
-  frame?: Shot;
+  shot?: Shot;
   sequenceId: string;
 };
 
 /**
- * Match a location to a frame's environmentTag
+ * Match a location to a shot's environmentTag
  * Replicates logic from sequence-locations.ts locationMatchesTag
  */
 function locationMatchesTag(
@@ -42,14 +42,14 @@ function locationMatchesTag(
 }
 
 /**
- * Match location to frame's environmentTag or metadata.location
+ * Match location to shot's environmentTag or metadata.location
  */
-function matchLocationToFrame(
+function matchLocationToShot(
   locations: SequenceLocation[],
-  frame: Shot
+  shot: Shot
 ): SequenceLocation | null {
-  const environmentTag = frame.metadata?.continuity?.environmentTag ?? '';
-  const sceneLocation = frame.metadata?.metadata?.location ?? '';
+  const environmentTag = shot.metadata?.continuity?.environmentTag ?? '';
+  const sceneLocation = shot.metadata?.metadata?.location ?? '';
 
   if (!environmentTag && !sceneLocation) return null;
 
@@ -82,14 +82,14 @@ const DetailRow: React.FC<DetailRowProps> = ({ label, value }) => {
 };
 
 export const SceneLocationTab: React.FC<SceneLocationTabProps> = ({
-  frame,
+  shot,
   sequenceId,
 }) => {
   const { data: locations, isLoading } = useSequenceLocations(sequenceId);
 
-  // Match location to this frame
-  const frameLocation =
-    frame && locations ? matchLocationToFrame(locations, frame) : null;
+  // Match location to this shot
+  const shotLocation =
+    shot && locations ? matchLocationToShot(locations, shot) : null;
 
   // Loading state
   if (isLoading) {
@@ -106,9 +106,9 @@ export const SceneLocationTab: React.FC<SceneLocationTabProps> = ({
   }
 
   // Empty state - no location matched
-  if (!frameLocation) {
-    const environmentTag = frame?.metadata?.continuity?.environmentTag;
-    const sceneLocation = frame?.metadata?.metadata?.location;
+  if (!shotLocation) {
+    const environmentTag = shot?.metadata?.continuity?.environmentTag;
+    const sceneLocation = shot?.metadata?.metadata?.location;
 
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -133,13 +133,13 @@ export const SceneLocationTab: React.FC<SceneLocationTabProps> = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
           <span>Scene Location</span>
-          {frameLocation.type && (
+          {shotLocation.type && (
             <>
               <span className="text-muted-foreground/50">·</span>
               <span>
-                {frameLocation.type === 'interior'
+                {shotLocation.type === 'interior'
                   ? 'Interior'
-                  : frameLocation.type === 'exterior'
+                  : shotLocation.type === 'exterior'
                     ? 'Exterior'
                     : 'Int/Ext'}
               </span>
@@ -148,7 +148,7 @@ export const SceneLocationTab: React.FC<SceneLocationTabProps> = ({
         </div>
         <Link
           to="/sequences/$id/locations/$locationId"
-          params={{ id: sequenceId, locationId: frameLocation.id }}
+          params={{ id: sequenceId, locationId: shotLocation.id }}
           className="flex items-center gap-1 text-xs text-primary hover:underline"
         >
           View Details
@@ -158,17 +158,17 @@ export const SceneLocationTab: React.FC<SceneLocationTabProps> = ({
 
       {/* Reference image */}
       <div className="relative aspect-video overflow-hidden rounded-lg bg-muted">
-        {frameLocation.referenceImageUrl ? (
+        {shotLocation.referenceImageUrl ? (
           <img
-            src={frameLocation.referenceImageUrl}
-            alt={frameLocation.name}
+            src={shotLocation.referenceImageUrl}
+            alt={shotLocation.name}
             className="h-full w-full object-cover"
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2">
             <MapPin className="h-12 w-12 text-muted-foreground/20" />
             <p className="text-xs text-muted-foreground">
-              {frameLocation.referenceStatus === 'generating'
+              {shotLocation.referenceStatus === 'generating'
                 ? 'Generating reference…'
                 : 'No reference image'}
             </p>
@@ -176,11 +176,11 @@ export const SceneLocationTab: React.FC<SceneLocationTabProps> = ({
         )}
 
         {/* Type badge overlay */}
-        {frameLocation.type && frameLocation.referenceImageUrl && (
+        {shotLocation.type && shotLocation.referenceImageUrl && (
           <div className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium text-white">
-            {frameLocation.type === 'interior'
+            {shotLocation.type === 'interior'
               ? 'INT'
-              : frameLocation.type === 'exterior'
+              : shotLocation.type === 'exterior'
                 ? 'EXT'
                 : 'INT/EXT'}
           </div>
@@ -188,30 +188,30 @@ export const SceneLocationTab: React.FC<SceneLocationTabProps> = ({
       </div>
 
       {/* Location name */}
-      <h3 className="text-sm font-medium">{frameLocation.name}</h3>
+      <h3 className="text-sm font-medium">{shotLocation.name}</h3>
 
       {/* Location details */}
       <dl className="space-y-3">
-        <DetailRow label="Description" value={frameLocation.description} />
+        <DetailRow label="Description" value={shotLocation.description} />
         <div className="grid grid-cols-2 gap-3">
-          <DetailRow label="Time of Day" value={frameLocation.timeOfDay} />
+          <DetailRow label="Time of Day" value={shotLocation.timeOfDay} />
           <DetailRow
             label="Architectural Style"
-            value={frameLocation.architecturalStyle}
+            value={shotLocation.architecturalStyle}
           />
         </div>
-        <DetailRow label="Key Features" value={frameLocation.keyFeatures} />
+        <DetailRow label="Key Features" value={shotLocation.keyFeatures} />
         <div className="grid grid-cols-2 gap-3">
-          <DetailRow label="Color Palette" value={frameLocation.colorPalette} />
-          <DetailRow label="Lighting" value={frameLocation.lightingSetup} />
+          <DetailRow label="Color Palette" value={shotLocation.colorPalette} />
+          <DetailRow label="Lighting" value={shotLocation.lightingSetup} />
         </div>
-        <DetailRow label="Ambiance" value={frameLocation.ambiance} />
+        <DetailRow label="Ambiance" value={shotLocation.ambiance} />
 
         {/* Consistency tag */}
-        {frameLocation.consistencyTag && (
+        {shotLocation.consistencyTag && (
           <div className="pt-2">
             <span className="rounded bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
-              {frameLocation.consistencyTag}
+              {shotLocation.consistencyTag}
             </span>
           </div>
         )}

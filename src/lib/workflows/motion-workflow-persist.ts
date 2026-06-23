@@ -2,9 +2,9 @@
  * Dual-write builders + persist orchestration for `MotionWorkflow` (#545).
  *
  * Motion generation writes each model's output in two places: the legacy
- * `frames.video*` columns (a last-write-wins default across models, kept so
+ * `shots.video*` columns (a last-write-wins default across models, kept so
  * single-model consumers and the "Mixed" player keep working) AND a per-model
- * `frame_variants` row (`variantType='video'`) that the scenes-view video-model
+ * `shot_variants` row (`variantType='video'`) that the scenes-view video-model
  * switcher resolves against.
  *
  * Pulled out of the workflow body — mirroring `image-workflow-snapshot.ts`'s
@@ -34,7 +34,7 @@ export type PersistMotionScopedDb = {
     ) => Promise<{ id: string } | undefined>;
   };
   shotVariants: {
-    updateByFrameAndModel: (
+    updateByShotAndModel: (
       shotId: string,
       type: VariantType,
       model: string,
@@ -64,7 +64,7 @@ export type MotionVideoProgressPayload =
       status: 'failed';
       model: string;
       variantOnly?: boolean;
-      // Failure reason so the cache updater writes `frames.videoError` live
+      // Failure reason so the cache updater writes `shots.videoError` live
       // (else the FailureSummaryBanner shows "Unknown error" until refetch). (#881)
       error?: string;
     };
@@ -75,20 +75,20 @@ export type MotionEmit = (
 ) => Promise<void>;
 
 type MotionWrites = {
-  frame: Partial<NewShot>;
+  shot: Partial<NewShot>;
   variant: Partial<NewShotVariant>;
 };
 
 /**
  * `set-generating-status` writes: stamp the legacy columns with the model and
- * run id, and open this model's `frame_variants` row in `generating`.
+ * run id, and open this model's `shot_variants` row in `generating`.
  */
 export function buildMotionGeneratingWrites(opts: {
   model: string;
   workflowRunId: string;
 }): MotionWrites {
   return {
-    frame: {
+    shot: {
       videoStatus: 'generating',
       videoWorkflowRunId: opts.workflowRunId,
       motionModel: opts.model,
@@ -110,7 +110,7 @@ export function buildMotionCompletedWrites(opts: {
 }): MotionWrites {
   const { upload, durationMs, promptHash, generatedAt } = opts;
   return {
-    frame: {
+    shot: {
       videoPath: upload.path,
       videoUrl: upload.url,
       durationMs,
@@ -133,7 +133,7 @@ export function buildMotionCompletedWrites(opts: {
 /** Failed writes: record the error on both the legacy columns and the variant. */
 export function buildMotionFailedWrites(opts: { error: string }): MotionWrites {
   return {
-    frame: {
+    shot: {
       videoStatus: 'failed',
       videoError: opts.error,
     },
@@ -146,12 +146,12 @@ export function buildMotionFailedWrites(opts: { error: string }): MotionWrites {
 
 export type PersistMotionOutcome =
   | { status: 'completed'; videoUrl: string }
-  | { status: 'frame-deleted' };
+  | { status: 'shot-deleted' };
 
 /**
- * Completed dual-write. Stamps the legacy `frames.video*` columns first; if the
- * frame was deleted mid-flight (`update` returns undefined) it short-circuits
- * without touching `frame_variants` or emitting — mirroring
+ * Completed dual-write. Stamps the legacy `shots.video*` columns first; if the
+ * shot was deleted mid-flight (`update` returns undefined) it short-circuits
+ * without touching `shot_variants` or emitting — mirroring
  * `persistImageResult`. Otherwise updates this model's existing (generating)
  * variant row to `completed` and emits progress.
  *
@@ -166,8 +166,8 @@ export async function persistMotionCompletion(opts: {
   promptHash: string | null;
   emit: MotionEmit;
   /**
-   * Variant-only (#547): write only this model's `frame_variants` row, never
-   * the legacy `frames.video*` columns — adding a video model leaves the
+   * Variant-only (#547): write only this model's `shot_variants` row, never
+   * the legacy `shots.video*` columns — adding a video model leaves the
    * primary video intact.
    */
   variantOnly?: boolean;
@@ -193,15 +193,15 @@ export async function persistMotionCompletion(opts: {
   });
 
   if (variantOnly) {
-    // Only this model's variant row; the primary `frames.video*` are untouched.
-    // A null update means the frame (and its cascade-deleted variant) is gone.
-    const updated = await scopedDb.shotVariants.updateByFrameAndModel(
+    // Only this model's variant row; the primary `shots.video*` are untouched.
+    // A null update means the shot (and its cascade-deleted variant) is gone.
+    const updated = await scopedDb.shotVariants.updateByShotAndModel(
       shotId,
       'video',
       model,
       writes.variant
     );
-    if (!updated) return { status: 'frame-deleted' };
+    if (!updated) return { status: 'shot-deleted' };
 
     await emit('generation.video:progress', {
       shotId,
@@ -215,12 +215,12 @@ export async function persistMotionCompletion(opts: {
     return { status: 'completed', videoUrl: upload.url };
   }
 
-  const updatedFrame = await scopedDb.shots.update(shotId, writes.frame, {
+  const updatedShot = await scopedDb.shots.update(shotId, writes.shot, {
     throwOnMissing: false,
   });
-  if (!updatedFrame) return { status: 'frame-deleted' };
+  if (!updatedShot) return { status: 'shot-deleted' };
 
-  await scopedDb.shotVariants.updateByFrameAndModel(
+  await scopedDb.shotVariants.updateByShotAndModel(
     shotId,
     'video',
     model,
@@ -241,7 +241,7 @@ export async function persistMotionCompletion(opts: {
  * Failure dual-write (called from the workflow's `onFailure`). Records `failed`
  * on the legacy columns and on this model's variant row, then emits.
  *
- * Flips an *existing* variant row to `failed` via `updateByFrameAndModel` —
+ * Flips an *existing* variant row to `failed` via `updateByShotAndModel` —
  * which only touches `status`/`error`, so a previously-completed `url`/
  * `storagePath` is preserved (a re-run that fails before producing a new video
  * must not erase the last good one). Falls back to `upsert` only when no row
@@ -260,7 +260,7 @@ export async function persistMotionFailure(opts: {
   workflowRunId: string;
   emit: MotionEmit;
   /** Variant-only (#547): record `failed` only on the variant, never the
-   * legacy `frames.video*` columns. */
+   * legacy `shots.video*` columns. */
   variantOnly?: boolean;
 }): Promise<void> {
   const {
@@ -277,12 +277,12 @@ export async function persistMotionFailure(opts: {
   const writes = buildMotionFailedWrites({ error });
 
   if (!variantOnly) {
-    await scopedDb.shots.update(shotId, writes.frame, {
+    await scopedDb.shots.update(shotId, writes.shot, {
       throwOnMissing: false,
     });
   }
 
-  const updated = await scopedDb.shotVariants.updateByFrameAndModel(
+  const updated = await scopedDb.shotVariants.updateByShotAndModel(
     shotId,
     'video',
     model,

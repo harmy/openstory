@@ -69,9 +69,9 @@ function makeSequence(overrides: Partial<Sequence> = {}): Sequence {
   };
 }
 
-function makeFrame(overrides: Partial<Shot> = {}): Shot {
+function makeShot(overrides: Partial<Shot> = {}): Shot {
   return {
-    id: 'frame-1',
+    id: 'shot-1',
     sequenceId: 'seq-1',
     orderIndex: 0,
     description: 'A scene',
@@ -154,12 +154,12 @@ function makeStyle(overrides: Partial<Style> = {}): Style {
 }
 
 /**
- * A scopedDb stub exposing the batched frame + style fetches the builder uses.
+ * A scopedDb stub exposing the batched shot + style fetches the builder uses.
  * `styles` defaults to a single 'style-1' row matching the default sequence.
  */
-function depsWithFrames(frames: Shot[], styles: Style[] = [makeStyle()]) {
+function depsWithShots(shots: Shot[], styles: Style[] = [makeStyle()]) {
   return {
-    sequences: { listFramesByIds: async () => frames },
+    sequences: { listShotsByIds: async () => shots },
     styles: { listByIds: async () => styles },
   };
 }
@@ -213,14 +213,14 @@ describe('buildSequenceListPage', () => {
       musicStatus: 'completed',
       musicUrl: 'https://cdn/music.mp3',
     });
-    const frames = [
-      makeFrame({ id: 'f1', thumbnailUrl: 'https://cdn/f1.png' }),
-      makeFrame({ id: 'f2', videoStatus: 'completed' }),
-      makeFrame({ id: 'f3', videoStatus: 'failed' }),
+    const shots = [
+      makeShot({ id: 'f1', thumbnailUrl: 'https://cdn/f1.png' }),
+      makeShot({ id: 'f2', videoStatus: 'completed' }),
+      makeShot({ id: 'f3', videoStatus: 'failed' }),
     ];
 
     const page = await buildSequenceListPage({
-      scopedDb: depsWithFrames(frames),
+      scopedDb: depsWithShots(shots),
       sequences: [sequence],
       hasMore: false,
       limit: 20,
@@ -243,24 +243,24 @@ describe('buildSequenceListPage', () => {
       },
       poster: { url: 'https://cdn/poster.png' },
       music: { status: 'completed', url: 'https://cdn/music.mp3' },
-      counts: { frames: 3, imagesReady: 1, videosReady: 1, videosFailed: 1 },
+      counts: { shots: 3, imagesReady: 1, videosReady: 1, videosFailed: 1 },
     });
-    // No per-frame array on the summary.
-    expect(item).not.toHaveProperty('frames');
+    // No per-shot array on the summary.
+    expect(item).not.toHaveProperty('shots');
     expect(item?._links.self?.href).toBe('/api/v1/sequences/seq-1');
   });
 
-  it('groups batched frames back to their own sequences', async () => {
+  it('groups batched shots back to their own sequences', async () => {
     const a = makeSequence({ id: 'seq-a' });
     const b = makeSequence({ id: 'seq-b' });
-    const frames = [
-      makeFrame({ id: 'fa1', sequenceId: 'seq-a', videoStatus: 'completed' }),
-      makeFrame({ id: 'fb1', sequenceId: 'seq-b' }),
-      makeFrame({ id: 'fb2', sequenceId: 'seq-b' }),
+    const shots = [
+      makeShot({ id: 'fa1', sequenceId: 'seq-a', videoStatus: 'completed' }),
+      makeShot({ id: 'fb1', sequenceId: 'seq-b' }),
+      makeShot({ id: 'fb2', sequenceId: 'seq-b' }),
     ];
 
     const page = await buildSequenceListPage({
-      scopedDb: depsWithFrames(frames),
+      scopedDb: depsWithShots(shots),
       sequences: [a, b],
       hasMore: false,
       limit: 20,
@@ -269,11 +269,11 @@ describe('buildSequenceListPage', () => {
 
     const byId = new Map(page.sequences.map((s) => [s.id, s]));
     expect(byId.get('seq-a')?.counts).toMatchObject({
-      frames: 1,
+      shots: 1,
       videosReady: 1,
     });
     expect(byId.get('seq-b')?.counts).toMatchObject({
-      frames: 2,
+      shots: 2,
       videosReady: 0,
     });
   });
@@ -284,7 +284,7 @@ describe('buildSequenceListPage', () => {
     const c = makeSequence({ id: 'seq-c', styleId: 'style-gone' });
 
     const page = await buildSequenceListPage({
-      scopedDb: depsWithFrames(
+      scopedDb: depsWithShots(
         [],
         [
           makeStyle({ id: 'style-1', name: 'Cinematic Noir' }),
@@ -317,7 +317,7 @@ describe('buildSequenceListPage', () => {
     });
 
     const noMore = await buildSequenceListPage({
-      scopedDb: depsWithFrames([]),
+      scopedDb: depsWithShots([]),
       sequences: [last],
       hasMore: false,
       limit: 5,
@@ -328,7 +328,7 @@ describe('buildSequenceListPage', () => {
     expect(noMore._links['create-sequence']?.method).toBe('POST');
 
     const more = await buildSequenceListPage({
-      scopedDb: depsWithFrames([]),
+      scopedDb: depsWithShots([]),
       sequences: [last],
       hasMore: true,
       limit: 5,

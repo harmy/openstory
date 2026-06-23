@@ -36,9 +36,9 @@ function asOptionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' ? value : undefined;
 }
 
-type FrameStatus = 'pending' | 'generating' | 'completed' | 'failed';
+type ShotStatus = 'pending' | 'generating' | 'completed' | 'failed';
 
-function asFrameStatus(value: unknown): FrameStatus | undefined {
+function asShotStatus(value: unknown): ShotStatus | undefined {
   if (
     value === 'pending' ||
     value === 'generating' ||
@@ -121,7 +121,7 @@ function mapEventToAction(
 
     case 'generation.shot:created':
       return {
-        type: 'FRAME_CREATED',
+        type: 'SHOT_CREATED',
         payload: {
           shotId: asString(data.shotId),
           sceneId: asString(data.sceneId),
@@ -134,7 +134,7 @@ function mapEventToAction(
         type: 'IMAGE_PROGRESS',
         payload: {
           shotId: asString(data.shotId),
-          status: asFrameStatus(data.status),
+          status: asShotStatus(data.status),
           thumbnailUrl: asOptionalString(data.thumbnailUrl),
           previewThumbnailUrl: asOptionalString(data.previewThumbnailUrl),
           retry: asRetryInfo(data),
@@ -146,7 +146,7 @@ function mapEventToAction(
         type: 'VIDEO_PROGRESS',
         payload: {
           shotId: asString(data.shotId),
-          status: asFrameStatus(data.status),
+          status: asShotStatus(data.status),
           videoUrl: asOptionalString(data.videoUrl),
           retry: asRetryInfo(data),
         },
@@ -234,7 +234,7 @@ function mapEventToAction(
  *
  * @param sequenceId - The sequence ID to subscribe to
  * @param enabled - Whether to enable the subscription (default: true)
- * @returns Generation stream state with scenes, frames, and phase progress
+ * @returns Generation stream state with scenes, shots, and phase progress
  *
  * @example
  * ```tsx

@@ -48,10 +48,10 @@ import { Route as ApiTestVerifyRouteImport } from './routes/api/test/verify'
 import { Route as ApiTestUserRouteImport } from './routes/api/test/user'
 import { Route as ApiTestTalentRouteImport } from './routes/api/test/talent'
 import { Route as ApiTestStyleRouteImport } from './routes/api/test/style'
+import { Route as ApiTestShotRouteImport } from './routes/api/test/shot'
 import { Route as ApiTestSequenceRouteImport } from './routes/api/test/sequence'
 import { Route as ApiTestLocationRouteImport } from './routes/api/test/location'
 import { Route as ApiTestImageRouteImport } from './routes/api/test/image'
-import { Route as ApiTestFrameRouteImport } from './routes/api/test/frame'
 import { Route as ApiTestCleanupRouteImport } from './routes/api/test/cleanup'
 import { Route as ApiTestCharacterRouteImport } from './routes/api/test/character'
 import { Route as ApiStorageUploadRouteImport } from './routes/api/storage/upload'
@@ -272,6 +272,11 @@ const ApiTestStyleRoute = ApiTestStyleRouteImport.update({
   path: '/style',
   getParentRoute: () => ApiTestRouteRoute,
 } as any)
+const ApiTestShotRoute = ApiTestShotRouteImport.update({
+  id: '/shot',
+  path: '/shot',
+  getParentRoute: () => ApiTestRouteRoute,
+} as any)
 const ApiTestSequenceRoute = ApiTestSequenceRouteImport.update({
   id: '/sequence',
   path: '/sequence',
@@ -285,11 +290,6 @@ const ApiTestLocationRoute = ApiTestLocationRouteImport.update({
 const ApiTestImageRoute = ApiTestImageRouteImport.update({
   id: '/image',
   path: '/image',
-  getParentRoute: () => ApiTestRouteRoute,
-} as any)
-const ApiTestFrameRoute = ApiTestFrameRouteImport.update({
-  id: '/frame',
-  path: '/frame',
   getParentRoute: () => ApiTestRouteRoute,
 } as any)
 const ApiTestCleanupRoute = ApiTestCleanupRouteImport.update({
@@ -471,10 +471,10 @@ export interface FileRoutesByFullPath {
   '/api/storage/upload': typeof ApiStorageUploadRoute
   '/api/test/character': typeof ApiTestCharacterRoute
   '/api/test/cleanup': typeof ApiTestCleanupRoute
-  '/api/test/frame': typeof ApiTestFrameRoute
   '/api/test/image': typeof ApiTestImageRoute
   '/api/test/location': typeof ApiTestLocationRoute
   '/api/test/sequence': typeof ApiTestSequenceRoute
+  '/api/test/shot': typeof ApiTestShotRoute
   '/api/test/style': typeof ApiTestStyleRoute
   '/api/test/talent': typeof ApiTestTalentRoute
   '/api/test/user': typeof ApiTestUserRoute
@@ -538,10 +538,10 @@ export interface FileRoutesByTo {
   '/api/storage/upload': typeof ApiStorageUploadRoute
   '/api/test/character': typeof ApiTestCharacterRoute
   '/api/test/cleanup': typeof ApiTestCleanupRoute
-  '/api/test/frame': typeof ApiTestFrameRoute
   '/api/test/image': typeof ApiTestImageRoute
   '/api/test/location': typeof ApiTestLocationRoute
   '/api/test/sequence': typeof ApiTestSequenceRoute
+  '/api/test/shot': typeof ApiTestShotRoute
   '/api/test/style': typeof ApiTestStyleRoute
   '/api/test/talent': typeof ApiTestTalentRoute
   '/api/test/user': typeof ApiTestUserRoute
@@ -611,10 +611,10 @@ export interface FileRoutesById {
   '/api/storage/upload': typeof ApiStorageUploadRoute
   '/api/test/character': typeof ApiTestCharacterRoute
   '/api/test/cleanup': typeof ApiTestCleanupRoute
-  '/api/test/frame': typeof ApiTestFrameRoute
   '/api/test/image': typeof ApiTestImageRoute
   '/api/test/location': typeof ApiTestLocationRoute
   '/api/test/sequence': typeof ApiTestSequenceRoute
+  '/api/test/shot': typeof ApiTestShotRoute
   '/api/test/style': typeof ApiTestStyleRoute
   '/api/test/talent': typeof ApiTestTalentRoute
   '/api/test/user': typeof ApiTestUserRoute
@@ -682,10 +682,10 @@ export interface FileRouteTypes {
     | '/api/storage/upload'
     | '/api/test/character'
     | '/api/test/cleanup'
-    | '/api/test/frame'
     | '/api/test/image'
     | '/api/test/location'
     | '/api/test/sequence'
+    | '/api/test/shot'
     | '/api/test/style'
     | '/api/test/talent'
     | '/api/test/user'
@@ -749,10 +749,10 @@ export interface FileRouteTypes {
     | '/api/storage/upload'
     | '/api/test/character'
     | '/api/test/cleanup'
-    | '/api/test/frame'
     | '/api/test/image'
     | '/api/test/location'
     | '/api/test/sequence'
+    | '/api/test/shot'
     | '/api/test/style'
     | '/api/test/talent'
     | '/api/test/user'
@@ -821,10 +821,10 @@ export interface FileRouteTypes {
     | '/api/storage/upload'
     | '/api/test/character'
     | '/api/test/cleanup'
-    | '/api/test/frame'
     | '/api/test/image'
     | '/api/test/location'
     | '/api/test/sequence'
+    | '/api/test/shot'
     | '/api/test/style'
     | '/api/test/talent'
     | '/api/test/user'
@@ -1153,6 +1153,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTestStyleRouteImport
       parentRoute: typeof ApiTestRouteRoute
     }
+    '/api/test/shot': {
+      id: '/api/test/shot'
+      path: '/shot'
+      fullPath: '/api/test/shot'
+      preLoaderRoute: typeof ApiTestShotRouteImport
+      parentRoute: typeof ApiTestRouteRoute
+    }
     '/api/test/sequence': {
       id: '/api/test/sequence'
       path: '/sequence'
@@ -1172,13 +1179,6 @@ declare module '@tanstack/react-router' {
       path: '/image'
       fullPath: '/api/test/image'
       preLoaderRoute: typeof ApiTestImageRouteImport
-      parentRoute: typeof ApiTestRouteRoute
-    }
-    '/api/test/frame': {
-      id: '/api/test/frame'
-      path: '/frame'
-      fullPath: '/api/test/frame'
-      preLoaderRoute: typeof ApiTestFrameRouteImport
       parentRoute: typeof ApiTestRouteRoute
     }
     '/api/test/cleanup': {
@@ -1513,10 +1513,10 @@ const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
 interface ApiTestRouteRouteChildren {
   ApiTestCharacterRoute: typeof ApiTestCharacterRoute
   ApiTestCleanupRoute: typeof ApiTestCleanupRoute
-  ApiTestFrameRoute: typeof ApiTestFrameRoute
   ApiTestImageRoute: typeof ApiTestImageRoute
   ApiTestLocationRoute: typeof ApiTestLocationRoute
   ApiTestSequenceRoute: typeof ApiTestSequenceRoute
+  ApiTestShotRoute: typeof ApiTestShotRoute
   ApiTestStyleRoute: typeof ApiTestStyleRoute
   ApiTestTalentRoute: typeof ApiTestTalentRoute
   ApiTestUserRoute: typeof ApiTestUserRoute
@@ -1526,10 +1526,10 @@ interface ApiTestRouteRouteChildren {
 const ApiTestRouteRouteChildren: ApiTestRouteRouteChildren = {
   ApiTestCharacterRoute: ApiTestCharacterRoute,
   ApiTestCleanupRoute: ApiTestCleanupRoute,
-  ApiTestFrameRoute: ApiTestFrameRoute,
   ApiTestImageRoute: ApiTestImageRoute,
   ApiTestLocationRoute: ApiTestLocationRoute,
   ApiTestSequenceRoute: ApiTestSequenceRoute,
+  ApiTestShotRoute: ApiTestShotRoute,
   ApiTestStyleRoute: ApiTestStyleRoute,
   ApiTestTalentRoute: ApiTestTalentRoute,
   ApiTestUserRoute: ApiTestUserRoute,

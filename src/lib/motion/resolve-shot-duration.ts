@@ -1,12 +1,12 @@
 import type { ImageToVideoModel } from '../ai/models';
 import { snapDuration } from './motion-generation';
 
-export type ResolveFrameDurationInput = {
+export type ResolveShotDurationInput = {
   /** Caller-supplied override (e.g. `data.duration` from the API). Wins if defined. */
   explicit?: number;
-  /** Frame's stored duration in milliseconds. `0` / `null` / `undefined` are treated as unset. */
+  /** Shot's stored duration in milliseconds. `0` / `null` / `undefined` are treated as unset. */
   durationMs?: number | null;
-  /** Fallback from scene metadata for legacy frames where `durationMs` was never populated. */
+  /** Fallback from scene metadata for legacy shots where `durationMs` was never populated. */
   metadataSeconds?: number | null;
   /** Motion model whose JSON Schema defines the valid duration set to snap to. */
   model: ImageToVideoModel;
@@ -15,12 +15,12 @@ export type ResolveFrameDurationInput = {
 /** Resolve the duration (seconds) for a motion generation call and snap it
  *  onto the selected model's valid duration set. Used by both the credit
  *  pre-flight and the workflow input so they always agree. */
-export function resolveFrameDuration({
+export function resolveShotDuration({
   explicit,
   durationMs,
   metadataSeconds,
   model,
-}: ResolveFrameDurationInput): number {
+}: ResolveShotDurationInput): number {
   const fromMs = durationMs && durationMs > 0 ? durationMs / 1000 : undefined;
   const requested = explicit ?? fromMs ?? metadataSeconds ?? undefined;
   return snapDuration(requested, model);

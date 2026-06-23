@@ -12,12 +12,12 @@
 
 import {
   computeCharacterSheetInputHash,
-  computeFrameImageInputHash,
+  computeShotImageInputHash,
   computeLocationSheetInputHash,
   computeTalentSheetInputHash,
   sha256Hex,
   type CharacterBibleHashFields,
-  type FrameImageHashInput,
+  type ShotImageHashInput,
   type LocationBibleHashFields,
 } from '@/lib/ai/input-hash';
 import { DEFAULT_IMAGE_MODEL } from '@/lib/ai/models';
@@ -30,7 +30,7 @@ import type {
 } from '@/lib/db/schema';
 import type {
   CharacterSheetWorkflowInput,
-  FrameImageSceneSnapshot,
+  ShotImageSceneSnapshot,
   ShotImagesWorkflowInput,
   LibraryTalentSheetWorkflowInput,
   LocationSheetWorkflowInput,
@@ -41,7 +41,7 @@ import {
   matchLocationsToScene,
 } from './scene-matching';
 
-export type { FrameImageSceneSnapshot } from '@/lib/workflow/types';
+export type { ShotImageSceneSnapshot } from '@/lib/workflow/types';
 
 /**
  * Resolve the upstream talent-sheet's `input_hash` for a sequence character.
@@ -241,7 +241,7 @@ function sortedRefHashes(values: Array<string | null | undefined>): string[] {
 
 /**
  * Match a scene's referenced characters / locations / elements from live DB
- * rows and resolve the three reference-hash sets that feed the frame-image
+ * rows and resolve the three reference-hash sets that feed the shot-image
  * input hash: character `sheetInputHash`, location `referenceInputHash`, and
  * element `imageUrl`.
  *
@@ -249,12 +249,12 @@ function sortedRefHashes(values: Array<string | null | undefined>): string[] {
  * (`computeImageWorkflowHashCurrent`) and the staleness **verify**
  * (`buildRegenerateShotSnapshot`) cannot drift — drift on the element /
  * location sets (verify hard-coded them to `[]` and used a different location
- * matcher) made every element- or location-bearing frame report permanently
+ * matcher) made every element- or location-bearing shot report permanently
  * "Inputs changed". See #867.
  */
-export function resolveSceneFrameImageReferences(params: {
+export function resolveSceneShotImageReferences(params: {
   // Structural (not `Scene`) so it accepts both the strict scene and the
-  // looser `frame.metadata` shapes callers hold; only these fields are read.
+  // looser `shot.metadata` shapes callers hold; only these fields are read.
   scene: {
     continuity?: {
       characterTags?: string[];
@@ -308,14 +308,14 @@ export function resolveSceneFrameImageReferences(params: {
 
 /**
  * Hash one scene's snapshot — used to populate `thumbnail_input_hash` on the
- * frame row and `input_hash` on the matching primary `frame_variants` row.
+ * shot row and `input_hash` on the matching primary `shot_variants` row.
  */
-export function computeFrameImageSceneHash(
-  scene: FrameImageSceneSnapshot,
+export function computeShotImageSceneHash(
+  scene: ShotImageSceneSnapshot,
   imageModel: string,
   aspectRatio: string
 ): Promise<string> {
-  const hashInput: FrameImageHashInput = {
+  const hashInput: ShotImageHashInput = {
     kind: 'thumbnail',
     visualPrompt: scene.visualPrompt,
     imageModel,
@@ -324,22 +324,22 @@ export function computeFrameImageSceneHash(
     locationSheetHashes: scene.locationSheetHashes,
     elementReferenceHashes: scene.elementReferenceHashes,
   };
-  return computeFrameImageInputHash(hashInput);
+  return computeShotImageInputHash(hashInput);
 }
 
 /**
- * Hash the full frame-images payload. Binds every scene snapshot — including
+ * Hash the full shot-images payload. Binds every scene snapshot — including
  * the upstream sheet hashes alongside each URL — so a payload that preserves
  * only `snapshotInputHash` cannot smuggle replaced reference images past
  * validation.
  */
-export async function computeFrameImagesHashFromDto(
+export async function computeShotImagesHashFromDto(
   input: ShotImagesWorkflowInput & {
-    sceneSnapshots: FrameImageSceneSnapshot[];
+    sceneSnapshots: ShotImageSceneSnapshot[];
   }
 ): Promise<string> {
   return sha256Hex({
-    artifact: 'frame-images:batch',
+    artifact: 'shot-images:batch',
     sequenceId: input.sequenceId ?? null,
     imageModel: input.imageModel ?? null,
     imageModels: input.imageModels ?? null,

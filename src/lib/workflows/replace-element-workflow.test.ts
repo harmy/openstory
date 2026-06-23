@@ -44,7 +44,7 @@ describe('buildEditPrompt', () => {
 });
 
 describe('decideBatchOutcome', () => {
-  it('returns complete with zero counts when no frames ran (e.g. all skipped-deleted)', () => {
+  it('returns complete with zero counts when no shots ran (e.g. all skipped-deleted)', () => {
     const outcome = decideBatchOutcome([]);
     expect(outcome).toEqual({
       kind: 'complete',
@@ -53,7 +53,7 @@ describe('decideBatchOutcome', () => {
     });
   });
 
-  it('throws-via-fail-kind when every attempted frame failed', () => {
+  it('throws-via-fail-kind when every attempted shot failed', () => {
     const results: ShotResult[] = [
       { shotId: 'f1', success: false, error: 'edit timeout' },
       { shotId: 'f2', success: false, error: 'no imageUrl' },
@@ -90,7 +90,7 @@ describe('shouldDowngradeVisionOnFailure', () => {
     expect(shouldDowngradeVisionOnFailure('pending')).toBe(true);
   });
 
-  it('does NOT downgrade when vision already succeeded (failure was in per-frame edit)', () => {
+  it('does NOT downgrade when vision already succeeded (failure was in per-shot edit)', () => {
     expect(shouldDowngradeVisionOnFailure('completed')).toBe(false);
   });
 

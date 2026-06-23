@@ -40,7 +40,7 @@ function variant(overrides: Partial<ShotVariant>): ShotVariant {
 describe('computeSequenceModelCoverage', () => {
   it('marks the primary model as set and reports partial coverage for an added model', () => {
     const variants = [
-      // Primary model: generated for all 3 frames.
+      // Primary model: generated for all 3 shots.
       variant({ id: 'a1', shotId: 'f1', model: 'nano_banana_2' }),
       variant({ id: 'a2', shotId: 'f2', model: 'nano_banana_2' }),
       variant({ id: 'a3', shotId: 'f3', model: 'nano_banana_2' }),

@@ -5,9 +5,9 @@ import { useRealtime } from './client';
 
 import { getLogger } from '@/lib/observability/logger';
 
-const logger = getLogger(['openstory', 'realtime', 'use-frame-prompt-stream']);
+const logger = getLogger(['openstory', 'realtime', 'use-shot-prompt-stream']);
 
-export type FramePromptKind = 'visual' | 'motion';
+export type ShotPromptKind = 'visual' | 'motion';
 
 const historyPayloadSchema = z.object({
   promptType: z.enum(['visual', 'motion']),
@@ -15,7 +15,7 @@ const historyPayloadSchema = z.object({
   error: z.string().optional(),
 });
 
-type FramePromptStreamStatus =
+type ShotPromptStreamStatus =
   | 'idle'
   | 'pending'
   | 'streaming'
@@ -24,27 +24,27 @@ type FramePromptStreamStatus =
 
 type PerPromptState = {
   text: string;
-  status: FramePromptStreamStatus;
+  status: ShotPromptStreamStatus;
   error?: string;
 };
 
-type FramePromptStreamState = {
+type ShotPromptStreamState = {
   visual: PerPromptState;
   motion: PerPromptState;
 };
 
 const initialPerPrompt: PerPromptState = { text: '', status: 'idle' };
 
-const initialState: FramePromptStreamState = {
+const initialState: ShotPromptStreamState = {
   visual: initialPerPrompt,
   motion: initialPerPrompt,
 };
 
 type Action =
-  | { type: 'PENDING'; promptType: FramePromptKind }
-  | { type: 'DELTA'; promptType: FramePromptKind; delta: string }
-  | { type: 'COMPLETED'; promptType: FramePromptKind }
-  | { type: 'FAILED'; promptType: FramePromptKind; error: string }
+  | { type: 'PENDING'; promptType: ShotPromptKind }
+  | { type: 'DELTA'; promptType: ShotPromptKind; delta: string }
+  | { type: 'COMPLETED'; promptType: ShotPromptKind }
+  | { type: 'FAILED'; promptType: ShotPromptKind; error: string }
   | { type: 'RESET' };
 
 /**
@@ -54,7 +54,7 @@ type Action =
  */
 function reducePromptState(
   state: PerPromptState,
-  action: Extract<Action, { promptType: FramePromptKind }>
+  action: Extract<Action, { promptType: ShotPromptKind }>
 ): PerPromptState {
   switch (action.type) {
     case 'PENDING':
@@ -75,9 +75,9 @@ function reducePromptState(
 }
 
 function reducer(
-  state: FramePromptStreamState,
+  state: ShotPromptStreamState,
   action: Action
-): FramePromptStreamState {
+): ShotPromptStreamState {
   if (action.type === 'RESET') return initialState;
   return {
     ...state,
@@ -86,26 +86,26 @@ function reducer(
 }
 
 /**
- * Subscribe to a frame's per-frame prompt-regen realtime channel and surface
+ * Subscribe to a shot's per-shot prompt-regen realtime channel and surface
  * the live-streaming text plus terminal status for each prompt type.
  *
  * The hook is gated on `enabled` so we only pay realtime + history-fetch
- * costs while the frame is actually being viewed — unsubscribe on nav-away.
+ * costs while the shot is actually being viewed — unsubscribe on nav-away.
  * On re-mount, channel history replays via `getChannelHistoryFn`, rebuilding
  * the streaming text (or terminal state) as if the user had been on the
- * frame the whole time.
+ * shot the whole time.
  */
-export function useFramePromptStream(
+export function useShotPromptStream(
   shotId: string | undefined,
   enabled: boolean = true
 ) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const channelId = shotId ? `frame-prompt:${shotId}` : undefined;
+  const channelId = shotId ? `shot-prompt:${shotId}` : undefined;
   const active = enabled && Boolean(channelId);
 
   // Replay history on mount so a user who navigates back mid-regen sees the
   // accumulated text and the right status. Re-keys on shotId so switching
-  // frames clears and re-fetches.
+  // shots clears and re-fetches.
   useEffect(() => {
     if (!active || !channelId) {
       dispatch({ type: 'RESET' });
@@ -126,7 +126,7 @@ export function useFramePromptStream(
           }
           const parsed = result.data;
           if (
-            evt.event === 'framePrompt.streaming' &&
+            evt.event === 'shotPrompt.streaming' &&
             typeof parsed.delta === 'string'
           ) {
             dispatch({
@@ -134,10 +134,10 @@ export function useFramePromptStream(
               promptType: parsed.promptType,
               delta: parsed.delta,
             });
-          } else if (evt.event === 'framePrompt.completed') {
+          } else if (evt.event === 'shotPrompt.completed') {
             dispatch({ type: 'COMPLETED', promptType: parsed.promptType });
           } else if (
-            evt.event === 'framePrompt.failed' &&
+            evt.event === 'shotPrompt.failed' &&
             typeof parsed.error === 'string'
           ) {
             dispatch({
@@ -161,20 +161,20 @@ export function useFramePromptStream(
   const handleEvent = useCallback(
     (msg: {
       event: string;
-      data: { promptType?: FramePromptKind; delta?: string; error?: string };
+      data: { promptType?: ShotPromptKind; delta?: string; error?: string };
     }) => {
       const { event, data } = msg;
       if (!data.promptType) return;
-      if (event === 'framePrompt.streaming' && typeof data.delta === 'string') {
+      if (event === 'shotPrompt.streaming' && typeof data.delta === 'string') {
         dispatch({
           type: 'DELTA',
           promptType: data.promptType,
           delta: data.delta,
         });
-      } else if (event === 'framePrompt.completed') {
+      } else if (event === 'shotPrompt.completed') {
         dispatch({ type: 'COMPLETED', promptType: data.promptType });
       } else if (
-        event === 'framePrompt.failed' &&
+        event === 'shotPrompt.failed' &&
         typeof data.error === 'string'
       ) {
         dispatch({
@@ -190,9 +190,9 @@ export function useFramePromptStream(
   useRealtime({
     channels: channelId ? [channelId] : [],
     events: [
-      'framePrompt.streaming',
-      'framePrompt.completed',
-      'framePrompt.failed',
+      'shotPrompt.streaming',
+      'shotPrompt.completed',
+      'shotPrompt.failed',
     ] as const,
     onData: handleEvent,
     enabled: active,
@@ -200,7 +200,7 @@ export function useFramePromptStream(
 
   const reset = useCallback(() => dispatch({ type: 'RESET' }), []);
   const markPending = useCallback(
-    (promptType: FramePromptKind) => dispatch({ type: 'PENDING', promptType }),
+    (promptType: ShotPromptKind) => dispatch({ type: 'PENDING', promptType }),
     []
   );
 

@@ -27,7 +27,7 @@ import {
 import {
   cleanupSequenceById,
   createTestStyle,
-  getTestSequenceFrames,
+  getTestSequenceShots,
   getTestSequenceStatus,
 } from '../fixtures/sequence.fixture';
 import {
@@ -73,7 +73,7 @@ testWithUser.describe('Full Sequence Pipeline', () => {
     'Set PLAYWRIGHT_FULL_PIPELINE=true (use `bun test:e2e:full`) to run.'
   );
 
-  // The full pipeline runs many workflow steps end-to-end (script → frames →
+  // The full pipeline runs many workflow steps end-to-end (script → shots →
   // motion → music). Each per-step poll below allows up to 10 minutes; the
   // outer cap accommodates all three running near their limit plus setup.
   testWithUser.setTimeout(1_800_000);
@@ -270,7 +270,7 @@ SUPER:  CORAL.  OUT NOW.
       }
       createdSequenceId = sequenceId;
 
-      // 9. Wait for storyboard + frame images to land in the DB.
+      // 9. Wait for storyboard + shot images to land in the DB.
       //
       // Content-flag retry coverage (#881): two recorded fixtures inject a
       // first-attempt content-checker 422 (sequenceIndex 0) then succeed —
@@ -278,15 +278,15 @@ SUPER:  CORAL.  OUT NOW.
       //   - video: grok "Handheld camera tracks forward…"
       // so the vanity scene's primary image and that clip's video each fail
       // once and are rescued by the workflow retry (image: CF default step
-      // retry; motion: submit→poll loop). The "every frame completed" /
-      // "every frame has video" assertions below therefore also prove the
+      // retry; motion: submit→poll loop). The "every shot completed" /
+      // "every shot has video" assertions below therefore also prove the
       // retry path end-to-end — no separate spec needed.
       await expect
         .poll(
           async () => {
-            const frames = await getTestSequenceFrames(sequenceId);
-            if (frames.length === 0) return false;
-            return frames.every((f) => f.thumbnailStatus === 'completed');
+            const shots = await getTestSequenceShots(sequenceId);
+            if (shots.length === 0) return false;
+            return shots.every((f) => f.thumbnailStatus === 'completed');
           },
           { timeout: 600_000, intervals: [2_000, 5_000, 10_000] }
         )
@@ -295,13 +295,13 @@ SUPER:  CORAL.  OUT NOW.
       // 10. Trigger motion generation, then wait for the scene-list footer
       //     button to leave the DOM. The footer renders a single dynamic-
       //     label button (`Writing motion prompts…` / `Composing music…` /
-      //     `Generating…` / `Generate {N} / {M} frame(s)`), gated by
-      //     `showButton = notStartedFrames > 0 || isMotionInProgress`
+      //     `Generating…` / `Generate {N} / {M} shot(s)`), gated by
+      //     `showButton = notStartedShots > 0 || isMotionInProgress`
       //     (src/components/scenes/scene-list.tsx). Once motion + music are
       //     fully done it unmounts — that's the most truthful "pipeline
       //     finished" UX signal.
       const motionButton = page
-        .getByRole('button', { name: /Generate \d+ ?\/ ?\d+ frames?/i })
+        .getByRole('button', { name: /Generate \d+ ?\/ ?\d+ shots?/i })
         .first();
       await expect(motionButton).toBeVisible({ timeout: t(120_000) });
       await expect(motionButton).toBeEnabled({ timeout: t(120_000) });
@@ -309,7 +309,7 @@ SUPER:  CORAL.  OUT NOW.
 
       await expect(
         page.getByRole('button', {
-          name: /Writing motion prompts|Composing music|Generating|Generate \d+ ?\/ ?\d+ frames?/i,
+          name: /Writing motion prompts|Composing music|Generating|Generate \d+ ?\/ ?\d+ shots?/i,
         })
       ).toHaveCount(0, { timeout: t(600_000) });
 
@@ -390,9 +390,9 @@ SUPER:  CORAL.  OUT NOW.
       //     final composition happens client-side via Mediabunny.
       const finalStatus = await getTestSequenceStatus(sequenceId);
       expect(finalStatus?.musicUrl, 'sequence missing music url').toBeTruthy();
-      const finalFrames = await getTestSequenceFrames(sequenceId);
-      for (const frame of finalFrames) {
-        expect(frame.videoUrl, `frame ${frame.id} missing video`).toBeTruthy();
+      const finalShots = await getTestSequenceShots(sequenceId);
+      for (const shot of finalShots) {
+        expect(shot.videoUrl, `shot ${shot.id} missing video`).toBeTruthy();
       }
 
       // Log any captured browser issues so they're visible in stdout / the

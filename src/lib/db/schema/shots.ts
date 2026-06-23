@@ -15,13 +15,13 @@ import {
 import { generateId } from '../id';
 import { sequences } from './sequences';
 
-export const FRAME_GENERATION_STATUSES = [
+export const SHOT_GENERATION_STATUSES = [
   'pending',
   'generating',
   'completed',
   'failed',
 ] as const;
-type FrameGenerationStatus = (typeof FRAME_GENERATION_STATUSES)[number];
+type ShotGenerationStatus = (typeof SHOT_GENERATION_STATUSES)[number];
 
 /**
  * Shots table
@@ -51,9 +51,7 @@ export const shots = snakeCase.table(
     previewThumbnailUrl: text(), // Fast preview CDN URL (not stored in R2; URL may expire but column persists)
     thumbnailPath: text(), // R2 storage path (not signed URL)
     variantImageUrl: text(), // R2 storage path (not signed URL)
-    variantImageStatus: text()
-      .$type<FrameGenerationStatus>()
-      .default('pending'),
+    variantImageStatus: text().$type<ShotGenerationStatus>().default('pending'),
     variantWorkflowRunId: text(),
     variantImageGeneratedAt: integer({
       mode: 'timestamp',
@@ -62,7 +60,7 @@ export const shots = snakeCase.table(
     videoUrl: text(),
     videoPath: text(), // R2 storage path (not signed URL)
     // Thumbnail generation status tracking
-    thumbnailStatus: text().$type<FrameGenerationStatus>().default('pending'),
+    thumbnailStatus: text().$type<ShotGenerationStatus>().default('pending'),
     thumbnailWorkflowRunId: text(),
     thumbnailGeneratedAt: integer({
       mode: 'timestamp',
@@ -77,7 +75,7 @@ export const shots = snakeCase.table(
     imageModel: text({ length: 100 }).default('nano_banana_2').notNull(),
     imagePrompt: text(), // User-updated image prompt (overrides AI-generated prompt from metadata)
     // Video/motion generation status tracking
-    videoStatus: text().$type<FrameGenerationStatus>().default('pending'),
+    videoStatus: text().$type<ShotGenerationStatus>().default('pending'),
     videoWorkflowRunId: text(),
     videoGeneratedAt: integer({
       mode: 'timestamp',
@@ -88,7 +86,7 @@ export const shots = snakeCase.table(
     // Audio/music generation status tracking
     audioUrl: text(),
     audioPath: text(), // R2 storage path (not signed URL)
-    audioStatus: text().$type<FrameGenerationStatus>().default('pending'),
+    audioStatus: text().$type<ShotGenerationStatus>().default('pending'),
     audioWorkflowRunId: text(),
     audioGeneratedAt: integer({
       mode: 'timestamp',
@@ -125,10 +123,10 @@ export const shots = snakeCase.table(
   },
   (table) => [
     // Compound index for efficient ordering queries
-    index('idx_frames_order').on(table.sequenceId, table.orderIndex),
-    index('idx_frames_sequence_id').on(table.sequenceId),
+    index('idx_shots_order').on(table.sequenceId, table.orderIndex),
+    index('idx_shots_sequence_id').on(table.sequenceId),
     // Unique constraint: one shot per sequence/order combination
-    uniqueIndex('frames_sequence_id_order_index_key').on(
+    uniqueIndex('shots_sequence_id_order_index_key').on(
       table.sequenceId,
       table.orderIndex
     ),

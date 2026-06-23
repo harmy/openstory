@@ -26,10 +26,10 @@ type SheetStaleDetectedOptions = {
   /**
    * Filter so the hook only reacts to events whose `entityType` matches one
    * of the values in this list. Avoids cross-talk when several entity types
-   * share a sequence channel (frame + character + location all emit there).
+   * share a sequence channel (shot + character + location all emit there).
    */
   entityTypes: ReadonlyArray<
-    'frame' | 'character' | 'location' | 'library-location' | 'talent'
+    'shot' | 'character' | 'location' | 'library-location' | 'talent'
   >;
   /**
    * Query keys to invalidate when a matching stale:detected event arrives.

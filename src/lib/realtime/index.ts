@@ -37,15 +37,15 @@ export const realtimeSchema = {
     }),
   },
 
-  // Per-frame prompt regeneration events. Lives on its own channel
-  // (`frame-prompt:${shotId}`) so a client only pays the realtime cost while
-  // it's actually viewing the frame, and history replay rebuilds the
+  // Per-shot prompt regeneration events. Lives on its own channel
+  // (`shot-prompt:${shotId}`) so a client only pays the realtime cost while
+  // it's actually viewing the shot, and history replay rebuilds the
   // streaming-text state for the active prompt type if the user navigates
   // away and back mid-generation. The `delta` carries the incremental visible
   // characters of the `fullPrompt` field — extraction happens server-side via
   // `extractStreamingStringField` so the client doesn't have to parse partial
   // JSON.
-  framePrompt: {
+  shotPrompt: {
     streaming: z.object({
       promptType: z.enum(['visual', 'motion']),
       delta: z.string(),
@@ -129,13 +129,13 @@ export const realtimeSchema = {
       // dropdown without clobbering the displayed primary thumbnail.
       variantOnly: z.boolean().optional(),
       // Failure reason (e.g. content-filter rejection). Carried on `failed`
-      // so the cache updater can write `frames.thumbnailError` live — without
+      // so the cache updater can write `shots.thumbnailError` live — without
       // it the FailureSummaryBanner only ever shows "Unknown error" until a
       // full refetch (#881).
       error: z.string().optional(),
     }),
 
-    // Fast preview frames replaced by AI-analyzed frames
+    // Fast preview shots replaced by AI-analyzed shots
     'preview:replaced': z.object({
       newSceneCount: z.number(),
     }),
@@ -168,7 +168,7 @@ export const realtimeSchema = {
       // without clobbering the displayed primary video.
       variantOnly: z.boolean().optional(),
       // Failure reason — carried on `failed` so the cache updater writes
-      // `frames.videoError` live (see image:progress.error above). (#881)
+      // `shots.videoError` live (see image:progress.error above). (#881)
       error: z.string().optional(),
     }),
 
@@ -201,10 +201,10 @@ export const realtimeSchema = {
       error: z.string().optional(),
     }),
 
-    // Recast-triggered frame regeneration events (characters)
+    // Recast-triggered shot regeneration events (characters)
     'recast:start': z.object({
       characterId: z.string(),
-      frameCount: z.number(),
+      shotCount: z.number(),
     }),
     'recast:complete': z.object({
       characterId: z.string(),
@@ -219,7 +219,7 @@ export const realtimeSchema = {
     // Recast-location events
     'recast-location:start': z.object({
       locationId: z.string(),
-      frameCount: z.number(),
+      shotCount: z.number(),
     }),
     'recast-location:complete': z.object({
       locationId: z.string(),
@@ -231,10 +231,10 @@ export const realtimeSchema = {
       error: z.string(),
     }),
 
-    // Replace-element events: edit affected frames to swap an element
+    // Replace-element events: edit affected shots to swap an element
     'replace-element:start': z.object({
       elementId: z.string().min(1),
-      frameCount: z.number().int().nonnegative(),
+      shotCount: z.number().int().nonnegative(),
       videoCount: z.number().int().nonnegative().optional(),
     }),
     'replace-element:complete': z.object({
@@ -513,11 +513,11 @@ export function getLocationChannel(locationId?: string): RealtimeChannelApi {
 }
 
 /**
- * Get a channel for per-frame prompt regeneration streaming.
- * @param shotId - The frame ID to use as the channel identifier
+ * Get a channel for per-shot prompt regeneration streaming.
+ * @param shotId - The shot ID to use as the channel identifier
  */
-export function getFramePromptChannel(shotId?: string): RealtimeChannelApi {
+export function getShotPromptChannel(shotId?: string): RealtimeChannelApi {
   return shotId
-    ? realtimeChannel(`frame-prompt:${shotId}`)
-    : noopChannel('frame-prompt');
+    ? realtimeChannel(`shot-prompt:${shotId}`)
+    : noopChannel('shot-prompt');
 }

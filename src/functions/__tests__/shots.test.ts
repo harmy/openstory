@@ -1,11 +1,11 @@
 /**
  * Tests for the promote/discard server-fn orchestration.
  *
- * The TanStack server-fn middleware chain (auth, frame access, scoped DB)
+ * The TanStack server-fn middleware chain (auth, shot access, scoped DB)
  * is exercised end-to-end by the e2e suite; here we cover the new logic
  * added in #625:
  *   - The pure per-variantType update builder (buildPromoteUpdate).
- *   - The atomic frame-update + variant-discard pair via the new scoped
+ *   - The atomic shot-update + variant-discard pair via the new scoped
  *     `promoteAtomically` method, including its all-or-nothing semantics.
  */
 
@@ -208,7 +208,7 @@ describe('shotVariants.promoteAtomically', () => {
     return variant;
   }
 
-  it('promotes image: updates frame thumbnail and discards variant in one batch', async () => {
+  it('promotes image: updates shot thumbnail and discards variant in one batch', async () => {
     const variant = await insertDivergent({
       inputHash: 'h1',
       url: 'https://alt/v1.png',
@@ -218,18 +218,18 @@ describe('shotVariants.promoteAtomically', () => {
     const { update } = buildPromoteUpdate(variant);
     const result = await methods.promoteAtomically(shotId, update, variant.id);
 
-    expect(result.frame.thumbnailUrl).toBe('https://alt/v1.png');
-    expect(result.frame.videoStatus).toBe('pending');
+    expect(result.shot.thumbnailUrl).toBe('https://alt/v1.png');
+    expect(result.shot.videoStatus).toBe('pending');
     expect(result.discardedAt).toBeInstanceOf(Date);
 
     const after = await methods.getById(variant.id);
     expect(after?.discardedAt).toBeInstanceOf(Date);
     // Variant falls out of the divergent listing once discardedAt is set.
-    const stillDivergent = await methods.listDivergentByFrame(shotId, 'image');
+    const stillDivergent = await methods.listDivergentByShot(shotId, 'image');
     expect(stillDivergent.map((r) => r.id)).not.toContain(variant.id);
   });
 
-  it('throws when frame does not exist; variant is not soft-deleted', async () => {
+  it('throws when shot does not exist; variant is not soft-deleted', async () => {
     const variant = await insertDivergent({
       inputHash: 'h2',
       url: 'https://alt/v2.png',
@@ -240,13 +240,13 @@ describe('shotVariants.promoteAtomically', () => {
       methods.promoteAtomically(generateId(), { thumbnailUrl: 'x' }, variant.id)
     ).rejects.toThrow('not found');
 
-    // Both writes go through db.batch, so a missing frame must roll back the
+    // Both writes go through db.batch, so a missing shot must roll back the
     // variant discard — promote is all-or-nothing.
     const after = await methods.getById(variant.id);
     expect(after?.discardedAt).toBeNull();
   });
 
-  it('throws when variant does not exist; frame is not updated', async () => {
+  it('throws when variant does not exist; shot is not updated', async () => {
     const methods = createShotVariantsMethods(db);
 
     expect(
@@ -257,12 +257,11 @@ describe('shotVariants.promoteAtomically', () => {
       )
     ).rejects.toThrow('not found');
 
-    const [frameAfter] = await db
+    const [shotAfter] = await db
       .select()
       .from(shots)
       .where(eq(shots.id, shotId));
-    if (!frameAfter)
-      throw new Error('test setup: frame lookup returned nothing');
-    expect(frameAfter.thumbnailUrl).toBe('https://live/old.png');
+    if (!shotAfter) throw new Error('test setup: shot lookup returned nothing');
+    expect(shotAfter.thumbnailUrl).toBe('https://live/old.png');
   });
 });

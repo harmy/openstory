@@ -131,9 +131,9 @@ describe('buildChildInstanceId', () => {
   });
 
   test('siblings within one parent run stay distinct', () => {
-    const frame7 = buildChildInstanceId('motion:01SEQ:07', 'parent_run_A');
-    const frame8 = buildChildInstanceId('motion:01SEQ:08', 'parent_run_A');
-    expect(frame7).not.toBe(frame8);
+    const shot7 = buildChildInstanceId('motion:01SEQ:07', 'parent_run_A');
+    const shot8 = buildChildInstanceId('motion:01SEQ:08', 'parent_run_A');
+    expect(shot7).not.toBe(shot8);
   });
 
   test('keeps the semantic id readable as the head when it fits', () => {
@@ -254,12 +254,12 @@ describe('spawnAndAwaitChild', () => {
   test('recovers a completed child output from instance status when the await times out (lost-notify fallback)', async () => {
     const { step, binding, get } = timeoutHarness({
       status: 'complete',
-      output: { frames: 3 },
+      output: { shots: 3 },
     });
 
     const result = await spawnAndAwaitChild(step, { ...baseArgs, binding });
 
-    expect(result).toEqual({ frames: 3 });
+    expect(result).toEqual({ shots: 3 });
     // The fallback asks the engine about the same run-scoped instance id.
     expect(get).toHaveBeenCalledWith(
       expect.stringMatching(/^motion_01SEQ_01FRAME_r/)
@@ -346,13 +346,13 @@ describe('notifyParent', () => {
     const { env, get } = fakeEnv(sendEvent);
     const { step, doSpy } = fakeStep();
 
-    await notifyParent(step, env, HINT, { frames: 3 });
+    await notifyParent(step, env, HINT, { shots: 3 });
 
     expect(doSpy).toHaveBeenCalledWith('notify-parent', expect.any(Function));
     expect(get).toHaveBeenCalledWith(HINT.parentInstanceId);
     expect(sendEvent).toHaveBeenCalledWith({
       type: HINT.eventType,
-      payload: { status: 'ok', output: { frames: 3 } },
+      payload: { status: 'ok', output: { shots: 3 } },
     });
   });
 

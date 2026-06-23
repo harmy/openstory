@@ -15,7 +15,7 @@ import {
   computeMotionPromptInputHash,
   computeVisualPromptInputHash,
 } from '../input-hash';
-import { narrowFramePromptContext } from '../prompt-context';
+import { narrowShotPromptContext } from '../prompt-context';
 import type {
   CharacterBibleEntry,
   ElementBibleEntry,
@@ -110,7 +110,7 @@ function sceneReferencing(opts: {
   };
 }
 
-describe('narrowFramePromptContext', () => {
+describe('narrowShotPromptContext', () => {
   it('keeps only the character entries the scene references', () => {
     const ctx = {
       scene: sceneReferencing({ characterTags: ['alice'] }),
@@ -121,7 +121,7 @@ describe('narrowFramePromptContext', () => {
       aspectRatio: '16:9',
       analysisModel: 'anthropic/claude-haiku-4.5',
     };
-    const narrowed = narrowFramePromptContext(ctx);
+    const narrowed = narrowShotPromptContext(ctx);
     expect(narrowed.characterBible.map((c) => c.characterId)).toEqual([
       'alice',
     ]);
@@ -137,7 +137,7 @@ describe('narrowFramePromptContext', () => {
       aspectRatio: '16:9',
       analysisModel: 'anthropic/claude-haiku-4.5',
     };
-    const narrowed = narrowFramePromptContext(ctx);
+    const narrowed = narrowShotPromptContext(ctx);
     expect(narrowed.locationBible.map((l) => l.locationId)).toEqual(['beach']);
   });
 
@@ -151,7 +151,7 @@ describe('narrowFramePromptContext', () => {
       aspectRatio: '16:9',
       analysisModel: 'anthropic/claude-haiku-4.5',
     };
-    const narrowed = narrowFramePromptContext(ctx);
+    const narrowed = narrowShotPromptContext(ctx);
     expect(narrowed.elementBible.map((e) => e.token)).toEqual(['LOGO']);
   });
 
@@ -169,7 +169,7 @@ describe('narrowFramePromptContext', () => {
       aspectRatio: '16:9',
       analysisModel: 'anthropic/claude-haiku-4.5',
     };
-    const narrowed = narrowFramePromptContext(ctx);
+    const narrowed = narrowShotPromptContext(ctx);
     expect(narrowed).toEqual(ctx);
   });
 });
@@ -191,11 +191,11 @@ describe('narrowed hash stability (the user-reported bug)', () => {
 
   it('adding an unreferenced element does NOT change the visual hash', async () => {
     const before = await computeVisualPromptInputHash(
-      narrowFramePromptContext(baseCtx)
+      narrowShotPromptContext(baseCtx)
     );
     // Simulate uploading a new element that no scene references yet.
     const after = await computeVisualPromptInputHash(
-      narrowFramePromptContext({
+      narrowShotPromptContext({
         ...baseCtx,
         elementBible: [logo, bottle],
       })
@@ -205,10 +205,10 @@ describe('narrowed hash stability (the user-reported bug)', () => {
 
   it('adding an unreferenced character does NOT change the visual hash', async () => {
     const before = await computeVisualPromptInputHash(
-      narrowFramePromptContext(baseCtx)
+      narrowShotPromptContext(baseCtx)
     );
     const after = await computeVisualPromptInputHash(
-      narrowFramePromptContext({
+      narrowShotPromptContext({
         ...baseCtx,
         characterBible: [alice, bob],
       })
@@ -218,10 +218,10 @@ describe('narrowed hash stability (the user-reported bug)', () => {
 
   it('adding an unreferenced location does NOT change the motion hash', async () => {
     const before = await computeMotionPromptInputHash(
-      narrowFramePromptContext(baseCtx)
+      narrowShotPromptContext(baseCtx)
     );
     const after = await computeMotionPromptInputHash(
-      narrowFramePromptContext({
+      narrowShotPromptContext({
         ...baseCtx,
         locationBible: [beach, forest],
       })
@@ -231,14 +231,14 @@ describe('narrowed hash stability (the user-reported bug)', () => {
 
   it('referencing a new element via continuity tags DOES change the hash', async () => {
     const before = await computeVisualPromptInputHash(
-      narrowFramePromptContext({
+      narrowShotPromptContext({
         ...baseCtx,
         elementBible: [logo, bottle],
       })
     );
     // Same bibles, but now the scene's continuity additionally references BOTTLE.
     const after = await computeVisualPromptInputHash(
-      narrowFramePromptContext({
+      narrowShotPromptContext({
         ...baseCtx,
         scene: sceneReferencing({
           characterTags: ['alice'],
@@ -253,9 +253,9 @@ describe('narrowed hash stability (the user-reported bug)', () => {
 
   // Issue #767: motion-music-prompts-workflow snaps the duration mid-pipeline
   // (e.g. 7 → 8 for a model that only supports {5, 10}) and overwrites
-  // `frame.metadata` after the visual prompt hash was already stored. The
+  // `shot.metadata` after the visual prompt hash was already stored. The
   // visual hash must NOT care about that downstream parameter — duration is
-  // hashed by `computeFrameVideoInputHash` where it actually matters.
+  // hashed by `computeShotVideoInputHash` where it actually matters.
   it('changing metadata.durationSeconds does NOT change the visual hash', async () => {
     const continuityTags = {
       characterTags: ['alice'],
@@ -263,13 +263,13 @@ describe('narrowed hash stability (the user-reported bug)', () => {
       elementTags: ['LOGO'],
     };
     const before = await computeVisualPromptInputHash(
-      narrowFramePromptContext({
+      narrowShotPromptContext({
         ...baseCtx,
         scene: sceneReferencing({ ...continuityTags, durationSeconds: 7 }),
       })
     );
     const after = await computeVisualPromptInputHash(
-      narrowFramePromptContext({
+      narrowShotPromptContext({
         ...baseCtx,
         scene: sceneReferencing({ ...continuityTags, durationSeconds: 8 }),
       })
@@ -284,13 +284,13 @@ describe('narrowed hash stability (the user-reported bug)', () => {
       elementTags: ['LOGO'],
     };
     const before = await computeMotionPromptInputHash(
-      narrowFramePromptContext({
+      narrowShotPromptContext({
         ...baseCtx,
         scene: sceneReferencing({ ...continuityTags, durationSeconds: 7 }),
       })
     );
     const after = await computeMotionPromptInputHash(
-      narrowFramePromptContext({
+      narrowShotPromptContext({
         ...baseCtx,
         scene: sceneReferencing({ ...continuityTags, durationSeconds: 8 }),
       })
@@ -315,10 +315,10 @@ describe('prompt-driving projection (#867 §4.2)', () => {
 
   it('a consistencyTag change on a referenced character does NOT move the visual hash', async () => {
     const before = await computeVisualPromptInputHash(
-      narrowFramePromptContext(baseCtx)
+      narrowShotPromptContext(baseCtx)
     );
     const after = await computeVisualPromptInputHash(
-      narrowFramePromptContext({
+      narrowShotPromptContext({
         ...baseCtx,
         characterBible: [{ ...alice, consistencyTag: 'alice_recast_xyz' }],
       })
@@ -328,10 +328,10 @@ describe('prompt-driving projection (#867 §4.2)', () => {
 
   it('a firstMention change on a referenced location does NOT move the motion hash', async () => {
     const before = await computeMotionPromptInputHash(
-      narrowFramePromptContext(baseCtx)
+      narrowShotPromptContext(baseCtx)
     );
     const after = await computeMotionPromptInputHash(
-      narrowFramePromptContext({
+      narrowShotPromptContext({
         ...baseCtx,
         locationBible: [
           {
@@ -346,10 +346,10 @@ describe('prompt-driving projection (#867 §4.2)', () => {
 
   it('a physicalDescription change on a referenced character DOES move the visual hash', async () => {
     const before = await computeVisualPromptInputHash(
-      narrowFramePromptContext(baseCtx)
+      narrowShotPromptContext(baseCtx)
     );
     const after = await computeVisualPromptInputHash(
-      narrowFramePromptContext({
+      narrowShotPromptContext({
         ...baseCtx,
         characterBible: [{ ...alice, physicalDescription: 'now bearded' }],
       })
@@ -422,7 +422,7 @@ describe('casting round-trip — stamp matches verify (#867)', () => {
   });
 
   const ctxWith = (characterBible: CharacterBibleEntry[]) =>
-    narrowFramePromptContext({
+    narrowShotPromptContext({
       scene,
       styleConfig: style,
       characterBible,
@@ -455,7 +455,7 @@ describe('casting round-trip — stamp matches verify (#867)', () => {
   // (analyze-script-workflow builds `castCharacterBible` once and feeds both).
   // Mirror the visual round-trip for motion so the motion stamp can't silently
   // regress to hashing the raw bible — that would make every talent-matched
-  // frame's motion prompt permanently stale, exactly like the visual case.
+  // shot's motion prompt permanently stale, exactly like the visual case.
   it('motion: stamp (cast bible) equals verify (cast bible read from the DB)', async () => {
     const [castSarah] = buildCastCharacterBible([rawSarah], [match]);
     if (!castSarah) throw new Error('expected one cast entry');
@@ -479,7 +479,7 @@ describe('casting round-trip — stamp matches verify (#867)', () => {
 // bible while VERIFY hashes the DB readback (`sequenceLocationsToBible` /
 // `sequenceElementsToBible`). Those readbacks coerce nulls/`type`, so a coercion
 // that diverged from the raw bible's projected fields would resurrect the #867
-// false-staleness for every location-/element-bearing frame. Pin the round-trip.
+// false-staleness for every location-/element-bearing shot. Pin the round-trip.
 describe('location/element bible round-trip — stamp matches verify (#867)', () => {
   const scene = sceneReferencing({
     environmentTag: 'beach',
@@ -491,7 +491,7 @@ describe('location/element bible round-trip — stamp matches verify (#867)', ()
     locationBible: LocationBibleEntry[],
     elementBible: ElementBibleEntry[]
   ) =>
-    narrowFramePromptContext({
+    narrowShotPromptContext({
       scene,
       styleConfig: style,
       characterBible: [],

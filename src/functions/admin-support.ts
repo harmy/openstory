@@ -19,9 +19,9 @@ export const getAllAdminSequencesFn = createServerFn({ method: 'GET' })
     return context.adminScopedDb.admin.getAllSequences(data);
   });
 
-export const getAdminFramesFn = createServerFn({ method: 'GET' })
+export const getAdminShotsFn = createServerFn({ method: 'GET' })
   .middleware([systemAdminMiddleware])
   .inputValidator(zodValidator(z.object({ sequenceId: ulidSchema })))
   .handler(async ({ context, data }) => {
-    return context.adminScopedDb.admin.getFramesForSequence(data.sequenceId);
+    return context.adminScopedDb.admin.getShotsForSequence(data.sequenceId);
   });

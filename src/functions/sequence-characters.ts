@@ -40,12 +40,12 @@ export const getSequenceCharactersFn = createServerFn({ method: 'GET' })
     return context.scopedDb.characters.listWithTalent(context.sequence.id);
   });
 
-/** Get frame IDs for all frames containing a specific character */
-export const getFrameIdsForCharacterFn = createServerFn({ method: 'GET' })
+/** Get shot IDs for all shots containing a specific character */
+export const getShotIdsForCharacterFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
   .inputValidator(zodValidator(z.object({ characterId: z.string().min(1) })))
   .handler(async ({ context, data }) => {
-    const shotIds = await context.scopedDb.characters.getFrameIdsForCharacter(
+    const shotIds = await context.scopedDb.characters.getShotIdsForCharacter(
       context.sequence.id,
       data.characterId
     );
@@ -133,7 +133,7 @@ export const recastCharacterFn = createServerFn({ method: 'POST' })
     );
 
     const affectedShotIds =
-      await context.scopedDb.characters.getFrameIdsForCharacter(
+      await context.scopedDb.characters.getShotIdsForCharacter(
         character.sequenceId,
         data.characterId
       );

@@ -19,7 +19,7 @@ type ReplaceElementPopoverProps = {
   sequenceId: string;
   elementId: string;
   token: string;
-  affectedFrameCount: number;
+  affectedShotCount: number;
   affectedVideoCount: number;
   disabled?: boolean;
 };
@@ -30,7 +30,7 @@ type ReplaceElementPopoverProps = {
  *  1. Dropzone — drag/drop, paste, or browse for a new image. Nothing
  *     destructive runs yet.
  *  2. Confirmation — shows the picked file with an explicit "Replace" button
- *     that spells out the cascade (script, frames, videos) before any upload
+ *     that spells out the cascade (script, shots, videos) before any upload
  *     starts. The user can cancel without touching server state.
  *
  * The actual upload + replace-element workflow only fires once the user
@@ -41,7 +41,7 @@ export const ReplaceElementPopover: React.FC<ReplaceElementPopoverProps> = ({
   sequenceId,
   elementId,
   token,
-  affectedFrameCount,
+  affectedShotCount,
   affectedVideoCount,
   disabled = false,
 }) => {
@@ -94,7 +94,7 @@ export const ReplaceElementPopover: React.FC<ReplaceElementPopoverProps> = ({
           const count = result.affectedShotIds.length;
           toast.info(
             count > 0
-              ? `Replacing ${token} — editing ${count} frame${count === 1 ? '' : 's'}…`
+              ? `Replacing ${token} — editing ${count} shot${count === 1 ? '' : 's'}…`
               : `Replaced ${token}`
           );
         },
@@ -140,7 +140,7 @@ export const ReplaceElementPopover: React.FC<ReplaceElementPopoverProps> = ({
             </p>
             <p className="text-xs text-muted-foreground">
               {pendingFile
-                ? `Confirming will replace ${token} everywhere it's used — your script, ${affectedFrameCount} frame${affectedFrameCount === 1 ? '' : 's'}, and ${affectedVideoCount} video${affectedVideoCount === 1 ? '' : 's'} will be updated.`
+                ? `Confirming will replace ${token} everywhere it's used — your script, ${affectedShotCount} shot${affectedShotCount === 1 ? '' : 's'}, and ${affectedVideoCount} video${affectedVideoCount === 1 ? '' : 's'} will be updated.`
                 : `Drop a new image to replace ${token}. You'll get a chance to confirm before anything changes.`}
             </p>
           </div>

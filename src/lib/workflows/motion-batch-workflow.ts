@@ -13,13 +13,13 @@
  *     `event.instanceId` instead of `context.requestPayload` /
  *     `context.workflowRunId`.
  *   - Each `context.invoke(...)` becomes a Pattern 3 `spawnAndAwaitChild`
- *     against the relevant binding (MOTION_WORKFLOW × N frames, optional
+ *     against the relevant binding (MOTION_WORKFLOW × N shots, optional
  *     MUSIC_WORKFLOW). There is no server-side video merge step — playback
  *     and the final MP4 are produced client-side (Mediabunny browser export).
  *   - Fan-out: `Promise.all` on spawn (parents block until every child has
  *     been queued so a transient spawn failure surfaces as a workflow error
  *     rather than a silently-skipped child), `Promise.allSettled` on await
- *     so a single bad frame doesn't kill the rest of the batch. */
+ *     so a single bad shot doesn't kill the rest of the batch. */
 
 import { resolveAudioModels } from '@/lib/ai/resolve-audio-models';
 import type { ScopedDb } from '@/lib/db/scoped';
@@ -50,7 +50,7 @@ export class MotionBatchWorkflow extends OpenStoryWorkflowEntrypoint<BatchMotion
     event: Readonly<WorkflowEvent<BatchMotionMusicWorkflowInput>>,
     step: WorkflowStep,
     // Fan-out uses workflow bindings, not direct DB access; the merge steps
-    // that read frames were removed (browser-side merge). Kept for signature
+    // that read shots were removed (browser-side merge). Kept for signature
     // parity with the abstract runImpl.
     _scopedDb: ScopedDb
   ): Promise<MotionBatchWorkflowResult> {
@@ -62,7 +62,7 @@ export class MotionBatchWorkflow extends OpenStoryWorkflowEntrypoint<BatchMotion
       throw new WorkflowValidationError('sequenceId is required');
     }
     if (!input.shots.length) {
-      throw new WorkflowValidationError('At least one frame is required');
+      throw new WorkflowValidationError('At least one shot is required');
     }
     if (includeMusic && !input.music) {
       throw new WorkflowValidationError(
@@ -71,13 +71,13 @@ export class MotionBatchWorkflow extends OpenStoryWorkflowEntrypoint<BatchMotion
     }
 
     // Step 1: Fan out motion workflows + optional music workflow in parallel.
-    // Multi-model video (#545): one MOTION_WORKFLOW child per (frame, model)
-    // — the motion analog of frame-images' per-(scene, model) fan-out (see
+    // Multi-model video (#545): one MOTION_WORKFLOW child per (shot, model)
+    // — the motion analog of shot-images' per-(scene, model) fan-out (see
     // `buildMotionJobs` for the resolution/dedupe rules). The first model is
-    // primary (its output also lands in the legacy `frames.video*` columns);
-    // the rest are alternates in `frame_variants`. Pattern 3 spawns + awaits
+    // primary (its output also lands in the legacy `shots.video*` columns);
+    // the rest are alternates in `shot_variants`. Pattern 3 spawns + awaits
     // each child via `spawnAndAwaitChild`; Promise.allSettled lets a single
-    // failing (frame, model) not poison the rest of the batch.
+    // failing (shot, model) not poison the rest of the batch.
     const motionJobs = buildMotionJobs(input.shots, input.videoModels);
 
     const motionAwaits = motionJobs.map(({ shot, shotIndex, model }) => {
@@ -107,7 +107,7 @@ export class MotionBatchWorkflow extends OpenStoryWorkflowEntrypoint<BatchMotion
         generateAudio: shot.generateAudio,
         userEditedPrompt: shot.userEditedPrompt,
         // Add-model (#547) batches generate alternates only — the child must
-        // not write the legacy `frames.video*` columns.
+        // not write the legacy `shots.video*` columns.
         variantOnly: input.variantOnly,
       };
 
@@ -118,7 +118,7 @@ export class MotionBatchWorkflow extends OpenStoryWorkflowEntrypoint<BatchMotion
           parentBindingName: 'MOTION_BATCH_WORKFLOW',
           parentInstanceId,
           // The model token keeps sibling-model children from colliding on the
-          // global CF instance id (mirrors frame-images' childId scheme).
+          // global CF instance id (mirrors shot-images' childId scheme).
           childId: `motion:${sequenceId}:${shot.shotId}:${model}`,
           childPayload: motionBody,
           spawnStepName: `spawn-motion-${shotIndex}-${model}`,
@@ -183,9 +183,9 @@ export class MotionBatchWorkflow extends OpenStoryWorkflowEntrypoint<BatchMotion
       ? await Promise.allSettled(musicAwaits)
       : null;
 
-    // Log per-frame motion failures for visibility; we don't throw here — the
+    // Log per-shot motion failures for visibility; we don't throw here — the
     // QStash original uses Promise.all + a single combined await, but parity
-    // with the rest of the CF batch surface (frame-images) is to allSettle
+    // with the rest of the CF batch surface (shot-images) is to allSettle
     // and rely on the collect step below to validate that we have something
     // mergeable.
     for (let i = 0; i < motionResults.length; i++) {
@@ -194,9 +194,9 @@ export class MotionBatchWorkflow extends OpenStoryWorkflowEntrypoint<BatchMotion
         const job = motionJobs[i];
         // Include the reason in the message itself — structured `err` fields
         // don't reliably survive into the log body (the June 7 run produced
-        // bare "Motion failed for frame …:" lines with no cause attached).
+        // bare "Motion failed for shot …:" lines with no cause attached).
         logger.warn(
-          `[MotionBatchWorkflow:cf] Motion failed for frame ${job?.shot.shotId ?? '(unknown)'} model ${job?.model ?? '(unknown)'}: ${String(r.reason)}`,
+          `[MotionBatchWorkflow:cf] Motion failed for shot ${job?.shot.shotId ?? '(unknown)'} model ${job?.model ?? '(unknown)'}: ${String(r.reason)}`,
           {
             err: r.reason,
           }

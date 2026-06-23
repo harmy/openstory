@@ -3,13 +3,13 @@
  * status endpoint returns today, and the same shape the phase-2 SSE stream and
  * webhook payloads will carry. It is derived from the DB (authoritative), so it
  * is correct even when the realtime channel has expired or a client never
- * subscribed. Keyed-by-id frame entries make it trivially mergeable with the
+ * subscribed. Keyed-by-id shot entries make it trivially mergeable with the
  * out-of-order realtime deltas a stream would later apply.
  */
 
 import type { ScopedDb } from '@/lib/db/scoped';
 import type { Shot } from '@/lib/db/schema/shots';
-import { FRAME_GENERATION_STATUSES } from '@/lib/db/schema/shots';
+import { SHOT_GENERATION_STATUSES } from '@/lib/db/schema/shots';
 import type { Style } from '@/lib/db/schema/libraries';
 import type { MusicStatus, SequenceStatus } from '@/lib/db/schema/sequences';
 import { getLogger } from '@/lib/observability/logger';
@@ -19,7 +19,7 @@ import { API_V1_BASE, type HalResource, waitLink, withLinks } from './hal';
 
 const logger = getLogger(['openstory', 'api-v1']);
 
-type FrameGenStatus = (typeof FRAME_GENERATION_STATUSES)[number];
+type ShotGenStatus = (typeof SHOT_GENERATION_STATUSES)[number];
 
 /** Sequence statuses past which no further generation happens. */
 const TERMINAL_STATUSES = new Set<SequenceStatus>([
@@ -28,21 +28,21 @@ const TERMINAL_STATUSES = new Set<SequenceStatus>([
   'archived',
 ]);
 
-type SequenceStateFrame = {
+type SequenceStateShot = {
   id: string;
   orderIndex: number;
   title: string | null;
-  image: { status: FrameGenStatus; url: string | null };
-  video: { status: FrameGenStatus; url: string | null };
+  image: { status: ShotGenStatus; url: string | null };
+  video: { status: ShotGenStatus; url: string | null };
 };
 
 export type SequenceCounts = {
-  frames: number;
+  shots: number;
   imagesReady: number;
   videosReady: number;
   /**
-   * Frames whose video generation failed. A sequence can reach the terminal
-   * `completed` status with `videosFailed > 0` (per-frame motion failures
+   * Shots whose video generation failed. A sequence can reach the terminal
+   * `completed` status with `videosFailed > 0` (per-shot motion failures
    * don't fail the run), so an agent must check this to know a terminal
    * result actually succeeded end-to-end.
    */
@@ -59,7 +59,7 @@ type SequenceStyle = {
 };
 
 /** The models a sequence was generated with — the raw ids the UI filters/sorts
- * on (script analysis + per-frame image + per-frame video, and the optional
+ * on (script analysis + per-shot image + per-shot video, and the optional
  * music model). */
 type SequenceModels = {
   analysis: string;
@@ -71,7 +71,7 @@ type SequenceModels = {
 /**
  * The scalar fields shared by the single-sequence status document and each
  * entry of the `GET /api/v1/sequences` list page — everything except the
- * per-frame array. Built once in `buildSequenceSummary` so the two documents
+ * per-shot array. Built once in `buildSequenceSummary` so the two documents
  * can't drift.
  */
 export type SequenceSummary = {
@@ -90,31 +90,31 @@ export type SequenceSummary = {
 };
 
 export type SequenceState = SequenceSummary & {
-  frames: SequenceStateFrame[];
+  shots: SequenceStateShot[];
 };
 
-/** The image URL a frame exposes once its still is ready (else null). */
-function frameImageUrl(frame: Shot): string | null {
-  // Frames track video status explicitly; image readiness is signalled by the
+/** The image URL a shot exposes once its still is ready (else null). */
+function shotImageUrl(shot: Shot): string | null {
+  // Shots track video status explicitly; image readiness is signalled by the
   // presence of a thumbnail URL (the stored R2 url, else the fast preview CDN
   // url).
-  return frame.thumbnailUrl ?? frame.previewThumbnailUrl ?? null;
+  return shot.thumbnailUrl ?? shot.previewThumbnailUrl ?? null;
 }
 
 /**
- * Readiness tallies over a sequence's frames — the single source of truth for
+ * Readiness tallies over a sequence's shots — the single source of truth for
  * the `counts` block shared by the status document and the list summary.
  */
-export function summarizeFrameCounts(frames: Shot[]): SequenceCounts {
+export function summarizeShotCounts(shots: Shot[]): SequenceCounts {
   let imagesReady = 0;
   let videosReady = 0;
   let videosFailed = 0;
-  for (const frame of frames) {
-    if (frameImageUrl(frame) !== null) imagesReady += 1;
-    if (frame.videoStatus === 'completed') videosReady += 1;
-    if (frame.videoStatus === 'failed') videosFailed += 1;
+  for (const shot of shots) {
+    if (shotImageUrl(shot) !== null) imagesReady += 1;
+    if (shot.videoStatus === 'completed') videosReady += 1;
+    if (shot.videoStatus === 'failed') videosFailed += 1;
   }
-  return { frames: frames.length, imagesReady, videosReady, videosFailed };
+  return { shots: shots.length, imagesReady, videosReady, videosFailed };
 }
 
 /**
@@ -182,27 +182,27 @@ export async function buildSequenceState(
   // toShareableUrl.
   origin: string
 ): Promise<SequenceState> {
-  const [frames, style] = await Promise.all([
+  const [shots, style] = await Promise.all([
     scopedDb.shots.listBySequence(sequence.id),
     scopedDb.styles.getById(sequence.styleId),
   ]);
-  const ordered = [...frames].sort((a, b) => a.orderIndex - b.orderIndex);
+  const ordered = [...shots].sort((a, b) => a.orderIndex - b.orderIndex);
   const share = (url: string | null): string | null =>
     url === null ? null : toShareableUrl(url, origin);
 
-  const stateFrames: SequenceStateFrame[] = ordered.map((frame) => {
-    const imageUrl = frameImageUrl(frame);
+  const stateShots: SequenceStateShot[] = ordered.map((shot) => {
+    const imageUrl = shotImageUrl(shot);
     return {
-      id: frame.id,
-      orderIndex: frame.orderIndex,
-      title: frame.metadata?.metadata?.title ?? null,
+      id: shot.id,
+      orderIndex: shot.orderIndex,
+      title: shot.metadata?.metadata?.title ?? null,
       image: {
         status: imageUrl ? 'completed' : 'pending',
         url: share(imageUrl),
       },
       video: {
-        status: frame.videoStatus ?? 'pending',
-        url: share(frame.videoUrl ?? null),
+        status: shot.videoStatus ?? 'pending',
+        url: share(shot.videoUrl ?? null),
       },
     };
   });
@@ -211,10 +211,10 @@ export async function buildSequenceState(
     ...buildSequenceSummary({
       sequence,
       style,
-      counts: summarizeFrameCounts(ordered),
+      counts: summarizeShotCounts(ordered),
       origin,
     }),
-    frames: stateFrames,
+    shots: stateShots,
   };
 }
 
@@ -227,7 +227,7 @@ export function isTerminalSequenceState(state: SequenceState): boolean {
  * A compact change-detection key for `?wait=` long-polling. It folds in every
  * field an agent polls for progress on, so the poll returns the instant any of
  * them advances — overall status, music, poster, per-kind ready counts, and
- * video failures (so a failing frame wakes the poll instead of stalling it
+ * video failures (so a failing shot wakes the poll instead of stalling it
  * until the deadline).
  */
 export function sequenceStateCursor(state: SequenceState): string {

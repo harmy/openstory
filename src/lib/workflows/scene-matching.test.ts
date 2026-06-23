@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CharacterMinimal, SequenceElementMinimal } from '@/lib/db/schema';
 import {
-  matchCharacterToFrameTags,
+  matchCharacterToShotTags,
   matchCharactersToScene,
   matchElementsToScene,
 } from './scene-matching';
@@ -42,7 +42,7 @@ function makeCharacter(
   };
 }
 
-describe('matchCharacterToFrameTags', () => {
+describe('matchCharacterToShotTags', () => {
   // Regression for sequence 01KQE5DTXJ93PB463JNW85TJV5: name "GIRL ONE" must
   // match snake_case tag emitted by the LLM.
   it('matches a spaced uppercase name against a snake_case tag', () => {
@@ -52,7 +52,7 @@ describe('matchCharacterToFrameTags', () => {
       consistencyTag: 'char_girl_one_scarlett_johansson',
     });
     expect(
-      matchCharacterToFrameTags(girlOne, [
+      matchCharacterToShotTags(girlOne, [
         'girl_one_late_teens_bathroom_morning',
       ])
     ).toBe(true);
@@ -63,7 +63,7 @@ describe('matchCharacterToFrameTags', () => {
       name: 'GIRL ONE',
       characterId: 'char_girl_one',
     });
-    expect(matchCharacterToFrameTags(girlOne, ['girl_one'])).toBe(true);
+    expect(matchCharacterToShotTags(girlOne, ['girl_one'])).toBe(true);
   });
 
   it('is invariant to hyphens and other punctuation in the name', () => {
@@ -71,7 +71,7 @@ describe('matchCharacterToFrameTags', () => {
       name: 'GIRL-ONE',
       characterId: 'char_girl_one',
     });
-    expect(matchCharacterToFrameTags(girlOne, ['girl_one'])).toBe(true);
+    expect(matchCharacterToShotTags(girlOne, ['girl_one'])).toBe(true);
   });
 
   it('does not match unrelated sibling characters', () => {
@@ -79,7 +79,7 @@ describe('matchCharacterToFrameTags', () => {
       name: 'GIRL ONE',
       characterId: 'char_girl_one',
     });
-    expect(matchCharacterToFrameTags(girlOne, ['boy_two_running'])).toBe(false);
+    expect(matchCharacterToShotTags(girlOne, ['boy_two_running'])).toBe(false);
   });
 
   it('returns false for an empty tags array', () => {
@@ -87,7 +87,7 @@ describe('matchCharacterToFrameTags', () => {
       name: 'GIRL ONE',
       characterId: 'char_girl_one',
     });
-    expect(matchCharacterToFrameTags(girlOne, [])).toBe(false);
+    expect(matchCharacterToShotTags(girlOne, [])).toBe(false);
   });
 
   it('rejects very short tags on the reverse direction', () => {
@@ -96,7 +96,7 @@ describe('matchCharacterToFrameTags', () => {
       characterId: 'char_girl_one',
     });
     // Slugifies to "a" — would match "girl_one" reverse-direction without the floor
-    expect(matchCharacterToFrameTags(girlOne, ['a'])).toBe(false);
+    expect(matchCharacterToShotTags(girlOne, ['a'])).toBe(false);
   });
 
   it('matches via characterId fallback when name slug differs', () => {
@@ -104,7 +104,7 @@ describe('matchCharacterToFrameTags', () => {
       name: 'Unnamed Stranger',
       characterId: 'char_001',
     });
-    expect(matchCharacterToFrameTags(c, ['char_001_in_doorway'])).toBe(true);
+    expect(matchCharacterToShotTags(c, ['char_001_in_doorway'])).toBe(true);
   });
 
   // Regression for sequence 01KQDZ5AY370HAPX736RHRWN0E — the LLM emitted
@@ -116,7 +116,7 @@ describe('matchCharacterToFrameTags', () => {
       consistencyTag: 'char_001_ben_affleck',
     });
     expect(
-      matchCharacterToFrameTags(subject, [
+      matchCharacterToShotTags(subject, [
         'anonymous_subject_tattooed_gold_nosering_vintage_tee',
       ])
     ).toBe(true);
@@ -125,7 +125,7 @@ describe('matchCharacterToFrameTags', () => {
   it('does not false-match when the name is a substring of a different word', () => {
     const jack = makeCharacter({ name: 'JACK', characterId: 'char_jack' });
     // Substring matcher would match "jack" inside "jacket"; token matcher must not.
-    expect(matchCharacterToFrameTags(jack, ['jacket_of_doom'])).toBe(false);
+    expect(matchCharacterToShotTags(jack, ['jacket_of_doom'])).toBe(false);
   });
 });
 
@@ -140,7 +140,7 @@ describe('matchCharactersToScene', () => {
     const matched = matchCharactersToScene(cast, tags);
     expect(matched.map((c) => c.name).sort()).toEqual(['GIRL ONE', 'GIRL TWO']);
     for (const c of cast) {
-      expect(matched.includes(c)).toBe(matchCharacterToFrameTags(c, tags));
+      expect(matched.includes(c)).toBe(matchCharacterToShotTags(c, tags));
     }
   });
 

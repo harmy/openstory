@@ -114,10 +114,10 @@ export type {
 // Shot Prompt Variants (visual/motion prompt history)
 export { shotPromptVariants };
 
-export { FRAME_PROMPT_TYPES } from './shot-prompt-variants';
+export { SHOT_PROMPT_TYPES } from './shot-prompt-variants';
 
 export type {
-  FramePromptType,
+  ShotPromptType,
   ShotPromptVariant,
   ShotPromptVariantComponents,
   PromptVariantSource,

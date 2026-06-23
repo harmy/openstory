@@ -4,7 +4,7 @@
  * Appends a new revision row to `sequence_music_prompt_variants` and
  * updates the cached `musicPrompt` / `musicTags` / `musicPromptInputHash`
  * columns on `sequences`. Sequential, not transactional — see the
- * equivalent docstring in `frame-prompt-variants.ts` for the durability
+ * equivalent docstring in `shot-prompt-variants.ts` for the durability
  * story.
  *
  * See docs/architecture/workflow-snapshots-and-content-hash-staleness.md

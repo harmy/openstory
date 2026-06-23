@@ -26,7 +26,7 @@ function imageModelName(model: string): string {
 
 /**
  * Top-level image-model switcher for the sequence header. Lists the distinct
- * image models that have generated for this sequence (frame_variants) and lets
+ * image models that have generated for this sequence (shot_variants) and lets
  * the viewer pick which model's image the scenes view shows; also hosts the
  * "Add a model" picker (#547). "Mixed" when more than one model has output and
  * none is pinned. Replaces the read-only ImageModelBadge.

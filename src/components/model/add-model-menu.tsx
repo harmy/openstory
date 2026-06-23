@@ -43,7 +43,7 @@ const scenes = (n: number) => `${n} scene${n === 1 ? '' : 's'}`;
  * "Add a model" section for the header model dropdowns (#547). Lists models of
  * the given type that have NOT yet generated for this sequence, with a rough
  * cost + scope estimate; clicking confirms via a toast then triggers
- * addModelToSequenceFn (which generates the new model for every frame / the
+ * addModelToSequenceFn (which generates the new model for every shot / the
  * whole sequence using the existing prompts). The server runs the authoritative
  * credit pre-flight; the estimate here is advisory.
  */
@@ -57,7 +57,7 @@ export const AddModelMenuSection = ({
   usedModels: string[];
 }) => {
   const addModel = useAddModelToSequence();
-  const { data: frames } = useShotsBySequence(sequenceId);
+  const { data: shots } = useShotsBySequence(sequenceId);
   const { data: sequence } = useSequence(sequenceId);
   const { data: style } = useStyle(sequence?.styleId ?? '');
   const aspectRatio = sequence?.aspectRatio ?? DEFAULT_ASPECT_RATIO;
@@ -68,10 +68,10 @@ export const AddModelMenuSection = ({
 
   const candidates = useMemo<Candidate[]>(() => {
     const used = new Set(usedModels);
-    const frameList = frames ?? [];
+    const shotList = shots ?? [];
 
     if (variantType === 'image') {
-      const count = frameList.filter(
+      const count = shotList.filter(
         (f) =>
           f.imagePrompt ||
           f.metadata?.prompts?.visual?.fullPrompt ||
@@ -95,7 +95,7 @@ export const AddModelMenuSection = ({
     }
 
     if (variantType === 'video') {
-      const count = frameList.filter(
+      const count = shotList.filter(
         (f) => f.thumbnailStatus === 'completed' && f.thumbnailUrl
       ).length;
       return Object.keys(IMAGE_TO_VIDEO_MODELS)
@@ -127,7 +127,7 @@ export const AddModelMenuSection = ({
 
     // audio — one track for the whole sequence; cost scales with total runtime.
     const totalDurationSecs =
-      frameList.reduce(
+      shotList.reduce(
         (sum, f) =>
           sum +
           (f.durationMs
@@ -148,7 +148,7 @@ export const AddModelMenuSection = ({
         cost: estimateAudioCost(key, totalDurationSecs),
         scope: '1 track',
       }));
-  }, [variantType, usedModels, frames, aspectRatio, styleCategory]);
+  }, [variantType, usedModels, shots, aspectRatio, styleCategory]);
 
   if (candidates.length === 0) return null;
 

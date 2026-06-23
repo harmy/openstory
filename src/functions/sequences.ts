@@ -18,7 +18,7 @@ import { requireCredits } from '@/lib/billing/preflight';
 import { DEFAULT_ASPECT_RATIO } from '@/lib/constants/aspect-ratios';
 import type { Shot, ShotVariant, NewShot } from '@/lib/db/schema';
 import { buildPromoteUpdate } from '@/functions/shots';
-import { buildFrameImageWorkflowInput } from '@/lib/image/build-frame-image-input';
+import { buildShotImageWorkflowInput } from '@/lib/image/build-shot-image-input';
 import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
 import { VARIANT_TYPES, type VariantType } from '@/lib/db/schema/shot-variants';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
@@ -47,10 +47,10 @@ const logger = getLogger(['openstory', 'serverFn', 'sequences']);
 
 /**
  * Result of {@link addModelToSequenceFn}. `count` is the number of generation
- * units actually started (1 track for audio; eligible frames for video; frames
+ * units actually started (1 track for audio; eligible shots for video; shots
  * whose `/image` workflow successfully triggered for image). `failed` is the
  * number of units that failed to start — only ever non-zero for the image path,
- * which triggers one workflow per frame and tolerates partial failure. Mirrored
+ * which triggers one workflow per shot and tolerates partial failure. Mirrored
  * by `useAddModelToSequence`'s mutation generic.
  */
 export type AddModelResult = {
@@ -164,7 +164,7 @@ export const updateSequenceFn = createServerFn({ method: 'POST' })
           teamId: context.teamId,
           sequenceId,
           options: {
-            framesPerScene: 3,
+            shotsPerScene: 3,
             generateThumbnails: true,
             generateDescriptions: true,
             aiProvider: 'openrouter',
@@ -252,7 +252,7 @@ export const retryStoryboardFn = createServerFn({ method: 'POST' })
       teamId,
       sequenceId: sequence.id,
       options: {
-        framesPerScene: 3,
+        shotsPerScene: 3,
         generateThumbnails: true,
         generateDescriptions: true,
         aiProvider: 'openrouter',
@@ -280,19 +280,19 @@ export const archiveSequenceFn = createServerFn({ method: 'POST' })
     return { success: true };
   });
 
-/** Build compact scene summaries from frames for music prompt generation */
-export function buildSceneSummaries(frames: Shot[]): MusicSceneSummary[] {
-  return frames.map((frame) => {
-    const md = frame.metadata?.musicDesign;
-    const prompts = frame.metadata?.prompts;
-    const legacyMusic = frame.metadata?.audioDesign?.music;
-    const meta = frame.metadata?.metadata;
-    const durationSeconds = frame.durationMs
-      ? frame.durationMs / 1000
+/** Build compact scene summaries from shots for music prompt generation */
+export function buildSceneSummaries(shots: Shot[]): MusicSceneSummary[] {
+  return shots.map((shot) => {
+    const md = shot.metadata?.musicDesign;
+    const prompts = shot.metadata?.prompts;
+    const legacyMusic = shot.metadata?.audioDesign?.music;
+    const meta = shot.metadata?.metadata;
+    const durationSeconds = shot.durationMs
+      ? shot.durationMs / 1000
       : (meta?.durationSeconds ?? 10);
 
     return {
-      sceneId: frame.id,
+      sceneId: shot.id,
       location: meta?.location || '',
       timeOfDay: meta?.timeOfDay || '',
       visualSummary: prompts?.visual?.components.sceneDescription || '',
@@ -346,28 +346,28 @@ export function assertModelNotAlreadyAdded(
 }
 
 /**
- * Frames eligible for a video add-model run (#547): only those with a completed
- * primary image to animate. A frame with no usable image is skipped — there is
+ * Shots eligible for a video add-model run (#547): only those with a completed
+ * primary image to animate. A shot with no usable image is skipped — there is
  * nothing to feed image-to-video.
  */
-export function selectEligibleVideoFrames(frames: readonly Shot[]): Shot[] {
-  return frames.filter(
+export function selectEligibleVideoShots(shots: readonly Shot[]): Shot[] {
+  return shots.filter(
     (f) => f.thumbnailStatus === 'completed' && Boolean(f.thumbnailUrl)
   );
 }
 
 /**
- * Sum a sequence's per-frame durations in seconds, falling back to 10s for any
- * frame whose duration is unknown. Shared by the add-audio and generate-music
+ * Sum a sequence's per-shot durations in seconds, falling back to 10s for any
+ * shot whose duration is unknown. Shared by the add-audio and generate-music
  * paths; callers apply their own empty-sequence floor (`|| 30`).
  */
-export function sumFrameDurationsSeconds(
-  frames: ReadonlyArray<Pick<Shot, 'durationMs' | 'metadata'>>
+export function sumShotDurationsSeconds(
+  shots: ReadonlyArray<Pick<Shot, 'durationMs' | 'metadata'>>
 ): number {
-  return frames.reduce((sum, frame) => {
-    const seconds = frame.durationMs
-      ? frame.durationMs / 1000
-      : (frame.metadata?.metadata?.durationSeconds ?? 10);
+  return shots.reduce((sum, shot) => {
+    const seconds = shot.durationMs
+      ? shot.durationMs / 1000
+      : (shot.metadata?.metadata?.durationSeconds ?? 10);
     return sum + seconds;
   }, 0);
 }
@@ -399,11 +399,11 @@ export function buildAddAudioMusicInput(args: {
 
 /**
  * Add a new image / video / audio model to an existing sequence (#547).
- * Generates that model's output for every eligible frame (image/video) or the
+ * Generates that model's output for every eligible shot (image/video) or the
  * whole sequence (audio) using the EXISTING prompts — no re-analysis. Each unit
- * lands as a `frame_variants` row (image/video) or `sequence_music_variants`
+ * lands as a `shot_variants` row (image/video) or `sequence_music_variants`
  * row (audio), pre-stamped `pending` so the new model appears in the header
- * dropdown immediately. Reuses the per-frame image / motion-batch / music
+ * dropdown immediately. Reuses the per-shot image / motion-batch / music
  * workflows unchanged.
  */
 export const addModelToSequenceFn = createServerFn({ method: 'POST' })
@@ -440,8 +440,8 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
           'Generate music once before adding another audio model'
         );
       }
-      const allFrames = await scopedDb.shots.listBySequence(sequence.id);
-      const totalDuration = sumFrameDurationsSeconds(allFrames) || 30;
+      const allShots = await scopedDb.shots.listBySequence(sequence.id);
+      const totalDuration = sumShotDurationsSeconds(allShots) || 30;
 
       await requireCredits(scopedDb, estimateAudioCost(model, totalDuration), {
         errorMessage: 'Insufficient credits to add this audio model',
@@ -504,7 +504,7 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       }
     }
 
-    // ── Video: animate every frame that already has an image ───────────────
+    // ── Video: animate every shot that already has an image ───────────────
     if (variantType === 'video') {
       if (!isValidImageToVideoModel(model)) {
         throw new Error('Invalid video model');
@@ -514,10 +514,10 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
         'video'
       );
       assertModelNotAlreadyAdded(existing, model, 'video');
-      const allFrames = await scopedDb.shots.listBySequence(sequence.id);
-      const eligible = selectEligibleVideoFrames(allFrames);
+      const allShots = await scopedDb.shots.listBySequence(sequence.id);
+      const eligible = selectEligibleVideoShots(allShots);
       if (eligible.length === 0) {
-        throw new Error('No frames have a completed image to animate yet');
+        throw new Error('No shots have a completed image to animate yet');
       }
 
       await requireCredits(
@@ -577,7 +577,7 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
           err: error,
           sequenceId: sequence.id,
           model,
-          frames: eligible.length,
+          shots: eligible.length,
         });
         // Mark the pre-stamped pending rows failed so the model can be re-added.
         // Guard the compensating writes so they can't mask the original trigger
@@ -585,15 +585,10 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
         try {
           await Promise.all(
             eligible.map((f) =>
-              scopedDb.shotVariants.updateByFrameAndModel(
-                f.id,
-                'video',
-                model,
-                {
-                  status: 'failed',
-                  error: 'Failed to trigger motion batch',
-                }
-              )
+              scopedDb.shotVariants.updateByShotAndModel(f.id, 'video', model, {
+                status: 'failed',
+                error: 'Failed to trigger motion batch',
+              })
             )
           );
         } catch (cleanupError) {
@@ -607,7 +602,7 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       }
     }
 
-    // ── Image: re-render every frame's prompt with the new model ───────────
+    // ── Image: re-render every shot's prompt with the new model ───────────
     if (!isValidTextToImageModel(model)) {
       throw new Error('Invalid image model');
     }
@@ -616,7 +611,7 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       'image'
     );
     assertModelNotAlreadyAdded(existingImage, model, 'image');
-    const allFrames = await scopedDb.shots.listBySequence(sequence.id);
+    const allShots = await scopedDb.shots.listBySequence(sequence.id);
     const [characters, locations, elements] = await Promise.all([
       scopedDb.characters.listWithSheets(sequence.id),
       scopedDb.sequenceLocations.listWithReferences(sequence.id),
@@ -624,11 +619,11 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
     ]);
 
     const inputs: NonNullable<
-      Awaited<ReturnType<typeof buildFrameImageWorkflowInput>>
+      Awaited<ReturnType<typeof buildShotImageWorkflowInput>>
     >[] = [];
-    for (const f of allFrames) {
-      const input = await buildFrameImageWorkflowInput({
-        frame: f,
+    for (const f of allShots) {
+      const input = await buildShotImageWorkflowInput({
+        shot: f,
         model,
         userId: user.id,
         teamId: sequence.teamId,
@@ -644,7 +639,7 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       if (input) inputs.push(input);
     }
     if (inputs.length === 0) {
-      throw new Error('No frames have a prompt to generate from');
+      throw new Error('No shots have a prompt to generate from');
     }
 
     await requireCredits(
@@ -656,10 +651,10 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       { errorMessage: 'Insufficient credits to add this image model' }
     );
 
-    // Trigger one image workflow per frame. A single frame's trigger failure
-    // shouldn't abort the rest of the batch — mark that frame's pending row
+    // Trigger one image workflow per shot. A single shot's trigger failure
+    // shouldn't abort the rest of the batch — mark that shot's pending row
     // failed (so it doesn't block a future re-add) and continue. Only throw if
-    // every frame failed to trigger.
+    // every shot failed to trigger.
     let workflowRunId = '';
     let triggered = 0;
     for (const input of inputs) {
@@ -679,17 +674,17 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
         });
         triggered++;
       } catch (error) {
-        // Log every per-frame trigger failure so a systemic cause (e.g. a
+        // Log every per-shot trigger failure so a systemic cause (e.g. a
         // transient binding issue hitting half the batch) leaves an aggregated
         // Sentry trace rather than only a row's `error` column.
-        logger.error('add-model: failed to trigger image workflow for frame', {
+        logger.error('add-model: failed to trigger image workflow for shot', {
           err: error,
           sequenceId: sequence.id,
           shotId: input.shotId,
           model,
         });
         if (input.shotId) {
-          await scopedDb.shotVariants.updateByFrameAndModel(
+          await scopedDb.shotVariants.updateByShotAndModel(
             input.shotId,
             'image',
             model,
@@ -705,7 +700,7 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       }
     }
     if (triggered === 0) {
-      throw new Error('Failed to start image generation for any frame');
+      throw new Error('Failed to start image generation for any shot');
     }
     return {
       workflowRunId,
@@ -767,11 +762,11 @@ export function buildSequencePromoteUpdate(
 /**
  * Promote a model to the live primary across the WHOLE sequence (#547) — the
  * sequence-wide "Set" that pairs with the header image/video dropdowns. For
- * every frame that has a completed `frame_variants` row for `model`, copies that
+ * every shot that has a completed `shot_variants` row for `model`, copies that
  * row onto the legacy primary columns (the per-scene `setImageFromVariantFn` /
- * `setVideoFromVariantFn` applied in bulk, reusing `buildPromoteUpdate`). Frames
+ * `setVideoFromVariantFn` applied in bulk, reusing `buildPromoteUpdate`). Shots
  * the model never generated are left on their current primary. Image promotion
- * invalidates each affected frame's video (the start image changed); video
+ * invalidates each affected shot's video (the start image changed); video
  * promotion is terminal. Audio is per-sequence — use `setMusicFromVariantFn`.
  */
 export const setSequenceModelFn = createServerFn({ method: 'POST' })
@@ -807,23 +802,23 @@ export const setSequenceModelFn = createServerFn({ method: 'POST' })
 
     let count = 0;
     for (const variant of promotable) {
-      const frameUpdate = buildSequencePromoteUpdate(
+      const shotUpdate = buildSequencePromoteUpdate(
         variant,
         variantType,
         model
       );
-      const updated = await scopedDb.shots.update(variant.shotId, frameUpdate, {
+      const updated = await scopedDb.shots.update(variant.shotId, shotUpdate, {
         throwOnMissing: false,
       });
       if (updated) count++;
     }
 
-    // A frame deleted mid-promotion is benign (throwOnMissing:false skips it),
+    // A shot deleted mid-promotion is benign (throwOnMissing:false skips it),
     // but a promoted count short of the promotable set otherwise points at a
     // real problem (e.g. a scoping mismatch) — surface it rather than letting
     // the lower count pass silently.
     if (count !== promotable.length) {
-      logger.warn('set-model: promoted fewer frames than promotable', {
+      logger.warn('set-model: promoted fewer shots than promotable', {
         sequenceId: sequence.id,
         model,
         variantType,
@@ -837,7 +832,7 @@ export const setSequenceModelFn = createServerFn({ method: 'POST' })
 
 /**
  * Trigger sequence-level music generation.
- * Uses pre-generated prompt/tags when available, otherwise builds from frame audio specs.
+ * Uses pre-generated prompt/tags when available, otherwise builds from shot audio specs.
  */
 export const generateMusicFn = createServerFn({ method: 'POST' })
   .middleware([sequenceAccessMiddleware])
@@ -881,11 +876,11 @@ export const generateMusicFn = createServerFn({ method: 'POST' })
       });
     }
 
-    const allFrames = await context.scopedDb.shots.listBySequence(
+    const allShots = await context.scopedDb.shots.listBySequence(
       data.sequenceId
     );
 
-    const totalDuration = sumFrameDurationsSeconds(allFrames);
+    const totalDuration = sumShotDurationsSeconds(allShots);
 
     const baseInput = {
       userId: user.id,

@@ -56,13 +56,13 @@ export async function reconcileAllStuckJobs(): Promise<ReconcileCounts> {
   const counts: ReconcileCounts = {};
 
   const passes: Array<[string, () => Promise<number>]> = [
-    ['frames.thumbnail', () => reconcileShotsPass(db, 'thumbnail')],
-    ['frames.video', () => reconcileShotsPass(db, 'video')],
-    ['frames.variant_image', () => reconcileShotsPass(db, 'variantImage')],
-    ['frames.audio', () => reconcileShotsPass(db, 'audio')],
-    ['frame_variants.status', () => reconcileShotVariantsPass(db, 'primary')],
+    ['shots.thumbnail', () => reconcileShotsPass(db, 'thumbnail')],
+    ['shots.video', () => reconcileShotsPass(db, 'video')],
+    ['shots.variant_image', () => reconcileShotsPass(db, 'variantImage')],
+    ['shots.audio', () => reconcileShotsPass(db, 'audio')],
+    ['shot_variants.status', () => reconcileShotVariantsPass(db, 'primary')],
     [
-      'frame_variants.shot_variant',
+      'shot_variants.shot_variant',
       () => reconcileShotVariantsPass(db, 'shotVariant'),
     ],
     ['sequences.status', () => reconcileSequencesPass(db)],
@@ -107,7 +107,7 @@ type ShotPipeline = 'thumbnail' | 'video' | 'variantImage' | 'audio';
 // in this file): the staleness predicate is `updated_at < cutoff`. If pass A
 // updated `updated_at = now` while writing its status column, pass B's
 // SELECT for the same row would see a fresh timestamp and skip it. So when a
-// frame is stuck across multiple pipelines simultaneously, only the first
+// shot is stuck across multiple pipelines simultaneously, only the first
 // pass would reconcile. Leaving `updated_at` untouched lets sequential
 // passes all see the row as stale until each one has flipped its own
 // status column. The on-load reconciler doesn't have this issue because it
@@ -230,7 +230,7 @@ async function reconcileShotVariantsPass(
  * can't distinguish slow-but-alive from dead, and 'processing' has no safe
  * blind-fail threshold now that full runs can legitimately take hours.
  */
-// Narrowly typed like FRAMES_PIPELINE_COLUMNS.setStatus so the compiler
+// Narrowly typed like SHOTS_PIPELINE_COLUMNS.setStatus so the compiler
 // enforces the null/'unknown' skip in the loop below: dropping either guard
 // makes this call fail typecheck instead of silently flipping a live (or
 // unverifiable) sequence to 'completed'.

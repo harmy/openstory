@@ -399,8 +399,8 @@ export type RunErrorDetail = {
  * Narrow a stream event to a `RUN_ERROR` and extract its diagnostic fields,
  * or return `null` for any other event. Takes `unknown` because `chat()`'s
  * yielded event union is wide and not cleanly nameable — this is a type guard
- * over an arbitrary (possibly malformed) provider frame. Fields are read
- * defensively: a bad frame can carry a non-string `message`.
+ * over an arbitrary (possibly malformed) provider shot. Fields are read
+ * defensively: a bad shot can carry a non-string `message`.
  */
 export function extractRunError(event: unknown): RunErrorDetail | null {
   if (
@@ -434,7 +434,7 @@ export function extractRunError(event: unknown): RunErrorDetail | null {
  * `metadata`, with the upstream body in `raw` (often a JSON string shaped like
  * `{ error: { message } }`, e.g. an Anthropic schema-validation message).
  * Returns a compact `provider=… <message>` string, or `undefined` when there's
- * no usable detail. Read defensively: `rawEvent` is an arbitrary provider frame.
+ * no usable detail. Read defensively: `rawEvent` is an arbitrary provider shot.
  */
 function extractProviderErrorDetail(rawEvent: unknown): string | undefined {
   if (!rawEvent || typeof rawEvent !== 'object') return undefined;

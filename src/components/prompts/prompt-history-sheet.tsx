@@ -33,7 +33,7 @@ type SharedProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-type FrameProps = SharedProps & {
+type ShotProps = SharedProps & {
   mode: 'visual' | 'motion';
   sequenceId: string;
   shotId: string;
@@ -48,7 +48,7 @@ type MusicProps = SharedProps & {
   currentText: string;
 };
 
-export type PromptHistorySheetProps = FrameProps | MusicProps;
+export type PromptHistorySheetProps = ShotProps | MusicProps;
 
 const SOURCE_LABEL: Record<PromptVariantSource, string> = {
   'ai-generated': 'AI',

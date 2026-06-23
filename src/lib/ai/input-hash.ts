@@ -79,7 +79,7 @@ const trim = (s: string | null | undefined): string => (s ?? '').trim();
 const sortedRefs = (refs: readonly string[] | undefined): string[] =>
   [...(refs ?? [])].sort();
 
-type FrameImageHashFields = {
+type ShotImageHashFields = {
   visualPrompt: string;
   imageModel: string;
   aspectRatio: string;
@@ -90,17 +90,17 @@ type FrameImageHashFields = {
   elementReferenceHashes: readonly string[];
 };
 
-type FrameImageHashKind = 'thumbnail' | 'variant-image';
+type ShotImageHashKind = 'thumbnail' | 'variant-image';
 
-export type FrameImageHashInput = FrameImageHashFields & {
-  kind: FrameImageHashKind;
+export type ShotImageHashInput = ShotImageHashFields & {
+  kind: ShotImageHashKind;
 };
 
-export function computeFrameImageInputHash(
-  input: FrameImageHashInput
+export function computeShotImageInputHash(
+  input: ShotImageHashInput
 ): Promise<string> {
   return sha256Hex({
-    artifact: `frame:${input.kind}`,
+    artifact: `shot:${input.kind}`,
     visualPrompt: trim(input.visualPrompt),
     imageModel: input.imageModel,
     aspectRatio: input.aspectRatio,
@@ -117,12 +117,12 @@ export function computeFrameImageInputHash(
  * artifact-hash chain (so a stale upstream image cascades); a `url` is used
  * when the source is an external asset with no hashable upstream.
  */
-type FrameVideoSourceImage =
+type ShotVideoSourceImage =
   | { kind: 'variantHash'; hash: string }
   | { kind: 'url'; url: string };
 
-export type FrameVideoHashInput = {
-  sourceImage: FrameVideoSourceImage;
+export type ShotVideoHashInput = {
+  sourceImage: ShotVideoSourceImage;
   motionPrompt: string;
   motionModel: string;
   durationSeconds: number;
@@ -130,15 +130,15 @@ export type FrameVideoHashInput = {
   aspectRatio: string;
 };
 
-export function computeFrameVideoInputHash(
-  input: FrameVideoHashInput
+export function computeShotVideoInputHash(
+  input: ShotVideoHashInput
 ): Promise<string> {
   const sourceImage =
     input.sourceImage.kind === 'variantHash'
       ? { kind: 'variantHash' as const, hash: trim(input.sourceImage.hash) }
       : { kind: 'url' as const, url: trim(input.sourceImage.url) };
   return sha256Hex({
-    artifact: 'frame:video',
+    artifact: 'shot:video',
     sourceImage,
     motionPrompt: trim(input.motionPrompt),
     motionModel: input.motionModel,
@@ -148,7 +148,7 @@ export function computeFrameVideoInputHash(
   });
 }
 
-export type FrameAudioHashInput = {
+export type ShotAudioHashInput = {
   musicPrompt: string;
   /** Unordered set of music tags. */
   tags: readonly string[];
@@ -156,11 +156,11 @@ export type FrameAudioHashInput = {
   audioModel: string;
 };
 
-export function computeFrameAudioInputHash(
-  input: FrameAudioHashInput
+export function computeShotAudioInputHash(
+  input: ShotAudioHashInput
 ): Promise<string> {
   return sha256Hex({
-    artifact: 'frame:audio',
+    artifact: 'shot:audio',
     musicPrompt: trim(input.musicPrompt),
     tags: sortedRefs(input.tags),
     durationSeconds: input.durationSeconds,
@@ -319,8 +319,8 @@ export type PromptSceneContextHashInput = {
   /** Analysis model id (e.g. `anthropic/claude-haiku-4.5`). */
   analysisModel: string;
   /**
-   * URL of the rendered starting-frame image this prompt was conditioned on
-   * (`frames.thumbnailUrl`), or null when no image has been rendered yet. Only
+   * URL of the rendered starting-shot image this prompt was conditioned on
+   * (`shots.thumbnailUrl`), or null when no image has been rendered yet. Only
    * the MOTION prompt consumes this — motion is now generated with the actual
    * still as a vision input (#929). The stored URL embeds a fresh id per
    * render, so re-rendering the still changes it and re-stales the motion
@@ -339,7 +339,7 @@ export type PromptSceneContextHashInput = {
  * (`durationSeconds` snapped mid-pipeline) one field over: `musicDesign`,
  * `audioDesign`, `sourceImageUrl` are all downstream output and must never be
  * hashed here. `durationSeconds` is excluded for the same #767 reason — it is a
- * video parameter (hashed by `computeFrameVideoInputHash`), not a prompt driver.
+ * video parameter (hashed by `computeShotVideoInputHash`), not a prompt driver.
  */
 function sceneInputContext(scene: Scene) {
   return {
@@ -425,7 +425,7 @@ function sortedBibles(input: PromptSceneContextHashInput) {
  * freshly-computed one, which would normally surface to users as "stale"
  * banners on unchanged content. The staleness handlers short-circuit when
  * the stored hash is null, so the matching deploy step should null the
- * `*_prompt_input_hash` columns on `frames` / `sequences` so legacy rows
+ * `*_prompt_input_hash` columns on `shots` / `sequences` so legacy rows
  * fall through that safe path until they're regenerated.
  */
 const PROMPT_INPUT_HASH_VERSION = 4;
@@ -435,7 +435,7 @@ export function computeVisualPromptInputHash(
 ): Promise<string> {
   const bibles = sortedBibles(input);
   return sha256Hex({
-    artifact: 'frame:visual-prompt',
+    artifact: 'shot:visual-prompt',
     hashVersion: PROMPT_INPUT_HASH_VERSION,
     scene: sceneInputContext(input.scene),
     styleConfig: input.styleConfig,
@@ -454,7 +454,7 @@ export function computeMotionPromptInputHash(
 ): Promise<string> {
   const bibles = sortedBibles(input);
   return sha256Hex({
-    artifact: 'frame:motion-prompt',
+    artifact: 'shot:motion-prompt',
     hashVersion: PROMPT_INPUT_HASH_VERSION,
     scene: sceneInputContext(input.scene),
     styleConfig: input.styleConfig,

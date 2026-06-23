@@ -19,7 +19,7 @@ async function* deltas(
 }
 
 describe('enhanceSseResponse', () => {
-  it('streams delta frames then a terminal done frame with the full script', async () => {
+  it('streams delta shots then a terminal done shot with the full script', async () => {
     const gen = deltas(['INT. ', 'LIGHTHOUSE', ' - NIGHT  ']);
     const first = await gen.next();
     const res = enhanceSseResponse(first, gen);
@@ -33,14 +33,14 @@ describe('enhanceSseResponse', () => {
     expect(body).toContain('data: {"delta":"INT. "}\n\n');
     expect(body).toContain('data: {"delta":"LIGHTHOUSE"}\n\n');
 
-    // The done frame carries the trimmed, concatenated script plus the HAL
+    // The done shot carries the trimmed, concatenated script plus the HAL
     // affordance catalog every v1 response exposes.
-    const doneFrame = body
+    const doneShot = body
       .split('\n\n')
-      .find((frame) => frame.startsWith('event: done'));
-    expect(doneFrame).toBeDefined();
+      .find((shot) => shot.startsWith('event: done'));
+    expect(doneShot).toBeDefined();
     const donePayload = JSON.parse(
-      (doneFrame ?? '').replace('event: done\ndata: ', '')
+      (doneShot ?? '').replace('event: done\ndata: ', '')
     );
     expect(donePayload.enhancedScript).toBe('INT. LIGHTHOUSE - NIGHT');
     expect(donePayload._links.self.href).toBe('/api/v1/scripts/enhance');
@@ -56,7 +56,7 @@ describe('enhanceSseResponse', () => {
     ]);
   });
 
-  it('emits an error frame when the generator fails mid-stream', async () => {
+  it('emits an error shot when the generator fails mid-stream', async () => {
     const gen = deltas(['partial ', 'never'], 1); // yields one delta, then throws
     const first = await gen.next();
     const body = await readSse(enhanceSseResponse(first, gen));

@@ -62,7 +62,7 @@ export class MotionPromptWorkflow extends OpenStoryWorkflowEntrypoint<MotionProm
       elementBible,
       styleConfig,
       analysisModelId,
-      frameMapping,
+      shotMapping,
       sequenceId,
       startingFrameImageUrls,
     } = input;
@@ -102,8 +102,7 @@ export class MotionPromptWorkflow extends OpenStoryWorkflowEntrypoint<MotionProm
           teamId: input.teamId,
           userId: input.userId,
           sequenceId,
-          shotId: frameMapping?.find((f) => f.sceneId === scene.sceneId)
-            ?.shotId,
+          shotId: shotMapping?.find((f) => f.sceneId === scene.sceneId)?.shotId,
           // Pass the rendered still per scene, snapshotted upstream (#929) —
           // never looked up inside the child workflow.
           startingFrameImageUrl:
@@ -167,7 +166,7 @@ export class MotionPromptWorkflow extends OpenStoryWorkflowEntrypoint<MotionProm
   }): void {
     // Mirror QStash's `failureFunction`, which returned a static string and
     // performed no DB writes — per-scene failures already surface via the
-    // child workflow's own onFailure (e.g. framePrompt.failed emits).
+    // child workflow's own onFailure (e.g. shotPrompt.failed emits).
     logger.error('[MotionPromptWorkflow:cf] Motion prompt generation failed', {
       error,
     });

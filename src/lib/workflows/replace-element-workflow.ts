@@ -13,8 +13,8 @@
  *     instead of invoking the `element-vision` child workflow — matches the
  *     QStash original, which also runs vision in-process here. The
  *     `ElementVisionWorkflow` child is exercised by *other* trigger paths.
- *   - Per-frame fan-out uses `spawnAndAwaitChild` (Pattern 3) to invoke
- *     `ImageWorkflow` for each affected frame, with `Promise.all` to spawn
+ *   - Per-shot fan-out uses `spawnAndAwaitChild` (Pattern 3) to invoke
+ *     `ImageWorkflow` for each affected shot, with `Promise.all` to spawn
  *     in parallel and `Promise.allSettled` to gather results so a single
  *     timed-out child cannot tank the rest of the batch.
  *   - Reads the workflow run id from `event.instanceId` instead of
@@ -81,7 +81,7 @@ type BatchOutcome =
 /**
  * Pure decision: given per-shot results, should the workflow emit `:complete`
  * or throw to trigger the base class's `onFailure` hook? Skipped-deleted
- * frames never enter `results` so they don't count against the success floor.
+ * shots never enter `results` so they don't count against the success floor.
  */
 export function decideBatchOutcome(results: ShotResult[]): BatchOutcome {
   const successCount = results.filter((r) => r.success).length;
@@ -102,7 +102,7 @@ export function decideBatchOutcome(results: ShotResult[]): BatchOutcome {
 /**
  * Pure decision: when `onFailure` fires, should the element's `visionStatus`
  * be downgraded to `'failed'`? Only when vision was still in flight — if
- * vision already succeeded, the failure was in a per-frame edit and
+ * vision already succeeded, the failure was in a per-shot edit and
  * downgrading would mislead the element card into showing "vision failed".
  */
 export function shouldDowngradeVisionOnFailure(
@@ -133,7 +133,7 @@ export function rejectionReasonMessage(reason: unknown): string {
 /**
  * Pure conversion of a `Promise.allSettled` entry into a `ShotResult`.
  * Fulfilled entries pass through; rejected entries become a failure result
- * tagged with `fallbackShotId` (the frame whose edit was awaited at this
+ * tagged with `fallbackShotId` (the shot whose edit was awaited at this
  * index) or `'unknown'` when that lookup came back empty.
  */
 export function settledToResult(
@@ -210,7 +210,7 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
       safeEmit(sequenceId, 'start', () =>
         getGenerationChannel(sequenceId).emit(
           'generation.replace-element:start',
-          { elementId, frameCount: affectedShotIds.length }
+          { elementId, shotCount: affectedShotIds.length }
         )
       )
     );
@@ -236,7 +236,7 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
 
     // Vision-driven auto-rename: if the new image suggests a meaningfully
     // different identifier AND that identifier isn't taken, cascade the
-    // rename through script + frames before the edits so the rewritten
+    // rename through script + shots before the edits so the rewritten
     // prompts/extracts land on the new token rather than the stale one.
     let renamedTo: string | undefined;
     if (visionResult.suggestedToken !== token) {
@@ -290,8 +290,8 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
     const aspectRatio = sequence.aspectRatio;
     const imageModel = input.imageModel ?? DEFAULT_IMAGE_MODEL;
 
-    // Frames captured at trigger time may have been deleted mid-flight. Treat
-    // missing frames as skipped rather than aborting the whole batch.
+    // Shots captured at trigger time may have been deleted mid-flight. Treat
+    // missing shots as skipped rather than aborting the whole batch.
     const liveShots = await step.do('load-shots', () =>
       scopedDb.shots.getByIds(affectedShotIds)
     );
@@ -300,11 +300,11 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
       (id) => !liveShotIds.has(id)
     );
 
-    // Flip every affected frame to `generating` and emit progress events
-    // BEFORE fanning out per-frame edits. Otherwise the user can navigate to
+    // Flip every affected shot to `generating` and emit progress events
+    // BEFORE fanning out per-shot edits. Otherwise the user can navigate to
     // a scene during the vision phase and see stale "completed" thumbnails —
     // the image-workflow's own set-generating-status step runs too late to
-    // cover that window. Same upfront flip for videos: any frame with a
+    // cover that window. Same upfront flip for videos: any shot with a
     // prior video will be regenerated, so its video tile should already read
     // as in-flight.
     await step.do('mark-shots-generating', async () => {
@@ -353,14 +353,14 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
     const imageBinding = this.env.IMAGE_WORKFLOW;
 
     // Parallel fan-out — per-child retries handle backpressure.
-    // `allSettled` so a per-frame throw (e.g. timed-out child) doesn't abort
-    // sibling frames.
+    // `allSettled` so a per-shot throw (e.g. timed-out child) doesn't abort
+    // sibling shots.
     const imageSpawnPromises = liveShots.map(
       async (shot, index): Promise<ShotResult> => {
         const sourceImageUrl = shot.thumbnailUrl;
         if (!sourceImageUrl) {
           // Replacement is only meaningful when a primary thumbnail exists;
-          // text-to-image regeneration would silently invent a frame from
+          // text-to-image regeneration would silently invent a shot from
           // prose alone.
           return {
             shotId: shot.id,
@@ -369,15 +369,15 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
           };
         }
 
-        // Prefer the frame's own model when it supports edits, so the swap
+        // Prefer the shot's own model when it supports edits, so the swap
         // reads as a continuation of the original render. Fall back to the
         // workflow's edit-capable default otherwise.
-        const frameModel = safeTextToImageModel(
+        const shotModel = safeTextToImageModel(
           shot.imageModel,
           DEFAULT_IMAGE_MODEL
         );
-        const model = supportsReferenceImages(frameModel)
-          ? frameModel
+        const model = supportsReferenceImages(shotModel)
+          ? shotModel
           : imageModel;
 
         const childPayload: ImageWorkflowInput = {
@@ -392,7 +392,7 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
           referenceImages: [
             {
               referenceImageUrl: sourceImageUrl,
-              description: 'Existing frame to edit',
+              description: 'Existing shot to edit',
               role: 'primary',
             },
             {
@@ -467,8 +467,8 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
       );
     }
 
-    // Cascade to videos: for each successfully-edited frame that previously
-    // had a video, regenerate the video off the new thumbnail. The frame's
+    // Cascade to videos: for each successfully-edited shot that previously
+    // had a video, regenerate the video off the new thumbnail. The shot's
     // `videoStatus` flips to `generating` so the existing UI surfaces the
     // in-flight state on both the image and video pages.
     const successByShotId = new Map<string, string>();
@@ -597,7 +597,7 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
     const input = event.payload;
 
     // The failure could be in vision (status still `analyzing`) or in a
-    // per-frame edit (vision succeeded → status is `completed`). Only
+    // per-shot edit (vision succeeded → status is `completed`). Only
     // downgrade in the first case; otherwise the element card would mislead
     // the user about which step failed.
     //

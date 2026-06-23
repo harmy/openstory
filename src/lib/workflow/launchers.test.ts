@@ -34,7 +34,7 @@ const INPUT: StoryboardWorkflowInput = {
   teamId: 't1',
   sequenceId: 'seq_1',
   options: {
-    framesPerScene: 3,
+    shotsPerScene: 3,
     generateThumbnails: true,
     generateDescriptions: true,
     aiProvider: 'openrouter',

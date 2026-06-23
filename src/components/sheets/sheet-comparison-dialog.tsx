@@ -100,7 +100,7 @@ const SheetPreview: React.FC<{
 /**
  * Sheet-shaped sibling of `DivergenceCompareDialog`. Same two-click promote
  * confirmation, same two-column live/alternate preview, but supports the
- * portrait sheet aspect ratios (vs. the frame dialog's hard-coded 16:9 video).
+ * portrait sheet aspect ratios (vs. the shot dialog's hard-coded 16:9 video).
  */
 export const SheetComparisonDialog: React.FC<SheetComparisonDialogProps> = ({
   open,

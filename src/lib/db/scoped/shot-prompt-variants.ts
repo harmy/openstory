@@ -19,7 +19,7 @@ import type { MotionPromptParameters } from '@/lib/ai/scene-analysis.schema';
 import type { Database } from '@/lib/db/client';
 import { shotPromptVariants, shots, user } from '@/lib/db/schema';
 import type {
-  FramePromptType,
+  ShotPromptType,
   ShotPromptVariant,
   ShotPromptVariantComponents,
 } from '@/lib/db/schema';
@@ -27,7 +27,7 @@ import { and, desc, eq, isNotNull, lte } from 'drizzle-orm';
 
 type WriteShotPromptVariantBase = {
   shotId: string;
-  promptType: FramePromptType;
+  promptType: ShotPromptType;
   text: string;
   components?: ShotPromptVariantComponents | null;
   parameters?: MotionPromptParameters | null;
@@ -72,7 +72,7 @@ export type WriteShotPromptVariantInput = WriteShotPromptVariantBase &
       }
   );
 
-const cachedColumnsForType = (promptType: FramePromptType) =>
+const cachedColumnsForType = (promptType: ShotPromptType) =>
   promptType === 'visual'
     ? {
         text: shots.imagePrompt,
@@ -195,9 +195,9 @@ export function createShotPromptVariantsMethods(db: Database) {
     },
 
     /** List the revision history for a shot's prompt, newest first. */
-    listByFrame: async (
+    listByShot: async (
       shotId: string,
-      promptType: FramePromptType
+      promptType: ShotPromptType
     ): Promise<ShotPromptVariant[]> => {
       return await db
         .select()
@@ -214,9 +214,9 @@ export function createShotPromptVariantsMethods(db: Database) {
     /**
      * History list for the UI — joins author name. Newest first.
      */
-    listByFrameWithAuthor: async (
+    listByShotWithAuthor: async (
       shotId: string,
-      promptType: FramePromptType
+      promptType: ShotPromptType
     ): Promise<Array<ShotPromptVariant & { createdByName: string | null }>> => {
       const rows = await db
         .select({ variant: shotPromptVariants, createdByName: user.name })
@@ -236,7 +236,7 @@ export function createShotPromptVariantsMethods(db: Database) {
     },
 
     /** Fetch a single variant scoped to its shot. */
-    getByIdForFrame: async (
+    getByIdForShot: async (
       variantId: string,
       shotId: string
     ): Promise<ShotPromptVariant | null> => {
@@ -260,7 +260,7 @@ export function createShotPromptVariantsMethods(db: Database) {
      */
     listCandidatesAtOrBefore: async (
       shotId: string,
-      promptType: FramePromptType,
+      promptType: ShotPromptType,
       cutoff: Date,
       limit = 50
     ): Promise<ShotPromptVariant[]> => {
@@ -281,7 +281,7 @@ export function createShotPromptVariantsMethods(db: Database) {
     /** Most recent variant of a given type, or null if none exists. */
     getLatest: async (
       shotId: string,
-      promptType: FramePromptType
+      promptType: ShotPromptType
     ): Promise<ShotPromptVariant | null> => {
       const [row] = await db
         .select()
@@ -306,7 +306,7 @@ export function createShotPromptVariantsMethods(db: Database) {
      */
     getLatestWithInputHash: async (
       shotId: string,
-      promptType: FramePromptType
+      promptType: ShotPromptType
     ): Promise<ShotPromptVariant | null> => {
       const [row] = await db
         .select()

@@ -11,8 +11,8 @@ import { type InferInsertModel, type InferSelectModel } from 'drizzle-orm';
 import { index, integer, snakeCase, text } from 'drizzle-orm/sqlite-core';
 import { generateId } from '../id';
 import { user } from './auth';
-// NOTE: frames imported in index.ts to avoid circular dependency
-// frames.ts imports sequences for foreign key reference
+// NOTE: shots imported in index.ts to avoid circular dependency
+// shots.ts imports sequences for foreign key reference
 import { styles } from './libraries';
 import { teams } from './teams';
 

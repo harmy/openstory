@@ -128,11 +128,11 @@ export class RealtimeChannel extends DurableObject {
     this.writers.add(writer);
 
     void writer
-      .write(this.frame({ type: 'connected', channel }))
+      .write(this.shot({ type: 'connected', channel }))
       .catch(() => this.dropWriter(writer));
 
     const ping = setInterval(() => {
-      writer.write(this.frame({ type: 'ping' })).catch(() => {
+      writer.write(this.shot({ type: 'ping' })).catch(() => {
         clearInterval(ping);
         this.dropWriter(writer);
       });
@@ -159,13 +159,13 @@ export class RealtimeChannel extends DurableObject {
     channel: string;
     data: unknown;
   }): void {
-    const frame = this.frame(event);
+    const shot = this.shot(event);
     for (const writer of this.writers) {
-      writer.write(frame).catch(() => this.dropWriter(writer));
+      writer.write(shot).catch(() => this.dropWriter(writer));
     }
   }
 
-  private frame(payload: unknown): Uint8Array {
+  private shot(payload: unknown): Uint8Array {
     return this.encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
   }
 

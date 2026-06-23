@@ -38,7 +38,7 @@ import { createServerFn, createServerOnlyFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 import { zodValidator } from '@tanstack/zod-adapter';
 import { z } from 'zod';
-import { authWithTeamMiddleware, frameAccessMiddleware } from './middleware';
+import { authWithTeamMiddleware, shotAccessMiddleware } from './middleware';
 
 import { getLogger } from '@/lib/observability/logger';
 
@@ -209,7 +209,7 @@ const estimateSceneDurationInputSchema = z.object({
 });
 
 export const estimateSceneDurationFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
+  .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(estimateSceneDurationInputSchema))
   .handler(async ({ data, context }) => {
     enforceRateLimit(sceneDurationEstimationRateLimiter, getClientIP());

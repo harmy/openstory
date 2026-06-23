@@ -67,7 +67,7 @@ export const EvalSequencesMobile: React.FC<EvalSequencesMobileProps> = ({
   };
 
   // Mirror EvalMatrix's row virtualization (#748). The mobile reel view used to
-  // mount every sequence row — and every frame strip within each row — in one
+  // mount every sequence row — and every shot strip within each row — in one
   // synchronous pass. On a large team that N×M mount is what pushed iOS WebKit
   // past its per-tab memory budget and killed the WebProcess ("Can't open this
   // page"). Render only the visible rows (+overscan); row height is measured
@@ -118,7 +118,7 @@ export const EvalSequencesMobile: React.FC<EvalSequencesMobileProps> = ({
                 sequenceIndex={virtualRow.index}
                 sequenceCount={sequences.length}
                 viewMode={viewMode}
-                framesLoading={shotsLoadingMap[sequence.id] ?? false}
+                shotsLoading={shotsLoadingMap[sequence.id] ?? false}
                 divergence={divergenceMap?.get(sequence.id)}
                 openDialog={openDialog}
                 onOpenDialogChange={setOpenDialog}
@@ -137,7 +137,7 @@ type MobileReelRowProps = {
   sequenceIndex: number;
   sequenceCount: number;
   viewMode: ViewMode;
-  framesLoading: boolean;
+  shotsLoading: boolean;
   divergence?: { hasMusic: boolean };
   openDialog: OpenDialogState;
   onOpenDialogChange: (state: OpenDialogState) => void;
@@ -149,7 +149,7 @@ const MobileReelRow: React.FC<MobileReelRowProps> = ({
   sequenceIndex,
   sequenceCount,
   viewMode,
-  framesLoading,
+  shotsLoading,
   divergence,
   openDialog,
   onOpenDialogChange,
@@ -160,7 +160,7 @@ const MobileReelRow: React.FC<MobileReelRowProps> = ({
   const cellWidth = ratioData
     ? (STRIP_HEIGHT * ratioData.width) / ratioData.height
     : STRIP_HEIGHT;
-  const frameCount = sequence.shots.length;
+  const shotCount = sequence.shots.length;
   const hasVariants = Boolean(divergence?.hasMusic);
 
   return (
@@ -212,8 +212,8 @@ const MobileReelRow: React.FC<MobileReelRowProps> = ({
             width={cellWidth}
             height={STRIP_HEIGHT}
           />
-          {frameCount === 0 ? (
-            framesLoading ? (
+          {shotCount === 0 ? (
+            shotsLoading ? (
               <Skeleton
                 style={{ width: cellWidth, height: STRIP_HEIGHT }}
                 className="shrink-0"
@@ -227,7 +227,7 @@ const MobileReelRow: React.FC<MobileReelRowProps> = ({
               </div>
             )
           ) : (
-            sequence.shots.map((frame, sceneIndex) => {
+            sequence.shots.map((shot, sceneIndex) => {
               const isDialogOpen =
                 openDialog?.sequenceIndex === sequenceIndex &&
                 openDialog.sceneIndex === sceneIndex;
@@ -237,17 +237,17 @@ const MobileReelRow: React.FC<MobileReelRowProps> = ({
 
               return (
                 <div
-                  key={frame.id}
+                  key={shot.id}
                   className="shrink-0 border rounded-md overflow-hidden bg-card [&>button]:!border-b-0 [&>div]:!border-b-0"
                   style={{ width: cellWidth, height: STRIP_HEIGHT }}
                 >
                   <EvalSceneCell
-                    frame={frame}
+                    shot={shot}
                     viewMode={viewMode}
                     sceneNumber={sceneIndex + 1}
                     sequenceTitle={sequence.title}
                     aspectRatio={aspectRatio}
-                    framesLoading={framesLoading}
+                    shotsLoading={shotsLoading}
                     dialogOpen={isDialogOpen}
                     dialogInitialTab={dialogInitialTab}
                     onDialogOpenChange={(open) => {
@@ -261,7 +261,7 @@ const MobileReelRow: React.FC<MobileReelRowProps> = ({
                       }
                     }}
                     onNavigateRight={() => {
-                      if (sceneIndex < frameCount - 1) {
+                      if (sceneIndex < shotCount - 1) {
                         onNavigateToCell(sequenceIndex, sceneIndex + 1);
                       }
                     }}

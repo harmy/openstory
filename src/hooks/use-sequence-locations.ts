@@ -4,7 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  getFrameIdsForLocationFn,
+  getShotIdsForLocationFn,
   getSequenceLocationsFn,
   getTeamLocationsLibraryFn,
   recastLocationFn,
@@ -81,14 +81,14 @@ export function useLibraryLocations() {
 }
 
 /**
- * Hook to get the count of frames at a location
- * Used to show affected frames before recasting
+ * Hook to get the count of shots at a location
+ * Used to show affected shots before recasting
  */
-export function useFrameIdsForLocation(sequenceId: string, locationId: string) {
+export function useShotIdsForLocation(sequenceId: string, locationId: string) {
   return useQuery({
     queryKey: sequenceLocationKeys.shotsForLocation(sequenceId, locationId),
     queryFn: () =>
-      getFrameIdsForLocationFn({ data: { sequenceId, locationId } }),
+      getShotIdsForLocationFn({ data: { sequenceId, locationId } }),
     enabled: !!sequenceId && !!locationId,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -112,7 +112,7 @@ export function useRecastLocation() {
       void queryClient.invalidateQueries({
         queryKey: sequenceLocationKeys.all,
       });
-      // Invalidate frames that are at this location
+      // Invalidate shots that are at this location
       void queryClient.invalidateQueries({ queryKey: ['shots'] });
     },
   });

@@ -8,15 +8,15 @@ import {
   computeMotionPromptInputHash,
   computeVisualPromptInputHash,
 } from '@/lib/ai/input-hash';
-import { loadNarrowFramePromptContext } from '@/lib/ai/prompt-context';
+import { loadNarrowShotPromptContext } from '@/lib/ai/prompt-context';
 import type { ShotVariant, NewShot } from '@/lib/db/schema';
 import { getGenerationChannel } from '@/lib/realtime';
 import { getVideoDownloadUrl } from '@/lib/motion/video-storage';
 import {
-  bulkFrameSchema,
-  singleFrameSchema,
-  updateFrameSchema,
-} from '@/lib/schemas/frame.schemas';
+  bulkShotSchema,
+  singleShotSchema,
+  updateShotSchema,
+} from '@/lib/schemas/shot.schemas';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import { rescanContinuityFromPrompt } from '@/lib/scenes/rescan-continuity-from-prompt';
 import { buildRegenerateShotSnapshot } from '@/lib/workflows/regenerate-shots-snapshot';
@@ -25,7 +25,7 @@ import { zodValidator } from '@tanstack/zod-adapter';
 import { z } from 'zod';
 import {
   authWithTeamMiddleware,
-  frameAccessMiddleware,
+  shotAccessMiddleware,
   sequenceAccessMiddleware,
 } from './middleware';
 
@@ -51,14 +51,14 @@ export const getShotsFn = createServerFn({ method: 'GET' })
  * connection pool, queued every subsequent navigation request, and killed
  * the WebProcess (root cause of the "Can't open this page" report).
  *
- * Team scoping is enforced by the join inside `sequences.listFramesByIds`,
+ * Team scoping is enforced by the join inside `sequences.listShotsByIds`,
  * so caller-supplied ids from another team return nothing rather than leak.
- * `listFramesByIds` chunks the ids to respect D1's bound-parameter limit, so
+ * `listShotsByIds` chunks the ids to respect D1's bound-parameter limit, so
  * the cap here is only an abuse guard on request size — a team's full sequence
  * list (which the sequences/eval pages send) used to overflow the old 500 cap
  * once it grew past 500 sequences (#957).
  */
-export const getFramesForSequencesFn = createServerFn({ method: 'GET' })
+export const getShotsForSequencesFn = createServerFn({ method: 'GET' })
   .middleware([authWithTeamMiddleware])
   .inputValidator(
     zodValidator(
@@ -68,11 +68,11 @@ export const getFramesForSequencesFn = createServerFn({ method: 'GET' })
     )
   )
   .handler(async ({ data, context }) => {
-    return context.scopedDb.sequences.listFramesByIds(data.sequenceIds);
+    return context.scopedDb.sequences.listShotsByIds(data.sequenceIds);
   });
 
 export const getShotFn = createServerFn({ method: 'GET' })
-  .middleware([frameAccessMiddleware])
+  .middleware([shotAccessMiddleware])
   .handler(async ({ context }) => {
     return context.shot;
   });
@@ -182,7 +182,7 @@ export function buildPromoteUpdate(variant: ShotVariant): {
  * listeners refresh.
  */
 export const promoteVariantFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
+  .middleware([shotAccessMiddleware])
   .inputValidator(
     zodValidator(
       z.object({
@@ -193,10 +193,10 @@ export const promoteVariantFn = createServerFn({ method: 'POST' })
     )
   )
   .handler(async ({ data, context }) => {
-    const { shot: frame, scopedDb } = context;
+    const { shot, scopedDb } = context;
     const variant = await scopedDb.shotVariants.getById(data.variantId);
-    if (!variant || variant.shotId !== frame.id) {
-      throw new Error('Variant not found for this frame');
+    if (!variant || variant.shotId !== shot.id) {
+      throw new Error('Variant not found for this shot');
     }
     if (variant.divergedAt === null || variant.discardedAt !== null) {
       throw new Error('Variant is not a live divergent alternate');
@@ -210,36 +210,35 @@ export const promoteVariantFn = createServerFn({ method: 'POST' })
 
     // Atomic: a partial failure can't leave the live primary updated with the
     // variant still appearing in the divergent list (or vice versa).
-    const { frame: updatedFrame } =
-      await scopedDb.shotVariants.promoteAtomically(
-        frame.id,
-        update,
-        variant.id
-      );
+    const { shot: updatedShot } = await scopedDb.shotVariants.promoteAtomically(
+      shot.id,
+      update,
+      variant.id
+    );
 
     // Realtime emit is purely cache-busting — TanStack Query refetches on the
     // mutation onSuccess invalidation regardless. A failed emit must not
     // surface to the user as "promote failed" when the DB already committed.
     const channel = getGenerationChannel(data.sequenceId);
     try {
-      const url = updatedFrame[progressUrlField] ?? variant.url;
+      const url = updatedShot[progressUrlField] ?? variant.url;
       await channel.emit(
         `generation.${progressEvent}`,
         progressEvent === 'audio:progress'
           ? {
-              shotId: frame.id,
+              shotId: shot.id,
               status: 'completed',
               audioUrl: url,
             }
           : progressEvent === 'video:progress'
             ? {
-                shotId: frame.id,
+                shotId: shot.id,
                 status: 'completed',
                 videoUrl: url,
                 model: variant.model,
               }
             : {
-                shotId: frame.id,
+                shotId: shot.id,
                 status: 'completed',
                 thumbnailUrl: url,
                 model: variant.model,
@@ -250,7 +249,7 @@ export const promoteVariantFn = createServerFn({ method: 'POST' })
       // realtime (not just cache) reset immediately.
       if (variant.variantType === 'image') {
         await channel.emit('generation.video:progress', {
-          shotId: frame.id,
+          shotId: shot.id,
           status: 'pending',
           videoUrl: undefined,
         });
@@ -259,11 +258,11 @@ export const promoteVariantFn = createServerFn({ method: 'POST' })
       logger.error('realtime emit failed', { err: error });
     }
 
-    return { frame: updatedFrame, variantId: variant.id };
+    return { shot: updatedShot, variantId: variant.id };
   });
 
 export const discardVariantFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
+  .middleware([shotAccessMiddleware])
   .inputValidator(
     zodValidator(
       z.object({
@@ -276,14 +275,14 @@ export const discardVariantFn = createServerFn({ method: 'POST' })
   .handler(async ({ data, context }) => {
     const variant = await context.scopedDb.shotVariants.getById(data.variantId);
     if (!variant || variant.shotId !== context.shot.id) {
-      throw new Error('Variant not found for this frame');
+      throw new Error('Variant not found for this shot');
     }
     const discardedAt = await context.scopedDb.shotVariants.discard(variant.id);
     return { variantId: variant.id, discardedAt };
   });
 
 export const undiscardVariantFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
+  .middleware([shotAccessMiddleware])
   .inputValidator(
     zodValidator(
       z.object({
@@ -296,7 +295,7 @@ export const undiscardVariantFn = createServerFn({ method: 'POST' })
   .handler(async ({ data, context }) => {
     const variant = await context.scopedDb.shotVariants.getById(data.variantId);
     if (!variant || variant.shotId !== context.shot.id) {
-      throw new Error('Variant not found for this frame');
+      throw new Error('Variant not found for this shot');
     }
     await context.scopedDb.shotVariants.undiscard(variant.id);
     return { variantId: variant.id };
@@ -323,7 +322,7 @@ export const getSequenceVideoVariantsFn = createServerFn({ method: 'GET' })
 export const createShotFn = createServerFn({ method: 'POST' })
   .middleware([sequenceAccessMiddleware])
   .inputValidator(
-    zodValidator(singleFrameSchema.extend({ sequenceId: ulidSchema }))
+    zodValidator(singleShotSchema.extend({ sequenceId: ulidSchema }))
   )
   .handler(async ({ data, context }) => {
     return context.scopedDb.shots.create(data);
@@ -335,23 +334,23 @@ export const createShotsBulkFn = createServerFn({ method: 'POST' })
     zodValidator(
       z.object({
         sequenceId: ulidSchema,
-        frames: bulkFrameSchema.shape.frames,
+        shots: bulkShotSchema.shape.shots,
       })
     )
   )
   .handler(async ({ data, context }) => {
-    const shotInserts: NewShot[] = data.frames.map((frame) => ({
+    const shotInserts: NewShot[] = data.shots.map((shot) => ({
       sequenceId: data.sequenceId,
-      ...frame,
+      ...shot,
     }));
     return context.scopedDb.shots.bulkUpsert(shotInserts);
   });
 
 export const updateShotFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
+  .middleware([shotAccessMiddleware])
   .inputValidator(
     zodValidator(
-      updateFrameSchema.extend({ sequenceId: ulidSchema, shotId: ulidSchema })
+      updateShotSchema.extend({ sequenceId: ulidSchema, shotId: ulidSchema })
     )
   )
   .handler(async ({ data, context }) => {
@@ -384,7 +383,7 @@ export const updateShotFn = createServerFn({ method: 'POST' })
       // find a reference either, and staleness stays `'untracked'` forever.
       // Compute the hash from the PRE-edit scene and stamp it on the shot
       // now: the post-edit live hash will then differ → banner flips
-      // `'stale'`. One-shot per frame; subsequent edits hit the normal hash
+      // `'stale'`. One-shot per shot; subsequent edits hit the normal hash
       // chain.
       let preEditSequenceForSplice: Awaited<
         ReturnType<typeof context.scopedDb.sequences.getById>
@@ -395,7 +394,7 @@ export const updateShotFn = createServerFn({ method: 'POST' })
             preEditSequenceForSplice ??=
               await context.scopedDb.sequences.getById(sequenceId);
             if (preEditSequenceForSplice) {
-              const ctx = await loadNarrowFramePromptContext({
+              const ctx = await loadNarrowShotPromptContext({
                 scopedDb: context.scopedDb,
                 sequence: {
                   id: preEditSequenceForSplice.id,
@@ -420,7 +419,7 @@ export const updateShotFn = createServerFn({ method: 'POST' })
             preEditSequenceForSplice ??=
               await context.scopedDb.sequences.getById(sequenceId);
             if (preEditSequenceForSplice) {
-              const ctx = await loadNarrowFramePromptContext({
+              const ctx = await loadNarrowShotPromptContext({
                 scopedDb: context.scopedDb,
                 sequence: {
                   id: preEditSequenceForSplice.id,
@@ -508,10 +507,10 @@ export const updateShotFn = createServerFn({ method: 'POST' })
     const motionPromptChanged =
       updateData.motionPrompt !== undefined &&
       updateData.motionPrompt !== context.shot.motionPrompt;
-    const frameMetadata = context.shot.metadata;
+    const shotMetadata = context.shot.metadata;
     if (
       (imagePromptChanged || motionPromptChanged) &&
-      frameMetadata?.continuity
+      shotMetadata?.continuity
     ) {
       const promptText = [
         imagePromptChanged ? updateData.imagePrompt : null,
@@ -523,13 +522,13 @@ export const updateShotFn = createServerFn({ method: 'POST' })
       const rescan = await rescanContinuityFromPrompt({
         scopedDb: context.scopedDb,
         sequenceId,
-        existing: frameMetadata.continuity,
+        existing: shotMetadata.continuity,
         promptText,
       });
 
       if (rescan.changed) {
         updateData.metadata = {
-          ...frameMetadata,
+          ...shotMetadata,
           continuity: rescan.continuity,
         };
       }
@@ -539,7 +538,7 @@ export const updateShotFn = createServerFn({ method: 'POST' })
   });
 
 export const deleteShotFn = createServerFn({ method: 'POST' })
-  .middleware([frameAccessMiddleware])
+  .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(shotIdInputSchema))
   .handler(async ({ data, context }) => {
     await context.scopedDb.shots.delete(data.shotId);
@@ -589,18 +588,18 @@ export const reorderShotsFn = createServerFn({ method: 'POST' })
  *                     freshness.
  */
 export const getShotStalenessFn = createServerFn({ method: 'GET' })
-  .middleware([frameAccessMiddleware])
+  .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(shotIdInputSchema))
   .handler(async ({ context }) => {
-    const { shot: frame, sequence, scopedDb } = context;
+    const { shot, sequence, scopedDb } = context;
 
     let thumbnail: 'stale' | 'fresh' | 'untracked' = 'untracked';
     // Effective prompt: same fallback chain as `buildRegenerateShotSnapshot`
-    // and `generateShotImageFn`. `frame.imagePrompt` alone misses
+    // and `generateShotImageFn`. `shot.imagePrompt` alone misses
     // AI-generated shots (where `imagePrompt` stays null) and shots whose
     // visual prompt was regenerated (which only updates metadata). See #713.
     const effectivePrompt =
-      frame.imagePrompt || frame.metadata?.prompts?.visual?.fullPrompt;
+      shot.imagePrompt || shot.metadata?.prompts?.visual?.fullPrompt;
     if (effectivePrompt) {
       // Distinguish "stored hash absent" from "stored hash matches". A null
       // stored hash means the image predates hash tracking (or was generated
@@ -609,7 +608,7 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
       // 'fresh'. Once the user regenerates the image once under the new code
       // path, this column populates and the live-vs-stored comparison takes
       // over.
-      if (frame.thumbnailInputHash === null) {
+      if (shot.thumbnailInputHash === null) {
         thumbnail = 'untracked';
       } else {
         try {
@@ -620,19 +619,19 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
           ]);
 
           const snapshot = await buildRegenerateShotSnapshot({
-            frame,
+            shot,
             characters,
             locations,
             elements,
             imageModel: safeTextToImageModel(
-              frame.imageModel,
+              shot.imageModel,
               DEFAULT_IMAGE_MODEL
             ),
             aspectRatio: sequence.aspectRatio,
           });
 
           thumbnail =
-            snapshot.snapshotInputHash !== frame.thumbnailInputHash
+            snapshot.snapshotInputHash !== shot.thumbnailInputHash
               ? 'stale'
               : 'fresh';
         } catch (error) {
@@ -641,12 +640,9 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
           // out of the whole handler — that would null the entire staleness
           // result and silently suppress the visual/motion banners too. Stay
           // 'untracked' (fail-open as 'fresh' would lie about freshness).
-          logger.warn(
-            `thumbnail staleness uncomputable for shot ${frame.id}:`,
-            {
-              err: error,
-            }
-          );
+          logger.warn(`thumbnail staleness uncomputable for shot ${shot.id}:`, {
+            err: error,
+          });
         }
       }
     }
@@ -658,12 +654,12 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
     // fall back to the most recent variant with a non-null `inputHash` for
     // shots whose cached column was nulled by a pre-fix user-edit. Without
     // the fallback, those shots are stuck at `'untracked'` permanently.
-    if (frame.metadata) {
-      let referenceHash = frame.visualPromptInputHash;
+    if (shot.metadata) {
+      let referenceHash = shot.visualPromptInputHash;
       if (!referenceHash) {
         const fallback =
           await scopedDb.shotPromptVariants.getLatestWithInputHash(
-            frame.id,
+            shot.id,
             'visual'
           );
         referenceHash = fallback?.inputHash ?? null;
@@ -671,13 +667,13 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
       if (referenceHash) {
         try {
           const latest = await scopedDb.shotPromptVariants.getLatest(
-            frame.id,
+            shot.id,
             'visual'
           );
-          const ctx = await loadNarrowFramePromptContext({
+          const ctx = await loadNarrowShotPromptContext({
             scopedDb,
             sequence,
-            scene: frame.metadata,
+            scene: shot.metadata,
             analysisModelOverride: latest?.analysisModel ?? null,
           });
           const liveHash = await computeVisualPromptInputHash(ctx);
@@ -685,19 +681,19 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
         } catch (error) {
           // Context unavailable (e.g., style deleted mid-flight). Stay
           // 'untracked' — fail-open as 'fresh' would silently lie to the user.
-          logger.warn(`visual staleness uncomputable for shot ${frame.id}:`, {
+          logger.warn(`visual staleness uncomputable for shot ${shot.id}:`, {
             err: error,
           });
         }
       }
     }
 
-    if (frame.metadata) {
-      let referenceHash = frame.motionPromptInputHash;
+    if (shot.metadata) {
+      let referenceHash = shot.motionPromptInputHash;
       if (!referenceHash) {
         const fallback =
           await scopedDb.shotPromptVariants.getLatestWithInputHash(
-            frame.id,
+            shot.id,
             'motion'
           );
         referenceHash = fallback?.inputHash ?? null;
@@ -705,20 +701,20 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
       if (referenceHash) {
         try {
           const latest = await scopedDb.shotPromptVariants.getLatest(
-            frame.id,
+            shot.id,
             'motion'
           );
-          const ctx = await loadNarrowFramePromptContext({
+          const ctx = await loadNarrowShotPromptContext({
             scopedDb,
             sequence,
-            scene: frame.metadata,
+            scene: shot.metadata,
             analysisModelOverride: latest?.analysisModel ?? null,
-            startingFrameImageUrl: frame.thumbnailUrl,
+            startingFrameImageUrl: shot.thumbnailUrl,
           });
           const liveHash = await computeMotionPromptInputHash(ctx);
           motionPrompt = liveHash !== referenceHash ? 'stale' : 'fresh';
         } catch (error) {
-          logger.warn(`motion staleness uncomputable for shot ${frame.id}:`, {
+          logger.warn(`motion staleness uncomputable for shot ${shot.id}:`, {
             err: error,
           });
         }
@@ -733,20 +729,20 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
  * Uses Content-Disposition: attachment to force browser download.
  */
 export const getShotDownloadUrlFn = createServerFn({ method: 'GET' })
-  .middleware([frameAccessMiddleware])
+  .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(shotIdInputSchema))
   .handler(async ({ context }) => {
-    const { shot: frame } = context;
+    const { shot } = context;
 
-    if (!frame.videoPath) {
+    if (!shot.videoPath) {
       throw new Error('Shot does not have a video');
     }
 
     const filename =
-      frame.videoPath.split('/').pop() || `scene-${frame.id}_openstory.mp4`;
+      shot.videoPath.split('/').pop() || `scene-${shot.id}_openstory.mp4`;
 
     const downloadUrl = await getVideoDownloadUrl(
-      frame.videoPath,
+      shot.videoPath,
       filename,
       3600
     );

@@ -7,7 +7,7 @@
  *     recoverable by reading the variant chain.
  *   - Regenerating a prompt produces a `'regenerated'` row with a populated
  *     `input_hash`.
- *   - The cached pointer (`frames.imagePrompt` / `motionPrompt` and the
+ *   - The cached pointer (`shots.imagePrompt` / `motionPrompt` and the
  *     matching `*PromptInputHash`) is updated by the helper sequentially
  *     after the variant insert (not transactionally — see the helper
  *     docstring for the durability story).
@@ -97,7 +97,7 @@ beforeEach(async () => {
   await seed();
 });
 
-describe('frame_prompt_variants helper', () => {
+describe('shot_prompt_variants helper', () => {
   it('user-edit with null inputHash appends a row and clears the cached hash', async () => {
     const methods = createShotPromptVariantsMethods(db);
 
@@ -210,7 +210,7 @@ describe('frame_prompt_variants helper', () => {
       analysisModel: null,
     });
 
-    const history = await methods.listByFrame(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'visual');
     expect(history).toHaveLength(2);
     // Newest first.
     const [latest, prior] = history;
@@ -263,7 +263,7 @@ describe('frame_prompt_variants helper', () => {
       analysisModel: null,
     });
 
-    const history = await methods.listByFrame(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'visual');
     expect(history.map((r) => r.source)).toEqual([
       'user-edit',
       'regenerated',
@@ -281,7 +281,7 @@ describe('frame_prompt_variants helper', () => {
     expect(refreshed.visualPromptInputHash).toBeNull();
   });
 
-  it('AI write is idempotent on (frame, type, input_hash) — a retry returns the existing row', async () => {
+  it('AI write is idempotent on (shot, type, input_hash) — a retry returns the existing row', async () => {
     const methods = createShotPromptVariantsMethods(db);
 
     const first = await methods.write({
@@ -304,7 +304,7 @@ describe('frame_prompt_variants helper', () => {
 
     expect(retried.id).toBe(first.id);
 
-    const history = await methods.listByFrame(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'visual');
     expect(history).toHaveLength(1);
   });
 
@@ -342,7 +342,7 @@ describe('frame_prompt_variants helper', () => {
     expect(forced.source).toBe('regenerated');
     expect(forced.text).toBe('Fresh LLM completion against same inputs');
 
-    const history = await methods.listByFrame(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'visual');
     expect(history).toHaveLength(2);
     const [latest, prior] = history;
     if (!latest || !prior) throw new Error('test setup: history missing rows');
@@ -386,11 +386,11 @@ describe('frame_prompt_variants helper', () => {
       analysisModel: 'anthropic/claude-haiku-4.5',
     });
 
-    const history = await methods.listByFrame(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'visual');
     expect(history).toHaveLength(1);
   });
 
-  it('a different input_hash produces a new row for the same frame+type', async () => {
+  it('a different input_hash produces a new row for the same shot+type', async () => {
     const methods = createShotPromptVariantsMethods(db);
 
     await methods.write({
@@ -410,7 +410,7 @@ describe('frame_prompt_variants helper', () => {
       analysisModel: 'anthropic/claude-haiku-4.5',
     });
 
-    const history = await methods.listByFrame(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'visual');
     expect(history).toHaveLength(2);
   });
 
@@ -445,39 +445,39 @@ describe('frame_prompt_variants helper', () => {
     expect(refreshed.motionPromptInputHash).toBe('motion-hash');
   });
 
-  it('getByIdForFrame refuses to return a sibling frame variant (cross-frame guard)', async () => {
+  it('getByIdForShot refuses to return a sibling shot variant (cross-shot guard)', async () => {
     // Restore handlers rely on this guard to refuse a `variantId` that
-    // belongs to a different frame in the same sequence — without it, a
-    // user could restore frame A's prompt onto frame B by passing the wrong
-    // variantId. The frame-access middleware only checks the parent frame.
+    // belongs to a different shot in the same sequence — without it, a
+    // user could restore shot A's prompt onto shot B by passing the wrong
+    // variantId. The shot-access middleware only checks the parent shot.
     const methods = createShotPromptVariantsMethods(db);
 
-    const [siblingFrame] = await db
+    const [siblingShot] = await db
       .insert(shots)
       .values({ sequenceId, orderIndex: 1 })
       .returning();
-    if (!siblingFrame)
+    if (!siblingShot)
       throw new Error('test setup: sibling shot insert returned nothing');
 
     const ownVariant = await methods.write({
       shotId,
       promptType: 'visual',
-      text: 'belongs to frame A',
+      text: 'belongs to shot A',
       source: 'ai-generated',
       inputHash: 'hash-A',
       analysisModel: 'anthropic/claude-haiku-4.5',
     });
 
-    // Lookup with the sibling frame's id must not succeed.
-    const wrongFrame = await methods.getByIdForFrame(
+    // Lookup with the sibling shot's id must not succeed.
+    const wrongShot = await methods.getByIdForShot(
       ownVariant.id,
-      siblingFrame.id
+      siblingShot.id
     );
-    expect(wrongFrame).toBeNull();
+    expect(wrongShot).toBeNull();
 
-    // Sanity: the same lookup with the owning frame's id does return it.
-    const rightFrame = await methods.getByIdForFrame(ownVariant.id, shotId);
-    expect(rightFrame?.id).toBe(ownVariant.id);
+    // Sanity: the same lookup with the owning shot's id does return it.
+    const rightShot = await methods.getByIdForShot(ownVariant.id, shotId);
+    expect(rightShot?.id).toBe(ownVariant.id);
   });
 
   it('restored row carries the source variant input_hash so staleness keeps tracking the original upstream context', async () => {
@@ -521,13 +521,13 @@ describe('frame_prompt_variants helper', () => {
     });
     expect(restored.inputHash).toBe('context-hash-1');
     // Restore must append a NEW history row, not silently return the source
-    // AI row when its hash is still unique on the frame. The previous unique
-    // index keyed on (frame, type, input_hash) collapsed restore-of-existing-
+    // AI row when its hash is still unique on the shot. The previous unique
+    // index keyed on (shot, type, input_hash) collapsed restore-of-existing-
     // hash into onConflictDoNothing, dropping the audit row.
     expect(restored.id).not.toBe(original.id);
     expect(restored.source).toBe('restored');
 
-    const history = await methods.listByFrame(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'visual');
     expect(history).toHaveLength(3);
     expect(history.map((r) => r.source)).toEqual([
       'restored',
@@ -573,7 +573,7 @@ describe('frame_prompt_variants helper', () => {
     expect(restored.source).toBe('restored');
     expect(restored.inputHash).toBe('context-hash-1');
 
-    const history = await methods.listByFrame(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'visual');
     expect(history).toHaveLength(2);
   });
 

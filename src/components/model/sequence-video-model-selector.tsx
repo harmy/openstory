@@ -33,7 +33,7 @@ function videoModelName(model: string): string {
  * Top-level video-model switcher for the sequence header (#545). Replaces the
  * old read-only video-model chip once any video variants exist: lists the
  * distinct models that have generated a video for this sequence (derived from
- * frame_variants) and lets the viewer pick which model's output to display.
+ * shot_variants) and lets the viewer pick which model's output to display.
  * The selection is viewer-local (localStorage via useActiveVideoModel).
  *
  * "Mixed" is shown when more than one model has output and the viewer has not

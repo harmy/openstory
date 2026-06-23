@@ -18,7 +18,7 @@ import {
   setImageFromVariantFn,
   setVideoFromVariantFn,
 } from '@/functions/shot-image';
-import type { GenerateVariantInput as SchemaGenerateVariantInput } from '@/lib/schemas/frame.schemas';
+import type { GenerateVariantInput as SchemaGenerateVariantInput } from '@/lib/schemas/shot.schemas';
 
 type GenerateVariantInput = SchemaGenerateVariantInput & {
   sequenceId: string;
@@ -124,7 +124,7 @@ export function useDivergentVariants(
 export function usePromoteVariantToPrimary() {
   const queryClient = useQueryClient();
   return useMutation<
-    { frame: Shot; variantId: string },
+    { shot: Shot; variantId: string },
     Error,
     { sequenceId: string; shotId: string; variantId: string }
   >({
@@ -132,8 +132,8 @@ export function usePromoteVariantToPrimary() {
       const result = await promoteVariantFn({ data: input });
       return result;
     },
-    onSuccess: async ({ frame }, { sequenceId }) => {
-      queryClient.setQueryData(shotKeys.detail(frame.id), frame);
+    onSuccess: async ({ shot }, { sequenceId }) => {
+      queryClient.setQueryData(shotKeys.detail(shot.id), shot);
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: shotKeys.list(sequenceId),

@@ -32,16 +32,16 @@ type TheatreViewProps = {
 
 export const TheatreView: React.FC<TheatreViewProps> = ({ sequence }) => {
   const posthog = usePostHog();
-  const { data: frames } = useShotsBySequence(sequence.id);
+  const { data: shots } = useShotsBySequence(sequence.id);
   const sequenceExport = useSequenceExport(sequence);
   const setMusicEnabled = useSetSequenceMusic(sequence.id);
 
   const scenes = useMemo(() => {
-    if (!frames) return [];
-    return frames
+    if (!shots) return [];
+    return shots
       .filter((f): f is typeof f & { videoUrl: string } => Boolean(f.videoUrl))
       .map((f) => ({ orderIndex: f.orderIndex, videoUrl: f.videoUrl }));
-  }, [frames]);
+  }, [shots]);
 
   const shareUrl = sequenceExport.latestExportUrl;
 
@@ -78,11 +78,11 @@ export const TheatreView: React.FC<TheatreViewProps> = ({ sequence }) => {
     posthog.capture('video_downloaded', { sequence_id: sequence.id });
   }, [shareUrl, sequence.id, sequence.title, posthog, sequenceExport]);
 
-  if (!frames) {
+  if (!shots) {
     return <Skeleton className="aspect-video w-full" />;
   }
 
-  const allScenesReady = scenes.length === frames.length;
+  const allScenesReady = scenes.length === shots.length;
   if (!allScenesReady || scenes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-16">

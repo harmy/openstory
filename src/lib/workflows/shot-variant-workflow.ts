@@ -51,14 +51,14 @@ export class ShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<ShotVariant
     scopedDb: ScopedDb
   ): Promise<ShotVariantWorkflowResult> {
     const rawInput = event.payload;
-    // Back-compat: accept shotId or frameId from in-flight instances serialized before #906
-    // TODO(#906): remove frameId shim one release after deploy
+    // Back-compat: accept shotId or shotId from in-flight instances serialized before #906
+    // TODO(#906): remove shotId shim one release after deploy
     const input = {
       ...rawInput,
       shotId:
         rawInput.shotId ??
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- back-compat shim for in-flight CF Workflow instances serialized before #906
-        (rawInput as { frameId?: string }).frameId ??
+        (rawInput as { shotId?: string }).shotId ??
         undefined,
     };
     const workflowRunId = event.instanceId;
@@ -86,8 +86,8 @@ export class ShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<ShotVariant
           gridConfig?.imageSize ?? input.imageSize ?? DEFAULT_IMAGE_SIZE;
 
         if (input.shotId) {
-          // update frame status to generating and store user prompt
-          const frame = await scopedDb.shots.update(
+          // update shot status to generating and store user prompt
+          const shot = await scopedDb.shots.update(
             input.shotId,
             {
               variantImageStatus: 'generating',
@@ -96,16 +96,16 @@ export class ShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<ShotVariant
             { throwOnMissing: false }
           );
 
-          if (!frame) {
+          if (!shot) {
             logger.info(
-              `[ShotVariantWorkflow:cf] Frame ${input.shotId} was deleted, skipping workflow`
+              `[ShotVariantWorkflow:cf] Shot ${input.shotId} was deleted, skipping workflow`
             );
             return null; // Signal to skip
           }
 
-          // Dual-write: update shot variant status on frame_variants row (returns null if row doesn't exist)
+          // Dual-write: update shot variant status on shot_variants row (returns null if row doesn't exist)
           if (input.sequenceId) {
-            await scopedDb.shotVariants.updateByFrameAndModel(
+            await scopedDb.shotVariants.updateByShotAndModel(
               input.shotId,
               'image',
               model,
@@ -167,7 +167,7 @@ export class ShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<ShotVariant
       }
     );
 
-    // Early exit if frame was deleted
+    // Early exit if shot was deleted
     if (!generationParams) {
       return { variantImageUrl: '' };
     }
@@ -228,7 +228,7 @@ export class ShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<ShotVariant
           throw new Error('Failed to upload image to storage');
         }
 
-        const updatedFrame = await scopedDb.shots.update(
+        const updatedShot = await scopedDb.shots.update(
           input.shotId,
           {
             variantImageUrl: result.url, // Store public URL (permanent, not signed)
@@ -237,16 +237,16 @@ export class ShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<ShotVariant
           { throwOnMissing: false }
         );
 
-        if (!updatedFrame) {
+        if (!updatedShot) {
           logger.info(
-            `[ShotVariantWorkflow:cf] Frame ${input.shotId} was deleted, skipping final update`
+            `[ShotVariantWorkflow:cf] Shot ${input.shotId} was deleted, skipping final update`
           );
           return { url: result.url, path: result.path };
         }
 
-        // Dual-write: update shot variant on frame_variants row (returns null if row doesn't exist)
+        // Dual-write: update shot variant on shot_variants row (returns null if row doesn't exist)
         const variantModel = input.model || DEFAULT_IMAGE_MODEL;
-        await scopedDb.shotVariants.updateByFrameAndModel(
+        await scopedDb.shotVariants.updateByShotAndModel(
           input.shotId,
           'image',
           variantModel,
@@ -295,7 +295,7 @@ export class ShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<ShotVariant
   }): Promise<void> {
     const input = event.payload;
 
-    // Set frame variant status to 'failed' after all retries exhausted
+    // Set shot variant status to 'failed' after all retries exhausted
     if (input.shotId && input.teamId) {
       await scopedDb.shots.update(
         input.shotId,
@@ -306,10 +306,10 @@ export class ShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<ShotVariant
         { throwOnMissing: false }
       );
 
-      // Dual-write: update shot variant status on frame_variants row (returns null if row doesn't exist)
+      // Dual-write: update shot variant status on shot_variants row (returns null if row doesn't exist)
       const model = input.model || DEFAULT_IMAGE_MODEL;
       if (input.sequenceId) {
-        await scopedDb.shotVariants.updateByFrameAndModel(
+        await scopedDb.shotVariants.updateByShotAndModel(
           input.shotId,
           'image',
           model,
@@ -333,7 +333,7 @@ export class ShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<ShotVariant
       }
 
       logger.error(
-        `[ShotVariantWorkflow:cf] Image generation failed for frame ${input.shotId}: ${error}`
+        `[ShotVariantWorkflow:cf] Image generation failed for shot ${input.shotId}: ${error}`
       );
     }
   }

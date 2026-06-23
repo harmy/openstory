@@ -67,7 +67,7 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
   const totalWidth = METADATA_WIDTH + VIDEO_WIDTH + maxSceneCount * CELL_WIDTH;
 
   const handleNavigateToCell = (sequenceIndex: number, sceneIndex: number) => {
-    // Validate bounds and check if frame exists
+    // Validate bounds and check if shot exists
     if (
       sequenceIndex >= 0 &&
       sequenceIndex < sequences.length &&
@@ -147,7 +147,7 @@ export const EvalMatrix: React.FC<EvalMatrixProps> = ({
                   viewMode={viewMode}
                   maxSceneCount={maxSceneCount}
                   sequenceIndex={virtualRow.index}
-                  framesLoading={shotsLoadingMap[sequence.id] ?? false}
+                  shotsLoading={shotsLoadingMap[sequence.id] ?? false}
                   divergence={divergenceMap?.get(sequence.id)}
                   openDialog={openDialog}
                   onOpenDialogChange={setOpenDialog}

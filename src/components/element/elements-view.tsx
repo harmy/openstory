@@ -11,7 +11,7 @@ import {
   type FileUploadProps,
 } from '@/components/ui/file-upload';
 import {
-  useFrameCountsForAllElements,
+  useShotCountsForAllElements,
   useSequenceElements,
   useUploadElementToSequence,
 } from '@/hooks/use-sequence-elements';
@@ -26,7 +26,7 @@ type ElementsViewProps = {
 
 export const ElementsView: React.FC<ElementsViewProps> = ({ sequenceId }) => {
   const { data: elements = [] } = useSequenceElements(sequenceId);
-  const { data: frameCounts } = useFrameCountsForAllElements(sequenceId);
+  const { data: shotCounts } = useShotCountsForAllElements(sequenceId);
   const uploadMutation = useUploadElementToSequence();
   const [files, setFiles] = useState<File[]>([]);
 
@@ -60,7 +60,7 @@ export const ElementsView: React.FC<ElementsViewProps> = ({ sequenceId }) => {
         <p className="text-sm text-muted-foreground">
           Upload reference images (logos, products, screenshots) and reference
           them by the UPPERCASE token in your script. Images are described by a
-          vision model and used when generating scene frames.
+          vision model and used when generating scene shots.
         </p>
       </div>
 
@@ -113,8 +113,8 @@ export const ElementsView: React.FC<ElementsViewProps> = ({ sequenceId }) => {
               key={el.id}
               element={el}
               sequenceId={sequenceId}
-              affectedFrameCount={frameCounts?.[el.id]?.frameCount ?? 0}
-              affectedVideoCount={frameCounts?.[el.id]?.videoCount ?? 0}
+              affectedShotCount={shotCounts?.[el.id]?.shotCount ?? 0}
+              affectedVideoCount={shotCounts?.[el.id]?.videoCount ?? 0}
             />
           ))}
         </div>

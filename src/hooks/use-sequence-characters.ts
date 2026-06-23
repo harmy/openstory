@@ -4,7 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  getFrameIdsForCharacterFn,
+  getShotIdsForCharacterFn,
   getSequenceCharactersFn,
   recastCharacterFn,
 } from '@/functions/sequence-characters';
@@ -47,17 +47,17 @@ export function useAddCharacterToLibrary() {
 }
 
 /**
- * Hook to get the count of frames containing a character
- * Used to show affected frames before recasting
+ * Hook to get the count of shots containing a character
+ * Used to show affected shots before recasting
  */
-export function useFrameIdsForCharacter(
+export function useShotIdsForCharacter(
   sequenceId: string,
   characterId: string
 ) {
   return useQuery({
     queryKey: sequenceCharacterKeys.shotsForCharacter(sequenceId, characterId),
     queryFn: () =>
-      getFrameIdsForCharacterFn({ data: { sequenceId, characterId } }),
+      getShotIdsForCharacterFn({ data: { sequenceId, characterId } }),
     enabled: !!sequenceId && !!characterId,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -77,7 +77,7 @@ export function useRecastCharacter() {
       void queryClient.invalidateQueries({
         queryKey: sequenceCharacterKeys.all,
       });
-      // Invalidate frames that contain this character
+      // Invalidate shots that contain this character
       void queryClient.invalidateQueries({ queryKey: ['shots'] });
     },
   });

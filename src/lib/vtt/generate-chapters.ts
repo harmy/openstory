@@ -26,10 +26,10 @@ function escapeVTTText(text: string): string {
 }
 
 /**
- * Generates a WebVTT chapters file from an array of frames.
- * Each frame becomes a chapter with its scene number and title.
+ * Generates a WebVTT chapters file from an array of shots.
+ * Each shot becomes a chapter with its scene number and title.
  */
-export function generateChaptersVTT(frames: Shot[]): string {
+export function generateChaptersVTT(shots: Shot[]): string {
   // Start with WebVTT header
   const lines: string[] = [
     'WEBVTT',
@@ -40,16 +40,16 @@ export function generateChaptersVTT(frames: Shot[]): string {
 
   let cumulativeTime = 0;
 
-  for (let i = 0; i < frames.length; i++) {
-    const frame = frames[i];
-    if (!frame) throw new Error(`expected frame at index ${i}`);
-    const duration = (frame.durationMs || 3000) / 1000; // Convert to seconds
+  for (let i = 0; i < shots.length; i++) {
+    const shot = shots[i];
+    if (!shot) throw new Error(`expected shot at index ${i}`);
+    const duration = (shot.durationMs || 3000) / 1000; // Convert to seconds
     const startTime = cumulativeTime;
     const endTime = cumulativeTime + duration;
 
     // Get scene metadata
-    const sceneNumber = frame.metadata?.sceneNumber ?? i + 1;
-    const sceneTitle = frame.metadata?.metadata?.title ?? `Scene ${i + 1}`;
+    const sceneNumber = shot.metadata?.sceneNumber ?? i + 1;
+    const sceneTitle = shot.metadata?.metadata?.title ?? `Scene ${i + 1}`;
 
     // Format: "Scene {number}: {title}"
     const chapterTitle = `Scene ${sceneNumber}: ${escapeVTTText(sceneTitle)}`;

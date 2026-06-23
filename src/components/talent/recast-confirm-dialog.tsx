@@ -16,7 +16,7 @@ type RecastConfirmDialogProps = {
   onConfirm: () => void;
   characterName: string;
   talentName: string;
-  affectedFrameCount: number;
+  affectedShotCount: number;
   isLoading: boolean;
 };
 
@@ -26,7 +26,7 @@ export const RecastConfirmDialog: React.FC<RecastConfirmDialogProps> = ({
   onConfirm,
   characterName,
   talentName,
-  affectedFrameCount,
+  affectedShotCount,
   isLoading,
 }) => {
   return (
@@ -39,12 +39,12 @@ export const RecastConfirmDialog: React.FC<RecastConfirmDialogProps> = ({
           <AlertDialogDescription>
             This will generate a new character sheet using {talentName} as the
             reference.
-            {affectedFrameCount > 0 && (
+            {affectedShotCount > 0 && (
               <>
                 {' '}
                 <strong>
-                  {affectedFrameCount} frame
-                  {affectedFrameCount !== 1 ? 's' : ''}
+                  {affectedShotCount} shot
+                  {affectedShotCount !== 1 ? 's' : ''}
                 </strong>{' '}
                 containing this character will need to be regenerated.
               </>

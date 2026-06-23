@@ -61,11 +61,11 @@ export interface ImageWorkflowInput extends SequenceWorkflowContext {
   /**
    * Per-scene snapshot for divergence detection. When present, the workflow
    * re-resolves character/location/element sheet hashes at write time and
-   * routes divergent results into `frame_variants` instead of overwriting
+   * routes divergent results into `shot_variants` instead of overwriting
    * the primary thumbnail. Optional: omit for callers that handle their own
-   * divergence (e.g. `regenerateFramesWorkflow`) or for preview-mode runs.
+   * divergence (e.g. `regenerateShotsWorkflow`) or for preview-mode runs.
    */
-  sceneSnapshot?: FrameImageSceneSnapshot;
+  sceneSnapshot?: ShotImageSceneSnapshot;
   /**
    * Aspect ratio frozen at trigger time. Required when `sceneSnapshot` is
    * present so write-time hash recomputation matches the trigger-time hash.
@@ -76,19 +76,19 @@ export interface ImageWorkflowInput extends SequenceWorkflowContext {
   /**
    * `true` when `prompt` came from a user edit (typed in the UI). `false` for
    * auto paths (storyboard generation, smart-retry, preview, scene split)
-   * where `prompt` may be reassembled from `frame.metadata.prompts.visual`
-   * and would not match the bare `frame.imagePrompt`. Drives whether the
+   * where `prompt` may be reassembled from `shot.metadata.prompts.visual`
+   * and would not match the bare `shot.imagePrompt`. Drives whether the
    * workflow appends a `user-edit` variant row.
    */
   userEditedPrompt?: boolean;
   /**
    * Variant-only mode (#547). When true, the run NEVER touches the live primary
-   * `frames.*` image/video columns — it writes only this model's
-   * `frame_variants` row. (See `persistImageResult`'s `variantOnly` branch and
+   * `shots.*` image/video columns — it writes only this model's
+   * `shot_variants` row. (See `persistImageResult`'s `variantOnly` branch and
    * the workflow's set-generating/onFailure guards for the authoritative set of
    * skipped columns.) Used by "add a model to an existing sequence" so a new
    * model lands as a selectable alternate without repointing the primary,
-   * tripping staleness, or invalidating the frame's video. Promotion to primary
+   * tripping staleness, or invalidating the shot's video. Promotion to primary
    * happens later via an explicit "Set". Skips divergence detection entirely
    * (there is no primary to protect).
    */
@@ -97,7 +97,7 @@ export interface ImageWorkflowInput extends SequenceWorkflowContext {
 
 /**
  * Shot variant generation workflow input — produces the 3x3 shot grid that
- * gets stored in `frame_variants.shotVariantUrl` for the matching primary row.
+ * gets stored in `shot_variants.shotVariantUrl` for the matching primary row.
  */
 export interface ShotVariantWorkflowInput extends SequenceWorkflowContext {
   thumbnailUrl: string;
@@ -108,7 +108,7 @@ export interface ShotVariantWorkflowInput extends SequenceWorkflowContext {
   shotId?: string;
   /** Sequence aspect ratio — drives shot grid layout */
   aspectRatio?: AspectRatio;
-  /** Scene description from frame.metadata.prompts.visual.fullPrompt */
+  /** Scene description from shot.metadata.prompts.visual.fullPrompt */
   scenePrompt?: string;
   /** Character reference sheets for visual consistency */
   characterReferences?: ReferenceImageDescription[];
@@ -127,7 +127,7 @@ export interface ShotVariantWorkflowResult {
  */
 export interface StoryboardWorkflowInput extends SequenceWorkflowContext {
   options?: {
-    framesPerScene?: number;
+    shotsPerScene?: number;
     generateThumbnails?: boolean;
     generateDescriptions?: boolean;
     aiProvider?: 'openai' | 'anthropic' | 'openrouter';
@@ -190,7 +190,7 @@ export type SceneSplitWorkflowInput = SequenceWorkflowContext & {
 export type SceneSplitWorkflowResult = {
   scenes: Scene[];
   title: string;
-  frameMapping: Array<{ sceneId: string; shotId: string }>;
+  shotMapping: Array<{ sceneId: string; shotId: string }>;
   characterBible: CharacterBibleEntry[];
   locationBible: LocationBibleEntry[];
   elementBible: ElementBibleEntry[];
@@ -200,7 +200,7 @@ export type SceneSplitWorkflowResult = {
  * Element sheet workflow input — generates a canonical reference image for
  * each element-bible entry that has no user-uploaded reference (recurring
  * products/objects detected during scene split) and ingests them as
- * `sequence_elements` rows so frame generation can attach them.
+ * `sequence_elements` rows so shot generation can attach them.
  */
 export interface ElementSheetWorkflowInput extends UserWorkflowContext {
   sequenceId: string;
@@ -239,14 +239,14 @@ export interface MotionWorkflowInput extends SequenceWorkflowContext {
    * `true` when `prompt` came from a user edit (typed in the UI). `false` for
    * auto paths (batch generation, smart-retry) where `prompt` was produced by
    * `resolveMotionPrompt` and may include model-specific dialogue/audio
-   * assembly that does not match the bare `frame.motionPrompt`. Drives whether
+   * assembly that does not match the bare `shot.motionPrompt`. Drives whether
    * the workflow appends a `user-edit` variant row.
    */
   userEditedPrompt?: boolean;
   /**
    * Variant-only mode (#547). When true, the run NEVER touches the legacy
-   * `frames.video*` / `motionModel` columns — it writes only this model's
-   * `frame_variants` row. Used by "add a video model to an existing sequence"
+   * `shots.video*` / `motionModel` columns — it writes only this model's
+   * `shot_variants` row. Used by "add a video model to an existing sequence"
    * so the new model lands as a selectable alternate without repointing the
    * primary video. Promotion happens later via an explicit "Set".
    */
@@ -285,7 +285,7 @@ export interface CharacterSheetWorkflowInput extends SequenceWorkflowContext {
 }
 
 /**
- * Per-frame snapshot DTO for `regenerateFramesWorkflow`. The hashes are
+ * Per-shot snapshot DTO for `regenerateShotsWorkflow`. The hashes are
  * snapshot-time `input_hash` values from the referenced sheets/library rows;
  * `null` means the row predated hash tracking and is treated as
  * "unknown, never stale" rather than forcing a false-positive divergence.
@@ -294,17 +294,17 @@ export type RegenerateShotSnapshot = {
   shotId: string;
   /** Visual prompt frozen at trigger time. */
   imagePrompt: string;
-  /** Sorted character-sheet input_hashes referenced by this frame. */
+  /** Sorted character-sheet input_hashes referenced by this shot. */
   characterSheetHashes: string[];
-  /** Sorted location-sheet input_hashes referenced by this frame. */
+  /** Sorted location-sheet input_hashes referenced by this shot. */
   locationSheetHashes: string[];
-  /** Sorted element reference-image identities referenced by this frame. */
+  /** Sorted element reference-image identities referenced by this shot. */
   elementReferenceHashes: string[];
   /** Reference image descriptions used for image generation. */
   characterRefs: ReferenceImageDescription[];
   locationRefs: ReferenceImageDescription[];
   /**
-   * Per-frame hash of `(prompt, model, aspect, characterSheetHashes,
+   * Per-shot hash of `(prompt, model, aspect, characterSheetHashes,
    * locationSheetHashes, elementReferenceHashes)`. Stored on the artifact row
    * at write time and compared to a freshly recomputed hash to detect
    * divergence.
@@ -313,10 +313,10 @@ export type RegenerateShotSnapshot = {
 };
 
 /**
- * Regenerate frames workflow input
- * Bulk regenerates frame images after a character or location recast.
+ * Regenerate shots workflow input
+ * Bulk regenerates shot images after a character or location recast.
  *
- * Carries an inlined snapshot per frame (resolved at trigger time) so the
+ * Carries an inlined snapshot per shot (resolved at trigger time) so the
  * workflow does not read live mutable state inside `context.run`. See
  * docs/architecture/workflow-snapshots-and-content-hash-staleness.md.
  */
@@ -337,8 +337,8 @@ export interface RegenerateShotsWorkflowInput extends SequenceWorkflowContext {
   imageModel?: TextToImageModel;
   /** Aspect ratio (frozen at trigger time, replaces a live sequence read). */
   aspectRatio: AspectRatio;
-  /** Per-frame inlined snapshot DTOs. */
-  frameSnapshots: RegenerateShotSnapshot[];
+  /** Per-shot inlined snapshot DTOs. */
+  shotSnapshots: RegenerateShotSnapshot[];
   /**
    * Hash over the full inlined DTO. The workflow validates this against a
    * recompute at start (tamper check) via `createScopedWorkflow`'s snapshot
@@ -349,7 +349,7 @@ export interface RegenerateShotsWorkflowInput extends SequenceWorkflowContext {
 
 /**
  * Recast character workflow input
- * Orchestrates character sheet generation + frame regeneration for recast
+ * Orchestrates character sheet generation + shot regeneration for recast
  */
 export interface RecastCharacterWorkflowInput extends SequenceWorkflowContext {
   /** Character database ID */
@@ -419,7 +419,7 @@ export interface CharacterBibleWorkflowInput extends SequenceWorkflowContext {
   styleConfig?: StyleConfig;
 }
 
-type FrameMapping = Array<{ sceneId: string; shotId: string }>;
+type ShotMapping = Array<{ sceneId: string; shotId: string }>;
 
 export interface VisualPromptWorkflowInput extends SequenceWorkflowContext {
   scenes: Scene[];
@@ -430,7 +430,7 @@ export interface VisualPromptWorkflowInput extends SequenceWorkflowContext {
   styleConfig: StyleConfig;
   analysisModelId: AnalysisModelId;
   /** Maps sceneId to shotId for DB persistence after visual prompt generation */
-  frameMapping?: FrameMapping;
+  shotMapping?: ShotMapping;
 }
 
 export interface VisualPromptSceneWorkflowInput extends SequenceWorkflowContext {
@@ -445,7 +445,7 @@ export interface VisualPromptSceneWorkflowInput extends SequenceWorkflowContext 
   analysisModelId: AnalysisModelId;
   shotId?: string;
   /**
-   * Stream incremental `fullPrompt` deltas over the per-frame realtime
+   * Stream incremental `fullPrompt` deltas over the per-shot realtime
    * channel while the LLM generates. Set by the explicit "Regenerate Prompt"
    * button so the active viewer sees the prompt fill in live; left unset by
    * script-analysis / auto-staleness paths so we don't burn realtime
@@ -462,9 +462,9 @@ export interface MotionPromptWorkflowInput extends SequenceWorkflowContext {
   elementBible?: ElementBibleEntry[];
   styleConfig: StyleConfig;
   analysisModelId: AnalysisModelId;
-  frameMapping?: FrameMapping;
+  shotMapping?: ShotMapping;
   /**
-   * Rendered starting-frame image URL per scene (`sceneId` → primary
+   * Rendered starting-shot image URL per scene (`sceneId` → primary
    * `thumbnailUrl`), captured at trigger time so the per-scene motion-prompt
    * children never look it up mid-run (#929). Absent / null entry → that scene
    * had no rendered still and falls back to the text-only motion path.
@@ -484,7 +484,7 @@ export interface MotionPromptSceneWorkflowInput extends SequenceWorkflowContext 
   analysisModelId: AnalysisModelId;
   shotId?: string;
   /**
-   * Rendered starting-frame image URL, captured at trigger time (#929). The
+   * Rendered starting-shot image URL, captured at trigger time (#929). The
    * motion prompt is conditioned on this exact still (vision input) and the
    * URL is its staleness identity — it must be PASSED IN, never looked up
    * inside the workflow, so a concurrent re-render can't swap it mid-run. Null
@@ -673,7 +673,7 @@ export interface LocationMatchingWorkflowOutput {
 }
 /**
  * Recast location workflow input
- * Orchestrates location sheet generation + frame regeneration for recast
+ * Orchestrates location sheet generation + shot regeneration for recast
  */
 export interface RecastLocationWorkflowInput extends SequenceWorkflowContext {
   /** Location database ID */
@@ -751,11 +751,11 @@ export interface MusicWorkflowResult {
 
 /**
  * Batch motion + music workflow input
- * Orchestrates parallel motion generation for all frames + optional music,
+ * Orchestrates parallel motion generation for all shots + optional music,
  * then merges videos and muxes audio.
  */
 export interface BatchMotionMusicWorkflowInput extends SequenceWorkflowContext {
-  /** Per-frame motion inputs (ordered by scene) */
+  /** Per-shot motion inputs (ordered by scene) */
   shots: Array<{
     shotId: string;
     imageUrl: string;
@@ -789,9 +789,9 @@ export interface BatchMotionMusicWorkflowInput extends SequenceWorkflowContext {
     userEditedPrompt?: boolean;
   }>;
   /**
-   * Video models to generate for every frame (#545). First is primary (its
-   * output also lands in the legacy `frames.video*` columns); the rest are
-   * alternates stored only in `frame_variants`. When absent, each frame's own
+   * Video models to generate for every shot (#545). First is primary (its
+   * output also lands in the legacy `shots.video*` columns); the rest are
+   * alternates stored only in `shot_variants`. When absent, each shot's own
    * `model` is used (single-model behaviour).
    */
   videoModels?: ImageToVideoModel[];
@@ -813,20 +813,20 @@ export interface BatchMotionMusicWorkflowInput extends SequenceWorkflowContext {
    */
   audioModels?: (keyof typeof AUDIO_MODELS)[];
   /**
-   * Variant-only mode (#547), threaded onto every per-frame motion child. When
-   * true, no frame writes its video to the legacy `frames.video*` columns —
-   * each model lands only in `frame_variants`. Used by "add a video model to an
+   * Variant-only mode (#547), threaded onto every per-shot motion child. When
+   * true, no shot writes its video to the legacy `shots.video*` columns —
+   * each model lands only in `shot_variants`. Used by "add a video model to an
    * existing sequence" so it never repoints the primary video.
    */
   variantOnly?: boolean;
 }
 
 /**
- * Per-scene snapshot for `frameImagesWorkflow`. Carries the upstream sheet
+ * Per-scene snapshot for `shotImagesWorkflow`. Carries the upstream sheet
  * hashes alongside each reference URL so the workflow can validate the
  * payload at start-time and detect divergence at write-time.
  */
-export type FrameImageSceneSnapshot = {
+export type ShotImageSceneSnapshot = {
   sceneId: string;
   visualPrompt: string;
   characterSheetHashes: string[];
@@ -835,8 +835,8 @@ export type FrameImageSceneSnapshot = {
 };
 
 /**
- * Frame images workflow input
- * Orchestrates frame image generation + automatic variant generation
+ * Shot images workflow input
+ * Orchestrates shot image generation + automatic variant generation
  */
 export interface ShotImagesWorkflowInput extends SequenceWorkflowContext {
   scenesWithVisualPrompts: Scene[];
@@ -844,7 +844,7 @@ export interface ShotImagesWorkflowInput extends SequenceWorkflowContext {
   locationsWithSheets: SequenceLocationMinimal[];
   /** User-uploaded elements (logos, products) for reference-image consistency */
   elements?: SequenceElementMinimal[];
-  frameMapping: FrameMapping;
+  shotMapping: ShotMapping;
   imageModel?: TextToImageModel;
   /** Multiple image models for variant generation (first is primary) */
   imageModels?: TextToImageModel[];
@@ -855,7 +855,7 @@ export interface ShotImagesWorkflowInput extends SequenceWorkflowContext {
    * workflow can detect divergence (sheet regenerated mid-flight) without
    * reading mutable state inside `context.run`.
    */
-  sceneSnapshots?: FrameImageSceneSnapshot[];
+  sceneSnapshots?: ShotImageSceneSnapshot[];
   /** Hash over the inlined DTO; validated by the snapshot middleware. */
   snapshotInputHash?: string;
 }
@@ -877,7 +877,7 @@ export interface ShotImagesWorkflowResult {
  */
 export interface MotionMusicPromptsWorkflowInput extends SequenceWorkflowContext {
   scenesWithVisualPrompts: Scene[];
-  frameMapping: FrameMapping;
+  shotMapping: ShotMapping;
   aspectRatio: AspectRatio;
   characterBible: CharacterBibleEntry[];
   locationBible: LocationBibleEntry[];
@@ -893,8 +893,8 @@ export interface MotionMusicPromptsWorkflowInput extends SequenceWorkflowContext
    */
   videoModels?: ImageToVideoModel[];
   /**
-   * Rendered starting-frame image URL per scene (`sceneId` → primary
-   * `thumbnailUrl`), captured by analyze-script after frame images render and
+   * Rendered starting-shot image URL per scene (`sceneId` → primary
+   * `thumbnailUrl`), captured by analyze-script after shot images render and
    * threaded down to the per-scene motion-prompt children (#929). See
    * {@link MotionPromptWorkflowInput.startingFrameImageUrls}.
    */
@@ -927,13 +927,13 @@ export interface ElementVisionWorkflowResult {
 
 /**
  * Replace element workflow input
- * Orchestrates element image swap + per-frame image edits for affected frames.
+ * Orchestrates element image swap + per-shot image edits for affected shots.
  *
- * Per-frame behaviour: invokes `image-workflow` with the existing frame
+ * Per-shot behaviour: invokes `image-workflow` with the existing shot
  * thumbnail as the PRIMARY SOURCE and the new element image as an ELEMENT REF.
  * The image edit endpoint swaps the element while preserving the rest of the
- * frame — this is by design for elements (vs cast/location which fully
- * regenerate the frame).
+ * shot — this is by design for elements (vs cast/location which fully
+ * regenerate the shot).
  */
 export interface ReplaceElementWorkflowInput extends SequenceWorkflowContext {
   /** Always present for this workflow — narrowed from the optional base type. */
@@ -947,7 +947,7 @@ export interface ReplaceElementWorkflowInput extends SequenceWorkflowContext {
   newImageUrl: string;
   /** Original filename of the new image (for vision analysis context) */
   newFilename: string;
-  /** Frame IDs to edit using the new element */
+  /** Shot IDs to edit using the new element */
   affectedShotIds: string[];
   /** Image model to use for the edit (defaults to nano_banana_2 for edit support) */
   imageModel?: TextToImageModel;

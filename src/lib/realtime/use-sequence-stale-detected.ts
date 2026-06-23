@@ -41,7 +41,7 @@ type DebounceState = {
 
 /**
  * Subscribes to `generation.stale:detected` filtered for sequence-scoped
- * music divergence. Mirrors `useStaleDetected` for frames:
+ * music divergence. Mirrors `useStaleDetected` for shots:
  *  1. Show a debounced sonner toast (5 s window, count).
  *  2. Invalidate the matching `sequenceVariantKeys.divergentMusic` query so
  *     the inline banner appears without a manual refresh.

@@ -22,7 +22,7 @@ type DivergencePromptDiff = {
 type DivergenceCompareDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  frame: Shot;
+  shot: Shot;
   variant: ShotVariant;
   onPromote: () => void;
   onDiscard: () => void;
@@ -41,16 +41,16 @@ const ARTIFACT_LABEL: Record<VariantType, string> = {
 };
 
 function liveAssetForVariant(
-  frame: Shot,
+  shot: Shot,
   variantType: VariantType
 ): { url: string | null; kind: 'image' | 'video' | 'audio' } {
   switch (variantType) {
     case 'image':
-      return { url: frame.thumbnailUrl, kind: 'image' };
+      return { url: shot.thumbnailUrl, kind: 'image' };
     case 'video':
-      return { url: frame.videoUrl, kind: 'video' };
+      return { url: shot.videoUrl, kind: 'video' };
     case 'audio':
-      return { url: frame.audioUrl, kind: 'audio' };
+      return { url: shot.audioUrl, kind: 'audio' };
   }
 }
 
@@ -98,7 +98,7 @@ export const DivergenceCompareDialog: React.FC<
 > = ({
   open,
   onOpenChange,
-  frame,
+  shot,
   variant,
   onPromote,
   onDiscard,
@@ -107,7 +107,7 @@ export const DivergenceCompareDialog: React.FC<
   upstreamChanges,
   promptDiff,
 }) => {
-  const live = liveAssetForVariant(frame, variant.variantType);
+  const live = liveAssetForVariant(shot, variant.variantType);
   const label = ARTIFACT_LABEL[variant.variantType];
   const busy = isPromoting || isDiscarding;
 

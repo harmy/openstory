@@ -185,9 +185,9 @@ describe('Pattern 3 childIds are CF-valid after sanitization', () => {
   // Catch the historical "colons in childId crash CF" footgun by sampling
   // the actual childId shapes our codebase passes.
   const realCallsiteIds = [
-    'image:seq-123:frame-7',
-    'image:seq-123:frame-7:nano_banana_2',
-    'motion:seq-123:frame-7',
+    'image:seq-123:shot-7',
+    'image:seq-123:shot-7:nano_banana_2',
+    'motion:seq-123:shot-7',
     'analyze-script:01KS23834FEGDBN8074VVPR3Q8',
     'character-sheet:recast:01KS23',
     'regenerate-shots:character:01KS23',
@@ -209,9 +209,9 @@ describe('buildInstanceId always emits CF-valid IDs', () => {
 
   const cases: Array<{ env: string; suffix: string }> = [
     { env: 'https://openstory.so', suffix: '01KS23834FEGDBN8074VVPR3Q8' },
-    { env: 'https://pr-42.openstory.dev', suffix: 'seq-123:frame.7' },
+    { env: 'https://pr-42.openstory.dev', suffix: 'seq-123:shot.7' },
     { env: '', suffix: 'a/b/c*d e' },
-    { env: 'https://openstory.so', suffix: 'image:seq-123:frame-7:variant.0' },
+    { env: 'https://openstory.so', suffix: 'image:seq-123:shot-7:variant.0' },
   ];
 
   for (const { env, suffix } of cases) {

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSequences } from './use-sequences';
-import { getFramesForSequencesFn } from '@/functions/shots';
+import { getShotsForSequencesFn } from '@/functions/shots';
 import type { Sequence, Shot } from '@/types/database';
 
 export type SequenceWithShots = Sequence & {
@@ -40,7 +40,7 @@ export function useSequencesWithShots() {
     queryKey: ['shots', 'by-sequences', [...sequenceIds].sort()],
     queryFn: async (): Promise<Map<string, Shot[]>> => {
       if (sequenceIds.length === 0) return new Map();
-      const allShots = await getFramesForSequencesFn({
+      const allShots = await getShotsForSequencesFn({
         data: { sequenceIds },
       });
       const map = new Map<string, Shot[]>();

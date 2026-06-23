@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useInfiniteQuery, useQueries } from '@tanstack/react-query';
 import {
-  getAdminFramesFn,
+  getAdminShotsFn,
   getAllAdminSequencesFn,
 } from '@/functions/admin-support';
 import type { SequenceWithShots } from './use-sequences-with-shots';
@@ -22,7 +22,7 @@ export type AdminSequenceWithShots = SequenceWithShots & {
   creatorEmail: string | null;
 };
 
-export function useAdminAllSequencesWithFrames(
+export function useAdminAllSequencesWithShots(
   enabled: boolean,
   search?: string
 ) {
@@ -57,11 +57,11 @@ export function useAdminAllSequencesWithFrames(
     [infiniteData]
   );
 
-  const framesQueries = useQueries({
+  const shotsQueries = useQueries({
     queries: allSequences.map((seq: Sequence) => ({
       queryKey: adminSupportKeys.shots(seq.id),
       queryFn: async (): Promise<Shot[]> => {
-        return getAdminFramesFn({ data: { sequenceId: seq.id } });
+        return getAdminShotsFn({ data: { sequenceId: seq.id } });
       },
       staleTime: 60_000,
       enabled: allSequences.length > 0,
@@ -79,21 +79,21 @@ export function useAdminAllSequencesWithFrames(
         i: number
       ) => ({
         ...seq,
-        shots: framesQueries[i]?.data ?? [],
+        shots: shotsQueries[i]?.data ?? [],
       })
     );
-  }, [allSequences, framesQueries]);
+  }, [allSequences, shotsQueries]);
 
   const shotsLoadingMap = useMemo<Record<string, boolean>>(() => {
     const map: Record<string, boolean> = {};
     allSequences.forEach((seq, i) => {
-      const q = framesQueries[i];
+      const q = shotsQueries[i];
       map[seq.id] = Boolean(q?.isLoading);
     });
     return map;
-  }, [allSequences, framesQueries]);
+  }, [allSequences, shotsQueries]);
 
-  const error = seqError || framesQueries.find((q) => q.error)?.error;
+  const error = seqError || shotsQueries.find((q) => q.error)?.error;
 
   return {
     data,

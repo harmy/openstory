@@ -38,8 +38,8 @@ export type ShotPromptVariantComponents =
   | VisualPromptComponents
   | MotionPromptComponents;
 
-export const FRAME_PROMPT_TYPES = ['visual', 'motion'] as const;
-export type FramePromptType = (typeof FRAME_PROMPT_TYPES)[number];
+export const SHOT_PROMPT_TYPES = ['visual', 'motion'] as const;
+export type ShotPromptType = (typeof SHOT_PROMPT_TYPES)[number];
 
 const PROMPT_VARIANT_SOURCES = [
   'ai-generated',
@@ -59,7 +59,7 @@ export const shotPromptVariants = snakeCase.table(
     shotId: text()
       .notNull()
       .references(() => shots.id, { onDelete: 'cascade' }),
-    promptType: text().$type<FramePromptType>().notNull(),
+    promptType: text().$type<ShotPromptType>().notNull(),
 
     // Full prompt text (mirrors the cached column on `shots`).
     text: text().notNull(),
@@ -90,7 +90,7 @@ export const shotPromptVariants = snakeCase.table(
     }),
   },
   (table) => [
-    index('idx_frame_prompt_variants_frame_type_created').on(
+    index('idx_shot_prompt_variants_shot_type_created').on(
       table.shotId,
       table.promptType,
       table.createdAt
@@ -100,7 +100,7 @@ export const shotPromptVariants = snakeCase.table(
     // legacy rows have null `input_hash` and are excluded; `source = 'restored'`
     // is also excluded so a restore that carries forward an existing AI hash
     // still appends an audit row to history.
-    uniqueIndex('uq_frame_prompt_variants_frame_type_hash_ai')
+    uniqueIndex('uq_shot_prompt_variants_shot_type_hash_ai')
       .on(table.shotId, table.promptType, table.inputHash)
       .where(
         sql`${table.inputHash} IS NOT NULL AND ${table.source} != 'restored'`

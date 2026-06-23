@@ -1,44 +1,42 @@
 import { z } from 'zod';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-orm/zod';
-import { shots, FRAME_GENERATION_STATUSES } from '@/lib/db/schema/shots';
+import { shots, SHOT_GENERATION_STATUSES } from '@/lib/db/schema/shots';
 import { IMAGE_MODELS, IMAGE_TO_VIDEO_MODELS } from '@/lib/ai/models';
 import { sceneSchema } from '@/lib/ai/scene-analysis.schema';
 
 /**
- * Shared Zod schemas for frame operations
+ * Shared Zod schemas for shot operations
  * Generated from Drizzle schema with custom refinements
  *
- * Note: Frame metadata field should contain FrameMetadata structure (see src/lib/ai/frame.schema.ts)
+ * Note: Shot metadata field should contain ShotMetadata structure (see src/lib/ai/shot.schema.ts)
  * which includes complete Scene data from script analysis. The schemas below validate structure
- * but do not enforce FrameMetadata typing to maintain flexibility.
+ * but do not enforce ShotMetadata typing to maintain flexibility.
  */
 
-const createFrameSchema = createInsertSchema(shots, {
+const createShotSchema = createInsertSchema(shots, {
   description: (schema) => schema.min(1).max(5000),
   durationMs: (schema) => schema.min(1),
   metadata: () => sceneSchema.nullable().optional(),
-  thumbnailStatus: () =>
-    z.enum(FRAME_GENERATION_STATUSES).nullable().optional(),
-  videoStatus: () => z.enum(FRAME_GENERATION_STATUSES).nullable().optional(),
+  thumbnailStatus: () => z.enum(SHOT_GENERATION_STATUSES).nullable().optional(),
+  videoStatus: () => z.enum(SHOT_GENERATION_STATUSES).nullable().optional(),
   variantImageStatus: () =>
-    z.enum(FRAME_GENERATION_STATUSES).nullable().optional(),
-  audioStatus: () => z.enum(FRAME_GENERATION_STATUSES).nullable().optional(),
+    z.enum(SHOT_GENERATION_STATUSES).nullable().optional(),
+  audioStatus: () => z.enum(SHOT_GENERATION_STATUSES).nullable().optional(),
 }).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const updateFrameSchema = createUpdateSchema(shots, {
+export const updateShotSchema = createUpdateSchema(shots, {
   description: (schema) => schema.min(1).max(5000),
   durationMs: (schema) => schema.min(1),
   metadata: () => sceneSchema.nullable().optional(),
-  thumbnailStatus: () =>
-    z.enum(FRAME_GENERATION_STATUSES).nullable().optional(),
-  videoStatus: () => z.enum(FRAME_GENERATION_STATUSES).nullable().optional(),
+  thumbnailStatus: () => z.enum(SHOT_GENERATION_STATUSES).nullable().optional(),
+  videoStatus: () => z.enum(SHOT_GENERATION_STATUSES).nullable().optional(),
   variantImageStatus: () =>
-    z.enum(FRAME_GENERATION_STATUSES).nullable().optional(),
-  audioStatus: () => z.enum(FRAME_GENERATION_STATUSES).nullable().optional(),
+    z.enum(SHOT_GENERATION_STATUSES).nullable().optional(),
+  audioStatus: () => z.enum(SHOT_GENERATION_STATUSES).nullable().optional(),
 }).omit({
   id: true,
   sequenceId: true,
@@ -46,7 +44,7 @@ export const updateFrameSchema = createUpdateSchema(shots, {
   updatedAt: true,
 });
 
-export const regenerateFrameSchema = z.object({
+export const regenerateShotSchema = z.object({
   regenerateDescription: z.boolean().optional(),
   regenerateThumbnail: z.boolean().optional(),
   model: z
@@ -83,11 +81,11 @@ export const generateVariantSchema = z.object({
   seed: z.number().int().optional(),
 });
 
-// Schemas for API endpoint frame creation (sequenceId comes from URL params)
-export const singleFrameSchema = createFrameSchema.omit({ sequenceId: true });
+// Schemas for API endpoint shot creation (sequenceId comes from URL params)
+export const singleShotSchema = createShotSchema.omit({ sequenceId: true });
 
-export const bulkFrameSchema = z.object({
-  frames: z.array(createFrameSchema.omit({ sequenceId: true })).min(1),
+export const bulkShotSchema = z.object({
+  shots: z.array(createShotSchema.omit({ sequenceId: true })).min(1),
 });
 
 export type GenerateVariantInput = z.infer<typeof generateVariantSchema>;

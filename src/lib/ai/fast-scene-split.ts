@@ -1,7 +1,7 @@
 /**
  * Fast text-based scene splitter for preview generation.
  * Splits scripts using screenplay formatting conventions (INT./EXT., CUT TO, etc.)
- * without any LLM calls. Produces minimal Scene[] for quick preview frames.
+ * without any LLM calls. Produces minimal Scene[] for quick preview shots.
  */
 
 import type { Scene } from '@/lib/ai/scene-analysis.schema';

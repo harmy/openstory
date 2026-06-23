@@ -10,7 +10,7 @@
  * verbs are team-scoped, so a key only ever sees its own team's sequences.
  *
  * GET returns a compact summary per sequence (status-document scalars + a
- * `counts` block, but not the full per-frame array) with a HAL `self` link to
+ * `counts` block, but not the full per-shot array) with a HAL `self` link to
  * each sequence's full status document. `?limit` (default 20, cap 100) and an
  * opaque `?cursor` page through the results; a `next` link appears while more
  * remain. Archived sequences are excluded.

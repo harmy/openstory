@@ -93,7 +93,7 @@ async function getSequenceRejectingActiveRun(
  * Throw if the sequence's most recent storyboard run is still in flight
  * (or its status can't be verified — see `getSequenceRejectingActiveRun`).
  *
- * Check-only — for partial retries (per-frame image/motion) that must not
+ * Check-only — for partial retries (per-shot image/motion) that must not
  * race a live full pipeline but don't start a storyboard themselves.
  */
 export async function assertNoActiveStoryboard(

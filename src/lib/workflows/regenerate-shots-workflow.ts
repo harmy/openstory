@@ -1,7 +1,7 @@
 /**
- * Cloudflare Workflows port of `regenerateFramesWorkflow`.
+ * Cloudflare Workflows port of `regenerateShotsWorkflow`.
  *
- * Wave 3 fan-out leaf: bulk regenerates frame images after a character or
+ * Wave 3 fan-out leaf: bulk regenerates shot images after a character or
  * location recast. Mirrors the QStash version
  * (`src/lib/workflows/regenerate-shots-workflow.ts`) step for step — same
  * step names, same control flow, same side effects. The only differences are:
@@ -55,8 +55,8 @@ type ShotResult =
   | { shotId: string; success: true; imageUrl: string }
   | { shotId: string; success: false; error: string };
 
-type RegenerateFramesResult = {
-  totalFrames: number;
+type RegenerateShotsResult = {
+  totalShots: number;
   successCount: number;
   failedShots: string[];
   divergedShotIds: string[];
@@ -73,7 +73,7 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
     event: Readonly<WorkflowEvent<RegenerateShotsWorkflowInput>>,
     step: WorkflowStep,
     scopedDb: ScopedDb
-  ): Promise<RegenerateFramesResult> {
+  ): Promise<RegenerateShotsResult> {
     const input = event.payload;
     const parentInstanceId = event.instanceId;
     const { sequenceId, teamId, triggerKind, triggerId } = input;
@@ -106,10 +106,10 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
       }
     });
 
-    const snapshots = input.frameSnapshots;
+    const snapshots = input.shotSnapshots;
     if (snapshots.length === 0) {
       return {
-        totalFrames: 0,
+        totalShots: 0,
         successCount: 0,
         failedShots: [],
         divergedShotIds: [],
@@ -125,21 +125,21 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
         event: 'start',
         sequenceId,
         triggerId,
-        frameCount: snapshots.length,
+        shotCount: snapshots.length,
       });
     });
 
     // ============================================================
-    // PHASE: Per-frame image regeneration — fan out via Pattern 3.
+    // PHASE: Per-shot image regeneration — fan out via Pattern 3.
     // Use Promise.allSettled so a single child timeout / failure does not
-    // kill the parent — each sibling resolves independently, and per-frame
+    // kill the parent — each sibling resolves independently, and per-shot
     // failures become `ShotResult` entries that the reconcile pass below
     // handles individually.
     // ============================================================
     const settled = await Promise.allSettled(
       snapshots.map((snapshot, shotIndex): Promise<ShotResult> => {
         if (!snapshot.imagePrompt) {
-          // Per-frame failure — peer frames in the batch should still run.
+          // Per-shot failure — peer shots in the batch should still run.
           return Promise.resolve({
             shotId: snapshot.shotId,
             success: false,
@@ -176,7 +176,7 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
           (body): ShotResult => {
             if (!body.imageUrl) {
               logger.error(
-                `[RegenerateFramesWorkflow:cf] Image generation failed shot=${snapshot.shotId} reason=no imageUrl`
+                `[RegenerateShotsWorkflow:cf] Image generation failed shot=${snapshot.shotId} reason=no imageUrl`
               );
               return {
                 shotId: snapshot.shotId,
@@ -193,7 +193,7 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
           (err: unknown): ShotResult => {
             const reason = err instanceof Error ? err.message : String(err);
             logger.error(
-              `[RegenerateFramesWorkflow:cf] Image generation failed shot=${snapshot.shotId} reason=${reason}`
+              `[RegenerateShotsWorkflow:cf] Image generation failed shot=${snapshot.shotId} reason=${reason}`
             );
             return {
               shotId: snapshot.shotId,
@@ -222,8 +222,8 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
       };
     });
 
-    // Shared batch reads — pulled out of the per-frame loop so each frame's
-    // reconcile step is independent (one frame's DB blip can't poison the
+    // Shared batch reads — pulled out of the per-shot loop so each shot's
+    // reconcile step is independent (one shot's DB blip can't poison the
     // batch's character/location lookup).
     const allCharacters = await step.do('load-characters', () =>
       scopedDb.characters.listWithSheets(sequenceId)
@@ -243,7 +243,7 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
 
     const reconcileOutcomes = new Map<string, ReconcileOutcome>();
 
-    // Per-frame `step.do` so one frame's failure does not abort siblings.
+    // Per-shot `step.do` so one shot's failure does not abort siblings.
     // Known-permanent states return tagged outcomes (no retries burned).
     // Unknown throws propagate inside the step so CF applies its retry
     // policy; only after retries exhaust does the outer catch convert to a
@@ -254,7 +254,7 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
       let outcome: ReconcileOutcome;
       try {
         outcome = await step.do(
-          `reconcile-frame-${result.shotId}`,
+          `reconcile-shot-${result.shotId}`,
           async (): Promise<ReconcileOutcome> => {
             const snapshot = snapshots.find((s) => s.shotId === result.shotId);
             if (!snapshot) {
@@ -266,16 +266,16 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
               };
             }
 
-            const liveFrame = await scopedDb.shots.getById(result.shotId);
-            if (!liveFrame) {
-              // Frame was deleted mid-flight. The speculative thumbnail was
+            const liveShot = await scopedDb.shots.getById(result.shotId);
+            if (!liveShot) {
+              // Shot was deleted mid-flight. The speculative thumbnail was
               // already written by image-workflow, but its row is gone —
               // there's nothing left to reconcile. Skipped, not failed.
               return { kind: 'skipped-deleted' };
             }
 
             const currentSnapshot = await buildRegenerateShotSnapshot({
-              frame: liveFrame,
+              shot: liveShot,
               characters: allCharacters,
               locations: allLocations,
               elements: allElements,
@@ -287,8 +287,8 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
               currentSnapshot.snapshotInputHash === snapshot.snapshotInputHash
             ) {
               const writes = buildConvergentWrites(snapshot.snapshotInputHash);
-              await scopedDb.shots.update(result.shotId, writes.frame);
-              const updated = await scopedDb.shotVariants.updateByFrameAndModel(
+              await scopedDb.shots.update(result.shotId, writes.shot);
+              const updated = await scopedDb.shotVariants.updateByShotAndModel(
                 result.shotId,
                 'image',
                 imageModel,
@@ -297,7 +297,7 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
               if (!updated) {
                 return {
                   kind: 'failed',
-                  error: `Convergent reconcile: no frame_variants row for frame=${result.shotId} model=${imageModel} — image-workflow's dual-write must run before regenerate-shots reconciles.`,
+                  error: `Convergent reconcile: no shot_variants row for shot=${result.shotId} model=${imageModel} — image-workflow's dual-write must run before regenerate-shots reconciles.`,
                 };
               }
               return { kind: 'convergent' };
@@ -309,7 +309,7 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
             // without copying would leave the speculative R2 object untracked.
             //
             // Write order (revert-then-insert):
-            //   1. Revert the speculative primary thumbnail on the frame row.
+            //   1. Revert the speculative primary thumbnail on the shot row.
             //   2. Revert the speculative URL on the primary variant row so
             //      the primary slot stops pointing at diverged work.
             //   3. Insert (or no-op on retry) a divergent alternate row
@@ -320,7 +320,7 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
             // saying "diverged" while the speculative thumbnail still owned
             // the primary.
             const primaryVariant =
-              await scopedDb.shotVariants.getByFrameAndModel(
+              await scopedDb.shotVariants.getByShotAndModel(
                 result.shotId,
                 'image',
                 imageModel
@@ -332,9 +332,9 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
               divergedAt
             );
 
-            await scopedDb.shots.update(result.shotId, writes.frame);
+            await scopedDb.shots.update(result.shotId, writes.shot);
 
-            const reverted = await scopedDb.shotVariants.updateByFrameAndModel(
+            const reverted = await scopedDb.shotVariants.updateByShotAndModel(
               result.shotId,
               'image',
               imageModel,
@@ -343,7 +343,7 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
             if (!reverted) {
               return {
                 kind: 'failed',
-                error: `Divergent reconcile: no primary frame_variants row to revert for frame=${result.shotId} model=${imageModel} — image-workflow's dual-write must run before regenerate-shots reconciles.`,
+                error: `Divergent reconcile: no primary shot_variants row to revert for shot=${result.shotId} model=${imageModel} — image-workflow's dual-write must run before regenerate-shots reconciles.`,
               };
             }
 
@@ -377,14 +377,14 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
             });
 
             logger.info(
-              `[RegenerateFramesWorkflow:cf] Diverged frame ${result.shotId}: snapshot=${snapshot.snapshotInputHash.slice(0, 8)} current=${currentSnapshot.snapshotInputHash.slice(0, 8)}`
+              `[RegenerateShotsWorkflow:cf] Diverged shot ${result.shotId}: snapshot=${snapshot.snapshotInputHash.slice(0, 8)} current=${currentSnapshot.snapshotInputHash.slice(0, 8)}`
             );
 
             return { kind: 'divergent' };
           }
         );
       } catch (err) {
-        // CF exhausted retries on this frame's step. Capture as a failed
+        // CF exhausted retries on this shot's step. Capture as a failed
         // outcome so siblings still reconcile.
         outcome = {
           kind: 'failed',
@@ -395,18 +395,18 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
       reconcileOutcomes.set(result.shotId, outcome);
       if (outcome.kind === 'failed') {
         logger.error(
-          `[RegenerateFramesWorkflow:cf] Reconcile failed for frame ${result.shotId}: ${outcome.error}`
+          `[RegenerateShotsWorkflow:cf] Reconcile failed for shot ${result.shotId}: ${outcome.error}`
         );
       } else if (outcome.kind === 'skipped-deleted') {
         logger.warn(
-          `[RegenerateFramesWorkflow:cf] Frame ${result.shotId} deleted mid-flight; skipping reconciliation`
+          `[RegenerateShotsWorkflow:cf] Shot ${result.shotId} deleted mid-flight; skipping reconciliation`
         );
       }
     }
 
     // Single pass over reconcileOutcomes with an exhaustive switch.
     // Adding a new ReconcileOutcome variant fails compile here (the `never`
-    // assignment) instead of silently dropping those frames from every tally.
+    // assignment) instead of silently dropping those shots from every tally.
     const convergentShotIds: string[] = [];
     const divergedShotIds: string[] = [];
     const skippedDeletedShotIds: string[] = [];
@@ -428,7 +428,7 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
         default: {
           const _exhaustive: never = outcome;
           throw new Error(
-            `[RegenerateFramesWorkflow:cf] Unhandled ReconcileOutcome: ${JSON.stringify(_exhaustive)}`
+            `[RegenerateShotsWorkflow:cf] Unhandled ReconcileOutcome: ${JSON.stringify(_exhaustive)}`
           );
         }
       }
@@ -438,8 +438,8 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
     // primary thumbnail. Image-workflow regenerated the primary; without this
     // step the grid keeps showing the pre-recast character. Fire-and-forget:
     // each variant runs as its own workflow so this batch returns as soon as
-    // primaries are reconciled. Only fan out for convergent frames — divergent
-    // frames preserve the user's live primary, so their existing shot
+    // primaries are reconciled. Only fan out for convergent shots — divergent
+    // shots preserve the user's live primary, so their existing shot
     // variants are still correct.
     await step.do('trigger-variant-regen', async () => {
       const convergentShotIdSet = new Set(convergentShotIds);
@@ -483,7 +483,7 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
       );
     });
 
-    // Success = frames whose primary write was reconciled (convergent kept
+    // Success = shots whose primary write was reconciled (convergent kept
     // the primary; divergent saved an alternate). Image-generation failures,
     // deleted-mid-flight skips, and reconcile failures don't count.
     const imageFailedShotIds = imageResults
@@ -505,11 +505,11 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
     });
 
     logger.info(
-      `[RegenerateFramesWorkflow:cf] Completed: ${successCount} success, ${failedShots.length} failed, ${divergedShotIds.length} diverged, ${skippedDeletedShotIds.length} skipped-deleted`
+      `[RegenerateShotsWorkflow:cf] Completed: ${successCount} success, ${failedShots.length} failed, ${divergedShotIds.length} diverged, ${skippedDeletedShotIds.length} skipped-deleted`
     );
 
     return {
-      totalFrames: snapshots.length,
+      totalShots: snapshots.length,
       successCount,
       failedShots,
       divergedShotIds,
@@ -537,7 +537,7 @@ export class RegenerateShotsWorkflow extends OpenStoryWorkflowEntrypoint<Regener
     }
 
     logger.error(
-      `[RegenerateFramesWorkflow:cf] Frame regeneration failed: ${error}`
+      `[RegenerateShotsWorkflow:cf] Shot regeneration failed: ${error}`
     );
   }
 }

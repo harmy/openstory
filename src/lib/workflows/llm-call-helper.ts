@@ -31,7 +31,7 @@ import {
   type ChatMessage,
   type ChatMessageImagePart,
 } from '@/lib/prompts';
-import { getFramePromptChannel } from '@/lib/realtime';
+import { getShotPromptChannel } from '@/lib/realtime';
 import { toVisionImageSource } from '@/lib/storage/external-url';
 import { chat, type TokenUsage } from '@tanstack/ai';
 import type { WorkflowStep } from 'cloudflare:workers';
@@ -164,7 +164,7 @@ export type DurableLLMCallContext = {
 };
 
 export type DurableStreamingLLMCallContext = DurableLLMCallContext & {
-  framePromptStream?: {
+  shotPromptStream?: {
     shotId: string;
     promptType: 'visual' | 'motion';
     flushIntervalMs?: number;
@@ -348,7 +348,7 @@ export async function durableLLMCallCf<TSchema extends z.ZodType>(
 
 /**
  * Streaming variant of {@link durableLLMCallCf}: degrades to the
- * non-streaming path when `framePromptStream` is omitted, so script-analysis
+ * non-streaming path when `shotPromptStream` is omitted, so script-analysis
  * flows that share these workflows don't burn realtime publishes nobody is
  * listening to.
  */
@@ -357,7 +357,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
   config: DurableLLMCallConfig<TSchema>,
   callContext: DurableStreamingLLMCallContext
 ): Promise<z.infer<TSchema>> {
-  if (!callContext.framePromptStream) {
+  if (!callContext.shotPromptStream) {
     return durableLLMCallCf(step, config, callContext);
   }
 
@@ -370,7 +370,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
     shotId,
     promptType,
     flushIntervalMs = 80,
-  } = callContext.framePromptStream;
+  } = callContext.shotPromptStream;
   const logName = `phase-${phase.number}-${name}`;
   const logTags = [name, `phase-${phase.number}`, 'analysis', 'stream'];
   const logMetadata = {
@@ -427,7 +427,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
       const abortController = new AbortController();
       const timeout = setTimeout(() => abortController.abort(), 300_000);
 
-      const channel = getFramePromptChannel(shotId);
+      const channel = getShotPromptChannel(shotId);
       let accumulated = '';
       let lastExtracted = '';
       let pendingDelta = '';
@@ -439,7 +439,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
         const delta = pendingDelta;
         pendingDelta = '';
         lastEmitAt = Date.now();
-        await channel.emit('framePrompt.streaming', { promptType, delta });
+        await channel.emit('shotPrompt.streaming', { promptType, delta });
       };
 
       try {

@@ -3,7 +3,7 @@
  *
  * Enhances a script WITHOUT creating a sequence: takes the enhancement-relevant
  * inputs (style, aspect ratio, target duration, reference elements) and streams
- * the enhanced script back as Server-Sent Events (unnamed `data:` delta frames,
+ * the enhanced script back as Server-Sent Events (unnamed `data:` delta shots,
  * then a terminal `event: done` carrying the full text plus the HAL `_links`
  * catalog of next actions — notably `create-sequence` pre-filled with the
  * enhanced script).
@@ -11,7 +11,7 @@
  * Authenticated via `authWithTeamRequestMiddleware` (API key or dashboard
  * session), billed per request like the dashboard enhance. Pre-stream failures
  * (bad body, unresolvable style, billing) return the standard JSON error
- * envelope; failures after streaming has begun arrive as an `event: error` frame.
+ * envelope; failures after streaming has begun arrive as an `event: error` shot.
  */
 
 import { authWithTeamRequestMiddleware } from '@/functions/middleware';

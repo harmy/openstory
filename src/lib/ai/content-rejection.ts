@@ -50,9 +50,9 @@ export const CONTENT_REJECTION_PATTERNS: readonly RegExp[] = [
 export const CONTENT_REJECTION_RETRY_EVENT = 'content_rejection_retry' as const;
 
 /**
- * Stable marker for the structured log emitted when a frame/clip's TERMINAL
+ * Stable marker for the structured log emitted when a shot/clip's TERMINAL
  * failure was a content rejection — fired from both image and motion
- * `onFailure`, so "how many frames failed a content checker" is one queryable
+ * `onFailure`, so "how many shots failed a content checker" is one queryable
  * PostHog Logs metric across both paths, regardless of the retry mechanism.
  */
 export const CONTENT_REJECTION_EVENT = 'content_rejection' as const;

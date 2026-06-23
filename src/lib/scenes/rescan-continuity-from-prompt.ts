@@ -1,7 +1,7 @@
 /**
  * Server helper: re-scan a (possibly user-edited) prompt for canonical
  * character / element / location tags and additively merge them into a
- * frame's `metadata.continuity`.
+ * shot's `metadata.continuity`.
  *
  * Lives here — not inline in `updateShotFn` — because the auto-link feature
  * (#683) needs to fire from both the explicit save path AND the regenerate

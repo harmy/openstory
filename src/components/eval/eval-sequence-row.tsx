@@ -23,7 +23,7 @@ type EvalSequenceRowProps = {
   viewMode: ViewMode;
   maxSceneCount: number;
   sequenceIndex: number;
-  framesLoading: boolean;
+  shotsLoading: boolean;
   divergence?: { hasMusic: boolean };
   openDialog: OpenDialogState;
   onOpenDialogChange: (state: OpenDialogState) => void;
@@ -36,7 +36,7 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
   viewMode,
   maxSceneCount,
   sequenceIndex,
-  framesLoading,
+  shotsLoading,
   divergence,
   openDialog,
   onOpenDialogChange,
@@ -83,7 +83,7 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
         )}
       </div>
       {Array.from({ length: maxSceneCount }, (_, i) => {
-        const frame = sequence.shots[i];
+        const shot = sequence.shots[i];
         const sceneIndex = i;
         const isDialogOpen =
           openDialog?.sequenceIndex === sequenceIndex &&
@@ -94,18 +94,18 @@ export const EvalSequenceRow: React.FC<EvalSequenceRowProps> = ({
 
         return (
           <div
-            // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- frame is undefined when sequence has fewer frames than maxSceneCount
-            key={frame?.id ?? `empty-${i}`}
+            // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- shot is undefined when sequence has fewer shots than maxSceneCount
+            key={shot?.id ?? `empty-${i}`}
             className="shrink-0 h-full"
             style={{ width: CELL_WIDTH }}
           >
             <EvalSceneCell
-              frame={frame}
+              shot={shot}
               viewMode={viewMode}
               sceneNumber={i + 1}
               sequenceTitle={sequence.title}
               aspectRatio={aspectRatio}
-              framesLoading={framesLoading}
+              shotsLoading={shotsLoading}
               dialogOpen={isDialogOpen}
               dialogInitialTab={dialogInitialTab}
               onDialogOpenChange={(open) => {

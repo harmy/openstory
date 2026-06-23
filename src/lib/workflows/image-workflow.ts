@@ -16,7 +16,7 @@
 
 import { computeVisualPromptInputHash } from '@/lib/ai/input-hash';
 import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS } from '@/lib/ai/models';
-import { loadNarrowFramePromptContext } from '@/lib/ai/prompt-context';
+import { loadNarrowShotPromptContext } from '@/lib/ai/prompt-context';
 import { ZERO_MICROS } from '@/lib/billing/money';
 import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import { DEFAULT_IMAGE_SIZE } from '@/lib/constants/aspect-ratios';
@@ -61,14 +61,14 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     scopedDb: ScopedDb
   ): Promise<ImageWorkflowResult> {
     const rawInput = event.payload;
-    // Back-compat: accept shotId or frameId from in-flight instances serialized before #906
-    // TODO(#906): remove frameId shim one release after deploy
+    // Back-compat: accept shotId or shotId from in-flight instances serialized before #906
+    // TODO(#906): remove shotId shim one release after deploy
     const input = {
       ...rawInput,
       shotId:
         rawInput.shotId ??
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- back-compat shim for in-flight CF Workflow instances serialized before #906
-        (rawInput as { frameId?: string }).frameId ??
+        (rawInput as { shotId?: string }).shotId ??
         undefined,
     };
     const workflowRunId = event.instanceId;
@@ -107,11 +107,11 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
 
         if (input.shotId) {
           // Variant-only (#547) must not touch the live primary columns — read
-          // the frame instead of stamping `imageModel`/`thumbnailStatus`, so
+          // the shot instead of stamping `imageModel`/`thumbnailStatus`, so
           // adding a model can't flip the primary or trip staleness. The
-          // per-model `frame_variants` row (opened below) carries the in-flight
+          // per-model `shot_variants` row (opened below) carries the in-flight
           // state instead.
-          const frame = input.variantOnly
+          const shot = input.variantOnly
             ? await scopedDb.shots.getById(input.shotId)
             : await scopedDb.shots.update(
                 input.shotId,
@@ -123,9 +123,9 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
                 { throwOnMissing: false }
               );
 
-          if (!frame) {
+          if (!shot) {
             logger.info(
-              `[ImageWorkflow:cf] Frame ${input.shotId} was deleted, skipping`
+              `[ImageWorkflow:cf] Shot ${input.shotId} was deleted, skipping`
             );
             return null;
           }
@@ -134,18 +134,18 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
             shouldRecordUserEdit({
               userEditedPrompt: input.userEditedPrompt,
               prompt: input.prompt,
-              currentPrompt: frame.imagePrompt,
+              currentPrompt: shot.imagePrompt,
             })
           ) {
             let userEditInputHash: string | null = null;
             let userEditAnalysisModel: string | null = null;
             try {
-              if (frame.metadata && input.sequenceId) {
+              if (shot.metadata && input.sequenceId) {
                 const sequence = await scopedDb.sequences.getById(
                   input.sequenceId
                 );
                 if (sequence) {
-                  const ctx = await loadNarrowFramePromptContext({
+                  const ctx = await loadNarrowShotPromptContext({
                     scopedDb,
                     sequence: {
                       id: sequence.id,
@@ -153,7 +153,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
                       aspectRatio: sequence.aspectRatio,
                       analysisModel: sequence.analysisModel,
                     },
-                    scene: frame.metadata,
+                    scene: shot.metadata,
                   });
                   userEditInputHash = await computeVisualPromptInputHash(ctx);
                   userEditAnalysisModel = ctx.analysisModel;
@@ -161,7 +161,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
               }
             } catch (err) {
               logger.warn(
-                `[ImageWorkflow:cf] Could not compute upstream hash for user-edit on frame ${input.shotId}; recording with null hash`,
+                `[ImageWorkflow:cf] Could not compute upstream hash for user-edit on shot ${input.shotId}; recording with null hash`,
                 {
                   err,
                 }
@@ -196,7 +196,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
               shotId: input.shotId,
               status: 'generating',
               model,
-              // Variant-only (#547): don't flip the primary frame to
+              // Variant-only (#547): don't flip the primary shot to
               // "generating" in cache — this run only fills a variant row.
               variantOnly: input.variantOnly,
             }
@@ -217,7 +217,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
             input.referenceImages?.map(
               (ref: ReferenceImageDescription) => ref.referenceImageUrl
             ) ?? [],
-          traceName: 'frame-image',
+          traceName: 'shot-image',
         } satisfies ImageGenerationParams;
       }
     );
@@ -233,7 +233,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     // Generate the image. CF's default per-step retry handles content-flag and
     // transient errors (#881): a stochastic rejection clears on a fresh
     // same-model call; a deterministic content-checker hit exhausts the retries
-    // and fails with its real message — recorded on the frame by onFailure and
+    // and fails with its real message — recorded on the shot by onFailure and
     // surfaced in the failure banner.
     const imageResult = await step.do('generate-image', async (ctx) => {
       logger.info(
@@ -322,16 +322,16 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
           },
         });
 
-        if (outcome.status === 'frame-deleted') {
+        if (outcome.status === 'shot-deleted') {
           logger.info(
-            `[ImageWorkflow:cf] Frame ${shotId} was deleted, skipping persist`
+            `[ImageWorkflow:cf] Shot ${shotId} was deleted, skipping persist`
           );
           return null;
         }
 
         if (outcome.status === 'divergent' && snapshotHash) {
           logger.info(
-            `[ImageWorkflow:cf] Diverged frame ${shotId}: snapshot=${snapshotHash.slice(0, 8)} current=${currentHash?.slice(0, 8)}; routed alternate to frame_variants`
+            `[ImageWorkflow:cf] Diverged shot ${shotId}: snapshot=${snapshotHash.slice(0, 8)} current=${currentHash?.slice(0, 8)}; routed alternate to shot_variants`
           );
         } else {
           logger.info(`[ImageWorkflow:cf] Uploaded to storage: ${upload.path}`);
@@ -342,7 +342,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
       if (writeResult) imageUrl = writeResult.imageUrl;
     } else if (imageUrl && shotId && input.skipStorage) {
       await step.do('store-preview-url', async () => {
-        const updatedFrame = await scopedDb.shots.update(
+        const updatedShot = await scopedDb.shots.update(
           shotId,
           {
             previewThumbnailUrl: imageUrl,
@@ -352,9 +352,9 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
           { throwOnMissing: false }
         );
 
-        if (!updatedFrame) {
+        if (!updatedShot) {
           logger.info(
-            `[ImageWorkflow:cf] Frame ${shotId} was deleted, skipping preview update`
+            `[ImageWorkflow:cf] Shot ${shotId} was deleted, skipping preview update`
           );
           return;
         }
@@ -398,7 +398,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
 
     const model = input.model ?? DEFAULT_IMAGE_MODEL;
     if (input.sequenceId) {
-      await scopedDb.shotVariants.updateByFrameAndModel(
+      await scopedDb.shotVariants.updateByShotAndModel(
         input.shotId,
         'image',
         model,
@@ -425,7 +425,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
         );
       } catch (emitError) {
         logger.error(
-          `[ImageWorkflow:cf] Failed to emit failure event for sequence ${input.sequenceId} frame ${input.shotId}:`,
+          `[ImageWorkflow:cf] Failed to emit failure event for sequence ${input.sequenceId} shot ${input.shotId}:`,
           {
             err: emitError,
           }
@@ -435,7 +435,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
 
     if (isContentRejectionError(error)) {
       logger.warn(
-        `[ImageWorkflow:cf] frame ${input.shotId} failed a content checker`,
+        `[ImageWorkflow:cf] shot ${input.shotId} failed a content checker`,
         {
           event: CONTENT_REJECTION_EVENT,
           kind: 'image',
@@ -448,7 +448,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     }
 
     logger.error(
-      `[ImageWorkflow:cf] Image generation failed for frame ${input.shotId}: ${error}`
+      `[ImageWorkflow:cf] Image generation failed for shot ${input.shotId}: ${error}`
     );
   }
 }

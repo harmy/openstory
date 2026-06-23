@@ -13,7 +13,7 @@ const logger = getLogger(['openstory', 'ai', 'enhance-inputs']);
 /**
  * A style as the enhancer sees it: the aesthetic recipe (`config`) plus the
  * identity that drives WHAT HAPPENS — name/category/tags decide whether "action"
- * gets a chase and "rom-com" gets a meet-cute, not just how the frame looks.
+ * gets a chase and "rom-com" gets a meet-cute, not just how the shot looks.
  * One cohesive narrowing of a `Style` row rather than two parallel bags.
  */
 export type EnhanceStyle = {

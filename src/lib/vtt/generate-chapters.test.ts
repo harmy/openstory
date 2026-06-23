@@ -11,8 +11,8 @@ const createTestScene = (overrides: Partial<Scene>): Scene => ({
   ...overrides,
 });
 
-// Helper to create test frames with minimal required fields
-const createTestFrame = (overrides: Partial<Shot>): Shot => ({
+// Helper to create test shots with minimal required fields
+const createTestShot = (overrides: Partial<Shot>): Shot => ({
   id: '1',
   sequenceId: 'seq-1',
   orderIndex: 0,
@@ -61,8 +61,8 @@ const createTestFrame = (overrides: Partial<Shot>): Shot => ({
 
 describe('generateChaptersVTT', () => {
   test('generates valid WebVTT chapters with metadata', () => {
-    const frames: Shot[] = [
-      createTestFrame({
+    const shots: Shot[] = [
+      createTestShot({
         id: '1',
         durationMs: 5000,
         videoUrl: 'https://example.com/video1.mp4',
@@ -78,7 +78,7 @@ describe('generateChaptersVTT', () => {
           },
         }),
       }),
-      createTestFrame({
+      createTestShot({
         id: '2',
         orderIndex: 1,
         durationMs: 3000,
@@ -97,7 +97,7 @@ describe('generateChaptersVTT', () => {
       }),
     ];
 
-    const vtt = generateChaptersVTT(frames);
+    const vtt = generateChaptersVTT(shots);
 
     expect(vtt).toContain('WEBVTT');
     expect(vtt).toContain('Scene 1: Opening Scene');
@@ -106,15 +106,15 @@ describe('generateChaptersVTT', () => {
     expect(vtt).toContain('00:00:05.000 --> 00:00:08.000');
   });
 
-  test('handles frames without metadata', () => {
-    const frames: Shot[] = [
-      createTestFrame({
+  test('handles shots without metadata', () => {
+    const shots: Shot[] = [
+      createTestShot({
         id: '1',
         durationMs: 3000,
         videoUrl: 'https://example.com/video1.mp4',
         videoStatus: 'completed',
       }),
-      createTestFrame({
+      createTestShot({
         id: '2',
         orderIndex: 1,
         durationMs: 2000,
@@ -123,7 +123,7 @@ describe('generateChaptersVTT', () => {
       }),
     ];
 
-    const vtt = generateChaptersVTT(frames);
+    const vtt = generateChaptersVTT(shots);
 
     expect(vtt).toContain('WEBVTT');
     expect(vtt).toContain('Scene 1');
@@ -131,35 +131,35 @@ describe('generateChaptersVTT', () => {
   });
 
   test('defaults to 3 seconds when durationMs is null', () => {
-    const frames: Shot[] = [
-      createTestFrame({
+    const shots: Shot[] = [
+      createTestShot({
         durationMs: null,
         videoUrl: 'https://example.com/video1.mp4',
         videoStatus: 'completed',
       }),
     ];
 
-    const vtt = generateChaptersVTT(frames);
+    const vtt = generateChaptersVTT(shots);
 
     expect(vtt).toContain('00:00:00.000 --> 00:00:03.000');
   });
 
   test('calculates cumulative time correctly', () => {
-    const frames: Shot[] = [
-      createTestFrame({
+    const shots: Shot[] = [
+      createTestShot({
         id: '1',
         durationMs: 5000,
         videoUrl: 'https://example.com/video1.mp4',
         videoStatus: 'completed',
       }),
-      createTestFrame({
+      createTestShot({
         id: '2',
         orderIndex: 1,
         durationMs: 7000,
         videoUrl: 'https://example.com/video2.mp4',
         videoStatus: 'completed',
       }),
-      createTestFrame({
+      createTestShot({
         id: '3',
         orderIndex: 2,
         durationMs: 4000,
@@ -168,7 +168,7 @@ describe('generateChaptersVTT', () => {
       }),
     ];
 
-    const vtt = generateChaptersVTT(frames);
+    const vtt = generateChaptersVTT(shots);
 
     // First chapter: 0-5 seconds
     expect(vtt).toContain('00:00:00.000 --> 00:00:05.000');
@@ -179,14 +179,14 @@ describe('generateChaptersVTT', () => {
   });
 
   test('formats timestamps correctly for hours', () => {
-    const frames: Shot[] = [
-      createTestFrame({
+    const shots: Shot[] = [
+      createTestShot({
         id: '1',
         durationMs: 3600000,
         videoUrl: 'https://example.com/video1.mp4',
         videoStatus: 'completed',
       }),
-      createTestFrame({
+      createTestShot({
         id: '2',
         orderIndex: 1,
         durationMs: 125000,
@@ -195,16 +195,16 @@ describe('generateChaptersVTT', () => {
       }),
     ];
 
-    const vtt = generateChaptersVTT(frames);
+    const vtt = generateChaptersVTT(shots);
 
     expect(vtt).toContain('00:00:00.000 --> 01:00:00.000');
     expect(vtt).toContain('01:00:00.000 --> 01:02:05.000');
   });
 
-  test('handles empty frames array', () => {
-    const frames: Shot[] = [];
+  test('handles empty shots array', () => {
+    const shots: Shot[] = [];
 
-    const vtt = generateChaptersVTT(frames);
+    const vtt = generateChaptersVTT(shots);
 
     expect(vtt).toContain('WEBVTT');
     expect(vtt).toContain('NOTE Generated chapters from shots');
@@ -214,8 +214,8 @@ describe('generateChaptersVTT', () => {
   });
 
   test('uses scene metadata for chapter titles', () => {
-    const frames: Shot[] = [
-      createTestFrame({
+    const shots: Shot[] = [
+      createTestShot({
         durationMs: 3000,
         videoUrl: 'https://example.com/video1.mp4',
         videoStatus: 'completed',
@@ -232,7 +232,7 @@ describe('generateChaptersVTT', () => {
       }),
     ];
 
-    const vtt = generateChaptersVTT(frames);
+    const vtt = generateChaptersVTT(shots);
 
     expect(vtt).toContain('Scene 5: The Great Revelation');
   });
@@ -262,8 +262,8 @@ describe('generateChaptersVTT', () => {
     ];
 
     for (const { input, expected } of xssVectors) {
-      const frames: Shot[] = [
-        createTestFrame({
+      const shots: Shot[] = [
+        createTestShot({
           durationMs: 3000,
           metadata: createTestScene({
             sceneNumber: 1,
@@ -278,22 +278,22 @@ describe('generateChaptersVTT', () => {
         }),
       ];
 
-      const vtt = generateChaptersVTT(frames);
+      const vtt = generateChaptersVTT(shots);
       expect(vtt).toContain(`Scene 1: ${expected}`);
       expect(vtt).not.toContain(input !== expected ? input : '<<impossible>>');
     }
   });
 
   test('handles fractional seconds in timestamps', () => {
-    const frames: Shot[] = [
-      createTestFrame({
+    const shots: Shot[] = [
+      createTestShot({
         durationMs: 1234, // 1.234 seconds
         videoUrl: 'https://example.com/video1.mp4',
         videoStatus: 'completed',
       }),
     ];
 
-    const vtt = generateChaptersVTT(frames);
+    const vtt = generateChaptersVTT(shots);
 
     expect(vtt).toContain('00:00:00.000 --> 00:00:01.234');
   });

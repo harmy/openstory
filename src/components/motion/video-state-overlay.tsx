@@ -2,11 +2,11 @@ import { BlobLoader } from '@/components/ui/blob-loader';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
-type FrameStatus = 'pending' | 'generating' | 'completed' | 'failed' | null;
+type ShotStatus = 'pending' | 'generating' | 'completed' | 'failed' | null;
 
 type VideoStateOverlayProps = {
   thumbnailUrl?: string | null;
-  videoStatus: FrameStatus;
+  videoStatus: ShotStatus;
   className?: string;
   progressMessage?: string;
   /**
@@ -74,7 +74,7 @@ export const VideoStateOverlay: React.FC<VideoStateOverlayProps> = ({
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               <p className="text-sm font-medium">
-                {retryMessage ?? progressMessage ?? 'Generating frame…'}
+                {retryMessage ?? progressMessage ?? 'Generating shot…'}
               </p>
             </div>
           </>

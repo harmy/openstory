@@ -37,7 +37,7 @@ const TRIGGER_TO_BINDING: Record<string, keyof CloudflareEnv> = {
   'music-prompt': 'MUSIC_PROMPT_WORKFLOW',
   'recast-character': 'RECAST_CHARACTER_WORKFLOW',
   'location-matching': 'LOCATION_MATCHING_WORKFLOW',
-  'frame-images': 'SHOT_IMAGES_WORKFLOW',
+  'shot-images': 'SHOT_IMAGES_WORKFLOW',
   'talent-matching': 'TALENT_MATCHING_WORKFLOW',
   'character-sheet-from-bible': 'CHARACTER_BIBLE_WORKFLOW',
   'location-sheet-from-bible': 'LOCATION_BIBLE_WORKFLOW',
@@ -116,7 +116,7 @@ export function getCfBindingForRunId(
  * work, so reusing its id is success. `errored`/`terminated` are excluded —
  * that instance will never do the work, and pretending it was enqueued turns
  * a loud failure into a silent no-op. This matters because deduplication ids
- * are not always run-scoped: `framePromptDedupId`/`musicPromptDedupId` are
+ * are not always run-scoped: `shotPromptDedupId`/`musicPromptDedupId` are
  * stable across user requests, so a failed instance would otherwise pin every
  * retry to a dead id for CF's 30-day retention window. `unknown` is excluded
  * too — rethrow rather than trust an id we can't verify.

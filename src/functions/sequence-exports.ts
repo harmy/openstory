@@ -65,7 +65,7 @@ export const commitSequenceExportFn = createServerFn({ method: 'POST' })
         sequenceId: ulidSchema,
         path: z.string().min(1),
         durationSeconds: z.number().positive().nullable().optional(),
-        sourceFramesHash: z.string().nullable().optional(),
+        sourceShotsHash: z.string().nullable().optional(),
         sourceMusicVariantId: ulidSchema.nullable().optional(),
       })
     )
@@ -88,7 +88,7 @@ export const commitSequenceExportFn = createServerFn({ method: 'POST' })
       url: publicUrl,
       storagePath: data.path,
       durationSeconds: data.durationSeconds ?? null,
-      sourceFramesHash: data.sourceFramesHash ?? null,
+      sourceShotsHash: data.sourceShotsHash ?? null,
       sourceMusicVariantId: data.sourceMusicVariantId ?? null,
     });
 

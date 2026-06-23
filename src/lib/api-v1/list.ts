@@ -3,10 +3,10 @@
  * recent-first page of the team's sequences.
  *
  * Each entry is a compact *summary* (the same scalar fields as the single-
- * sequence status document, minus the per-frame array) plus a `counts` block
+ * sequence status document, minus the per-shot array) plus a `counts` block
  * and a HAL `self` link to its full status document. Counts are derived from a
- * single batched frame query across the whole page, so listing N sequences
- * costs one frames round-trip rather than N (see `listFramesByIds`).
+ * single batched shot query across the whole page, so listing N sequences
+ * costs one shots round-trip rather than N (see `listShotsByIds`).
  */
 
 import type { ScopedDb } from '@/lib/db/scoped';
@@ -19,10 +19,10 @@ import { API_V1_BASE, getLink, type HalResource, withLinks } from './hal';
 import {
   buildSequenceSummary,
   type SequenceSummary,
-  summarizeFrameCounts,
+  summarizeShotCounts,
 } from './state';
 
-/** A compact list entry — the status-document scalars without the frame array. */
+/** A compact list entry — the status-document scalars without the shot array. */
 type SequenceListItem = SequenceSummary;
 
 export type SequenceListPage = HalResource<{
@@ -77,14 +77,14 @@ export function decodeCursor(raw: string): SequenceCursor {
 
 function buildListItem(
   sequence: Sequence,
-  frames: Shot[],
+  shots: Shot[],
   style: Style | null,
   origin: string
 ): HalResource<SequenceListItem> {
   const item = buildSequenceSummary({
     sequence,
     style,
-    counts: summarizeFrameCounts(frames),
+    counts: summarizeShotCounts(shots),
     origin,
   });
   return withLinks(item, {
@@ -100,7 +100,7 @@ function buildListItem(
  */
 export async function buildSequenceListPage(params: {
   scopedDb: {
-    sequences: Pick<ScopedDb['sequences'], 'listFramesByIds'>;
+    sequences: Pick<ScopedDb['sequences'], 'listShotsByIds'>;
     styles: Pick<ScopedDb['styles'], 'listByIds'>;
   };
   sequences: Sequence[];
@@ -110,25 +110,25 @@ export async function buildSequenceListPage(params: {
 }): Promise<SequenceListPage> {
   const { scopedDb, sequences, hasMore, limit, origin } = params;
 
-  // One batched frame fetch and one batched style fetch across the whole page,
+  // One batched shot fetch and one batched style fetch across the whole page,
   // rather than N round-trips per sequence.
-  const [allFrames, allStyles] = await Promise.all([
-    scopedDb.sequences.listFramesByIds(sequences.map((s) => s.id)),
+  const [allShots, allStyles] = await Promise.all([
+    scopedDb.sequences.listShotsByIds(sequences.map((s) => s.id)),
     scopedDb.styles.listByIds(sequences.map((s) => s.styleId)),
   ]);
 
-  const framesById = new Map<string, Shot[]>();
-  for (const frame of allFrames) {
-    const bucket = framesById.get(frame.sequenceId);
-    if (bucket) bucket.push(frame);
-    else framesById.set(frame.sequenceId, [frame]);
+  const shotsById = new Map<string, Shot[]>();
+  for (const shot of allShots) {
+    const bucket = shotsById.get(shot.sequenceId);
+    if (bucket) bucket.push(shot);
+    else shotsById.set(shot.sequenceId, [shot]);
   }
   const styleById = new Map(allStyles.map((style) => [style.id, style]));
 
   const items = sequences.map((sequence) =>
     buildListItem(
       sequence,
-      framesById.get(sequence.id) ?? [],
+      shotsById.get(sequence.id) ?? [],
       styleById.get(sequence.styleId) ?? null,
       origin
     )

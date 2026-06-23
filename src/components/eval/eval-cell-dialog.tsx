@@ -48,7 +48,7 @@ function isDialogTab(value: string): value is DialogTab {
 type EvalCellDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  frame: Shot;
+  shot: Shot;
   sceneNumber: number;
   sequenceTitle: string;
   aspectRatio: AspectRatio;
@@ -62,7 +62,7 @@ type EvalCellDialogProps = {
 export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
   open,
   onOpenChange,
-  frame,
+  shot,
   sceneNumber,
   sequenceTitle,
   aspectRatio,
@@ -72,15 +72,15 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
   onNavigateUp,
   onNavigateDown,
 }) => {
-  const prompt = getVisualPrompt(frame);
-  const motionPrompt = getMotionPrompt(frame);
-  const script = getSceneScript(frame);
+  const prompt = getVisualPrompt(shot);
+  const motionPrompt = getMotionPrompt(shot);
+  const script = getSceneScript(shot);
   const [selectedTab, setSelectedTab] = useState<DialogTab>(initialTab);
 
   // Mention pills for the prompt text. Gated on `open` so the lists are only
   // fetched for the dialog the user actually opened — each grid cell mounts its
   // own dialog, so unconditional fetching would hit every sequence at once.
-  const seqId = open ? frame.sequenceId : undefined;
+  const seqId = open ? shot.sequenceId : undefined;
   const { data: mentionElements } = useSequenceElements(seqId);
   const { data: mentionCharacters } = useSequenceCharacters(seqId ?? '');
   const { data: mentionLocations } = useSequenceLocations(seqId ?? '');
@@ -263,14 +263,14 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
           </TabsContent>
 
           <TabsContent value="images" className="flex-1 min-h-0 mt-0">
-            {!frame.thumbnailUrl ? (
+            {!shot.thumbnailUrl ? (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 No image available
               </div>
             ) : (
               <div className="flex justify-center items-center h-full">
                 <AppImage
-                  src={frame.thumbnailUrl}
+                  src={shot.thumbnailUrl}
                   alt={`Scene ${sceneNumber}`}
                   className="max-w-full max-h-full object-contain rounded-lg"
                   width={1000}
@@ -281,12 +281,12 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
           </TabsContent>
 
           <TabsContent value="motion" className="flex-1 min-h-0 mt-0">
-            {!frame.videoUrl ? (
-              frame.thumbnailUrl ? (
+            {!shot.videoUrl ? (
+              shot.thumbnailUrl ? (
                 <div className="flex justify-center items-center h-full w-full">
                   <div className="relative w-full max-w-4xl">
                     <AppImage
-                      src={frame.thumbnailUrl}
+                      src={shot.thumbnailUrl}
                       alt={`Scene ${sceneNumber} preview`}
                       className="w-full h-auto object-contain rounded-lg opacity-60"
                       width={1920}
@@ -294,7 +294,7 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
                     />
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       <span className="text-sm font-medium text-foreground bg-background/85 backdrop-blur-sm px-3 py-1.5 rounded-md border">
-                        {frame.videoStatus === 'generating'
+                        {shot.videoStatus === 'generating'
                           ? 'Generating video…'
                           : 'No video yet'}
                       </span>
@@ -310,8 +310,8 @@ export const EvalCellDialog: React.FC<EvalCellDialogProps> = ({
               <div className="flex justify-center items-center h-full w-full">
                 <div className="w-full max-w-4xl">
                   <VideoPlayer
-                    src={frame.videoUrl}
-                    posterSrc={frame.thumbnailUrl}
+                    src={shot.videoUrl}
+                    posterSrc={shot.thumbnailUrl}
                     aspectRatio={aspectRatio}
                     className="rounded-lg"
                   />

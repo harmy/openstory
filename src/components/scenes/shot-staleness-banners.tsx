@@ -17,10 +17,10 @@ type ShotStalenessBannersProps = {
 
 /**
  * Surfaces Stage 1 divergence + staleness signals for the currently selected
- * frame. The divergent banner is driven by `frame_variants` rows with
+ * shot. The divergent banner is driven by `shot_variants` rows with
  * `divergedAt IS NOT NULL` (refreshed in real time by `stale:detected`); the
  * staleness indicator queries the scoped `isStale` helper. Both render at most
- * once per frame so the panel stays calm — only the most recent divergent
+ * once per shot so the panel stays calm — only the most recent divergent
  * alternate is offered.
  *
  * Compare/promote/discard handlers are intentionally optional: this PR ships
