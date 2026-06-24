@@ -143,4 +143,31 @@ describe('shot-list schema — constraints', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('enforces the 1..MAX shots-per-scene bound at parse time', () => {
+    const validShot = {
+      shotNumber: 1,
+      framing: {
+        shotSize: 'medium',
+        angle: 'eye level',
+        composition: 'centered',
+        subjectStartState: 'standing',
+      },
+      action: 'turns',
+      cameraMovement: { move: 'pan', pacing: 'smooth' as const },
+      soundCue: '',
+      durationSeconds: 3,
+    };
+    const shots = sceneWithShotsSchema.shape.shots;
+    // Empty (zero shots) is rejected — a scene must own at least one shot.
+    expect(shots.safeParse([]).success).toBe(false);
+    // One shot is fine.
+    expect(shots.safeParse([validShot]).success).toBe(true);
+    // Over the ceiling is rejected (minItems/maxItems, still union-free).
+    const tooMany = Array.from({ length: MAX_SHOTS_PER_SCENE + 1 }, (_, i) => ({
+      ...validShot,
+      shotNumber: i + 1,
+    }));
+    expect(shots.safeParse(tooMany).success).toBe(false);
+  });
 });

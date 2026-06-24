@@ -16,10 +16,11 @@
  * (an `anyOf` in the emitted JSON Schema). The existing
  * `sceneSplittingResultSchema` already carries optionals; nesting a rich
  * shots[] array inside it would blow that budget. This schema is authored
- * SEPARATELY and kept STRICTLY union-free — every field is required with an
- * emptyable default ('' / [] / sensible scalar). The
- * `sceneWithShotsResultSchema.union-count.test.ts` asserts the compiled grammar
- * stays at zero `anyOf` so the budget can never be silently exceeded.
+ * SEPARATELY and kept STRICTLY union-free — every field is required and
+ * emptyable by convention ('' / [] / sensible scalar), with no Zod `.default()`,
+ * so the model emits the empty value explicitly rather than the parser filling
+ * it. The union-budget block in `shot-list.schema.test.ts` asserts the compiled
+ * grammar stays at zero `anyOf` so the budget can never be silently exceeded.
  *
  * ## Single source of truth (derive, don't double-author)
  *
@@ -209,9 +210,19 @@ export const sceneWithShotsSchema = z.object({
     description:
       'Whether this scene continues directly from the previous one without a hard cut (a continuous-transition hint for the render layer). False for the first scene.',
   }),
-  shots: z.array(shotSpecSchema).meta({
-    description: `Ordered list of 1..${MAX_SHOTS_PER_SCENE} shots. A short scene with no internal cut is a single shot.`,
-  }),
+  // `.min(1).max()` compile to JSON-Schema minItems/maxItems — NOT an `anyOf`
+  // union — so the count bound is enforced at parse time without touching the
+  // zero-union budget (asserted in the union-budget test). The per-shot 3s
+  // floor and 15s scene-sum cap are cross-field and can't be expressed
+  // union-free per field; they stay prompt-only (the field descriptions) and
+  // are enforced by the #910 render-layer consumer.
+  shots: z
+    .array(shotSpecSchema)
+    .min(1)
+    .max(MAX_SHOTS_PER_SCENE)
+    .meta({
+      description: `Ordered list of 1..${MAX_SHOTS_PER_SCENE} shots. A short scene with no internal cut is a single shot.`,
+    }),
 });
 
 export type SceneWithShots = z.infer<typeof sceneWithShotsSchema>;

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { dbSceneId } from '@/lib/db/schema';
+import type { SceneRow } from '@/lib/db/schema';
 import type { Scene } from './scene-analysis.schema';
-import { buildSceneInserts } from './scene-persistence';
+import { buildSceneInserts, buildSceneShotLinks } from './scene-persistence';
 
 function makeScene(overrides: Partial<Scene> = {}): Scene {
   return {
@@ -64,5 +66,92 @@ describe('buildSceneInserts', () => {
 
   it('returns an empty array for no scenes', () => {
     expect(buildSceneInserts('seq-1', [])).toEqual([]);
+  });
+});
+
+/** Minimal scene row — only `id` + `orderIndex` drive the linking. */
+function makeSceneRow(id: string, orderIndex: number): SceneRow {
+  const now = new Date();
+  return {
+    id: dbSceneId(id),
+    sequenceId: 'seq-1',
+    orderIndex,
+    location: null,
+    timeOfDay: null,
+    storyBeat: null,
+    title: null,
+    continuity: null,
+    musicDesign: null,
+    originalScript: null,
+    imageModel: null,
+    videoModel: null,
+    videoUrl: null,
+    videoPath: null,
+    videoStatus: 'pending',
+    videoWorkflowRunId: null,
+    videoGeneratedAt: null,
+    videoError: null,
+    videoInputHash: null,
+    renderStrategy: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+describe('buildSceneShotLinks', () => {
+  const scenes = [
+    { sceneId: 'analysis-scene-1' },
+    { sceneId: 'analysis-scene-2' },
+  ];
+  const shotMapping = [
+    { analysisSceneId: 'analysis-scene-1', shotId: 'shot-a' },
+    { analysisSceneId: 'analysis-scene-2', shotId: 'shot-b' },
+  ];
+
+  it('links each shot to its scene row at shotNumber 1 (1:1)', () => {
+    const { links, unmappedShotIds } = buildSceneShotLinks(
+      scenes,
+      [makeSceneRow('scene-row-1', 0), makeSceneRow('scene-row-2', 1)],
+      shotMapping
+    );
+    expect(unmappedShotIds).toEqual([]);
+    expect(links).toEqual([
+      { shotId: 'shot-a', sceneId: 'scene-row-1', shotNumber: 1 },
+      { shotId: 'shot-b', sceneId: 'scene-row-2', shotNumber: 1 },
+    ]);
+  });
+
+  it('keys on orderIndex, not array position (rows returned out of order)', () => {
+    // createBulk RETURNING order is not guaranteed; the link must still be
+    // correct when sceneRows come back reversed.
+    const { links, unmappedShotIds } = buildSceneShotLinks(
+      scenes,
+      [makeSceneRow('scene-row-2', 1), makeSceneRow('scene-row-1', 0)],
+      shotMapping
+    );
+    expect(unmappedShotIds).toEqual([]);
+    expect(links).toEqual([
+      { shotId: 'shot-a', sceneId: 'scene-row-1', shotNumber: 1 },
+      { shotId: 'shot-b', sceneId: 'scene-row-2', shotNumber: 1 },
+    ]);
+  });
+
+  it('surfaces a shot whose analysis scene has no row (no silent skip)', () => {
+    const { links, unmappedShotIds } = buildSceneShotLinks(
+      scenes,
+      [makeSceneRow('scene-row-1', 0)], // scene 2's row is missing
+      shotMapping
+    );
+    expect(links).toEqual([
+      { shotId: 'shot-a', sceneId: 'scene-row-1', shotNumber: 1 },
+    ]);
+    expect(unmappedShotIds).toEqual(['shot-b']);
+  });
+
+  it('returns empty plan for no shots', () => {
+    expect(buildSceneShotLinks(scenes, [], [])).toEqual({
+      links: [],
+      unmappedShotIds: [],
+    });
   });
 });
