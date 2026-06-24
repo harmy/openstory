@@ -137,6 +137,11 @@ export function createShotsMethods(db: Database) {
             description: sql.raw(`excluded."description"`),
             durationMs: sql.raw(`excluded."duration_ms"`),
             metadata: sql.raw(`excluded."metadata"`),
+            // #908: a replay re-derives the same shot at the same orderIndex —
+            // carry the scene link + intra-scene number through the conflict so
+            // a re-run is idempotent rather than leaving stale values.
+            sceneId: sql.raw(`excluded."scene_id"`),
+            shotNumber: sql.raw(`excluded."shot_number"`),
             updatedAt: new Date(),
           },
         })
@@ -190,6 +195,10 @@ export function createShotsMethods(db: Database) {
               description: sql.raw(`excluded."description"`),
               durationMs: sql.raw(`excluded."duration_ms"`),
               metadata: sql.raw(`excluded."metadata"`),
+              // #908: keep the scene link + intra-scene number idempotent on
+              // replay (see the matching note in `upsert`).
+              sceneId: sql.raw(`excluded."scene_id"`),
+              shotNumber: sql.raw(`excluded."shot_number"`),
               updatedAt: new Date(),
             },
           })
