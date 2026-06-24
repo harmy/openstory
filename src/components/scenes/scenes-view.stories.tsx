@@ -107,6 +107,8 @@ type Story = StoryObj<typeof meta>;
 // Mock shot base — all Shot fields included
 const mockShotBase = {
   sequenceId: 'seq-1',
+  sceneId: null,
+  shotNumber: null,
   orderIndex: 0,
   description: 'A scene from the storyboard',
   durationMs: 5000,

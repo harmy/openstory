@@ -77,7 +77,7 @@ const LOG_METADATA = { phase: PHASE.number, phaseName: PHASE.name };
 type StreamResult = {
   scenes: SceneSplittingResult['scenes'];
   projectMetadata: SceneSplittingResult['projectMetadata'];
-  shotMapping: Array<{ sceneId: string; shotId: string }>;
+  shotMapping: Array<{ analysisSceneId: string; shotId: string }>;
   characterBible: SceneSplittingResult['characterBible'];
   locationBible: SceneSplittingResult['locationBible'];
   elementBible: SceneSplittingResult['elementBible'];
@@ -153,7 +153,8 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
         );
 
         const parser = createStreamingSceneParser();
-        const shotMapping: Array<{ sceneId: string; shotId: string }> = [];
+        const shotMapping: Array<{ analysisSceneId: string; shotId: string }> =
+          [];
         let finalText = '';
         let chunkCount = 0;
         let prevScene: SceneSplittingScene | undefined = undefined;
@@ -291,7 +292,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
                 );
 
                 shotMapping.push({
-                  sceneId: ev.scene.sceneId,
+                  analysisSceneId: ev.scene.sceneId,
                   shotId: shot.id,
                 });
 
@@ -465,7 +466,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
         const reconciledShots = await scopedDb.shots.bulkUpsert(shotInserts);
         const reconciledMapping = reconciledShots.map((f) => ({
           // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: metadata is JSONB, can be null despite Drizzle types
-          sceneId: f.metadata?.sceneId || '',
+          analysisSceneId: f.metadata?.sceneId || '',
           shotId: f.id,
         }));
 
@@ -479,9 +480,9 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
 
         // Emit shot:created for any shots the streaming step didn't cover.
         const streamedSceneIds = new Set(
-          streamResult.shotMapping.map((f) => f.sceneId)
+          streamResult.shotMapping.map((f) => f.analysisSceneId)
         );
-        for (const { sceneId: sId, shotId } of reconciledMapping) {
+        for (const { analysisSceneId: sId, shotId } of reconciledMapping) {
           if (!streamedSceneIds.has(sId)) {
             const scene = scenes.find((s) => s.sceneId === sId);
             await getGenerationChannel(sequenceId).emit(

@@ -51,6 +51,7 @@ export const relations = defineRelations(schema, (r) => ({
       alias: 'sequences_updatedBy_users_id',
     }),
     style: r.one.styles({ from: r.sequences.styleId, to: r.styles.id }),
+    scenes: r.many.scenes(),
     shots: r.many.shots(),
     characters: r.many.characters(),
     locations: r.many.sequenceLocations(),
@@ -58,11 +59,24 @@ export const relations = defineRelations(schema, (r) => ({
     musicPromptVariants: r.many.sequenceMusicPromptVariants(),
   },
 
+  // ---- Scenes ----
+  scenes: {
+    sequence: r.one.sequences({
+      from: r.scenes.sequenceId,
+      to: r.sequences.id,
+    }),
+    shots: r.many.shots(),
+  },
+
   // ---- Shots ----
   shots: {
     sequence: r.one.sequences({
       from: r.shots.sequenceId,
       to: r.sequences.id,
+    }),
+    scene: r.one.scenes({
+      from: r.shots.sceneId,
+      to: r.scenes.id,
     }),
     variants: r.many.shotVariants(),
     promptVariants: r.many.shotPromptVariants(),

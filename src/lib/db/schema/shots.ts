@@ -13,6 +13,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 import { generateId } from '../id';
+import { scenes } from './scenes';
 import { sequences } from './sequences';
 
 export const SHOT_GENERATION_STATUSES = [
@@ -44,6 +45,13 @@ export const shots = snakeCase.table(
     sequenceId: text()
       .notNull()
       .references(() => sequences.id, { onDelete: 'cascade' }),
+    // Parent scene (#907). NULL until backfilled. Deliberately NOT cascade —
+    // CLAUDE.md rule 3: never cascade to long-lived parents; orphaned shots
+    // null out rather than vanish if a scene is deleted.
+    sceneId: text().references(() => scenes.id, { onDelete: 'set null' }),
+    // 1-based shot order within the scene. Backfill sets this to 1 (every
+    // sequence becomes scenes-of-one-shot until multi-shot analysis lands).
+    shotNumber: integer(),
     orderIndex: integer().notNull(),
     description: text(),
     durationMs: integer().default(3000),

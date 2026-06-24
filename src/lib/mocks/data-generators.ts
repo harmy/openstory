@@ -18,6 +18,8 @@ const generateMockShot = (overrides?: Partial<Shot>): Shot => {
   return {
     id: faker.string.ulid(),
     sequenceId: faker.string.ulid(),
+    sceneId: null,
+    shotNumber: null,
     orderIndex: faker.number.int({ min: 1, max: 10 }),
     description: faker.lorem.paragraph(),
     thumbnailUrl: `https://picsum.photos/seed/${faker.helpers.arrayElement([

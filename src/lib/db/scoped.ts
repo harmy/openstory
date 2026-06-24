@@ -14,6 +14,7 @@ import { createApiKeysMethods } from '@/lib/db/scoped/api-keys';
 import { createBillingMethods } from '@/lib/db/scoped/billing';
 import { createCharacterSheetVariantsMethods } from '@/lib/db/scoped/character-sheet-variants';
 import { createCharactersMethods } from '@/lib/db/scoped/characters';
+import { createScenesMethods } from '@/lib/db/scoped/scenes';
 import { createShotPromptVariantsMethods } from '@/lib/db/scoped/shot-prompt-variants';
 import { createShotVariantsMethods } from '@/lib/db/scoped/shot-variants';
 import { createShotsMethods } from '@/lib/db/scoped/shots';
@@ -284,6 +285,7 @@ export function createScopedDb(teamId: string, userId: string) {
     locationSheets: createLocationSheetsMethods(db),
     library: createLibraryMethods(db, teamId),
 
+    scenes: createScenesMethods(db),
     shots: createShotsMethods(db),
     shotVariants: createShotVariantsMethods(db),
     shotPromptVariants: createShotPromptVariantsMethods(db),

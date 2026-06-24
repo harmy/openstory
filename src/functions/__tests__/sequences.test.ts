@@ -58,6 +58,8 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
   return {
     id: 'shot-1',
     sequenceId: 'seq-1',
+    sceneId: null,
+    shotNumber: null,
     orderIndex: 0,
     description: 'A scene',
     durationMs: 3000,

@@ -190,7 +190,7 @@ export type SceneSplitWorkflowInput = SequenceWorkflowContext & {
 export type SceneSplitWorkflowResult = {
   scenes: Scene[];
   title: string;
-  shotMapping: Array<{ sceneId: string; shotId: string }>;
+  shotMapping: ShotMapping;
   characterBible: CharacterBibleEntry[];
   locationBible: LocationBibleEntry[];
   elementBible: ElementBibleEntry[];
@@ -419,7 +419,13 @@ export interface CharacterBibleWorkflowInput extends SequenceWorkflowContext {
   styleConfig?: StyleConfig;
 }
 
-type ShotMapping = Array<{ sceneId: string; shotId: string }>;
+/**
+ * Maps each analysis scene (the LLM-assigned `Scene.sceneId` string carried in
+ * the analysis output) to the DB shot row created for it. `analysisSceneId` is
+ * deliberately NOT the new `scenes.id` ULID (see DbSceneId in schema/scenes.ts)
+ * — both are strings, so the distinct name guards against confusing them.
+ */
+type ShotMapping = Array<{ analysisSceneId: string; shotId: string }>;
 
 export interface VisualPromptWorkflowInput extends SequenceWorkflowContext {
   scenes: Scene[];

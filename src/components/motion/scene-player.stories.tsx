@@ -16,6 +16,8 @@ type Story = StoryObj<typeof ScenePlayer>;
 
 const mockShotBase = {
   sequenceId: 'seq-1',
+  sceneId: null,
+  shotNumber: null,
   orderIndex: 0,
   description: 'A scene from the storyboard',
   durationMs: 5000,

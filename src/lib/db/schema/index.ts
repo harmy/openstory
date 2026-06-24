@@ -12,6 +12,8 @@ import { teamInvitations, teamMembers, teams } from './teams';
 
 import { sequences } from './sequences';
 
+import { dbSceneId, scenes } from './scenes';
+
 import { shots } from './shots';
 
 import { shotVariants } from './shot-variants';
@@ -77,6 +79,11 @@ export { teamInvitations, teamMembers, teams };
 export { sequences };
 
 export type { NewSequence, Sequence } from './sequences';
+
+// Scenes (narrative units; each owns an ordered list of shots)
+export { dbSceneId, scenes };
+
+export type { DbSceneId, NewScene, SceneRow } from './scenes';
 
 // Shots
 export { shots };
@@ -244,6 +251,7 @@ export const schema = {
 
   // Sequences
   sequences,
+  scenes,
   shots,
   shotVariants,
   characterSheetVariants,

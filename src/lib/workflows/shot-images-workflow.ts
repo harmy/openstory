@@ -202,7 +202,7 @@ export class ShotImagesWorkflow extends OpenStoryWorkflowEntrypoint<ShotImagesWo
         }
 
         const matchedShot = shotMapping.find(
-          (f) => f.sceneId === scene.sceneId
+          (f) => f.analysisSceneId === scene.sceneId
         );
 
         const characterRefs = buildCharacterReferenceImages(
