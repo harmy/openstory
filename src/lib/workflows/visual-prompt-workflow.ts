@@ -97,7 +97,8 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
         userId: input.userId,
         sequenceId: input.sequenceId,
         // Shot id of the scene to save the visual prompt to
-        shotId: shotMapping?.find((f) => f.sceneId === scene.sceneId)?.shotId,
+        shotId: shotMapping?.find((f) => f.analysisSceneId === scene.sceneId)
+          ?.shotId,
       };
 
       const childResult = await spawnAndAwaitChild<

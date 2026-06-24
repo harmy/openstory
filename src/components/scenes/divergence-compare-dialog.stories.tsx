@@ -7,6 +7,8 @@ const NOW = new Date('2026-04-29T00:00:00Z');
 const baseShot: Shot = {
   id: 'shot-1',
   sequenceId: 'seq-1',
+  sceneId: null,
+  shotNumber: null,
   orderIndex: 0,
   description: 'A wide shot.',
   durationMs: 3000,

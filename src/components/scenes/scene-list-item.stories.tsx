@@ -5,6 +5,8 @@ import { SceneListItem } from './scene-list-item';
 const mockShot: Shot = {
   id: 'shot-1',
   sequenceId: 'seq-1',
+  sceneId: null,
+  shotNumber: null,
   orderIndex: 0,
   description: 'A bustling coffee shop interior during morning rush hour',
   durationMs: 3000,

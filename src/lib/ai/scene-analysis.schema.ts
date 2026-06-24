@@ -450,7 +450,7 @@ export type VisualPromptResult = z.infer<typeof visualPromptResultSchema>;
 // Original Script Schema
 // ============================================================================
 
-const originalScriptSchema = z.object({
+export const originalScriptSchema = z.object({
   extract: z
     .string()
     .meta({ description: 'Original script text for this scene' }),
@@ -463,7 +463,7 @@ const originalScriptSchema = z.object({
 // Scene Metadata Schema
 // ============================================================================
 
-const sceneMetadataSchema = z.object({
+export const sceneMetadataSchema = z.object({
   title: z.string().meta({ description: 'Short descriptive scene title' }),
   durationSeconds: z.number().meta({
     description: 'Estimated scene duration in seconds (typically 3-15)',

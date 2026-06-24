@@ -628,7 +628,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
         }
 
         const matchedShot = shotMapping.find(
-          (f) => f.sceneId === scene.sceneId
+          (f) => f.analysisSceneId === scene.sceneId
         );
 
         const characterTags = scene.continuity?.characterTags;

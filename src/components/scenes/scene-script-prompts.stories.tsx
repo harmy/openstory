@@ -6,6 +6,8 @@ import { SceneScriptPrompts, type TabValue } from './scene-script-prompts';
 const mockShot = {
   id: 'shot-1',
   sequenceId: 'seq-1',
+  sceneId: null,
+  shotNumber: null,
   orderIndex: 0,
   description: 'A bustling coffee shop interior during morning rush hour',
   durationMs: 3000,

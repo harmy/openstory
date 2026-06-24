@@ -1,0 +1,125 @@
+/**
+ * Scoped Scenes Sub-module
+ * Scene CRUD and ordered listing within a sequence.
+ *
+ * Scenes are the narrative units introduced in #907. Each owns an ordered list
+ * of shots; this stage keeps every sequence as scenes-of-one-shot.
+ */
+
+import type { Database } from '@/lib/db/client';
+import { scenes } from '@/lib/db/schema';
+import type { DbSceneId, NewScene, SceneRow } from '@/lib/db/schema';
+import { asc, desc, eq, inArray } from 'drizzle-orm';
+
+type SceneOrderBy = 'orderIndex' | 'createdAt' | 'updatedAt';
+
+type SceneFilters = {
+  orderBy?: SceneOrderBy;
+  ascending?: boolean;
+};
+
+export function createScenesMethods(db: Database) {
+  return {
+    getById: async (sceneId: DbSceneId): Promise<SceneRow | null> => {
+      const result = await db
+        .select()
+        .from(scenes)
+        .where(eq(scenes.id, sceneId));
+      return result[0] ?? null;
+    },
+
+    listBySequence: async (
+      sequenceId: string,
+      options?: SceneFilters
+    ): Promise<SceneRow[]> => {
+      const { orderBy = 'orderIndex', ascending = true } = options ?? {};
+
+      const orderColumn =
+        orderBy === 'orderIndex'
+          ? scenes.orderIndex
+          : orderBy === 'createdAt'
+            ? scenes.createdAt
+            : scenes.updatedAt;
+
+      const orderFn = ascending ? asc : desc;
+
+      return await db
+        .select()
+        .from(scenes)
+        .where(eq(scenes.sequenceId, sequenceId))
+        .orderBy(orderFn(orderColumn));
+    },
+
+    create: async (data: NewScene): Promise<SceneRow> => {
+      const [scene] = await db.insert(scenes).values(data).returning();
+      if (!scene) {
+        throw new Error(
+          `Failed to create scene for sequence ${data.sequenceId}`
+        );
+      }
+      return scene;
+    },
+
+    update: async (
+      sceneId: DbSceneId,
+      data: Partial<NewScene>,
+      options?: { throwOnMissing?: boolean }
+    ): Promise<SceneRow | undefined> => {
+      const [scene] = await db
+        .update(scenes)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(scenes.id, sceneId))
+        .returning();
+
+      if (!scene && options?.throwOnMissing !== false) {
+        throw new Error(`Scene ${sceneId} not found`);
+      }
+
+      return scene;
+    },
+
+    delete: async (sceneId: DbSceneId): Promise<boolean> => {
+      const result = await db.delete(scenes).where(eq(scenes.id, sceneId));
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
+      return (result.rowsAffected ?? 0) > 0;
+    },
+
+    deleteBySequence: async (sequenceId: string): Promise<number> => {
+      const result = await db
+        .delete(scenes)
+        .where(eq(scenes.sequenceId, sequenceId));
+      // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime
+      return result.rowsAffected ?? 0;
+    },
+
+    createBulk: async (sceneData: NewScene[]): Promise<SceneRow[]> => {
+      if (sceneData.length === 0) return [];
+
+      const BATCH_SIZE = 5;
+      const results: SceneRow[] = [];
+
+      for (let i = 0; i < sceneData.length; i += BATCH_SIZE) {
+        const batch = sceneData.slice(i, i + BATCH_SIZE);
+        const batchResults = await db.insert(scenes).values(batch).returning();
+        results.push(...batchResults);
+      }
+
+      // Fail loud on a short write rather than silently returning fewer rows
+      // than requested. (Batches are not atomic across the loop — same as
+      // shots.createBulk — so a mid-loop throw can leave earlier batches
+      // committed; the count check at least surfaces a truncated success.)
+      if (results.length !== sceneData.length) {
+        throw new Error(
+          `createBulk inserted ${results.length}/${sceneData.length} scenes`
+        );
+      }
+
+      return results;
+    },
+
+    getByIds: async (sceneIds: DbSceneId[]): Promise<SceneRow[]> => {
+      if (sceneIds.length === 0) return [];
+      return await db.select().from(scenes).where(inArray(scenes.id, sceneIds));
+    },
+  };
+}

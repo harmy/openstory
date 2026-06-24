@@ -39,6 +39,10 @@ import {
 import type { Microdollars } from '@/lib/billing/money';
 import type { TokenUsage } from '@tanstack/ai';
 import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
+import {
+  buildSceneInserts,
+  buildSceneShotLinks,
+} from '@/lib/ai/scene-persistence';
 import { aspectRatioToImageSize } from '@/lib/constants/aspect-ratios';
 import type { NewShot } from '@/lib/db/schema';
 import type { ScopedDb } from '@/lib/db/scoped';
@@ -77,7 +81,7 @@ const LOG_METADATA = { phase: PHASE.number, phaseName: PHASE.name };
 type StreamResult = {
   scenes: SceneSplittingResult['scenes'];
   projectMetadata: SceneSplittingResult['projectMetadata'];
-  shotMapping: Array<{ sceneId: string; shotId: string }>;
+  shotMapping: Array<{ analysisSceneId: string; shotId: string }>;
   characterBible: SceneSplittingResult['characterBible'];
   locationBible: SceneSplittingResult['locationBible'];
   elementBible: SceneSplittingResult['elementBible'];
@@ -153,7 +157,8 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
         );
 
         const parser = createStreamingSceneParser();
-        const shotMapping: Array<{ sceneId: string; shotId: string }> = [];
+        const shotMapping: Array<{ analysisSceneId: string; shotId: string }> =
+          [];
         let finalText = '';
         let chunkCount = 0;
         let prevScene: SceneSplittingScene | undefined = undefined;
@@ -291,7 +296,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
                 );
 
                 shotMapping.push({
-                  sceneId: ev.scene.sceneId,
+                  analysisSceneId: ev.scene.sceneId,
                   shotId: shot.id,
                 });
 
@@ -465,7 +470,7 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
         const reconciledShots = await scopedDb.shots.bulkUpsert(shotInserts);
         const reconciledMapping = reconciledShots.map((f) => ({
           // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: metadata is JSONB, can be null despite Drizzle types
-          sceneId: f.metadata?.sceneId || '',
+          analysisSceneId: f.metadata?.sceneId || '',
           shotId: f.id,
         }));
 
@@ -479,9 +484,9 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
 
         // Emit shot:created for any shots the streaming step didn't cover.
         const streamedSceneIds = new Set(
-          streamResult.shotMapping.map((f) => f.sceneId)
+          streamResult.shotMapping.map((f) => f.analysisSceneId)
         );
-        for (const { sceneId: sId, shotId } of reconciledMapping) {
+        for (const { analysisSceneId: sId, shotId } of reconciledMapping) {
           if (!streamedSceneIds.has(sId)) {
             const scene = scenes.find((s) => s.sceneId === sId);
             await getGenerationChannel(sequenceId).emit(
@@ -530,6 +535,62 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
             text: entry.firstMention.text,
             lineNumber: entry.firstMention.lineNumber,
           });
+        }
+      });
+    }
+
+    // Step 4b (#908): persist a `scenes` row per analysis scene and link each
+    // shot to it via `shots.sceneId`. Analysis currently emits shot-sized
+    // scenes (one shot per scene), so this writes a 1:1 scenes↔shots mapping —
+    // the same shape #907's backfill produced for existing sequences, now
+    // populated at analysis time for NEW sequences too. Scene-level fields
+    // (location / time of day / story beat / continuity / music design /
+    // original script) are stored on the scene row; the shot's `metadata` keeps
+    // the full Scene object unchanged so every downstream read path is
+    // untouched. The structured multi-shot shot list + per-shot prompt
+    // derivation (src/lib/ai/shot-list.{schema,derive}.ts) is wired into the
+    // render chain in #910 — this step is the additive persistence half.
+    //
+    // Idempotent on replay: delete-then-recreate within the step (scenes are
+    // only ever written here, so a full rewrite is safe and avoids the missing
+    // scenes-upsert).
+    if (sequenceId && reconciled.scenes.length > 0) {
+      await step.do('persist-scenes', async () => {
+        await scopedDb.scenes.deleteBySequence(sequenceId);
+
+        const sceneInserts = buildSceneInserts(sequenceId, reconciled.scenes);
+        const sceneRows = await scopedDb.scenes.createBulk(sceneInserts);
+
+        // Link each shot to its scene row by analysisSceneId → orderIndex →
+        // row (see buildSceneShotLinks — keyed on the unique orderIndex, not
+        // array position). A shot whose scene is missing is surfaced, not
+        // silently skipped: every mapped shot should belong to a scene.
+        const { links, unmappedShotIds } = buildSceneShotLinks(
+          reconciled.scenes,
+          sceneRows,
+          reconciled.shotMapping
+        );
+        if (unmappedShotIds.length > 0) {
+          logger.warn(
+            `[SceneSplitWorkflow:cf] persist-scenes: ${unmappedShotIds.length} shot(s) had no matching scene row`,
+            { sequenceId, unmappedShotIds }
+          );
+        }
+
+        const missingShotIds: string[] = [];
+        for (const { shotId, sceneId, shotNumber } of links) {
+          const updated = await scopedDb.shots.update(
+            shotId,
+            { sceneId, shotNumber },
+            { throwOnMissing: false }
+          );
+          if (!updated) missingShotIds.push(shotId);
+        }
+        if (missingShotIds.length > 0) {
+          logger.warn(
+            `[SceneSplitWorkflow:cf] persist-scenes: ${missingShotIds.length} shot(s) missing at link time`,
+            { sequenceId, missingShotIds }
+          );
         }
       });
     }

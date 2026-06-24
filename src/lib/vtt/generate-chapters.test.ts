@@ -15,6 +15,8 @@ const createTestScene = (overrides: Partial<Scene>): Scene => ({
 const createTestShot = (overrides: Partial<Shot>): Shot => ({
   id: '1',
   sequenceId: 'seq-1',
+  sceneId: null,
+  shotNumber: null,
   orderIndex: 0,
   description: null,
   durationMs: 3000,
