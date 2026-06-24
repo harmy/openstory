@@ -39,6 +39,7 @@ import {
 import type { Microdollars } from '@/lib/billing/money';
 import type { TokenUsage } from '@tanstack/ai';
 import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
+import { buildSceneInserts } from '@/lib/ai/scene-persistence';
 import { aspectRatioToImageSize } from '@/lib/constants/aspect-ratios';
 import type { NewShot } from '@/lib/db/schema';
 import type { ScopedDb } from '@/lib/db/scoped';
@@ -531,6 +532,49 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
             text: entry.firstMention.text,
             lineNumber: entry.firstMention.lineNumber,
           });
+        }
+      });
+    }
+
+    // Step 4b (#908): persist a `scenes` row per analysis scene and link each
+    // shot to it via `shots.sceneId`. Analysis currently emits shot-sized
+    // scenes (one shot per scene), so this writes a 1:1 scenes↔shots mapping —
+    // the same shape #907's backfill produced for existing sequences, now
+    // populated at analysis time for NEW sequences too. Scene-level fields
+    // (location / time of day / story beat / continuity / music design /
+    // original script) are stored on the scene row; the shot's `metadata` keeps
+    // the full Scene object unchanged so every downstream read path is
+    // untouched. The structured multi-shot shot list + per-shot prompt
+    // derivation (src/lib/ai/shot-list.{schema,derive}.ts) is wired into the
+    // render chain in #910 — this step is the additive persistence half.
+    //
+    // Idempotent on replay: delete-then-recreate within the step (scenes are
+    // only ever written here, so a full rewrite is safe and avoids the missing
+    // scenes-upsert).
+    if (sequenceId && reconciled.scenes.length > 0) {
+      await step.do('persist-scenes', async () => {
+        await scopedDb.scenes.deleteBySequence(sequenceId);
+
+        const sceneInserts = buildSceneInserts(sequenceId, reconciled.scenes);
+        const sceneRows = await scopedDb.scenes.createBulk(sceneInserts);
+
+        // Link each shot to its scene row by analysisSceneId → orderIndex.
+        // shotMapping is analysisSceneId-keyed; scenes are order-aligned to
+        // `reconciled.scenes`, so map analysisSceneId → its index → scene row.
+        const sceneRowByAnalysisId = new Map(
+          reconciled.scenes.map((scene, index) => [
+            scene.sceneId,
+            sceneRows[index],
+          ])
+        );
+        for (const { analysisSceneId, shotId } of reconciled.shotMapping) {
+          const sceneRow = sceneRowByAnalysisId.get(analysisSceneId);
+          if (!sceneRow) continue;
+          await scopedDb.shots.update(
+            shotId,
+            { sceneId: sceneRow.id, shotNumber: 1 },
+            { throwOnMissing: false }
+          );
         }
       });
     }
