@@ -38,27 +38,36 @@ export function computeSequenceModelCoverage(opts: {
   variantType: VariantType;
   /** The live primary model (marked `set`), if any. */
   primaryModel?: string | null;
+  /**
+   * Map of shotId → its parent sceneId (#909). When provided, coverage counts
+   * distinct *scenes* (a scene is covered once any of its shots has a completed
+   * variant) so the "N/M" marker reads at scene granularity. Shots missing from
+   * the map count as their own unit. Without it, counting falls back to shots.
+   */
+  shotToScene?: ReadonlyMap<string, string>;
 }): Map<string, ModelCoverage> {
-  const { variants, variantType, primaryModel } = opts;
+  const { variants, variantType, primaryModel, shotToScene } = opts;
   const map = new Map<string, ModelCoverage>();
   if (!variants) return map;
 
-  const completedShotsByModel = new Map<string, Set<string>>();
+  const unit = (shotId: string) => shotToScene?.get(shotId) ?? shotId;
+
+  const completedUnitsByModel = new Map<string, Set<string>>();
   const generating = new Set<string>();
   const failed = new Set<string>();
-  const allCompletedShots = new Set<string>();
+  const allCompletedUnits = new Set<string>();
 
   for (const v of variants) {
     if (v.variantType !== variantType) continue;
     if (v.divergedAt !== null || v.discardedAt !== null) continue;
     if (v.status === 'completed' && v.url) {
-      let shots = completedShotsByModel.get(v.model);
-      if (!shots) {
-        shots = new Set();
-        completedShotsByModel.set(v.model, shots);
+      let units = completedUnitsByModel.get(v.model);
+      if (!units) {
+        units = new Set();
+        completedUnitsByModel.set(v.model, units);
       }
-      shots.add(v.shotId);
-      allCompletedShots.add(v.shotId);
+      units.add(unit(v.shotId));
+      allCompletedUnits.add(unit(v.shotId));
     } else if (v.status === 'generating' || v.status === 'pending') {
       generating.add(v.model);
     } else if (v.status === 'failed') {
@@ -66,16 +75,16 @@ export function computeSequenceModelCoverage(opts: {
     }
   }
 
-  const total = allCompletedShots.size;
+  const total = allCompletedUnits.size;
   const models = new Set<string>([
-    ...completedShotsByModel.keys(),
+    ...completedUnitsByModel.keys(),
     ...generating,
     ...failed,
   ]);
   if (primaryModel) models.add(primaryModel);
 
   for (const model of models) {
-    const completed = completedShotsByModel.get(model)?.size ?? 0;
+    const completed = completedUnitsByModel.get(model)?.size ?? 0;
     let status: ModelGenerationStatus;
     if (model === primaryModel) {
       status = 'set';

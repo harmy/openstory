@@ -14,6 +14,7 @@ import { useActiveImageModel } from '@/hooks/use-active-image-model';
 import {
   useSequenceImageModels,
   useSequenceImageVariants,
+  useShotsBySequence,
 } from '@/hooks/use-shots';
 import { IMAGE_MODELS, isValidTextToImageModel } from '@/lib/ai/models';
 import { computeSequenceModelCoverage } from '@/lib/model/sequence-model-coverage';
@@ -40,8 +41,16 @@ export const SequenceImageModelSelector = ({
 }) => {
   const { data: models } = useSequenceImageModels(sequenceId);
   const { data: variants } = useSequenceImageVariants(sequenceId);
+  const { data: shots } = useShotsBySequence(sequenceId);
   const { activeImageModel, selectImageModel } =
     useActiveImageModel(sequenceId);
+
+  // Map shots → their parent scene so coverage counts at scene granularity (#909).
+  const shotToScene = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const shot of shots ?? []) map.set(shot.id, shot.sceneId ?? shot.id);
+    return map;
+  }, [shots]);
 
   const coverage = useMemo(
     () =>
@@ -49,8 +58,9 @@ export const SequenceImageModelSelector = ({
         variants,
         variantType: 'image',
         primaryModel: sequenceImageModel,
+        shotToScene,
       }),
-    [variants, sequenceImageModel]
+    [variants, sequenceImageModel, shotToScene]
   );
 
   if (!models || models.length === 0) {
@@ -80,7 +90,12 @@ export const SequenceImageModelSelector = ({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[280px]">
-        <DropdownMenuLabel className="text-xs">Image model</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-xs">
+          Image model
+          <span className="block font-normal text-muted-foreground">
+            View a model across the sequence; Set applies it to every scene.
+          </span>
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {models.length > 1 && (
           <DropdownMenuCheckboxItem
