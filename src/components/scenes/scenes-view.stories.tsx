@@ -93,8 +93,8 @@ const meta = {
       });
 
       // Pre-populate the cache with mock data using the correct query keys.
-      // Scenes (#909) group the shots and drive the scene model bar; without
-      // them the editor renders the pre-scene shape.
+      // Scenes (#909) own model selection — the image/motion tab selectors read
+      // and write the selected shot's scene; without them those picks no-op.
       queryClient.setQueryData(['shots', 'list', sequenceId], shots);
       queryClient.setQueryData(['scenes', 'list', sequenceId], scenes);
       queryClient.setQueryData(['sequences', 'detail', sequenceId], sequence);
@@ -125,7 +125,7 @@ type Story = StoryObj<typeof meta>;
 
 /**
  * Real sequence (MAKEUP AD, 9:16) captured from local D1, so the editor renders
- * exactly as it does live: shots grouped under scenes, with the scene model bar
+ * exactly as it does live: a flat shot list with the image/motion tab selectors
  * resolving each scene's look/motion models. Media URLs are swapped for public
  * placeholders (stored R2 paths are origin-relative and don't resolve from the
  * Storybook origin). Regenerate via scratchpad/gen-fixture.mjs.
@@ -142,7 +142,7 @@ export const RealSequence: Story = {
     docs: {
       description: {
         story:
-          'A real, fully-generated sequence pulled from the local database — the closest match to the live editor (scene grouping + populated scene model bar).',
+          'A real, fully-generated sequence pulled from the local database — the closest match to the live editor (flat shot list + scene-level model selectors in the image/motion tabs).',
       },
     },
   },

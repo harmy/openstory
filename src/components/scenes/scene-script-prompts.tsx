@@ -1,4 +1,7 @@
 import { BillingGateDialog } from '@/components/billing/billing-gate-dialog';
+import { type ModelGenerationStatus } from '@/components/model/base-model-selector';
+import { ImageModelSelector } from '@/components/model/image-model-selector';
+import { MotionModelSelector } from '@/components/model/motion-model-selector';
 import { ThinkingBar } from '@/components/ai/thinking-bar';
 import { PromptHistorySheet } from '@/components/prompts/prompt-history-sheet';
 import { DivergentAlternateBanner } from '@/components/staleness/divergent-alternate-banner';
@@ -119,12 +122,26 @@ type SceneScriptPromptsProps = {
   videoVariantForSelectedModel?: ShotVariant;
   /**
    * Resolved scene-level models (#909). Model selection lives on the scene, so
-   * the tabs target these (and show them read-only) rather than a per-shot pick.
+   * the image/motion tab selectors are seeded with these, and changing one
+   * persists to the scene (whole-scene change) via the handlers below.
    */
   sceneImageModel: TextToImageModel;
   sceneVideoModel: ImageToVideoModel;
+  /** Per-scene generation status by model — drives the ✓/⟳/! dropdown markers. */
+  imageModelStatuses?: Map<string, ModelGenerationStatus>;
+  videoModelStatuses?: Map<string, ModelGenerationStatus>;
+  /** Persist a new look model on the selected shot's scene (#909). */
+  onImageModelChange?: (model: TextToImageModel) => void;
+  /** Persist a new motion model on the selected shot's scene (#909). */
+  onVideoModelChange?: (model: ImageToVideoModel) => void;
   /** Current style category, used to snap style-restricted motion models. */
   styleCategory?: string;
+  /** Current style name, used in recommendation tooltips. */
+  styleName?: string;
+  /** Style-recommended image model — drives the "Recommended" badge. */
+  recommendedImageModel?: string | null;
+  /** Style-recommended video model — drives the "Recommended" badge. */
+  recommendedVideoModel?: string | null;
   /** Live divergent alternates for the current shot across variant types. */
   shotDivergentVariants?: ShotVariant[];
   onCompareDivergent?: (variant: ShotVariant) => void;
@@ -144,7 +161,14 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   videoVariantForSelectedModel,
   sceneImageModel,
   sceneVideoModel,
+  imageModelStatuses,
+  videoModelStatuses,
+  onImageModelChange,
+  onVideoModelChange,
   styleCategory,
+  styleName,
+  recommendedImageModel,
+  recommendedVideoModel,
   shotDivergentVariants,
   onCompareDivergent,
 }) => {
@@ -988,6 +1012,24 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
             />
           </div>
 
+          {/* Model selector — model selection is scene-level (#909): picking a
+              model here persists to the whole scene, so all its shots share a
+              look. */}
+          <div className="space-y-2">
+            <span className="text-sm font-medium">Model</span>
+            <ImageModelSelector
+              selectedModel={effectiveImageModel}
+              onModelChange={(model) => onImageModelChange?.(model)}
+              disabled={isGenerating}
+              recommendedImageModel={recommendedImageModel}
+              styleName={styleName}
+              generatedStatuses={imageModelStatuses}
+            />
+            <p className="text-xs text-muted-foreground">
+              Changing the model sets it for the whole scene.
+            </p>
+          </div>
+
           {/* Shorten + History buttons */}
           <div className="flex gap-2">
             <Button
@@ -1165,6 +1207,25 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
               }
               mentionItems={mentionItems}
             />
+          </div>
+
+          {/* Model selector — scene-level (#909): the chosen motion model
+              applies to every shot in the scene. */}
+          <div className="space-y-2">
+            <span className="text-sm font-medium">Model</span>
+            <MotionModelSelector
+              selectedModel={effectiveMotionModel}
+              onModelChange={(model) => onVideoModelChange?.(model)}
+              disabled={isGenerating || isGeneratingMotion}
+              aspectRatio={aspectRatio}
+              styleCategory={styleCategory}
+              recommendedVideoModel={recommendedVideoModel}
+              styleName={styleName}
+              generatedStatuses={videoModelStatuses}
+            />
+            <p className="text-xs text-muted-foreground">
+              Changing the model sets it for the whole scene.
+            </p>
           </div>
 
           {/* Assembled prompt preview */}
@@ -1349,6 +1410,22 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
               No variant image available. Generate variants to see options.
             </div>
           )}
+
+          {/* Model selector — scene-level (#909). */}
+          <div className="space-y-2">
+            <span className="text-sm font-medium">Model</span>
+            <ImageModelSelector
+              selectedModel={effectiveImageModel}
+              onModelChange={(model) => onImageModelChange?.(model)}
+              disabled={isGenerating || isGeneratingSceneVariants}
+              recommendedImageModel={recommendedImageModel}
+              styleName={styleName}
+              generatedStatuses={imageModelStatuses}
+            />
+            <p className="text-xs text-muted-foreground">
+              Changing the model sets it for the whole scene.
+            </p>
+          </div>
 
           {/* Regenerate button */}
           <Button

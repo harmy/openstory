@@ -6,7 +6,6 @@ import { DivergenceCompareDialog } from '@/components/scenes/divergence-compare-
 import { MobileSceneDrawer } from '@/components/scenes/mobile-scene-drawer';
 import type { BatchGenerateMotionArgs } from '@/components/scenes/scene-list';
 import { SceneList } from '@/components/scenes/scene-list';
-import { SceneModelBar } from '@/components/scenes/scene-model-bar';
 import {
   SceneScriptPrompts,
   type TabValue,
@@ -20,7 +19,7 @@ import { smartRetryFn } from '@/functions/smart-retry';
 import { useActiveImageModel } from '@/hooks/use-active-image-model';
 import { useActiveVideoModel } from '@/hooks/use-active-video-model';
 import { BILLING_BALANCE_KEY } from '@/hooks/use-billing-balance';
-import { useScenesBySequence } from '@/hooks/use-scenes';
+import { useScenesBySequence, useUpdateSceneModel } from '@/hooks/use-scenes';
 import { sequenceKeys, useSequence } from '@/hooks/use-sequences';
 import {
   shotKeys,
@@ -41,6 +40,8 @@ import {
   safeAudioModel,
   safeImageToVideoModel,
   safeTextToImageModel,
+  type ImageToVideoModel,
+  type TextToImageModel,
 } from '@/lib/ai/models';
 import {
   resolveSceneImageModel,
@@ -222,14 +223,6 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   const isProcessing = sequence?.status === 'processing';
   const { data: style } = useStyle(sequence?.styleId ?? '');
   const styleCategory = style?.category ?? undefined;
-  const sequenceMotionModel = safeImageToVideoModel(
-    sequence?.videoModel,
-    DEFAULT_VIDEO_MODEL
-  );
-  const sequenceImageModel = safeTextToImageModel(
-    sequence?.imageModel,
-    DEFAULT_IMAGE_MODEL
-  );
   const sequenceMusicModel = safeAudioModel(
     sequence?.musicModel,
     DEFAULT_MUSIC_MODEL
@@ -449,10 +442,6 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   const selectedScene = selectedShot?.sceneId
     ? scenesById.get(selectedShot.sceneId)
     : undefined;
-  const selectedSceneNumber = selectedScene
-    ? (scenes?.findIndex((s) => s.id === selectedScene.id) ?? -1) + 1 ||
-      undefined
-    : undefined;
   const sceneModelSequence = {
     imageModel: sequence?.imageModel,
     videoModel: sequence?.videoModel,
@@ -491,6 +480,33 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         sceneVideoModel
       ),
     [videoVariantsByShot, sceneShotIds, sceneVideoModel]
+  );
+
+  // Model selection lives on the scene (#909): changing the look/motion model
+  // from the image/motion tabs persists to the selected shot's scene, so every
+  // shot in that scene shares the choice.
+  const updateSceneModel = useUpdateSceneModel();
+  const handleSceneImageModelChange = useCallback(
+    (model: TextToImageModel) => {
+      if (!selectedScene) return;
+      updateSceneModel.mutate({
+        sequenceId,
+        sceneId: selectedScene.id,
+        imageModel: model,
+      });
+    },
+    [selectedScene, sequenceId, updateSceneModel]
+  );
+  const handleSceneVideoModelChange = useCallback(
+    (model: ImageToVideoModel) => {
+      if (!selectedScene) return;
+      updateSceneModel.mutate({
+        sequenceId,
+        sceneId: selectedScene.id,
+        videoModel: model,
+      });
+    },
+    [selectedScene, sequenceId, updateSceneModel]
   );
 
   // In-flight retry state (#882) for the selected shot. Image retry matters
@@ -944,12 +960,9 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         {/* Desktop: Scene List sidebar */}
         <div className="hidden md:block pl-4 py-4">
           <SceneList
-            scenes={scenes}
             shots={shots}
             selectedShotId={curSelectedShotId}
             aspectRatio={aspectRatio}
-            sequenceImageModel={sequenceImageModel}
-            sequenceVideoModel={sequenceMotionModel}
             onSelectShot={setSelectedShotId}
             regeneratingImages={regeneratingImages}
             regeneratingMotion={regeneratingMotion}
@@ -1014,21 +1027,6 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
               wrapperClassName={PLAYER_MAX_W_BY_RATIO[aspectRatio]}
             />
           </div>
-          <SceneModelBar
-            scene={selectedScene}
-            sceneNumber={selectedSceneNumber}
-            sequenceId={sequenceId}
-            sequenceImageModel={sequenceImageModel}
-            sequenceVideoModel={sequenceMotionModel}
-            aspectRatio={aspectRatio}
-            styleCategory={styleCategory}
-            styleName={styleName}
-            recommendedImageModel={recommendedImageModel}
-            recommendedVideoModel={recommendedVideoModel}
-            imageGeneratedStatuses={sceneImageModelStatuses}
-            videoGeneratedStatuses={sceneVideoModelStatuses}
-          />
-
           <SceneScriptPrompts
             shot={selectedShot}
             sequenceId={sequenceId}
@@ -1043,7 +1041,14 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
             videoVariantForSelectedModel={videoVariantForSelectedModel}
             sceneImageModel={sceneImageModel}
             sceneVideoModel={sceneVideoModel}
+            imageModelStatuses={sceneImageModelStatuses}
+            videoModelStatuses={sceneVideoModelStatuses}
+            onImageModelChange={handleSceneImageModelChange}
+            onVideoModelChange={handleSceneVideoModelChange}
             styleCategory={styleCategory}
+            styleName={styleName}
+            recommendedImageModel={recommendedImageModel}
+            recommendedVideoModel={recommendedVideoModel}
             shotDivergentVariants={divergentVariants?.filter(
               (v) => v.shotId === curSelectedShotId
             )}

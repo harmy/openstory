@@ -1,21 +1,13 @@
 import { MusicModelSelector } from '@/components/model/music-model-selector';
-import { SceneGroup } from '@/components/scenes/scene-group';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  DEFAULT_MUSIC_MODEL,
-  type AudioModel,
-  type ImageToVideoModel,
-  type TextToImageModel,
-} from '@/lib/ai/models';
+import { DEFAULT_MUSIC_MODEL, type AudioModel } from '@/lib/ai/models';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
-import type { SceneRow, Shot, ShotVariant } from '@/lib/db/schema';
+import type { Shot, ShotVariant } from '@/lib/db/schema';
 import { Loader2, Video } from 'lucide-react';
 import { memo, useMemo, useRef, useState } from 'react';
 import { SceneListItem } from './scene-list-item';
-
-const UNASSIGNED = '__unassigned__';
 
 export type BatchGenerateMotionArgs = {
   includeMusic: boolean;
@@ -26,14 +18,9 @@ export type BatchGenerateMotionArgs = {
 };
 
 type SceneListProps = {
-  /** Ordered scenes — shots are grouped under these (#909). */
-  scenes?: SceneRow[];
   shots?: Shot[] | undefined;
   selectedShotId?: string;
   aspectRatio: AspectRatio;
-  /** Sequence defaults a scene inherits when its own model column is null. */
-  sequenceImageModel: TextToImageModel;
-  sequenceVideoModel: ImageToVideoModel;
   onSelectShot: (shotId: string) => void;
   regeneratingImages: Set<string>;
   regeneratingMotion: Set<string>;
@@ -60,12 +47,9 @@ const isCompleted = (shot: Shot) =>
   shot.thumbnailStatus === 'completed' && shot.videoStatus === 'completed';
 
 const SceneListComponent: React.FC<SceneListProps> = ({
-  scenes,
   shots,
   selectedShotId,
   aspectRatio,
-  sequenceImageModel,
-  sequenceVideoModel,
   onSelectShot,
   regeneratingImages,
   regeneratingMotion,
@@ -88,19 +72,6 @@ const SceneListComponent: React.FC<SceneListProps> = ({
     }
     return map;
   }, [divergentVariants]);
-
-  // Group shots under their parent scene (#909). Shots keep their query order
-  // (orderIndex) within a group; orphans (null sceneId / legacy) trail.
-  const shotsByScene = useMemo(() => {
-    const map = new Map<string, Shot[]>();
-    for (const shot of shots ?? []) {
-      const key = shot.sceneId ?? UNASSIGNED;
-      const list = map.get(key) ?? [];
-      list.push(shot);
-      map.set(key, list);
-    }
-    return map;
-  }, [shots]);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [includeMusic, setIncludeMusic] = useState(true);
@@ -192,8 +163,6 @@ const SceneListComponent: React.FC<SceneListProps> = ({
     );
   };
 
-  const orphanShots = shotsByScene.get(UNASSIGNED) ?? [];
-
   return (
     <div className="flex h-full w-[280px] lg:w-[480px] flex-col rounded-lg border bg-background">
       {/* Header */}
@@ -206,7 +175,7 @@ const SceneListComponent: React.FC<SceneListProps> = ({
       {/* Scene list */}
       <ScrollArea className="flex-1 min-h-0">
         <div className="flex flex-col gap-3 p-4">
-          {shots === undefined &&
+          {(shots === undefined || shots.length === 0) &&
             [1, 2, 3].map((i) => (
               <SceneListItem
                 key={`shot-skeleton-${i}`}
@@ -217,44 +186,7 @@ const SceneListComponent: React.FC<SceneListProps> = ({
               />
             ))}
 
-          {shots &&
-            scenes &&
-            scenes.map((scene, idx) => {
-              const sceneShots = shotsByScene.get(scene.id) ?? [];
-              return (
-                <SceneGroup
-                  key={scene.id}
-                  scene={scene}
-                  sceneNumber={idx + 1}
-                  sequenceImageModel={sequenceImageModel}
-                  sequenceVideoModel={sequenceVideoModel}
-                >
-                  {sceneShots.length > 0 ? (
-                    sceneShots.map(renderShotCard)
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      No shots yet.
-                    </p>
-                  )}
-                </SceneGroup>
-              );
-            })}
-
-          {/* Scenes still loading — render shots flat so nothing flashes empty. */}
-          {shots && !scenes && shots.map(renderShotCard)}
-
-          {shots && scenes && orphanShots.length > 0 && (
-            <div className="rounded-lg border bg-muted/20">
-              <div className="border-b px-3 py-2.5">
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Unassigned
-                </span>
-              </div>
-              <div className="flex flex-col gap-3 p-3">
-                {orphanShots.map(renderShotCard)}
-              </div>
-            </div>
-          )}
+          {shots && shots.map(renderShotCard)}
         </div>
       </ScrollArea>
 
@@ -339,13 +271,10 @@ const areEqual = (
   if (
     prevProps.selectedShotId !== nextProps.selectedShotId ||
     prevProps.aspectRatio !== nextProps.aspectRatio ||
-    prevProps.sequenceImageModel !== nextProps.sequenceImageModel ||
-    prevProps.sequenceVideoModel !== nextProps.sequenceVideoModel ||
     prevProps.musicPromptsReady !== nextProps.musicPromptsReady ||
     prevProps.initialMusicModel !== nextProps.initialMusicModel ||
     prevProps.modelMissingLabel !== nextProps.modelMissingLabel ||
-    prevProps.modelMissingShotIds !== nextProps.modelMissingShotIds ||
-    prevProps.scenes !== nextProps.scenes
+    prevProps.modelMissingShotIds !== nextProps.modelMissingShotIds
   ) {
     return false;
   }
