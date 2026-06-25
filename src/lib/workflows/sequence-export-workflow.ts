@@ -177,12 +177,30 @@ export class SequenceExportWorkflow extends OpenStoryWorkflowEntrypoint<Sequence
           );
         }
 
-        // Stream the container's MP4 straight into R2 via the binding — no
-        // presigned URL, no full-buffer in the isolate.
-        await uploadFile(STORAGE_BUCKETS.VIDEOS, storagePath, response.body, {
-          contentType: 'video/mp4',
-          upsert: true,
-        });
+        // Stream the container's MP4 into R2 via the binding — no presigned
+        // URL, no full-buffer in the isolate. R2.put needs a *known length*
+        // for a stream: the container sends the MP4 with a content-length (it
+        // renders the whole file before responding), but a bare `response.body`
+        // doesn't carry that length to R2 ("readable stream must have a known
+        // length"). Rewrap it through a FixedLengthStream of the declared size
+        // so R2 accepts the stream.
+        const contentLength = Number(response.headers.get('content-length'));
+        if (!Number.isInteger(contentLength) || contentLength <= 0) {
+          throw new Error(
+            `Container response has no usable content-length (got ${response.headers.get('content-length')}) — cannot stream the MP4 to R2`
+          );
+        }
+        const sized = new FixedLengthStream(contentLength);
+        // Pump and upload concurrently: R2 drains `sized.readable` while the
+        // container body fills `sized.writable`. Promise.all surfaces a pump
+        // failure (e.g. a short/aborted body) rather than leaving it unhandled.
+        await Promise.all([
+          response.body.pipeTo(sized.writable),
+          uploadFile(STORAGE_BUCKETS.VIDEOS, storagePath, sized.readable, {
+            contentType: 'video/mp4',
+            upsert: true,
+          }),
+        ]);
 
         return { durationSeconds: durationSecondsFromMeta };
       }
