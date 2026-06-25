@@ -4,6 +4,7 @@ import {
   safeImageToVideoModel,
   safeTextToImageModel,
 } from '@/lib/ai/models';
+import { resolveSceneImageModel } from '@/lib/ai/resolve-scene-models';
 import {
   estimateImageCost,
   estimateStoryboardCost,
@@ -13,7 +14,7 @@ import {
   aspectRatioToImageSize,
   getVariantGridConfig,
 } from '@/lib/constants/aspect-ratios';
-import type { SequenceLocation } from '@/lib/db/schema';
+import { dbSceneId, type SequenceLocation } from '@/lib/db/schema';
 import { locationMatchesTag } from '@/lib/db/scoped/sequence-locations';
 import { cropTileFromGrid } from '@/lib/image/image-crop';
 import { buildCharacterReferenceImages } from '@/lib/prompts/character-prompt';
@@ -200,8 +201,13 @@ export const generateShotImageFn = createServerFn({ method: 'POST' })
     );
     const elementReferences = buildElementReferenceImages(matchedElements);
 
-    const model =
-      data.model || safeTextToImageModel(shot.imageModel, DEFAULT_IMAGE_MODEL);
+    // Model selection lives at the scene level (#909): an explicit per-request
+    // model wins (one-off variant generation), otherwise the shot's parent
+    // scene drives it, falling back to the sequence default.
+    const scene = shot.sceneId
+      ? await context.scopedDb.scenes.getById(dbSceneId(shot.sceneId))
+      : null;
+    const model = data.model || resolveSceneImageModel(scene, sequence);
 
     await requireCredits(
       context.scopedDb,

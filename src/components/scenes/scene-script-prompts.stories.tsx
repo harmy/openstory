@@ -136,12 +136,18 @@ const meta: Meta<typeof SceneScriptPrompts> = {
     layout: 'centered',
   },
   args: {
+    sequenceId: 'seq-1',
     selectedTab: 'script' as TabValue,
     onTabChange: fn(),
     regeneratingImages: new Set<string>(),
     regeneratingMotion: new Set<string>(),
     regeneratingSceneVariants: new Set<string>(),
     onRegenerateStart: fn(),
+    // Scene-level model selection (#909) — these are required props; without
+    // them IMAGE_TO_VIDEO_MODELS[undefined] is undefined and the component
+    // crashes on `'requiredStyleCategory' in undefined`.
+    sceneImageModel: 'gpt_image_2',
+    sceneVideoModel: 'seedance_v2',
   },
   decorators: [
     (Story) => (

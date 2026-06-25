@@ -143,8 +143,12 @@ function makeContext(sequence: Sequence, shots: Shot[]) {
   const updateMusicFields = vi.fn();
   const listBySequence = vi.fn(async () => shots);
   const listWithSheets = vi.fn(async () => []);
+  // Scenes own model selection (#909); none defined → shots inherit the
+  // sequence default, preserving the legacy single-model retry behaviour.
+  const listScenesBySequence = vi.fn(async () => []);
   const stub = {
     shots: { listBySequence },
+    scenes: { listBySequence: listScenesBySequence },
     characters: { listWithSheets },
     sequence: vi.fn(() => ({ updateStatus, updateMusicFields })),
   };

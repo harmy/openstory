@@ -14,6 +14,7 @@ import { useActiveVideoModel } from '@/hooks/use-active-video-model';
 import {
   useSequenceVideoModels,
   useSequenceVideoVariants,
+  useShotsBySequence,
 } from '@/hooks/use-shots';
 import {
   IMAGE_TO_VIDEO_MODELS,
@@ -48,8 +49,16 @@ export const SequenceVideoModelSelector = ({
 }) => {
   const { data: models } = useSequenceVideoModels(sequenceId);
   const { data: variants } = useSequenceVideoVariants(sequenceId);
+  const { data: shots } = useShotsBySequence(sequenceId);
   const { activeVideoModel, selectVideoModel } =
     useActiveVideoModel(sequenceId);
+
+  // Map shots → their parent scene so coverage counts at scene granularity (#909).
+  const shotToScene = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const shot of shots ?? []) map.set(shot.id, shot.sceneId ?? shot.id);
+    return map;
+  }, [shots]);
 
   const coverage = useMemo(
     () =>
@@ -57,8 +66,9 @@ export const SequenceVideoModelSelector = ({
         variants,
         variantType: 'video',
         primaryModel: sequenceVideoModel,
+        shotToScene,
       }),
-    [variants, sequenceVideoModel]
+    [variants, sequenceVideoModel, shotToScene]
   );
 
   // No video variants generated yet — fall back to the read-only chip showing
@@ -90,7 +100,12 @@ export const SequenceVideoModelSelector = ({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[280px]">
-        <DropdownMenuLabel className="text-xs">Video model</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-xs">
+          Video model
+          <span className="block font-normal text-muted-foreground">
+            View a model across the sequence; Set applies it to every scene.
+          </span>
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {models.length > 1 && (
           <DropdownMenuCheckboxItem

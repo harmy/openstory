@@ -12,8 +12,9 @@ import {
   DEFAULT_VIDEO_MODEL,
   safeImageToVideoModel,
 } from '@/lib/ai/models';
+import { resolveSceneVideoModel } from '@/lib/ai/resolve-scene-models';
 import { estimateVideoCost } from '@/lib/billing/cost-estimation';
-import { multiplyMicros } from '@/lib/billing/money';
+import { addMicros, ZERO_MICROS } from '@/lib/billing/money';
 import { requireCredits } from '@/lib/billing/preflight';
 import { resolveShotDuration } from '@/lib/motion/resolve-shot-duration';
 import { snapDuration } from '@/lib/motion/motion-generation';
@@ -21,6 +22,7 @@ import { generateMotionSchema } from '@/lib/schemas/shot.schemas';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import { triggerWorkflow } from '@/lib/workflow/client';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
+import { dbSceneId } from '@/lib/db/schema';
 import type { BatchMotionMusicWorkflowInput } from '@/lib/workflow/types';
 
 import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
@@ -45,10 +47,14 @@ export const generateShotMotionFn = createServerFn({ method: 'POST' })
       throw new Error('Shot has no thumbnail to generate motion from');
     }
 
-    const model = safeImageToVideoModel(
-      data.model || shot.motionModel || sequence.videoModel,
-      DEFAULT_VIDEO_MODEL
-    );
+    // Video model selection lives at the scene level (#909): explicit request
+    // model wins, else the shot's parent scene drives it, then the sequence.
+    const scene = shot.sceneId
+      ? await context.scopedDb.scenes.getById(dbSceneId(shot.sceneId))
+      : null;
+    const model = data.model
+      ? safeImageToVideoModel(data.model, DEFAULT_VIDEO_MODEL)
+      : resolveSceneVideoModel(scene, sequence);
 
     const userEditedPrompt = Boolean(data.prompt);
     const prompt = data.prompt || resolveMotionPrompt(shot, model);
@@ -158,19 +164,31 @@ export const batchGenerateMotionFn = createServerFn({ method: 'POST' })
       throw new Error('No eligible shots for motion generation');
     }
 
-    const batchModel = data.model ?? DEFAULT_VIDEO_MODEL;
-    const batchDuration = snapDuration(data.duration, batchModel);
+    // Video model selection lives at the scene level (#909). Resolve each
+    // shot's model through its parent scene (an explicit batch `data.model`
+    // still overrides everything). Load scenes once to avoid an N+1.
+    const scenes = await context.scopedDb.scenes.listBySequence(sequence.id);
+    const scenesById = new Map(scenes.map((s) => [s.id, s]));
+    const resolveShotVideoModel = (shot: (typeof allShots)[number]) =>
+      data.model
+        ? safeImageToVideoModel(data.model, DEFAULT_VIDEO_MODEL)
+        : resolveSceneVideoModel(
+            shot.sceneId ? scenesById.get(dbSceneId(shot.sceneId)) : null,
+            sequence
+          );
 
-    await requireCredits(
-      context.scopedDb,
-      multiplyMicros(
-        estimateVideoCost(batchModel, batchDuration),
-        eligibleShots.length
-      ),
-      {
-        errorMessage: `Insufficient credits for batch motion generation (${eligibleShots.length} shots)`,
-      }
-    );
+    // Sum per-shot costs — scenes may render with different (priced) models.
+    const estimatedCost = eligibleShots.reduce((sum, shot) => {
+      const model = resolveShotVideoModel(shot);
+      return addMicros(
+        sum,
+        estimateVideoCost(model, snapDuration(data.duration, model))
+      );
+    }, ZERO_MICROS);
+
+    await requireCredits(context.scopedDb, estimatedCost, {
+      errorMessage: `Insufficient credits for batch motion generation (${eligibleShots.length} shots)`,
+    });
 
     const includeMusic =
       (data.includeMusic ?? false) && sequence.musicStatus !== 'generating';
@@ -218,10 +236,7 @@ export const batchGenerateMotionFn = createServerFn({ method: 'POST' })
       sequenceId: sequence.id,
       includeMusic,
       shots: eligibleShots.map((shot) => {
-        const shotModel = safeImageToVideoModel(
-          data.model || shot.motionModel || sequence.videoModel,
-          DEFAULT_VIDEO_MODEL
-        );
+        const shotModel = resolveShotVideoModel(shot);
         return {
           shotId: shot.id,
           imageUrl: shot.thumbnailUrl ?? '',

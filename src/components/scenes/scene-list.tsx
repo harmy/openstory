@@ -1,34 +1,39 @@
-import { MotionModelSelector } from '@/components/model/motion-model-selector';
 import { MusicModelSelector } from '@/components/model/music-model-selector';
+import { SceneGroup } from '@/components/scenes/scene-group';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   DEFAULT_MUSIC_MODEL,
-  DEFAULT_VIDEO_MODEL,
-  videoModelSupportsAudio,
   type AudioModel,
   type ImageToVideoModel,
+  type TextToImageModel,
 } from '@/lib/ai/models';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
-import type { Shot, ShotVariant } from '@/lib/db/schema';
+import type { SceneRow, Shot, ShotVariant } from '@/lib/db/schema';
 import { Loader2, Video } from 'lucide-react';
 import { memo, useMemo, useRef, useState } from 'react';
 import { SceneListItem } from './scene-list-item';
 
+const UNASSIGNED = '__unassigned__';
+
 export type BatchGenerateMotionArgs = {
   includeMusic: boolean;
-  motionModel: ImageToVideoModel;
   musicModel: AudioModel;
-  /** When the motion model emits audio (sfx/dialogue/ambient), allow the
+  /** When a scene's motion model emits audio (sfx/dialogue/ambient), allow the
    *  user to suppress it. Ignored for models without audio output. */
   generateAudio: boolean;
 };
 
 type SceneListProps = {
+  /** Ordered scenes — shots are grouped under these (#909). */
+  scenes?: SceneRow[];
   shots?: Shot[] | undefined;
   selectedShotId?: string;
   aspectRatio: AspectRatio;
+  /** Sequence defaults a scene inherits when its own model column is null. */
+  sequenceImageModel: TextToImageModel;
+  sequenceVideoModel: ImageToVideoModel;
   onSelectShot: (shotId: string) => void;
   regeneratingImages: Set<string>;
   regeneratingMotion: Set<string>;
@@ -39,12 +44,8 @@ type SceneListProps = {
   /** Live divergent alternates for the current sequence (filtered per-shot). */
   divergentVariants?: ShotVariant[];
   onCompareDivergent?: (variant: ShotVariant) => void;
-  /** Initial motion model for the batch selector (from `sequence.videoModel`). */
-  initialMotionModel?: ImageToVideoModel;
   /** Initial music model for the batch selector (from `sequence.musicModel`). */
   initialMusicModel?: AudioModel;
-  /** Current style category — used to filter style-restricted motion models. */
-  styleCategory?: string;
   /**
    * Scenes the pinned image model hasn't generated yet (#547). Those cards show
    * a "No {model}" badge so the thumbnail (which still shows the primary image)
@@ -55,16 +56,16 @@ type SceneListProps = {
   modelMissingLabel?: string | null;
 };
 
-const isCompleted = (shot: Shot) => {
-  const isFullyGenerated =
-    shot.thumbnailStatus === 'completed' && shot.videoStatus === 'completed';
-  return isFullyGenerated;
-};
+const isCompleted = (shot: Shot) =>
+  shot.thumbnailStatus === 'completed' && shot.videoStatus === 'completed';
 
 const SceneListComponent: React.FC<SceneListProps> = ({
+  scenes,
   shots,
   selectedShotId,
   aspectRatio,
+  sequenceImageModel,
+  sequenceVideoModel,
   onSelectShot,
   regeneratingImages,
   regeneratingMotion,
@@ -73,9 +74,7 @@ const SceneListComponent: React.FC<SceneListProps> = ({
   hideBatchButton = false,
   divergentVariants,
   onCompareDivergent,
-  initialMotionModel,
   initialMusicModel,
-  styleCategory,
   modelMissingShotIds,
   modelMissingLabel,
 }) => {
@@ -90,28 +89,28 @@ const SceneListComponent: React.FC<SceneListProps> = ({
     return map;
   }, [divergentVariants]);
 
+  // Group shots under their parent scene (#909). Shots keep their query order
+  // (orderIndex) within a group; orphans (null sceneId / legacy) trail.
+  const shotsByScene = useMemo(() => {
+    const map = new Map<string, Shot[]>();
+    for (const shot of shots ?? []) {
+      const key = shot.sceneId ?? UNASSIGNED;
+      const list = map.get(key) ?? [];
+      list.push(shot);
+      map.set(key, list);
+    }
+    return map;
+  }, [shots]);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [includeMusic, setIncludeMusic] = useState(true);
   const [generateAudio, setGenerateAudio] = useState(true);
-  const [motionModel, setMotionModel] = useState<ImageToVideoModel>(
-    initialMotionModel ?? DEFAULT_VIDEO_MODEL
-  );
   const [musicModel, setMusicModel] = useState<AudioModel>(
     initialMusicModel ?? DEFAULT_MUSIC_MODEL
   );
 
-  const motionSupportsAudio = videoModelSupportsAudio(motionModel);
-
   // Sync local selection when the sequence's saved model changes from outside
   // (e.g. after generation completes and the workflow persists the new model).
-  const prevInitialMotionRef = useRef(initialMotionModel);
-  if (
-    initialMotionModel &&
-    initialMotionModel !== prevInitialMotionRef.current
-  ) {
-    prevInitialMotionRef.current = initialMotionModel;
-    setMotionModel(initialMotionModel);
-  }
   const prevInitialMusicRef = useRef(initialMusicModel);
   if (initialMusicModel && initialMusicModel !== prevInitialMusicRef.current) {
     prevInitialMusicRef.current = initialMusicModel;
@@ -152,9 +151,8 @@ const SceneListComponent: React.FC<SceneListProps> = ({
     try {
       await onBatchGenerateMotion({
         includeMusic,
-        motionModel,
         musicModel,
-        generateAudio: motionSupportsAudio ? generateAudio : false,
+        generateAudio,
       });
     } finally {
       setIsGenerating(false);
@@ -170,6 +168,32 @@ const SceneListComponent: React.FC<SceneListProps> = ({
     !motionPromptsReady ||
     (includeMusic && !musicPromptsReady);
 
+  const renderShotCard = (shot: Shot) => {
+    const divergent = divergentByShotId.get(shot.id);
+    return (
+      <SceneListItem
+        key={shot.id}
+        shot={shot}
+        aspectRatio={aspectRatio}
+        isActive={shot.id === selectedShotId}
+        isCompleted={isCompleted(shot)}
+        onSelect={() => onSelectShot(shot.id)}
+        isRegeneratingImage={regeneratingImages.has(shot.id)}
+        isRegeneratingMotion={regeneratingMotion.has(shot.id)}
+        divergentVariantId={divergent?.id}
+        onCompareDivergent={
+          divergent ? () => onCompareDivergent?.(divergent) : undefined
+        }
+        modelMissing={
+          !!modelMissingLabel && (modelMissingShotIds?.has(shot.id) ?? false)
+        }
+        modelMissingLabel={modelMissingLabel}
+      />
+    );
+  };
+
+  const orphanShots = shotsByScene.get(UNASSIGNED) ?? [];
+
   return (
     <div className="flex h-full w-[280px] lg:w-[480px] flex-col rounded-lg border bg-background">
       {/* Header */}
@@ -182,7 +206,7 @@ const SceneListComponent: React.FC<SceneListProps> = ({
       {/* Scene list */}
       <ScrollArea className="flex-1 min-h-0">
         <div className="flex flex-col gap-3 p-4">
-          {(shots === undefined || shots.length === 0) &&
+          {shots === undefined &&
             [1, 2, 3].map((i) => (
               <SceneListItem
                 key={`shot-skeleton-${i}`}
@@ -194,48 +218,49 @@ const SceneListComponent: React.FC<SceneListProps> = ({
             ))}
 
           {shots &&
-            shots.map((shot) => {
-              const divergent = divergentByShotId.get(shot.id);
+            scenes &&
+            scenes.map((scene, idx) => {
+              const sceneShots = shotsByScene.get(scene.id) ?? [];
               return (
-                <SceneListItem
-                  key={shot.id}
-                  shot={shot}
-                  aspectRatio={aspectRatio}
-                  isActive={shot.id === selectedShotId}
-                  isCompleted={isCompleted(shot)}
-                  onSelect={() => onSelectShot(shot.id)}
-                  isRegeneratingImage={regeneratingImages.has(shot.id)}
-                  isRegeneratingMotion={regeneratingMotion.has(shot.id)}
-                  divergentVariantId={divergent?.id}
-                  onCompareDivergent={
-                    divergent
-                      ? () => onCompareDivergent?.(divergent)
-                      : undefined
-                  }
-                  modelMissing={
-                    !!modelMissingLabel &&
-                    (modelMissingShotIds?.has(shot.id) ?? false)
-                  }
-                  modelMissingLabel={modelMissingLabel}
-                />
+                <SceneGroup
+                  key={scene.id}
+                  scene={scene}
+                  sceneNumber={idx + 1}
+                  sequenceImageModel={sequenceImageModel}
+                  sequenceVideoModel={sequenceVideoModel}
+                >
+                  {sceneShots.length > 0 ? (
+                    sceneShots.map(renderShotCard)
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      No shots yet.
+                    </p>
+                  )}
+                </SceneGroup>
               );
             })}
+
+          {/* Scenes still loading — render shots flat so nothing flashes empty. */}
+          {shots && !scenes && shots.map(renderShotCard)}
+
+          {shots && scenes && orphanShots.length > 0 && (
+            <div className="rounded-lg border bg-muted/20">
+              <div className="border-b px-3 py-2.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Unassigned
+                </span>
+              </div>
+              <div className="flex flex-col gap-3 p-3">
+                {orphanShots.map(renderShotCard)}
+              </div>
+            </div>
+          )}
         </div>
       </ScrollArea>
 
       {/* Sticky footer with Generate Motion button */}
       {showButton && (
         <div className="sticky bottom-0 border-t bg-background p-4 flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Motion model</span>
-            <MotionModelSelector
-              selectedModel={motionModel}
-              onModelChange={setMotionModel}
-              disabled={isGenerating || isMotionInProgress}
-              aspectRatio={aspectRatio}
-              styleCategory={styleCategory}
-            />
-          </div>
           {includeMusic && (
             <div className="flex flex-col gap-1">
               <span className="text-xs text-muted-foreground">Music model</span>
@@ -252,8 +277,7 @@ const SceneListComponent: React.FC<SceneListProps> = ({
             onClick={() => void handleGenerateMotion()}
             disabled={isButtonDisabled}
           >
-            {isGenerating ||
-            (notStartedShots.length === 0 && isMotionInProgress) ? (
+            {isGenerating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Generating…
@@ -289,48 +313,43 @@ const SceneListComponent: React.FC<SceneListProps> = ({
               )}
             </span>
           </label>
-          {motionSupportsAudio && (
-            <label
-              htmlFor="batch-generate-audio"
-              className="flex items-center gap-2 text-sm text-muted-foreground"
-            >
-              <Checkbox
-                id="batch-generate-audio"
-                checked={generateAudio}
-                onCheckedChange={(checked) =>
-                  setGenerateAudio(checked === true)
-                }
-              />
-              <span>Include SFX &amp; dialogue</span>
-            </label>
-          )}
+          <label
+            htmlFor="batch-generate-audio"
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <Checkbox
+              id="batch-generate-audio"
+              checked={generateAudio}
+              onCheckedChange={(checked) => setGenerateAudio(checked === true)}
+            />
+            <span>Include SFX &amp; dialogue (when the model supports it)</span>
+          </label>
         </div>
       )}
     </div>
   );
 };
 
-// Custom equality check to prevent unnecessary re-renders during polling
-// Relies on TanStack Query's structural sharing to preserve shot object references
+// Custom equality check to prevent unnecessary re-renders during polling.
+// Relies on TanStack Query's structural sharing to preserve object references.
 const areEqual = (
   prevProps: SceneListProps,
   nextProps: SceneListProps
 ): boolean => {
-  // Compare primitive props
   if (
     prevProps.selectedShotId !== nextProps.selectedShotId ||
     prevProps.aspectRatio !== nextProps.aspectRatio ||
+    prevProps.sequenceImageModel !== nextProps.sequenceImageModel ||
+    prevProps.sequenceVideoModel !== nextProps.sequenceVideoModel ||
     prevProps.musicPromptsReady !== nextProps.musicPromptsReady ||
-    prevProps.initialMotionModel !== nextProps.initialMotionModel ||
     prevProps.initialMusicModel !== nextProps.initialMusicModel ||
-    prevProps.styleCategory !== nextProps.styleCategory ||
     prevProps.modelMissingLabel !== nextProps.modelMissingLabel ||
-    prevProps.modelMissingShotIds !== nextProps.modelMissingShotIds
+    prevProps.modelMissingShotIds !== nextProps.modelMissingShotIds ||
+    prevProps.scenes !== nextProps.scenes
   ) {
     return false;
   }
 
-  // Compare regenerating Sets by reference (parent creates new Set on change)
   if (
     prevProps.regeneratingImages !== nextProps.regeneratingImages ||
     prevProps.regeneratingMotion !== nextProps.regeneratingMotion
@@ -338,7 +357,6 @@ const areEqual = (
     return false;
   }
 
-  // Compare callback references
   if (
     prevProps.onBatchGenerateMotion !== nextProps.onBatchGenerateMotion ||
     prevProps.onCompareDivergent !== nextProps.onCompareDivergent
@@ -346,31 +364,21 @@ const areEqual = (
     return false;
   }
 
-  // Divergent / staleness inputs drive corner-dot indicators on each row.
-  // TanStack Query structural sharing keeps the array reference stable when
-  // contents are unchanged, so reference equality is sufficient here.
   if (prevProps.divergentVariants !== nextProps.divergentVariants) {
     return false;
   }
 
-  // Compare shots array
-  // TanStack Query's structural sharing should maintain the same array reference
-  // if the content hasn't changed, so reference equality check is sufficient
+  // TanStack Query's structural sharing keeps the array reference stable when
+  // the contents are unchanged, so reference equality is sufficient.
   if (prevProps.shots === nextProps.shots) {
     return true;
   }
-
-  // If one is undefined and the other isn't, they're not equal
   if (!prevProps.shots || !nextProps.shots) {
     return false;
   }
-
-  // If array lengths differ, they're not equal
   if (prevProps.shots.length !== nextProps.shots.length) {
     return false;
   }
-
-  // Check if shot object references have changed (structural sharing preserves refs)
   for (let i = 0; i < prevProps.shots.length; i++) {
     if (prevProps.shots[i] !== nextProps.shots[i]) {
       return false;

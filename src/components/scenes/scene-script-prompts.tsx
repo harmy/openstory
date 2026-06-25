@@ -1,7 +1,4 @@
 import { BillingGateDialog } from '@/components/billing/billing-gate-dialog';
-import { ImageModelSelector } from '@/components/model/image-model-selector';
-import { MotionModelSelector } from '@/components/model/motion-model-selector';
-import { type ModelGenerationStatus } from '@/components/model/base-model-selector';
 import { ThinkingBar } from '@/components/ai/thinking-bar';
 import { PromptHistorySheet } from '@/components/prompts/prompt-history-sheet';
 import { DivergentAlternateBanner } from '@/components/staleness/divergent-alternate-banner';
@@ -27,8 +24,6 @@ import { updateShotFn } from '@/functions/shots';
 import { generateShotImageFn } from '@/functions/shot-image';
 import { generateShotMotionFn } from '@/functions/motion-functions';
 import { regenerateShotPromptFn } from '@/functions/prompt-variants';
-import { useActiveImageModel } from '@/hooks/use-active-image-model';
-import { useActiveVideoModel } from '@/hooks/use-active-video-model';
 import { BILLING_BALANCE_KEY } from '@/hooks/use-billing-balance';
 import { useFalBillingGate } from '@/hooks/use-billing-gate';
 import {
@@ -122,28 +117,17 @@ type SceneScriptPromptsProps = {
   variantForSelectedModel?: ShotVariant;
   /** The selected scene's video variant for the effective video model (#545). */
   videoVariantForSelectedModel?: ShotVariant;
-  /** Per-scene generation status by model — drives the ✓/⟳/! dropdown markers (#545). */
-  imageModelStatuses?: Map<string, ModelGenerationStatus>;
-  videoModelStatuses?: Map<string, ModelGenerationStatus>;
-  onImageModelChange?: (model: string) => void;
-  /** Per-scene video-model preview switch (#545), mirror of onImageModelChange. */
-  onVideoModelChange?: (model: string) => void;
-  /** Current style category, used to show/hide style-restricted motion models */
+  /**
+   * Resolved scene-level models (#909). Model selection lives on the scene, so
+   * the tabs target these (and show them read-only) rather than a per-shot pick.
+   */
+  sceneImageModel: TextToImageModel;
+  sceneVideoModel: ImageToVideoModel;
+  /** Current style category, used to snap style-restricted motion models. */
   styleCategory?: string;
-  /** Current style name, used in recommendation tooltips */
-  styleName?: string;
-  /** Style-recommended image model — drives the "Recommended" badge */
-  recommendedImageModel?: string | null;
-  /** Style-recommended video model — drives the "Recommended" badge */
-  recommendedVideoModel?: string | null;
   /** Live divergent alternates for the current shot across variant types. */
   shotDivergentVariants?: ShotVariant[];
   onCompareDivergent?: (variant: ShotVariant) => void;
-  /**
-   * Sequence-level motion model. Used as the display fallback when the user
-   * hasn't picked one in the dropdown and the shot has no completed motion.
-   */
-  sequenceMotionModel?: ImageToVideoModel;
 };
 
 export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
@@ -158,17 +142,11 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   aspectRatio,
   variantForSelectedModel,
   videoVariantForSelectedModel,
-  imageModelStatuses,
-  videoModelStatuses,
-  onImageModelChange,
-  onVideoModelChange,
+  sceneImageModel,
+  sceneVideoModel,
   styleCategory,
-  styleName,
-  recommendedImageModel,
-  recommendedVideoModel,
   shotDivergentVariants,
   onCompareDivergent,
-  sequenceMotionModel,
 }) => {
   const divergentImageVariant = useMemo(
     () => shotDivergentVariants?.find((v) => v.variantType === 'image'),
@@ -179,11 +157,6 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     [shotDivergentVariants]
   );
   const [copiedTab, setCopiedTab] = useState<string | null>(null);
-  // Sequence-level model pins from the header dropdowns (#547). Fold them into
-  // the per-scene effective model below so switching a header model also moves
-  // this scene's image/video tab selector.
-  const { activeImageModel } = useActiveImageModel(sequenceId);
-  const { activeVideoModel } = useActiveVideoModel(sequenceId);
   const [historyOpen, setHistoryOpen] = useState<'visual' | 'motion' | null>(
     null
   );
@@ -196,44 +169,16 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   // Image & motion regeneration state
   const [editPrompts, setEditPrompts] = useState({
     imagePrompt: '' as string,
-    imageModel: undefined as TextToImageModel | undefined,
     motionPrompt: '' as string,
-    motionModel: undefined as ImageToVideoModel | undefined,
   });
-  const {
-    imagePrompt: editedImagePrompt,
-    imageModel: selectedImageModel,
-    motionPrompt: editedMotionPrompt,
-    motionModel: selectedMotionModel,
-  } = editPrompts;
+  const { imagePrompt: editedImagePrompt, motionPrompt: editedMotionPrompt } =
+    editPrompts;
   const setEditedImagePrompt = (v: string) =>
     setEditPrompts((s) => ({ ...s, imagePrompt: v }));
-  const setSelectedImageModel = (v: TextToImageModel | undefined) =>
-    setEditPrompts((s) => ({ ...s, imageModel: v }));
   const setEditedMotionPrompt = (v: string) =>
     setEditPrompts((s) => ({ ...s, motionPrompt: v }));
-  const setSelectedMotionModel = (v: ImageToVideoModel | undefined) =>
-    setEditPrompts((s) => ({ ...s, motionModel: v }));
   // SFX/dialogue toggle for audio-capable models (kling v3, veo3, etc.)
   const [generateAudio, setGenerateAudio] = useState(true);
-
-  const handleImageModelChange = useCallback(
-    (model: TextToImageModel) => {
-      setSelectedImageModel(model);
-      onImageModelChange?.(model);
-    },
-    [onImageModelChange]
-  );
-
-  // Picking a motion model both sets the regen target and (mirroring the image
-  // flow) previews that model's existing video variant for this scene (#545).
-  const handleMotionModelChange = useCallback(
-    (model: ImageToVideoModel) => {
-      setSelectedMotionModel(model);
-      onVideoModelChange?.(model);
-    },
-    [onVideoModelChange]
-  );
 
   // Script tab edit state — `undefined` means "no draft" (textarea mirrors the
   // saved value); a string means "user has typed". We reset to `undefined` when
@@ -520,47 +465,23 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     shot?.imageModel,
     DEFAULT_IMAGE_MODEL
   );
-  // The model this scene's image tab targets, mirroring scenes-view's
-  // effectiveImageModel so the selector, the Generate/Set state, and the
-  // previewed image all agree. Precedence: explicit per-scene pick → the
-  // sequence-level header pin (#547) → the shot's own model. `selectedImageModel`
-  // is ONLY a deliberate dropdown pick (reset on shot switch), so the pin isn't
-  // shadowed by a shot-synced value. `regenImageModel` drops the shot fallback
-  // so "nothing chosen" passes undefined and lets the server default.
-  const effectiveImageModel =
-    selectedImageModel ?? activeImageModel ?? imageModel;
-  const regenImageModel = selectedImageModel ?? activeImageModel ?? undefined;
-  // Resolved motion model for this scene. Precedence:
-  //   1. explicit per-scene dropdown pick
-  //   2. sequence-level header pin (#547) — switching it moves this selector
-  //   3. shot already has completed motion → show what it was generated with
-  //   4. sequence-level model (reflects most recent batch pick or creation)
-  //   5. global default
-  const baseMotionModel: ImageToVideoModel =
-    selectedMotionModel ||
-    activeVideoModel ||
-    (shot?.videoStatus === 'completed' && shot.motionModel
-      ? safeImageToVideoModel(shot.motionModel, DEFAULT_VIDEO_MODEL)
-      : undefined) ||
-    sequenceMotionModel ||
-    DEFAULT_VIDEO_MODEL;
-  // Keep the resolved model usable for this scene: snap to an aspect-ratio
-  // compatible model, then fall back to the default when it's gated to a
-  // different style category (e.g. Seedance 2 is animation-only). This used to
-  // live in a render-phase shot→state sync, which pre-filled the dropdown
-  // selection and shadowed the header pin — folding it here lets the pin drive.
+  // Model selection lives on the scene (#909): the image tab targets the
+  // scene's look model, so the previewed variant + Generate/Set state all agree.
+  const effectiveImageModel = sceneImageModel;
+  const regenImageModel = sceneImageModel;
+  // The scene's motion model, snapped to an aspect-ratio compatible model and
+  // falling back to the default when gated to a different style category (e.g.
+  // Seedance 2 is animation-only).
   const aspectCompatibleMotion = aspectRatio
-    ? getCompatibleModel(baseMotionModel, aspectRatio)
-    : baseMotionModel;
+    ? getCompatibleModel(sceneVideoModel, aspectRatio)
+    : sceneVideoModel;
   const motionModelConfig = IMAGE_TO_VIDEO_MODELS[aspectCompatibleMotion];
   const effectiveMotionModel: ImageToVideoModel =
     'requiredStyleCategory' in motionModelConfig &&
     motionModelConfig.requiredStyleCategory !== styleCategory
       ? DEFAULT_VIDEO_MODEL
       : aspectCompatibleMotion;
-  // Regen target (mirror of regenImageModel): explicit pick → header pin, else
-  // undefined so the server defaults rather than re-asserting a model.
-  const regenMotionModel = selectedMotionModel ?? activeVideoModel ?? undefined;
+  const regenMotionModel = effectiveMotionModel;
   const imagePrompt =
     shot?.imagePrompt || shot?.metadata?.prompts?.visual?.fullPrompt;
 
@@ -671,7 +592,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
                 ...f,
                 thumbnailStatus: 'generating' as const,
                 imagePrompt: editedImagePrompt || f.imagePrompt,
-                imageModel: regenImageModel ?? f.imageModel,
+                imageModel: regenImageModel,
               }
             : f
         );
@@ -685,7 +606,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
         ...oldShot,
         thumbnailStatus: 'generating' as const,
         imagePrompt: editedImagePrompt || oldShot.imagePrompt,
-        imageModel: regenImageModel ?? oldShot.imageModel,
+        imageModel: regenImageModel,
       };
     });
 
@@ -747,7 +668,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
                 ...f,
                 videoStatus: 'generating' as const,
                 motionPrompt: editedMotionPrompt || f.motionPrompt,
-                motionModel: regenMotionModel ?? f.motionModel,
+                motionModel: regenMotionModel,
               }
             : f
         );
@@ -761,11 +682,11 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
         ...oldShot,
         videoStatus: 'generating' as const,
         motionPrompt: editedMotionPrompt || oldShot.motionPrompt,
-        motionModel: regenMotionModel ?? oldShot.motionModel,
+        motionModel: regenMotionModel,
       };
     });
 
-    const motionModelForCall = regenMotionModel || DEFAULT_VIDEO_MODEL;
+    const motionModelForCall = regenMotionModel;
     const supportsAudio = videoModelSupportsAudio(motionModelForCall);
 
     try {
@@ -891,12 +812,6 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     prevScriptShotIdRef.current = shot?.id;
     setEditedScript(undefined);
     setEditedDurationSeconds(undefined);
-    // Clear per-scene dropdown picks so the next scene starts from its header
-    // pin / own model (#547). Storing the shot's model here previously shadowed
-    // the pin; aspect-ratio + style-category fallback now lives in
-    // effectiveMotionModel instead.
-    setSelectedImageModel(undefined);
-    setSelectedMotionModel(undefined);
   }
 
   if (imagePrompt !== prevImagePromptRef.current) {
@@ -1070,19 +985,6 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
               className="min-h-[120px]"
               disabled={isGenerating || isStreamingVisualPrompt}
               mentionItems={mentionItems}
-            />
-          </div>
-
-          {/* Model selector */}
-          <div className="space-y-2">
-            <span className="text-sm font-medium">Model</span>
-            <ImageModelSelector
-              selectedModel={effectiveImageModel}
-              onModelChange={handleImageModelChange}
-              disabled={isGenerating}
-              recommendedImageModel={recommendedImageModel}
-              styleName={styleName}
-              generatedStatuses={imageModelStatuses}
             />
           </div>
 
@@ -1262,21 +1164,6 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
                 isGenerating || isGeneratingMotion || isStreamingMotionPrompt
               }
               mentionItems={mentionItems}
-            />
-          </div>
-
-          {/* Model selector */}
-          <div className="space-y-2">
-            <span className="text-sm font-medium">Model</span>
-            <MotionModelSelector
-              selectedModel={effectiveMotionModel}
-              onModelChange={handleMotionModelChange}
-              disabled={isGenerating || isGeneratingMotion}
-              aspectRatio={aspectRatio}
-              styleCategory={styleCategory}
-              recommendedVideoModel={recommendedVideoModel}
-              styleName={styleName}
-              generatedStatuses={videoModelStatuses}
             />
           </div>
 
@@ -1462,19 +1349,6 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
               No variant image available. Generate variants to see options.
             </div>
           )}
-
-          {/* Model selector */}
-          <div className="space-y-2">
-            <span className="text-sm font-medium">Model</span>
-            <ImageModelSelector
-              selectedModel={effectiveImageModel}
-              onModelChange={handleImageModelChange}
-              disabled={isGenerating || isGeneratingSceneVariants}
-              recommendedImageModel={recommendedImageModel}
-              styleName={styleName}
-              generatedStatuses={imageModelStatuses}
-            />
-          </div>
 
           {/* Regenerate button */}
           <Button
