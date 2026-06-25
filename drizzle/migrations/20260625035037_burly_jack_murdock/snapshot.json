@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "fcccc184-fe43-4e04-8f81-193fdf6d67c7",
-  "prevIds": ["644fafd1-dd42-4567-a118-a19a3cf9495e"],
+  "id": "6dbc313e-6594-49d0-9b30-cbbd097399bb",
+  "prevIds": ["b118fee2-ab40-4bd2-bad5-beeef1bf5b42"],
   "ddl": [
     {
       "name": "account",
@@ -37,18 +37,6 @@
       "entityType": "tables"
     },
     {
-      "name": "frame_prompt_variants",
-      "entityType": "tables"
-    },
-    {
-      "name": "frame_variants",
-      "entityType": "tables"
-    },
-    {
-      "name": "frames",
-      "entityType": "tables"
-    },
-    {
       "name": "gift_token_redemptions",
       "entityType": "tables"
     },
@@ -70,6 +58,10 @@
     },
     {
       "name": "passkey",
+      "entityType": "tables"
+    },
+    {
+      "name": "scenes",
       "entityType": "tables"
     },
     {
@@ -98,6 +90,18 @@
     },
     {
       "name": "session",
+      "entityType": "tables"
+    },
+    {
+      "name": "shot_prompt_variants",
+      "entityType": "tables"
+    },
+    {
+      "name": "shot_variants",
+      "entityType": "tables"
+    },
+    {
+      "name": "shots",
       "entityType": "tables"
     },
     {
@@ -1114,776 +1118,6 @@
       "generated": null,
       "name": "id",
       "entityType": "columns",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "frame_id",
-      "entityType": "columns",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "prompt_type",
-      "entityType": "columns",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "text",
-      "entityType": "columns",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "components",
-      "entityType": "columns",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "parameters",
-      "entityType": "columns",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "source",
-      "entityType": "columns",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "input_hash",
-      "entityType": "columns",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "type": "text(100)",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "analysis_model",
-      "entityType": "columns",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "created_by",
-      "entityType": "columns",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "id",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "frame_id",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "sequence_id",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "variant_type",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text(100)",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "model",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "url",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "storage_path",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "preview_url",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "shot_variant_url",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "shot_variant_path",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": "'pending'",
-      "generated": null,
-      "name": "shot_variant_status",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "shot_variant_workflow_run_id",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "'pending'",
-      "generated": null,
-      "name": "status",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "workflow_run_id",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "generated_at",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "error",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "prompt_hash",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "input_hash",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "diverged_at",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "discarded_at",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "duration_ms",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "table": "frame_variants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "id",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "sequence_id",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "order_index",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "description",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": "3000",
-      "generated": null,
-      "name": "duration_ms",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "thumbnail_url",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "preview_thumbnail_url",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "thumbnail_path",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "variant_image_url",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": "'pending'",
-      "generated": null,
-      "name": "variant_image_status",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "variant_workflow_run_id",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "variant_image_generated_at",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "variant_image_error",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "video_url",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "video_path",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": "'pending'",
-      "generated": null,
-      "name": "thumbnail_status",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "thumbnail_workflow_run_id",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "thumbnail_generated_at",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "thumbnail_error",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text(100)",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "'gpt_image_2'",
-      "generated": null,
-      "name": "image_model",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "image_prompt",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": "'pending'",
-      "generated": null,
-      "name": "video_status",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "video_workflow_run_id",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "video_generated_at",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "video_error",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "motion_prompt",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text(100)",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "motion_model",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "audio_url",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "audio_path",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": "'pending'",
-      "generated": null,
-      "name": "audio_status",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "audio_workflow_run_id",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "audio_generated_at",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "audio_error",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text(100)",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "audio_model",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "thumbnail_input_hash",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "variant_image_input_hash",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "video_input_hash",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "audio_input_hash",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "visual_prompt_input_hash",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "motion_prompt_input_hash",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "metadata",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "table": "frames"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "id",
-      "entityType": "columns",
       "table": "gift_token_redemptions"
     },
     {
@@ -2504,6 +1738,226 @@
       "generated": null,
       "name": "id",
       "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sequence_id",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "order_index",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "location",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_of_day",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "story_beat",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "title",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "continuity",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "music_design",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "original_script",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text(100)",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "image_model",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text(100)",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "video_model",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "video_url",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "video_path",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "'pending'",
+      "generated": null,
+      "name": "video_status",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "video_workflow_run_id",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "video_generated_at",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "video_error",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "video_input_hash",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "render_strategy",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "scenes"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
       "table": "sequence_elements"
     },
     {
@@ -2742,7 +2196,7 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "source_frames_hash",
+      "name": "source_shots_hash",
       "entityType": "columns",
       "table": "sequence_exports"
     },
@@ -3450,7 +2904,7 @@
       "type": "text(100)",
       "notNull": true,
       "autoincrement": false,
-      "default": "'gpt_image_2'",
+      "default": "'nano_banana_2'",
       "generated": null,
       "name": "image_model",
       "entityType": "columns",
@@ -3705,6 +3159,796 @@
       "name": "user_id",
       "entityType": "columns",
       "table": "session"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shot_id",
+      "entityType": "columns",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "prompt_type",
+      "entityType": "columns",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "text",
+      "entityType": "columns",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "components",
+      "entityType": "columns",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parameters",
+      "entityType": "columns",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source",
+      "entityType": "columns",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "input_hash",
+      "entityType": "columns",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "type": "text(100)",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "analysis_model",
+      "entityType": "columns",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_by",
+      "entityType": "columns",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shot_id",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sequence_id",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "variant_type",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text(100)",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "model",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "url",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "storage_path",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "preview_url",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shot_variant_url",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shot_variant_path",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "'pending'",
+      "generated": null,
+      "name": "shot_variant_status",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shot_variant_workflow_run_id",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'pending'",
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "workflow_run_id",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "generated_at",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "error",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "prompt_hash",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "input_hash",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "diverged_at",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "discarded_at",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "duration_ms",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "shot_variants"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "sequence_id",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "scene_id",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shot_number",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "order_index",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "description",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "3000",
+      "generated": null,
+      "name": "duration_ms",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "thumbnail_url",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "preview_thumbnail_url",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "thumbnail_path",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "variant_image_url",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "'pending'",
+      "generated": null,
+      "name": "variant_image_status",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "variant_workflow_run_id",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "variant_image_generated_at",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "variant_image_error",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "video_url",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "video_path",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "'pending'",
+      "generated": null,
+      "name": "thumbnail_status",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "thumbnail_workflow_run_id",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "thumbnail_generated_at",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "thumbnail_error",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text(100)",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'nano_banana_2'",
+      "generated": null,
+      "name": "image_model",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "image_prompt",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "'pending'",
+      "generated": null,
+      "name": "video_status",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "video_workflow_run_id",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "video_generated_at",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "video_error",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "motion_prompt",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text(100)",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "motion_model",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "audio_url",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "audio_path",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "'pending'",
+      "generated": null,
+      "name": "audio_status",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "audio_workflow_run_id",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "audio_generated_at",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "audio_error",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text(100)",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "audio_model",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "thumbnail_input_hash",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "variant_image_input_hash",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "video_input_hash",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "audio_input_hash",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "visual_prompt_input_hash",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "motion_prompt_input_hash",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "metadata",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "shots"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "shots"
     },
     {
       "type": "text",
@@ -5256,61 +5500,6 @@
       "table": "credits"
     },
     {
-      "columns": ["frame_id"],
-      "tableTo": "frames",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "nameExplicit": false,
-      "name": "fk_frame_prompt_variants_frame_id_frames_id_fk",
-      "entityType": "fks",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "columns": ["created_by"],
-      "tableTo": "user",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "nameExplicit": false,
-      "name": "fk_frame_prompt_variants_created_by_user_id_fk",
-      "entityType": "fks",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "columns": ["frame_id"],
-      "tableTo": "frames",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "nameExplicit": false,
-      "name": "frame_variants_frame_id_frames_id_fk",
-      "entityType": "fks",
-      "table": "frame_variants"
-    },
-    {
-      "columns": ["sequence_id"],
-      "tableTo": "sequences",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "nameExplicit": false,
-      "name": "frame_variants_sequence_id_sequences_id_fk",
-      "entityType": "fks",
-      "table": "frame_variants"
-    },
-    {
-      "columns": ["sequence_id"],
-      "tableTo": "sequences",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "nameExplicit": false,
-      "name": "frames_sequence_id_sequences_id_fk",
-      "entityType": "fks",
-      "table": "frames"
-    },
-    {
       "columns": ["gift_token_id"],
       "tableTo": "gift_tokens",
       "columnsTo": ["id"],
@@ -5397,6 +5586,17 @@
       "name": "passkey_user_id_user_id_fk",
       "entityType": "fks",
       "table": "passkey"
+    },
+    {
+      "columns": ["sequence_id"],
+      "tableTo": "sequences",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_scenes_sequence_id_sequences_id_fk",
+      "entityType": "fks",
+      "table": "scenes"
     },
     {
       "columns": ["sequence_id"],
@@ -5529,6 +5729,72 @@
       "name": "session_user_id_user_id_fk",
       "entityType": "fks",
       "table": "session"
+    },
+    {
+      "columns": ["shot_id"],
+      "tableTo": "shots",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_shot_prompt_variants_shot_id_shots_id_fk",
+      "entityType": "fks",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "columns": ["created_by"],
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "nameExplicit": false,
+      "name": "fk_shot_prompt_variants_created_by_user_id_fk",
+      "entityType": "fks",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "columns": ["shot_id"],
+      "tableTo": "shots",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_shot_variants_shot_id_shots_id_fk",
+      "entityType": "fks",
+      "table": "shot_variants"
+    },
+    {
+      "columns": ["sequence_id"],
+      "tableTo": "sequences",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_shot_variants_sequence_id_sequences_id_fk",
+      "entityType": "fks",
+      "table": "shot_variants"
+    },
+    {
+      "columns": ["sequence_id"],
+      "tableTo": "sequences",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_shots_sequence_id_sequences_id_fk",
+      "entityType": "fks",
+      "table": "shots"
+    },
+    {
+      "columns": ["scene_id"],
+      "tableTo": "scenes",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "nameExplicit": false,
+      "name": "fk_shots_scene_id_scenes_id_fk",
+      "entityType": "fks",
+      "table": "shots"
     },
     {
       "columns": ["team_id"],
@@ -5794,27 +6060,6 @@
     {
       "columns": ["id"],
       "nameExplicit": false,
-      "name": "frame_prompt_variants_pk",
-      "table": "frame_prompt_variants",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
-      "name": "frame_variants_pk",
-      "table": "frame_variants",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
-      "name": "frames_pk",
-      "table": "frames",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
       "name": "gift_token_redemptions_pk",
       "table": "gift_token_redemptions",
       "entityType": "pks"
@@ -5852,6 +6097,13 @@
       "nameExplicit": false,
       "name": "passkey_pk",
       "table": "passkey",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "scenes_pk",
+      "table": "scenes",
       "entityType": "pks"
     },
     {
@@ -5901,6 +6153,27 @@
       "nameExplicit": false,
       "name": "session_pk",
       "table": "session",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "shot_prompt_variants_pk",
+      "table": "shot_prompt_variants",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "shot_variants_pk",
+      "table": "shot_variants",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "shots_pk",
+      "table": "shots",
       "entityType": "pks"
     },
     {
@@ -6231,184 +6504,6 @@
     {
       "columns": [
         {
-          "value": "frame_id",
-          "isExpression": false
-        },
-        {
-          "value": "prompt_type",
-          "isExpression": false
-        },
-        {
-          "value": "created_at",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_frame_prompt_variants_frame_type_created",
-      "entityType": "indexes",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "columns": [
-        {
-          "value": "frame_id",
-          "isExpression": false
-        },
-        {
-          "value": "prompt_type",
-          "isExpression": false
-        },
-        {
-          "value": "input_hash",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
-      "where": "\"frame_prompt_variants\".\"input_hash\" IS NOT NULL AND \"frame_prompt_variants\".\"source\" != 'restored'",
-      "origin": "manual",
-      "name": "uq_frame_prompt_variants_frame_type_hash_ai",
-      "entityType": "indexes",
-      "table": "frame_prompt_variants"
-    },
-    {
-      "columns": [
-        {
-          "value": "frame_id",
-          "isExpression": false
-        },
-        {
-          "value": "variant_type",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_frame_variants_frame_type",
-      "entityType": "indexes",
-      "table": "frame_variants"
-    },
-    {
-      "columns": [
-        {
-          "value": "sequence_id",
-          "isExpression": false
-        },
-        {
-          "value": "variant_type",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_frame_variants_sequence_type",
-      "entityType": "indexes",
-      "table": "frame_variants"
-    },
-    {
-      "columns": [
-        {
-          "value": "frame_id",
-          "isExpression": false
-        },
-        {
-          "value": "variant_type",
-          "isExpression": false
-        },
-        {
-          "value": "model",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
-      "where": "\"frame_variants\".\"diverged_at\" IS NULL",
-      "origin": "manual",
-      "name": "frame_variants_primary_key",
-      "entityType": "indexes",
-      "table": "frame_variants"
-    },
-    {
-      "columns": [
-        {
-          "value": "frame_id",
-          "isExpression": false
-        },
-        {
-          "value": "variant_type",
-          "isExpression": false
-        },
-        {
-          "value": "model",
-          "isExpression": false
-        },
-        {
-          "value": "input_hash",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
-      "where": "\"frame_variants\".\"diverged_at\" IS NOT NULL",
-      "origin": "manual",
-      "name": "frame_variants_divergent_key",
-      "entityType": "indexes",
-      "table": "frame_variants"
-    },
-    {
-      "columns": [
-        {
-          "value": "sequence_id",
-          "isExpression": false
-        },
-        {
-          "value": "order_index",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_frames_order",
-      "entityType": "indexes",
-      "table": "frames"
-    },
-    {
-      "columns": [
-        {
-          "value": "sequence_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_frames_sequence_id",
-      "entityType": "indexes",
-      "table": "frames"
-    },
-    {
-      "columns": [
-        {
-          "value": "sequence_id",
-          "isExpression": false
-        },
-        {
-          "value": "order_index",
-          "isExpression": false
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "origin": "manual",
-      "name": "frames_sequence_id_order_index_key",
-      "entityType": "indexes",
-      "table": "frames"
-    },
-    {
-      "columns": [
-        {
           "value": "gift_token_id",
           "isExpression": false
         },
@@ -6635,6 +6730,42 @@
         {
           "value": "sequence_id",
           "isExpression": false
+        },
+        {
+          "value": "order_index",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_scenes_sequence_order",
+      "entityType": "indexes",
+      "table": "scenes"
+    },
+    {
+      "columns": [
+        {
+          "value": "sequence_id",
+          "isExpression": false
+        },
+        {
+          "value": "order_index",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "scenes_sequence_id_order_index_key",
+      "entityType": "indexes",
+      "table": "scenes"
+    },
+    {
+      "columns": [
+        {
+          "value": "sequence_id",
+          "isExpression": false
         }
       ],
       "isUnique": false,
@@ -6687,6 +6818,20 @@
       "where": null,
       "origin": "manual",
       "name": "idx_sequence_exports_created_at",
+      "entityType": "indexes",
+      "table": "sequence_exports"
+    },
+    {
+      "columns": [
+        {
+          "value": "sequence_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"sequence_exports\".\"status\" = 'processing'",
+      "origin": "manual",
+      "name": "uq_sequence_exports_one_processing",
       "entityType": "indexes",
       "table": "sequence_exports"
     },
@@ -6895,6 +7040,184 @@
       "name": "session_userId_idx",
       "entityType": "indexes",
       "table": "session"
+    },
+    {
+      "columns": [
+        {
+          "value": "shot_id",
+          "isExpression": false
+        },
+        {
+          "value": "prompt_type",
+          "isExpression": false
+        },
+        {
+          "value": "created_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_shot_prompt_variants_shot_type_created",
+      "entityType": "indexes",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "columns": [
+        {
+          "value": "shot_id",
+          "isExpression": false
+        },
+        {
+          "value": "prompt_type",
+          "isExpression": false
+        },
+        {
+          "value": "input_hash",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"shot_prompt_variants\".\"input_hash\" IS NOT NULL AND \"shot_prompt_variants\".\"source\" != 'restored'",
+      "origin": "manual",
+      "name": "uq_shot_prompt_variants_shot_type_hash_ai",
+      "entityType": "indexes",
+      "table": "shot_prompt_variants"
+    },
+    {
+      "columns": [
+        {
+          "value": "shot_id",
+          "isExpression": false
+        },
+        {
+          "value": "variant_type",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_shot_variants_shot_type",
+      "entityType": "indexes",
+      "table": "shot_variants"
+    },
+    {
+      "columns": [
+        {
+          "value": "sequence_id",
+          "isExpression": false
+        },
+        {
+          "value": "variant_type",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_shot_variants_sequence_type",
+      "entityType": "indexes",
+      "table": "shot_variants"
+    },
+    {
+      "columns": [
+        {
+          "value": "shot_id",
+          "isExpression": false
+        },
+        {
+          "value": "variant_type",
+          "isExpression": false
+        },
+        {
+          "value": "model",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"shot_variants\".\"diverged_at\" IS NULL",
+      "origin": "manual",
+      "name": "shot_variants_primary_key",
+      "entityType": "indexes",
+      "table": "shot_variants"
+    },
+    {
+      "columns": [
+        {
+          "value": "shot_id",
+          "isExpression": false
+        },
+        {
+          "value": "variant_type",
+          "isExpression": false
+        },
+        {
+          "value": "model",
+          "isExpression": false
+        },
+        {
+          "value": "input_hash",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"shot_variants\".\"diverged_at\" IS NOT NULL",
+      "origin": "manual",
+      "name": "shot_variants_divergent_key",
+      "entityType": "indexes",
+      "table": "shot_variants"
+    },
+    {
+      "columns": [
+        {
+          "value": "sequence_id",
+          "isExpression": false
+        },
+        {
+          "value": "order_index",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_shots_order",
+      "entityType": "indexes",
+      "table": "shots"
+    },
+    {
+      "columns": [
+        {
+          "value": "sequence_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_shots_sequence_id",
+      "entityType": "indexes",
+      "table": "shots"
+    },
+    {
+      "columns": [
+        {
+          "value": "sequence_id",
+          "isExpression": false
+        },
+        {
+          "value": "order_index",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "shots_sequence_id_order_index_key",
+      "entityType": "indexes",
+      "table": "shots"
     },
     {
       "columns": [

@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX `uq_sequence_exports_one_processing` ON `sequence_exports` (`sequence_id`) WHERE "sequence_exports"."status" = 'processing';

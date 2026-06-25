@@ -66,29 +66,29 @@ export class SequenceExportWorkflow extends OpenStoryWorkflowEntrypoint<Sequence
         const sequence = await scopedDb.sequences.getById(sequenceId);
         if (!sequence) throw new Error(`Sequence ${sequenceId} not found`);
 
-        const frames = await scopedDb.frames.listBySequence(sequenceId, {
+        const shots = await scopedDb.shots.listBySequence(sequenceId, {
           orderBy: 'orderIndex',
           ascending: true,
         });
-        if (frames.length === 0) throw new Error('Sequence has no frames yet');
+        if (shots.length === 0) throw new Error('Sequence has no shots yet');
 
         // Absolutize stored `/r2/...` URLs so the off-platform container can
         // fetch them (CDN domain in prod, else the worker origin).
         const origin = env.VITE_APP_URL;
-        const scenes = frames
-          .filter((f): f is typeof f & { videoUrl: string } =>
-            Boolean(f.videoUrl)
+        const scenes = shots
+          .filter((s): s is typeof s & { videoUrl: string } =>
+            Boolean(s.videoUrl)
           )
-          .map((f) => ({
-            orderIndex: f.orderIndex,
-            videoUrl: toShareableUrl(f.videoUrl, origin),
+          .map((s) => ({
+            orderIndex: s.orderIndex,
+            videoUrl: toShareableUrl(s.videoUrl, origin),
           }));
         if (scenes.length === 0) {
           throw new Error('No scene videos are ready yet');
         }
-        if (scenes.length !== frames.length) {
+        if (scenes.length !== shots.length) {
           throw new Error(
-            `${frames.length - scenes.length} of ${frames.length} scenes are still generating`
+            `${shots.length - scenes.length} of ${shots.length} scenes are still generating`
           );
         }
 
