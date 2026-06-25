@@ -84,10 +84,16 @@ export { ReplaceElementWorkflow } from '@/lib/workflows/replace-element-workflow
 export { SceneSplitWorkflow } from '@/lib/workflows/scene-split-workflow';
 export { StoryboardWorkflow } from '@/lib/workflows/storyboard-workflow';
 export { AnalyzeScriptWorkflow } from '@/lib/workflows/analyze-script-workflow';
+export { SequenceExportWorkflow } from '@/lib/workflows/sequence-export-workflow';
 
 // Realtime broker Durable Object. Re-exported so the binding's `class_name`
 // in wrangler.jsonc resolves in the Worker bundle (#802).
 export { RealtimeChannel } from '@/lib/realtime/realtime-channel.do';
+
+// Server-side video-export container DO (#968). Production-only binding
+// (`VIDEO_EXPORT_CONTAINER`); re-exported so its `class_name` resolves in the
+// bundle when CLOUDFLARE_ENV=production bakes the [env.production] block.
+export { VideoExportContainer } from '@/lib/containers/video-export-container';
 
 // Bindings shape from wrangler.jsonc. Only declared so the scheduled() handler
 // has a real type for its env parameter (vs. the framework default of unknown).

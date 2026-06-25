@@ -226,6 +226,20 @@ Motion status checking: `checkMotionStatus(statusUrl)`, `getMotionResult(respons
 
 ---
 
+## Server-side export (API)
+
+Exporting a sequence to one stitched MP4 exists in **two** places:
+
+- **Browser** (`src/lib/sequence-player/export.ts`, `use-sequence-export`) — the Theatre "Export MP4" button. Uses WebCodecs + Web Audio in the user's browser. **Unchanged.**
+- **Server** (#968) — the public API. WebCodecs/Web Audio don't exist on Workers, so the heavy lift runs in a **Cloudflare Container** (`containers/video-export/`, Node + `@mediabunny/server`/NodeAV). Flow:
+  - `POST /api/v1/sequences/$id/exports` reserves a `sequence_exports` row (`status: processing`) and triggers `SequenceExportWorkflow`; `GET …/exports` lists/polls them. (`src/routes/api/v1/sequences.$id.exports.ts`)
+  - `SequenceExportWorkflow` (`src/lib/workflows/`) does **all** DB access via `scopedDb`, absolutizes scene/music URLs (`toShareableUrl`), POSTs the job to the container, streams the returned MP4 into R2 (`uploadFile`), and flips the row to `ready`/`failed`. The container is a **stateless renderer — it never touches D1**; it only gets URLs + params over HTTP.
+  - `sequence_exports` gained `status`/`error`/`workflowRunId` (additive). `listBySequence`/`getLatest` are `ready`-only (the browser UI never sees in-flight/failed server rows); the API uses `listAllBySequence`.
+- **v1 scope:** transmux-compatible (uniform AVC) sequences + music/dialogue mix. Mixed-resolution re-encode is rejected server-side (browser still handles it) — a follow-up.
+- **Local dev:** `bun dev:all` runs the export service (`dev:bunny`, host bun runtime — no Docker, `node-av`/FFmpeg works under bun) AND sets `VIDEO_EXPORT_DEV_URL=http://localhost:8080` (via `CLOUDFLARE_INCLUDE_PROCESS_ENV`, the same injection Playwright uses) so the workflow POSTs to it instead of the (production-only) container binding — a full local export loop, zero config. Plain `bun dev` doesn't set the var (prod uses the container); for a two-terminal `bun dev` + `bun dev:bunny` setup, set `VIDEO_EXPORT_DEV_URL` in `.env.local` yourself. The container uses **bun** as its package manager (`bun.lock`, `trustedDependencies: ["node-av"]`) but **Node** as the image runtime. Container details, contract, and Docker build/smoke-test: `containers/video-export/README.md`.
+
+---
+
 ## Database
 
 **Schema management:**
@@ -247,7 +261,7 @@ bun db:migrate   # Apply migrations to local.db
 **The structure.** `wrangler.jsonc` separates dev from prod via env blocks:
 
 - **default** (no env) — triple duty: (1) `bun dev` / `vite dev` / `bun cf:dev` local simulation, (2) the patch base for PR-preview deploys (CI rewrites D1/bucket/workflow names in place), and (3) the provisioning template for Deploy-to-Cloudflare button deploys — its `database_name`/`bucket_name` are what a button user's fresh resources get called, and `tail_consumers` must stay `[]` so button deploys don't reference our log-forwarder Worker. The D1 binding has a **placeholder** `database_id: "dev-local-d1"` so any misrouted remote call (or buggy preview patch, or wrong-env deploy) 404s against Cloudflare rather than silently writing to prod. R2 buckets are **local Miniflare** too — stored media URLs are origin-relative (`/r2/<key>`, #894) and the worker's `/r2/$` route streams them from the binding when `R2_PUBLIC_STORAGE_DOMAIN` is unset (with a CDN domain set, the route redirects to it). Local dev needs no Cloudflare credentials. (Opt back into remote R2 by setting `"remote": true` on the binding + `R2_PUBLIC_STORAGE_DOMAIN` in `.env.local`; revert when done.)
-- **`[env.production]`** — real prod D1 (`database_name: openstory-prd`, `database_id: d5981bee-...`; the `#897` cutover recreated it from the old `velro-prd`/`d6a35f64-...`, which is retired). Production builds MUST set `CLOUDFLARE_ENV=production` (so the built `dist/server/wrangler.json` bakes this block) and the migrate step MUST pass `--env=production` (wired in `deploy:production` / `cf:deploy:prd`).
+- **`[env.production]`** — real prod D1 (`database_name: openstory-prd`, `database_id: d5981bee-...`; the `#897` cutover recreated it from the old `velro-prd`/`d6a35f64-...`, which is retired). Production builds MUST set `CLOUDFLARE_ENV=production` (so the built `dist/server/wrangler.json` bakes this block) and the migrate step MUST pass `--env=production` (wired in `deploy:production` / `cf:deploy:prd`). This block ALSO declares the **video-export Cloudflare Container** (#968): `containers[]` (built from `containers/video-export/Dockerfile`), the `VIDEO_EXPORT_CONTAINER` Durable Object binding, and migration tag `v2`. It is **production-only** so `bun dev` and e2e stay Docker-free — `wrangler deploy`/Workers Builds builds + pushes the image (Docker required only at deploy, which Workers Builds provides). See "Server-side export" below.
 - **`[env.test]`** — Playwright e2e. Local Miniflare D1 (`database_id: "openstory-test-local"`) AND local Miniflare R2 — fully hermetic, no Cloudflare credentials in CI. Activated via `CLOUDFLARE_ENV=test` (set in `playwright.config.ts` envPrefix and CI workflow env block) for `vite dev`, or `wrangler dev --env=test` for the built-server path.
 
 **Rules:**
