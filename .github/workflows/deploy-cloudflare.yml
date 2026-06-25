@@ -128,6 +128,34 @@ jobs:
               ...w,
               name: \`\${w.name}-pr-${PR_NUMBER}\`,
             }));
+            // Server-side video export container (#968). Production declares
+            // the container, its VIDEO_EXPORT_CONTAINER DO binding, and the v2
+            // migration tag in [env.production] ONLY (so 'bun dev' / hermetic
+            // e2e stay Docker-free). Mirror that full wiring onto the preview's
+            // default block so previews render exports for real, exactly like
+            // prod. Each preview is its own worker with independent DO
+            // migration history, so v1 (RealtimeChannel) + v2
+            // (VideoExportContainer) both apply to a fresh preview worker. The
+            // image is built from the Dockerfile during 'wrangler deploy' (the
+            // CI runner has Docker). See containers/video-export and
+            // src/lib/containers/video-export-container.ts.
+            obj.containers = [
+              {
+                class_name: 'VideoExportContainer',
+                image: './containers/video-export/Dockerfile',
+                instance_type: 'standard',
+                max_instances: 3
+              }
+            ];
+            obj.durable_objects = obj.durable_objects || { bindings: [] };
+            obj.durable_objects.bindings = [
+              ...(obj.durable_objects.bindings || []),
+              { name: 'VIDEO_EXPORT_CONTAINER', class_name: 'VideoExportContainer' }
+            ];
+            obj.migrations = [
+              ...(obj.migrations || []),
+              { tag: 'v2', new_sqlite_classes: ['VideoExportContainer'] }
+            ];
             // Tail-consume preview logs into the staging log forwarder
             // (workers/posthog-log-forwarder), which transforms our LogTape
             // JSON into proper OTLP log records and POSTs to PostHog. The
