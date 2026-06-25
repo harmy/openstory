@@ -2,7 +2,7 @@ import {
   isValidImageToVideoModel,
   isValidTextToImageModel,
 } from '@/lib/ai/models';
-import { dbSceneId } from '@/lib/db/schema';
+import { dbSceneId, type NewScene } from '@/lib/db/schema';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import { createServerFn } from '@tanstack/react-start';
 import { zodValidator } from '@tanstack/zod-adapter';
@@ -17,24 +17,23 @@ export const getScenesFn = createServerFn({ method: 'GET' })
   });
 
 // `null` resets a field back to inheriting the sequence default; omitting a
-// field leaves it untouched. A non-null value must be a known model id.
+// field leaves it untouched. A non-null value must be a known model id —
+// the type guards narrow the inferred output to the branded model types, so
+// `SceneModelInput` carries `TextToImageModel`/`ImageToVideoModel` (not bare
+// `string`) and the validation work isn't discarded downstream.
 export const sceneModelSchema = z.object({
   sequenceId: ulidSchema,
   sceneId: ulidSchema,
   imageModel: z
     .string()
+    .refine(isValidTextToImageModel, { message: 'Unknown image model' })
     .nullable()
-    .optional()
-    .refine((m) => m == null || isValidTextToImageModel(m), {
-      message: 'Unknown image model',
-    }),
+    .optional(),
   videoModel: z
     .string()
+    .refine(isValidImageToVideoModel, { message: 'Unknown video model' })
     .nullable()
-    .optional()
-    .refine((m) => m == null || isValidImageToVideoModel(m), {
-      message: 'Unknown video model',
-    }),
+    .optional(),
 });
 
 export type SceneModelInput = z.infer<typeof sceneModelSchema>;
@@ -57,11 +56,10 @@ export function assertSceneOwnedBySequence<T extends { sequenceId: string }>(
  * Build the column patch from validated input. Only fields actually present
  * are written; `null` clears the override back to inheriting the sequence.
  */
-export function buildSceneModelPatch(data: SceneModelInput): {
-  imageModel?: string | null;
-  videoModel?: string | null;
-} {
-  const patch: { imageModel?: string | null; videoModel?: string | null } = {};
+export function buildSceneModelPatch(
+  data: SceneModelInput
+): Pick<NewScene, 'imageModel' | 'videoModel'> {
+  const patch: Pick<NewScene, 'imageModel' | 'videoModel'> = {};
   if ('imageModel' in data) patch.imageModel = data.imageModel ?? null;
   if ('videoModel' in data) patch.videoModel = data.videoModel ?? null;
   return patch;

@@ -14,10 +14,12 @@ import {
 } from '@/lib/ai/models';
 import { resolveSceneVideoModel } from '@/lib/ai/resolve-scene-models';
 import { estimateVideoCost } from '@/lib/billing/cost-estimation';
-import { addMicros, ZERO_MICROS } from '@/lib/billing/money';
+import {
+  estimateBatchMotionCost,
+  resolveBatchShotVideoModel,
+} from '@/lib/motion/batch-motion-cost';
 import { requireCredits } from '@/lib/billing/preflight';
 import { resolveShotDuration } from '@/lib/motion/resolve-shot-duration';
-import { snapDuration } from '@/lib/motion/motion-generation';
 import { generateMotionSchema } from '@/lib/schemas/shot.schemas';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import { triggerWorkflow } from '@/lib/workflow/client';
@@ -168,23 +170,19 @@ export const batchGenerateMotionFn = createServerFn({ method: 'POST' })
     // shot's model through its parent scene (an explicit batch `data.model`
     // still overrides everything). Load scenes once to avoid an N+1.
     const scenes = await context.scopedDb.scenes.listBySequence(sequence.id);
-    const scenesById = new Map(scenes.map((s) => [s.id, s]));
+    const scenesById = new Map<string, (typeof scenes)[number]>(
+      scenes.map((s) => [s.id, s])
+    );
     const resolveShotVideoModel = (shot: (typeof allShots)[number]) =>
-      data.model
-        ? safeImageToVideoModel(data.model, DEFAULT_VIDEO_MODEL)
-        : resolveSceneVideoModel(
-            shot.sceneId ? scenesById.get(dbSceneId(shot.sceneId)) : null,
-            sequence
-          );
+      resolveBatchShotVideoModel(shot, scenesById, sequence, data.model);
 
     // Sum per-shot costs — scenes may render with different (priced) models.
-    const estimatedCost = eligibleShots.reduce((sum, shot) => {
-      const model = resolveShotVideoModel(shot);
-      return addMicros(
-        sum,
-        estimateVideoCost(model, snapDuration(data.duration, model))
-      );
-    }, ZERO_MICROS);
+    const estimatedCost = estimateBatchMotionCost(
+      eligibleShots,
+      scenesById,
+      sequence,
+      { explicitModel: data.model, duration: data.duration }
+    );
 
     await requireCredits(context.scopedDb, estimatedCost, {
       errorMessage: `Insufficient credits for batch motion generation (${eligibleShots.length} shots)`,

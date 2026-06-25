@@ -493,13 +493,13 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   // scene's look model, so the previewed variant + Generate/Set state all agree.
   const effectiveImageModel = sceneImageModel;
   const regenImageModel = sceneImageModel;
-  // The scene's motion model, snapped to an aspect-ratio compatible model and
-  // falling back to the default when gated to a different style category (e.g.
-  // Seedance 2 is animation-only).
+  // The scene's motion model, snapped to an aspect-ratio compatible model.
   const aspectCompatibleMotion = aspectRatio
     ? getCompatibleModel(sceneVideoModel, aspectRatio)
     : sceneVideoModel;
   const motionModelConfig = IMAGE_TO_VIDEO_MODELS[aspectCompatibleMotion];
+  // Fall back to the default when the snapped model is gated to a different
+  // style category (e.g. Seedance 2 is animation-only).
   const effectiveMotionModel: ImageToVideoModel =
     'requiredStyleCategory' in motionModelConfig &&
     motionModelConfig.requiredStyleCategory !== styleCategory

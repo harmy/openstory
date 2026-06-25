@@ -15,40 +15,54 @@
 import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_VIDEO_MODEL,
+  isValidImageToVideoModel,
+  isValidTextToImageModel,
   safeImageToVideoModel,
   safeTextToImageModel,
   type ImageToVideoModel,
   type TextToImageModel,
 } from '@/lib/ai/models';
 
-/** Just the model fields we read — keeps these resolvers easy to unit-test. */
-type SceneModelFields = {
-  imageModel?: string | null;
-  videoModel?: string | null;
-};
-type SequenceModelFields = {
+/**
+ * Just the model fields we read off a scene or sequence row — keeps these
+ * resolvers easy to unit-test without a full row. A field is a model-id
+ * string, `null` (inherit), or absent.
+ */
+type ModelFields = {
   imageModel?: string | null;
   videoModel?: string | null;
 };
 
 /** Resolve the image model that drives a scene's shots: scene → sequence → default. */
 export function resolveSceneImageModel(
-  scene: SceneModelFields | null | undefined,
-  sequence: SequenceModelFields
+  scene: ModelFields | null | undefined,
+  sequence: ModelFields
 ): TextToImageModel {
+  // Only inherit from the scene when its override is a *currently valid* model.
+  // A scene value that's set but unrecognized (e.g. a model id retired after
+  // the scene was saved) falls back to the sequence default, not straight to
+  // the app default — otherwise the user's sequence choice is silently skipped.
+  const sceneModel = scene?.imageModel;
   return safeTextToImageModel(
-    scene?.imageModel ?? sequence.imageModel,
+    sceneModel && isValidTextToImageModel(sceneModel)
+      ? sceneModel
+      : sequence.imageModel,
     DEFAULT_IMAGE_MODEL
   );
 }
 
 /** Resolve the video model that drives a scene's shots: scene → sequence → default. */
 export function resolveSceneVideoModel(
-  scene: SceneModelFields | null | undefined,
-  sequence: SequenceModelFields
+  scene: ModelFields | null | undefined,
+  sequence: ModelFields
 ): ImageToVideoModel {
+  // See `resolveSceneImageModel` — a set-but-invalid scene value inherits the
+  // sequence default rather than skipping it for the app default.
+  const sceneModel = scene?.videoModel;
   return safeImageToVideoModel(
-    scene?.videoModel ?? sequence.videoModel,
+    sceneModel && isValidImageToVideoModel(sceneModel)
+      ? sceneModel
+      : sequence.videoModel,
     DEFAULT_VIDEO_MODEL
   );
 }

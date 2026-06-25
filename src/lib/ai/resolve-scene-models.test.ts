@@ -20,6 +20,14 @@ describe('resolveSceneImageModel', () => {
     expect(resolveSceneImageModel(null, sequence)).toBe('flux_2_max');
   });
 
+  it('inherits the sequence default when the scene override is set but invalid', () => {
+    // e.g. a model id retired after the scene saved it — the user's sequence
+    // choice must win over the global app default.
+    expect(
+      resolveSceneImageModel({ imageModel: 'retired_model' }, sequence)
+    ).toBe('flux_2_max');
+  });
+
   it('falls back to the app default when both are invalid/empty', () => {
     expect(
       resolveSceneImageModel(
@@ -45,6 +53,12 @@ describe('resolveSceneVideoModel', () => {
       'kling_v3_pro'
     );
     expect(resolveSceneVideoModel(undefined, sequence)).toBe('kling_v3_pro');
+  });
+
+  it('inherits the sequence default when the scene override is set but invalid', () => {
+    expect(
+      resolveSceneVideoModel({ videoModel: 'retired_model' }, sequence)
+    ).toBe('kling_v3_pro');
   });
 
   it('falls back to the app default when both are invalid/empty', () => {

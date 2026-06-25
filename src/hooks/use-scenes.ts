@@ -1,6 +1,11 @@
-import { getScenesFn, updateSceneModelFn } from '@/functions/scenes';
+import {
+  getScenesFn,
+  updateSceneModelFn,
+  type SceneModelInput,
+} from '@/functions/scenes';
 import type { SceneRow } from '@/lib/db/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { shotKeys } from './use-shots';
 
 const sceneKeys = {
@@ -21,12 +26,9 @@ export function useScenesBySequence(sequenceId?: string) {
   });
 }
 
-type UpdateSceneModelInput = {
-  sequenceId: string;
-  sceneId: string;
-  imageModel?: string | null;
-  videoModel?: string | null;
-};
+// The mutation input is exactly the server fn's validated input — derive it so
+// the ULID + branded-model-id typing flows to the client call sites (#909).
+type UpdateSceneModelInput = SceneModelInput;
 
 /**
  * Set (or clear) a scene's image/video model override. Optimistically patches
@@ -65,13 +67,18 @@ export function useUpdateSceneModel() {
       }
       return { previous };
     },
-    onError: (_error, input, ctx) => {
+    onError: (error, input, ctx) => {
       if (ctx?.previous) {
         queryClient.setQueryData(
           sceneKeys.list(input.sequenceId),
           ctx.previous
         );
       }
+      // The optimistic patch silently reverts on failure — surface it so the
+      // user knows the selector snapping back means the write didn't land.
+      toast.error('Failed to update scene model', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
     },
     onSettled: async (_data, _error, input) => {
       await Promise.all([

@@ -18,6 +18,8 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { Shot, Sequence } from '@/lib/db/schema';
 import type { ScopedDb } from '@/lib/db/scoped';
+import { estimateImageCost } from '@/lib/billing/cost-estimation';
+import { addMicros, ZERO_MICROS } from '@/lib/billing/money';
 
 const assertNoActiveStoryboardMock = vi.fn();
 const triggerStoryboardMock = vi.fn();
@@ -138,14 +140,34 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
   };
 }
 
-function makeContext(sequence: Sequence, shots: Shot[]) {
+/** Minimal scene shape the retry path reads (#909): id + model overrides. */
+type SceneStub = {
+  id: string;
+  sequenceId: string;
+  imageModel: string | null;
+  videoModel: string | null;
+};
+function makeScene(overrides: Partial<SceneStub> & { id: string }): SceneStub {
+  return {
+    sequenceId: 'seq_1',
+    imageModel: null,
+    videoModel: null,
+    ...overrides,
+  };
+}
+
+function makeContext(
+  sequence: Sequence,
+  shots: Shot[],
+  scenes: SceneStub[] = []
+) {
   const updateStatus = vi.fn();
   const updateMusicFields = vi.fn();
   const listBySequence = vi.fn(async () => shots);
   const listWithSheets = vi.fn(async () => []);
-  // Scenes own model selection (#909); none defined → shots inherit the
-  // sequence default, preserving the legacy single-model retry behaviour.
-  const listScenesBySequence = vi.fn(async () => []);
+  // Scenes own model selection (#909); when none are passed the list is empty →
+  // shots inherit the sequence default, preserving the legacy single-model path.
+  const listScenesBySequence = vi.fn(async () => scenes);
   const stub = {
     shots: { listBySequence },
     scenes: { listBySequence: listScenesBySequence },
@@ -359,6 +381,97 @@ describe('executeSmartRetry — partial retry status reset', () => {
 
     await expect(executeSmartRetry(context)).rejects.toThrow(
       'No failures found to retry'
+    );
+  });
+});
+
+describe('executeSmartRetry — scene-level model selection (#909)', () => {
+  test("retries each failed image with its parent scene's model, summing cost per model", async () => {
+    resetMocks();
+    // Two failed image shots in two scenes whose look models differ from each
+    // other and from the sequence default ('nano_banana_2').
+    const sceneA = makeScene({ id: 'scene-a', imageModel: 'gpt_image_2' });
+    const sceneB = makeScene({ id: 'scene-b', imageModel: 'flux_2_max' });
+    const shotA = makeShot({
+      id: 'shot-a',
+      sceneId: 'scene-a',
+      thumbnailStatus: 'failed',
+      imagePrompt: 'Look A',
+    });
+    const shotB = makeShot({
+      id: 'shot-b',
+      orderIndex: 1,
+      sceneId: 'scene-b',
+      thumbnailStatus: 'failed',
+      imagePrompt: 'Look B',
+    });
+    const { context } = makeContext(
+      makeSequence(),
+      [shotA, shotB],
+      [sceneA, sceneB]
+    );
+
+    await executeSmartRetry(context);
+
+    // Each shot retries with its own scene's image model, not the sequence one.
+    expect(triggerWorkflowMock).toHaveBeenCalledWith(
+      '/image',
+      expect.objectContaining({ shotId: 'shot-a', model: 'gpt_image_2' }),
+      expect.objectContaining({ label: expect.any(String) })
+    );
+    expect(triggerWorkflowMock).toHaveBeenCalledWith(
+      '/image',
+      expect.objectContaining({ shotId: 'shot-b', model: 'flux_2_max' }),
+      expect.objectContaining({ label: expect.any(String) })
+    );
+
+    // Pre-flight credit check sums per-shot costs across the two models —
+    // a regression to single-model `multiply(cost, count)` pricing would diverge
+    // whenever the scenes use differently-priced models.
+    const expectedCost = addMicros(
+      addMicros(ZERO_MICROS, estimateImageCost('gpt_image_2', '16:9', 1)),
+      estimateImageCost('flux_2_max', '16:9', 1)
+    );
+    expect(requireCreditsMock).toHaveBeenCalledTimes(1);
+    expect(requireCreditsMock.mock.calls[0]?.[1]).toEqual(expectedCost);
+  });
+
+  test("retries each failed motion video with its parent scene's video model", async () => {
+    resetMocks();
+    const sceneA = makeScene({ id: 'scene-a', videoModel: 'seedance_v2' });
+    const sceneB = makeScene({ id: 'scene-b', videoModel: 'kling_v3_pro' });
+    const shotA = makeShot({
+      id: 'shot-a',
+      sceneId: 'scene-a',
+      videoStatus: 'failed',
+      thumbnailStatus: 'completed',
+      thumbnailUrl: 'https://cdn/a.jpg',
+    });
+    const shotB = makeShot({
+      id: 'shot-b',
+      orderIndex: 1,
+      sceneId: 'scene-b',
+      videoStatus: 'failed',
+      thumbnailStatus: 'completed',
+      thumbnailUrl: 'https://cdn/b.jpg',
+    });
+    const { context } = makeContext(
+      makeSequence(),
+      [shotA, shotB],
+      [sceneA, sceneB]
+    );
+
+    await executeSmartRetry(context);
+
+    expect(triggerWorkflowMock).toHaveBeenCalledWith(
+      '/motion',
+      expect.objectContaining({ shotId: 'shot-a', model: 'seedance_v2' }),
+      expect.objectContaining({ label: expect.any(String) })
+    );
+    expect(triggerWorkflowMock).toHaveBeenCalledWith(
+      '/motion',
+      expect.objectContaining({ shotId: 'shot-b', model: 'kling_v3_pro' }),
+      expect.objectContaining({ label: expect.any(String) })
     );
   });
 });

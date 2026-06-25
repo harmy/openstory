@@ -12,8 +12,9 @@ import { SceneListItem } from './scene-list-item';
 export type BatchGenerateMotionArgs = {
   includeMusic: boolean;
   musicModel: AudioModel;
-  /** When a scene's motion model emits audio (sfx/dialogue/ambient), allow the
-   *  user to suppress it. Ignored for models without audio output. */
+  /** Lets the user suppress model-emitted audio (sfx/dialogue/ambient) for the
+   *  batch. The flag is honored only by models that produce audio — non-audio
+   *  models ignore it downstream during motion-prompt assembly. */
   generateAudio: boolean;
 };
 
