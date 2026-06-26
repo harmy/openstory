@@ -58,7 +58,7 @@ export const relations = defineRelations(schema, (r) => ({
     characters: r.many.characters(),
     locations: r.many.sequenceLocations(),
     elements: r.many.sequenceElements(),
-    musicPromptVariants: r.many.sequenceMusicPromptVariants(),
+    musicPromptVariants: r.many.sequenceMusicPromptVersions(),
   },
 
   // ---- Scenes ----
@@ -82,7 +82,7 @@ export const relations = defineRelations(schema, (r) => ({
     }),
     frames: r.many.frames(),
     variants: r.many.shotVariants(),
-    promptVariants: r.many.shotPromptVariants(),
+    promptVariants: r.many.shotPromptVersions(),
   },
 
   // ---- Shot Variants ----
@@ -147,26 +147,26 @@ export const relations = defineRelations(schema, (r) => ({
     }),
   },
 
-  // ---- Shot Prompt Variants ----
-  shotPromptVariants: {
+  // ---- Shot Prompt Versions ----
+  shotPromptVersions: {
     shot: r.one.shots({
-      from: r.shotPromptVariants.shotId,
+      from: r.shotPromptVersions.shotId,
       to: r.shots.id,
     }),
     createdByUser: r.one.user({
-      from: r.shotPromptVariants.createdBy,
+      from: r.shotPromptVersions.createdBy,
       to: r.user.id,
     }),
   },
 
-  // ---- Sequence Music Prompt Variants ----
-  sequenceMusicPromptVariants: {
+  // ---- Sequence Music Prompt Versions ----
+  sequenceMusicPromptVersions: {
     sequence: r.one.sequences({
-      from: r.sequenceMusicPromptVariants.sequenceId,
+      from: r.sequenceMusicPromptVersions.sequenceId,
       to: r.sequences.id,
     }),
     createdByUser: r.one.user({
-      from: r.sequenceMusicPromptVariants.createdBy,
+      from: r.sequenceMusicPromptVersions.createdBy,
       to: r.user.id,
     }),
   },

@@ -90,6 +90,11 @@ export const shots = snakeCase.table(
     }),
     videoError: text(),
     motionPrompt: text(), // User-updated motion prompt (overrides AI-generated prompt from metadata)
+    // Soft pointer (plain column, no FK — mirrors frames.selected*VersionId) to
+    // the selected `shot_prompt_versions` row for the MOTION prompt. Selection
+    // is a pointer, not a per-row flag: reverting / re-rolling the motion prompt
+    // repoints this. Null until a motion prompt version is written (#988).
+    selectedMotionPromptVersionId: text(),
     motionModel: text({ length: 100 }), // Model used for motion/video generation (nullable - inherits from sequence if not set)
     // Audio/music generation status tracking
     audioUrl: text(),

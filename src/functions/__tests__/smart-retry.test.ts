@@ -119,6 +119,7 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     videoError: null,
     motionPrompt: 'slow pan',
     motionModel: null,
+    selectedMotionPromptVersionId: null,
     audioUrl: null,
     audioPath: null,
     audioStatus: 'pending',

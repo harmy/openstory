@@ -252,7 +252,7 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
           );
         }
 
-        await scopedDb.shotPromptVariants.write({
+        await scopedDb.shotPromptVersions.write({
           shotId: input.shotId,
           promptType: 'motion',
           text: input.prompt,

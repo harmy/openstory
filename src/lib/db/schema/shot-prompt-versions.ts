@@ -1,12 +1,19 @@
 /**
- * Shot Prompt Variants Schema
+ * Shot Prompt Versions Schema
  *
  * One row per revision of a shot's visual or motion prompt. The current
  * "active" prompt is mirrored on `shots.imagePrompt` / `shots.motionPrompt`
  * for read-path simplicity; this table stores the full revision history.
  *
+ * Renamed from `shot_prompt_variants` in the Scene→Shot→Frame redesign (#988):
+ * a prompt is a single authored input revised over time (a *version* history),
+ * not a set of parallel alternatives (*variants*). End-state role is the MOTION
+ * prompt — the image/visual prompt migrates to `frame_prompt_versions` as the
+ * image surface moves onto frames (later phases); the `promptType` column stays
+ * dual-purpose meanwhile.
+ *
  * See docs/architecture/workflow-snapshots-and-content-hash-staleness.md
- * § prompt versioning.
+ * § prompt versioning and docs/architecture/scene-shot-frame-redesign.md.
  */
 
 import type {
@@ -34,7 +41,7 @@ import { shots } from './shots';
  *     speed / ...)
  * User-edits without structured components persist `null`.
  */
-export type ShotPromptVariantComponents =
+export type ShotPromptVersionComponents =
   | VisualPromptComponents
   | MotionPromptComponents;
 
@@ -49,8 +56,8 @@ const PROMPT_VARIANT_SOURCES = [
 ] as const;
 export type PromptVariantSource = (typeof PROMPT_VARIANT_SOURCES)[number];
 
-export const shotPromptVariants = snakeCase.table(
-  'shot_prompt_variants',
+export const shotPromptVersions = snakeCase.table(
+  'shot_prompt_versions',
   {
     id: text()
       .$defaultFn(() => generateId())
@@ -67,7 +74,7 @@ export const shotPromptVariants = snakeCase.table(
     // composition / lighting / etc.; user-edits may not have components).
     components: text({
       mode: 'json',
-    }).$type<ShotPromptVariantComponents>(),
+    }).$type<ShotPromptVersionComponents>(),
     // Motion-only: timing / speed / camera parameters. Visual rows store null.
     parameters: text({
       mode: 'json',
@@ -89,6 +96,11 @@ export const shotPromptVariants = snakeCase.table(
       onDelete: 'set null',
     }),
   },
+  // Index names intentionally keep the `*_variants_*` spelling: SQLite's
+  // `ALTER TABLE … RENAME TO` carries a table's indexes across unchanged, so
+  // renaming them here would force a needless DROP/CREATE INDEX pair on top of
+  // the rename. Keep them as-is so the #988 migration is RENAME TO + ADD COLUMN
+  // only (no rebuild).
   (table) => [
     index('idx_shot_prompt_variants_shot_type_created').on(
       table.shotId,
@@ -108,4 +120,4 @@ export const shotPromptVariants = snakeCase.table(
   ]
 );
 
-export type ShotPromptVariant = InferSelectModel<typeof shotPromptVariants>;
+export type ShotPromptVersion = InferSelectModel<typeof shotPromptVersions>;

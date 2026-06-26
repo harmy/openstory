@@ -30,9 +30,9 @@ import { locationSheetVariants } from './location-sheet-variants';
 
 import { talentSheetVariants } from './talent-sheet-variants';
 
-import { shotPromptVariants } from './shot-prompt-variants';
+import { shotPromptVersions } from './shot-prompt-versions';
 
-import { sequenceMusicPromptVariants } from './sequence-music-prompt-variants';
+import { sequenceMusicPromptVersions } from './sequence-music-prompt-versions';
 
 import { sequenceMusicVariants } from './sequence-music-variants';
 import { sequenceExports } from './sequence-exports';
@@ -168,22 +168,24 @@ export type {
   TalentSheetVariant,
 } from './talent-sheet-variants';
 
-// Shot Prompt Variants (visual/motion prompt history)
-export { shotPromptVariants };
+// Shot Prompt Versions (visual/motion prompt history; renamed from
+// shot_prompt_variants in #988)
+export { shotPromptVersions };
 
-export { SHOT_PROMPT_TYPES } from './shot-prompt-variants';
+export { SHOT_PROMPT_TYPES } from './shot-prompt-versions';
 
 export type {
   ShotPromptType,
-  ShotPromptVariant,
-  ShotPromptVariantComponents,
+  ShotPromptVersion,
+  ShotPromptVersionComponents,
   PromptVariantSource,
-} from './shot-prompt-variants';
+} from './shot-prompt-versions';
 
-// Sequence Music Prompt Variants (music prompt history)
-export { sequenceMusicPromptVariants };
+// Sequence Music Prompt Versions (music prompt history; renamed from
+// sequence_music_prompt_variants in #988)
+export { sequenceMusicPromptVersions };
 
-export type { SequenceMusicPromptVariant } from './sequence-music-prompt-variants';
+export type { SequenceMusicPromptVersion } from './sequence-music-prompt-versions';
 
 // Sequence-level variants (music)
 export { sequenceMusicVariants };
@@ -312,8 +314,8 @@ export const schema = {
   characterSheetVariants,
   locationSheetVariants,
   talentSheetVariants,
-  shotPromptVariants,
-  sequenceMusicPromptVariants,
+  shotPromptVersions,
+  sequenceMusicPromptVersions,
   sequenceMusicVariants,
   sequenceExports,
 

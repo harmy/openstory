@@ -34,6 +34,7 @@ const baseShot: Shot = {
   videoError: null,
   motionPrompt: null,
   motionModel: null,
+  selectedMotionPromptVersionId: null,
   audioUrl: null,
   audioPath: null,
   audioStatus: 'pending',

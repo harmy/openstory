@@ -16,9 +16,9 @@
 import type { Database } from '@/lib/db/client';
 import { generateId } from '@/lib/db/id';
 import {
-  shotPromptVariants,
+  shotPromptVersions,
   shots,
-  sequenceMusicPromptVariants,
+  sequenceMusicPromptVersions,
   sequences,
   styles,
   teams,
@@ -30,8 +30,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
-import { createShotPromptVariantsMethods } from './shot-prompt-variants';
-import { createSequenceMusicPromptVariantsMethods } from './sequence-music-prompt-variants';
+import { createShotPromptVersionsMethods } from './shot-prompt-versions';
+import { createSequenceMusicPromptVersionsMethods } from './sequence-music-prompt-versions';
 
 let client: Client;
 let db: Database;
@@ -40,8 +40,8 @@ let sequenceId = '';
 let shotId = '';
 
 async function seed() {
-  await db.delete(shotPromptVariants);
-  await db.delete(sequenceMusicPromptVariants);
+  await db.delete(shotPromptVersions);
+  await db.delete(sequenceMusicPromptVersions);
   await db.delete(shots);
   await db.delete(sequences);
   await db.delete(styles);
@@ -99,7 +99,7 @@ beforeEach(async () => {
 
 describe('shot_prompt_variants helper', () => {
   it('user-edit with null inputHash appends a row and clears the cached hash', async () => {
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     // Seed the cached column to mimic an existing AI-generated prompt.
     await db
@@ -135,7 +135,7 @@ describe('shot_prompt_variants helper', () => {
   });
 
   it('user-edit with a real inputHash stamps both the row and the cached column', async () => {
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     await db
       .update(shots)
@@ -167,7 +167,7 @@ describe('shot_prompt_variants helper', () => {
   });
 
   it('regenerated prompt populates input_hash on both the row and the cached column', async () => {
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     const variant = await methods.write({
       shotId,
@@ -191,7 +191,7 @@ describe('shot_prompt_variants helper', () => {
   });
 
   it('preserves prior AI text in the variant chain after a user edit (recoverable history)', async () => {
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     await methods.write({
       shotId,
@@ -226,7 +226,7 @@ describe('shot_prompt_variants helper', () => {
     // 'regenerated' : 'ai-generated'. A regression that swaps the two would
     // mislabel every regeneration as a first generation (or vice versa) and
     // corrupt prompt history.
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     const previousBeforeFirst = await methods.getLatest(shotId, 'visual');
     expect(previousBeforeFirst).toBeNull();
@@ -282,7 +282,7 @@ describe('shot_prompt_variants helper', () => {
   });
 
   it('AI write is idempotent on (shot, type, input_hash) — a retry returns the existing row', async () => {
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     const first = await methods.write({
       shotId,
@@ -315,7 +315,7 @@ describe('shot_prompt_variants helper', () => {
     // text in history (otherwise the user's regenerated prompt would be
     // silently lost) while keeping the cached `*_prompt_input_hash` column
     // tracking the real upstream hash so staleness detection stays correct.
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     const first = await methods.write({
       shotId,
@@ -366,7 +366,7 @@ describe('shot_prompt_variants helper', () => {
     // Regression guard for the force-regen branch: it must only fire when
     // `existing.text !== input.text`. A genuine workflow step retry submits
     // the same text + same hash and should still collapse to one row.
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     await methods.write({
       shotId,
@@ -391,7 +391,7 @@ describe('shot_prompt_variants helper', () => {
   });
 
   it('a different input_hash produces a new row for the same shot+type', async () => {
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     await methods.write({
       shotId,
@@ -415,7 +415,7 @@ describe('shot_prompt_variants helper', () => {
   });
 
   it('motion prompts use the motionPrompt cached column independently of visual', async () => {
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     await methods.write({
       shotId,
@@ -450,7 +450,7 @@ describe('shot_prompt_variants helper', () => {
     // belongs to a different shot in the same sequence — without it, a
     // user could restore shot A's prompt onto shot B by passing the wrong
     // variantId. The shot-access middleware only checks the parent shot.
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     const [siblingShot] = await db
       .insert(shots)
@@ -481,7 +481,7 @@ describe('shot_prompt_variants helper', () => {
   });
 
   it('restored row carries the source variant input_hash so staleness keeps tracking the original upstream context', async () => {
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     // Original AI-generated prompt with a stored hash.
     const original = await methods.write({
@@ -547,7 +547,7 @@ describe('shot_prompt_variants helper', () => {
   it('restoring an AI prompt that is currently live still appends a restored row (audit trail)', async () => {
     // Without the partial-index `source != 'restored'` exclusion, this case
     // hit onConflictDoNothing and silently returned the original AI row.
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     const original = await methods.write({
       shotId,
@@ -578,7 +578,7 @@ describe('shot_prompt_variants helper', () => {
   });
 
   it('restored row from a user-edit source carries null hash (no staleness opinion to forward)', async () => {
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     const userEdit = await methods.write({
       shotId,
@@ -606,7 +606,7 @@ describe('shot_prompt_variants helper', () => {
   });
 
   it('getLatestWithInputHash skips null-hash user-edits and returns the most recent hashed row', async () => {
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     // 1) An AI prompt with a real hash.
     const ai = await methods.write({
@@ -638,7 +638,7 @@ describe('shot_prompt_variants helper', () => {
   });
 
   it('getLatestWithInputHash isolates by promptType (visual vs motion)', async () => {
-    const methods = createShotPromptVariantsMethods(db);
+    const methods = createShotPromptVersionsMethods(db);
 
     await methods.write({
       shotId,
@@ -656,7 +656,7 @@ describe('shot_prompt_variants helper', () => {
 
 describe('sequence_music_prompt_variants helper', () => {
   it('user-edit clears musicPromptInputHash and overwrites the cached prompt/tags', async () => {
-    const methods = createSequenceMusicPromptVariantsMethods(db);
+    const methods = createSequenceMusicPromptVersionsMethods(db);
 
     await db
       .update(sequences)
@@ -687,7 +687,7 @@ describe('sequence_music_prompt_variants helper', () => {
   });
 
   it('ai-generated → regenerated chain on music variants mirrors the music-prompt workflow flow', async () => {
-    const methods = createSequenceMusicPromptVariantsMethods(db);
+    const methods = createSequenceMusicPromptVersionsMethods(db);
 
     const previousBeforeFirst = await methods.getLatest(sequenceId);
     expect(previousBeforeFirst).toBeNull();
@@ -731,7 +731,7 @@ describe('sequence_music_prompt_variants helper', () => {
   });
 
   it('AI music write is idempotent on (sequence, input_hash) — a retry returns the existing row', async () => {
-    const methods = createSequenceMusicPromptVariantsMethods(db);
+    const methods = createSequenceMusicPromptVersionsMethods(db);
 
     const first = await methods.write({
       sequenceId,
@@ -758,7 +758,7 @@ describe('sequence_music_prompt_variants helper', () => {
   });
 
   it('regenerated music prompt populates the input hash on the sequence row', async () => {
-    const methods = createSequenceMusicPromptVariantsMethods(db);
+    const methods = createSequenceMusicPromptVersionsMethods(db);
 
     await methods.write({
       sequenceId,
@@ -779,7 +779,7 @@ describe('sequence_music_prompt_variants helper', () => {
   });
 
   it('getByIdForSequence refuses to return a sibling sequence variant (cross-sequence guard)', async () => {
-    const methods = createSequenceMusicPromptVariantsMethods(db);
+    const methods = createSequenceMusicPromptVersionsMethods(db);
 
     // Reuse the seeded style so we can satisfy the not-null styleId on
     // sequences without duplicating the style fixture here.
@@ -820,7 +820,7 @@ describe('sequence_music_prompt_variants helper', () => {
   });
 
   it('restored music row carries the source variant input_hash so sequence staleness keeps tracking upstream context', async () => {
-    const methods = createSequenceMusicPromptVariantsMethods(db);
+    const methods = createSequenceMusicPromptVersionsMethods(db);
 
     const original = await methods.write({
       sequenceId,

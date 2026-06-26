@@ -31,6 +31,7 @@ const mockShot: Shot = {
   videoError: null,
   motionPrompt: '',
   motionModel: 'veo3',
+  selectedMotionPromptVersionId: null,
   audioUrl: null,
   audioPath: null,
   audioStatus: 'pending',

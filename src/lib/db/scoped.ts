@@ -14,8 +14,12 @@ import { createApiKeysMethods } from '@/lib/db/scoped/api-keys';
 import { createBillingMethods } from '@/lib/db/scoped/billing';
 import { createCharacterSheetVariantsMethods } from '@/lib/db/scoped/character-sheet-variants';
 import { createCharactersMethods } from '@/lib/db/scoped/characters';
+import { createFramePromptVersionsMethods } from '@/lib/db/scoped/frame-prompt-versions';
+import { createFrameVariantsMethods } from '@/lib/db/scoped/frame-variants';
+import { createFramesMethods } from '@/lib/db/scoped/frames';
 import { createScenesMethods } from '@/lib/db/scoped/scenes';
-import { createShotPromptVariantsMethods } from '@/lib/db/scoped/shot-prompt-variants';
+import { createSequenceEventsMethods } from '@/lib/db/scoped/sequence-events';
+import { createShotPromptVersionsMethods } from '@/lib/db/scoped/shot-prompt-versions';
 import { createShotVariantsMethods } from '@/lib/db/scoped/shot-variants';
 import { createShotsMethods } from '@/lib/db/scoped/shots';
 import { createLibraryMethods } from '@/lib/db/scoped/library';
@@ -29,7 +33,7 @@ import { createLocationSheetVariantsMethods } from '@/lib/db/scoped/location-she
 import { createSequenceElementsMethods } from '@/lib/db/scoped/sequence-elements';
 import { createSequenceExportsMethods } from '@/lib/db/scoped/sequence-exports';
 import { createSequenceLocationsMethods } from '@/lib/db/scoped/sequence-locations';
-import { createSequenceMusicPromptVariantsMethods } from '@/lib/db/scoped/sequence-music-prompt-variants';
+import { createSequenceMusicPromptVersionsMethods } from '@/lib/db/scoped/sequence-music-prompt-versions';
 import { createSequenceVariantsMethods } from '@/lib/db/scoped/sequence-variants';
 import {
   createSequenceMethods,
@@ -288,11 +292,18 @@ export function createScopedDb(teamId: string, userId: string) {
     scenes: createScenesMethods(db),
     shots: createShotsMethods(db),
     shotVariants: createShotVariantsMethods(db),
-    shotPromptVariants: createShotPromptVariantsMethods(db),
+    shotPromptVersions: createShotPromptVersionsMethods(db),
+    // SSF redesign (#988) — frames are the IMAGE unit (still keyframes per
+    // shot); frame_variants the flat image versions; frame_prompt_versions the
+    // visual-prompt history; sequence_events the append-only activity log.
+    frames: createFramesMethods(db),
+    frameVariants: createFrameVariantsMethods(db),
+    framePromptVersions: createFramePromptVersionsMethods(db),
+    sequenceEvents: createSequenceEventsMethods(db),
     characterSheetVariants: createCharacterSheetVariantsMethods(db),
     locationSheetVariants: createLocationSheetVariantsMethods(db),
     talentSheetVariants: createTalentSheetVariantsMethods(db),
-    sequenceMusicPromptVariants: createSequenceMusicPromptVariantsMethods(db),
+    sequenceMusicPromptVersions: createSequenceMusicPromptVersionsMethods(db),
     sequenceVariants: createSequenceVariantsMethods(db),
     sequenceExports: createSequenceExportsMethods(db),
 

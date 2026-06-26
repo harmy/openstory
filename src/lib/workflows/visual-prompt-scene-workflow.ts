@@ -369,7 +369,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
       const inputHash = await computeVisualPromptInputHash(narrowed);
 
       await step.do('save-visual-prompt-to-db', async () => {
-        const previous = await scopedDb.shotPromptVariants.getLatest(
+        const previous = await scopedDb.shotPromptVersions.getLatest(
           shotId,
           'visual'
         );
@@ -387,7 +387,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
           imagePrompt: null,
         });
 
-        await scopedDb.shotPromptVariants.write({
+        await scopedDb.shotPromptVersions.write({
           shotId,
           promptType: 'visual',
           text: result.visual.fullPrompt,

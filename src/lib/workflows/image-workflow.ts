@@ -168,7 +168,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
               );
             }
 
-            await scopedDb.shotPromptVariants.write({
+            await scopedDb.shotPromptVersions.write({
               shotId: input.shotId,
               promptType: 'visual',
               text: input.prompt,
