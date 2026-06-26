@@ -18,6 +18,12 @@ import { shots } from './shots';
 
 import { shotVariants } from './shot-variants';
 
+// SSF redesign (#987) — additive image/event surface. Empty until #988+ wire it.
+import { frames } from './frames';
+import { frameVariants } from './frame-variants';
+import { framePromptVersions } from './frame-prompt-versions';
+import { sequenceEvents } from './sequence-events';
+
 import { characterSheetVariants } from './character-sheet-variants';
 
 import { locationSheetVariants } from './location-sheet-variants';
@@ -94,6 +100,50 @@ export type { NewShot, Shot } from './shots';
 export { shotVariants };
 
 export type { ShotVariant, NewShotVariant } from './shot-variants';
+
+/**
+ * SSF redesign (#987) — the still-image + activity-log surface, added ahead of
+ * its consumers (#988 scoped-db layer onward). The tables ship empty; the app
+ * still reads/writes the `shots` image columns until later phases repoint it.
+ * Each table must stay individually exported (drizzle-kit only diffs top-level
+ * exports — see the creditBatches note below).
+ *
+ * @public consumed from #988+, not yet in the app import graph
+ */
+export { frames, frameVariants, framePromptVersions, sequenceEvents };
+
+/** @public used by #988+ (frames = the IMAGE unit; still keyframes per shot) */
+export { FRAME_ROLES, FRAME_SOURCES } from './frames';
+
+/** @public used by #988+ */
+export type { Frame, NewFrame, FrameRole, FrameSource } from './frames';
+
+/** @public used by #988+ (flat still-image versions; variant = model|framing) */
+export { FRAME_VARIANT_KINDS } from './frame-variants';
+
+/** @public used by #988+ */
+export type {
+  FrameVariant,
+  NewFrameVariant,
+  FrameVariantKind,
+} from './frame-variants';
+
+/** @public used by #988+ (visual/image prompt version history) */
+export type {
+  FramePromptVersion,
+  PromptVersionSource,
+} from './frame-prompt-versions';
+
+/** @public used by #988+ (append-only cross-sequence activity log) */
+export { SEQUENCE_EVENT_TARGET_TYPES } from './sequence-events';
+
+/** @public used by #988+ */
+export type {
+  SequenceEvent,
+  NewSequenceEvent,
+  SequenceEventTargetType,
+  SequenceEventData,
+} from './sequence-events';
 
 // Sheet Variants (Stage 2: divergent character/location/talent sheet outputs)
 export { characterSheetVariants };
@@ -254,6 +304,11 @@ export const schema = {
   scenes,
   shots,
   shotVariants,
+  // SSF redesign (#987) — additive image/event surface
+  frames,
+  frameVariants,
+  framePromptVersions,
+  sequenceEvents,
   characterSheetVariants,
   locationSheetVariants,
   talentSheetVariants,

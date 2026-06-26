@@ -53,6 +53,8 @@ export const relations = defineRelations(schema, (r) => ({
     style: r.one.styles({ from: r.sequences.styleId, to: r.styles.id }),
     scenes: r.many.scenes(),
     shots: r.many.shots(),
+    frames: r.many.frames(),
+    events: r.many.sequenceEvents(),
     characters: r.many.characters(),
     locations: r.many.sequenceLocations(),
     elements: r.many.sequenceElements(),
@@ -78,6 +80,7 @@ export const relations = defineRelations(schema, (r) => ({
       from: r.shots.sceneId,
       to: r.scenes.id,
     }),
+    frames: r.many.frames(),
     variants: r.many.shotVariants(),
     promptVariants: r.many.shotPromptVariants(),
   },
@@ -91,6 +94,56 @@ export const relations = defineRelations(schema, (r) => ({
     sequence: r.one.sequences({
       from: r.shotVariants.sequenceId,
       to: r.sequences.id,
+    }),
+  },
+
+  // ---- Frames (SSF #987 — IMAGE unit; still keyframes within a shot) ----
+  frames: {
+    shot: r.one.shots({
+      from: r.frames.shotId,
+      to: r.shots.id,
+    }),
+    sequence: r.one.sequences({
+      from: r.frames.sequenceId,
+      to: r.sequences.id,
+    }),
+    variants: r.many.frameVariants(),
+    promptVersions: r.many.framePromptVersions(),
+  },
+
+  // ---- Frame Variants (SSF #987 — flat still-image versions) ----
+  frameVariants: {
+    frame: r.one.frames({
+      from: r.frameVariants.frameId,
+      to: r.frames.id,
+    }),
+    sequence: r.one.sequences({
+      from: r.frameVariants.sequenceId,
+      to: r.sequences.id,
+    }),
+  },
+
+  // ---- Frame Prompt Versions (SSF #987 — visual prompt history) ----
+  framePromptVersions: {
+    frame: r.one.frames({
+      from: r.framePromptVersions.frameId,
+      to: r.frames.id,
+    }),
+    createdByUser: r.one.user({
+      from: r.framePromptVersions.createdBy,
+      to: r.user.id,
+    }),
+  },
+
+  // ---- Sequence Events (SSF #987 — append-only activity log) ----
+  sequenceEvents: {
+    sequence: r.one.sequences({
+      from: r.sequenceEvents.sequenceId,
+      to: r.sequences.id,
+    }),
+    actor: r.one.user({
+      from: r.sequenceEvents.actorId,
+      to: r.user.id,
     }),
   },
 
