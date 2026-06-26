@@ -1,5 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Storybook mock data uses intentional type assertions */
 import type { Shot } from '@/types/database';
+import type { Frame } from '@/lib/db/schema';
+import {
+  projectShotWithImage,
+  type ShotWithImage,
+} from '@/lib/shots/shot-with-image';
 import type { Meta, StoryObj } from '@storybook/react';
 import { ScenePlayer } from './scene-player';
 
@@ -13,6 +18,46 @@ const meta: Meta<typeof ScenePlayer> = {
 
 export default meta;
 type Story = StoryObj<typeof ScenePlayer>;
+
+// The still IMAGE surface moved off `shots` onto the anchor frame in #989. The
+// mock rows carry the legacy `thumbnail*`/`image*` names the player still reads
+// (the `ShotWithImage` projection); mirror them back onto a concrete anchor
+// `Frame` (id == shot.id) so each row matches what `getShotsFn` returns.
+const toShotWithImage = (shot: Omit<ShotWithImage, 'frame'>): ShotWithImage => {
+  const frame: Frame = {
+    id: shot.id,
+    shotId: shot.id,
+    sequenceId: shot.sequenceId,
+    orderIndex: 0,
+    role: 'first',
+    source: 'generated',
+    imageUrl: shot.thumbnailUrl,
+    previewImageUrl: shot.previewThumbnailUrl,
+    imagePath: shot.thumbnailPath,
+    imageStatus: shot.thumbnailStatus,
+    imageWorkflowRunId: shot.thumbnailWorkflowRunId,
+    imageGeneratedAt: shot.thumbnailGeneratedAt,
+    imageError: shot.thumbnailError,
+    imageModel: shot.imageModel,
+    imagePrompt: shot.imagePrompt,
+    selectedImageVersionId: null,
+    selectedImagePromptVersionId: null,
+    imageInputHash: shot.thumbnailInputHash,
+    visualPromptInputHash: shot.visualPromptInputHash,
+    createdAt: shot.createdAt,
+    updatedAt: shot.updatedAt,
+  };
+  return projectShotWithImage(shot, frame, {
+    url: shot.variantImageUrl,
+    status: shot.variantImageStatus,
+  });
+};
+
+// A shot row before its anchor frame is attached. Annotating each mock array as
+// `MockShotRow[]` gives the literal a contextual type so the status fields
+// ('completed' etc.) keep their enum-literal types instead of widening to
+// `string` through `.map` (which would break assignability to `ShotWithImage`).
+type MockShotRow = Omit<ShotWithImage, 'frame'>;
 
 const mockShotBase = {
   sequenceId: 'seq-1',
@@ -40,16 +85,12 @@ const mockShotBase = {
   audioError: null,
   audioModel: null,
   thumbnailInputHash: null,
-  variantImageInputHash: null,
   videoInputHash: null,
   audioInputHash: null,
   visualPromptInputHash: null,
   motionPromptInputHash: null,
   variantImageUrl: null,
   variantImageStatus: 'pending' as const,
-  variantWorkflowRunId: null,
-  variantImageGeneratedAt: null,
-  variantImageError: null,
   previewThumbnailUrl: null,
   metadata: {
     sceneId: 'scene-1',
@@ -124,7 +165,7 @@ const mockShotBase = {
 };
 
 // Mock shots with scene metadata
-const mockShots: Shot[] = [
+const mockShots: ShotWithImage[] = ([
   {
     ...mockShotBase,
     id: '1',
@@ -181,7 +222,7 @@ const mockShots: Shot[] = [
       metadata: { ...mockShotBase.metadata.metadata, title: 'Climax' },
     } as unknown as Shot['metadata'],
   },
-];
+] satisfies MockShotRow[]).map(toShotWithImage);
 
 // Note: This component now shows ALL shots with completed thumbnails, not just completed videos.
 // Shots with pending/generating/failed video status show poster frame with status overlay.
@@ -208,7 +249,7 @@ export const AllVideoStates: Story = {
     selectedShotId: '1',
     aspectRatio: '16:9',
     onSelectShot: () => {},
-    shots: [
+    shots: ([
       {
         ...mockShotBase,
         id: '1',
@@ -294,7 +335,7 @@ export const AllVideoStates: Story = {
           },
         } as unknown as Shot['metadata'],
       },
-    ],
+    ] satisfies MockShotRow[]).map(toShotWithImage),
   },
   parameters: {
     docs: {
@@ -311,7 +352,7 @@ export const OnlyPendingVideos: Story = {
     selectedShotId: '1',
     aspectRatio: '16:9',
     onSelectShot: () => {},
-    shots: [
+    shots: ([
       {
         ...mockShotBase,
         id: '1',
@@ -356,7 +397,7 @@ export const OnlyPendingVideos: Story = {
           },
         } as unknown as Shot['metadata'],
       },
-    ],
+    ] satisfies MockShotRow[]).map(toShotWithImage),
   },
   parameters: {
     docs: {
@@ -373,7 +414,7 @@ export const FailedVideoWithThumbnail: Story = {
     selectedShotId: '1',
     aspectRatio: '16:9',
     onSelectShot: () => {},
-    shots: [
+    shots: ([
       {
         ...mockShotBase,
         id: '1',
@@ -396,7 +437,7 @@ export const FailedVideoWithThumbnail: Story = {
           },
         } as unknown as Shot['metadata'],
       },
-    ],
+    ] satisfies MockShotRow[]).map(toShotWithImage),
   },
   parameters: {
     docs: {
@@ -413,7 +454,7 @@ export const PreviewMode: Story = {
     selectedShotId: '1',
     aspectRatio: '16:9',
     onSelectShot: () => {},
-    shots: [
+    shots: ([
       {
         ...mockShotBase,
         id: '1',
@@ -477,7 +518,7 @@ export const PreviewMode: Story = {
           },
         } as unknown as Shot['metadata'],
       },
-    ],
+    ] satisfies MockShotRow[]).map(toShotWithImage),
   },
   parameters: {
     docs: {
@@ -494,7 +535,7 @@ export const FailedVideoWithoutThumbnail: Story = {
     selectedShotId: '1',
     aspectRatio: '16:9',
     onSelectShot: () => {},
-    shots: [
+    shots: ([
       {
         ...mockShotBase,
         id: '1',
@@ -518,7 +559,7 @@ export const FailedVideoWithoutThumbnail: Story = {
           },
         } as unknown as Shot['metadata'],
       },
-    ],
+    ] satisfies MockShotRow[]).map(toShotWithImage),
   },
   parameters: {
     docs: {

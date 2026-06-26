@@ -1,6 +1,6 @@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { Shot } from '@/types/database';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { stripMarkdown } from '@/lib/utils/markdown-plain';
 import { AppImage } from '@/components/ui/app-image';
@@ -12,7 +12,7 @@ import type { ViewMode } from './eval-view';
  * Get visual prompt from shot - client-safe utility
  * Prioritizes user-updated prompt over AI-generated prompt
  */
-export function getVisualPrompt(shot: Shot): string | null {
+export function getVisualPrompt(shot: ShotWithImage): string | null {
   if (shot.imagePrompt) {
     return shot.imagePrompt;
   }
@@ -24,7 +24,7 @@ export function getVisualPrompt(shot: Shot): string | null {
  * Get motion prompt from shot - client-safe utility
  * Prioritizes user-updated prompt over AI-generated prompt
  */
-export function getMotionPrompt(shot: Shot): string | null {
+export function getMotionPrompt(shot: ShotWithImage): string | null {
   if (shot.motionPrompt) {
     return shot.motionPrompt;
   }
@@ -35,13 +35,13 @@ export function getMotionPrompt(shot: Shot): string | null {
 /**
  * Get original script extract from shot
  */
-export function getSceneScript(shot: Shot): string | null {
+export function getSceneScript(shot: ShotWithImage): string | null {
   const scene = shot.metadata;
   return scene?.originalScript.extract || null;
 }
 
 type EvalSceneCellProps = {
-  shot: Shot | undefined;
+  shot: ShotWithImage | undefined;
   viewMode: ViewMode;
   sceneNumber: number;
   sequenceTitle: string;

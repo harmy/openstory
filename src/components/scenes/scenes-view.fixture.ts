@@ -1,7 +1,11 @@
 // AUTO-GENERATED Storybook fixture — real rows from local D1 (sequence 01KT2TPG5WYQ15H79SAV88EH45),
 // media URLs swapped for public placeholders. Do NOT hand-edit.
 // Regenerate via: bun scripts/generate-scenes-view-fixture.ts
-import { dbSceneId, type SceneRow, type Shot } from '@/lib/db/schema';
+import { dbSceneId, type Frame, type SceneRow } from '@/lib/db/schema';
+import {
+  projectShotWithImage,
+  type ShotWithImage,
+} from '@/lib/shots/shot-with-image';
 import type { Sequence, Style } from '@/types/database';
 
 export const fixtureSequence: Sequence = {
@@ -355,7 +359,7 @@ export const fixtureScenes: SceneRow[] = [
   },
 ];
 
-export const fixtureShots: Shot[] = [
+const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
   {
     id: '01KT2TQ072YB92D8NWRQC5W9C6',
     sequenceId: '01KT2TPG5WYQ15H79SAV88EH45',
@@ -370,8 +374,6 @@ export const fixtureShots: Shot[] = [
     variantImageUrl:
       'https://picsum.photos/seed/01KT2TQ072YB92D8NWRQC5W9C6-v/720/1280',
     variantImageStatus: 'completed',
-    variantWorkflowRunId:
-      'localhost-3000_variant-image_1780359131280-d410dfc3-b144-406d-8b28-283191c8f58c',
     videoUrl:
       'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
     videoPath:
@@ -493,15 +495,12 @@ export const fixtureShots: Shot[] = [
       'https://picsum.photos/seed/01KT2TQ072YB92D8NWRQC5W9C6-p/720/1280',
     thumbnailInputHash:
       '638094256e60548cf03e763d845424d0891173245acbf1888c7723797e5a76c7',
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
     visualPromptInputHash:
       '5e35aef7cbcca388535f8280c210c9f8c4961f0f40720138df3fd8fdbf57a2db',
     motionPromptInputHash:
       '8712d23c15cd7b2fa15e51c851a1e6ed44d754eb5e997dff340ed563836065a6',
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     sceneId: '01KT2TQ072YB92D8NWRQC5W9C6',
     shotNumber: 1,
   },
@@ -519,8 +518,6 @@ export const fixtureShots: Shot[] = [
     variantImageUrl:
       'https://picsum.photos/seed/01KT2TQ2A3VNHR4NKMFZE9XAAC-v/720/1280',
     variantImageStatus: 'completed',
-    variantWorkflowRunId:
-      'localhost-3000_variant-image_1780359128559-817e870a-b29f-41d2-b374-7ce5067a6b0f',
     videoUrl:
       'https://test-videos.co.uk/vids/sintel/mp4/h264/360/Sintel_360_10s_1MB.mp4',
     videoPath:
@@ -642,15 +639,12 @@ export const fixtureShots: Shot[] = [
       'https://picsum.photos/seed/01KT2TQ2A3VNHR4NKMFZE9XAAC-p/720/1280',
     thumbnailInputHash:
       '25f45d2f849554e8ea0304f957cc61ebd97658eac4e24bd098e7ef5bdeed2847',
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
     visualPromptInputHash:
       '6a0661a6909ede6efb155a60703eb80a3bd0a16f07fc3e79a5a23285bcd03be6',
     motionPromptInputHash:
       '8a1cb524606a6055e779a0d958f7a269744da29d444d02c0930b396aafa40cda',
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     sceneId: '01KT2TQ2A3VNHR4NKMFZE9XAAC',
     shotNumber: 1,
   },
@@ -668,8 +662,6 @@ export const fixtureShots: Shot[] = [
     variantImageUrl:
       'https://picsum.photos/seed/01KT2TQ4BPDYFBAG7AHWAAY43C-v/720/1280',
     variantImageStatus: 'completed',
-    variantWorkflowRunId:
-      'localhost-3000_variant-image_1780359127092-b461d1c0-a2a4-4525-bebc-2fb0b2f6b5b5',
     videoUrl:
       'https://test-videos.co.uk/vids/jellyfish/mp4/h264/360/Jellyfish_360_10s_1MB.mp4',
     videoPath:
@@ -793,15 +785,12 @@ export const fixtureShots: Shot[] = [
       'https://picsum.photos/seed/01KT2TQ4BPDYFBAG7AHWAAY43C-p/720/1280',
     thumbnailInputHash:
       'e250b71299008aa923231b7c8cb543f8adfdd955ea7dd30f8135dd2547127818',
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
     visualPromptInputHash:
       '9a5a8fb49c2420a571ced29213472cc5bc8611ffffabec608e321fc8d0a614ef',
     motionPromptInputHash:
       '1c1c244ef3466f36d3c556d38446a53bfd007b7953a0b2647fbc49a94fe9985f',
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     sceneId: '01KT2TQ4BPDYFBAG7AHWAAY43C',
     shotNumber: 1,
   },
@@ -819,8 +808,6 @@ export const fixtureShots: Shot[] = [
     variantImageUrl:
       'https://picsum.photos/seed/01KT2TQ6B0MH3VDAXH16G54X33-v/720/1280',
     variantImageStatus: 'completed',
-    variantWorkflowRunId:
-      'localhost-3000_variant-image_1780359134074-2252f4c5-70a5-478f-b77b-b757bfb44e60',
     videoUrl:
       'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
     videoPath:
@@ -942,15 +929,12 @@ export const fixtureShots: Shot[] = [
       'https://picsum.photos/seed/01KT2TQ6B0MH3VDAXH16G54X33-p/720/1280',
     thumbnailInputHash:
       '7569cfba0a472864c2cdcd76aee3ca1f5491d35d70d5f478ecb9d83050337db8',
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
     visualPromptInputHash:
       'c24b43ff12503d783dfd1513eecf8989160d3f1b2ae13dccc964ff2db63dfb9d',
     motionPromptInputHash:
       '488cfb63a7e74a8209df5cdedf2b6631effc178d6590f49bd22eb6ab084ba1f3',
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     sceneId: '01KT2TQ6B0MH3VDAXH16G54X33',
     shotNumber: 1,
   },
@@ -968,8 +952,6 @@ export const fixtureShots: Shot[] = [
     variantImageUrl:
       'https://picsum.photos/seed/01KT2TQ8E692CA985WMB9SNXMX-v/720/1280',
     variantImageStatus: 'completed',
-    variantWorkflowRunId:
-      'localhost-3000_variant-image_1780359137810-6e477b97-3e49-4f4f-9ede-678318999401',
     videoUrl:
       'https://test-videos.co.uk/vids/sintel/mp4/h264/360/Sintel_360_10s_1MB.mp4',
     videoPath:
@@ -1092,15 +1074,12 @@ export const fixtureShots: Shot[] = [
       'https://picsum.photos/seed/01KT2TQ8E692CA985WMB9SNXMX-p/720/1280',
     thumbnailInputHash:
       '47f18d95f63eb293ecaa35f037f1e92b0807e763081282385f6d90dfde3cd0f2',
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
     visualPromptInputHash:
       '08e0c43484383c9d78261fe4ea2983a1e08e331e40ec3d3e21aff6ed66a8c46b',
     motionPromptInputHash:
       '6d892b0d86f77dce5c7dda7f142e3b323246687963fe463cf1cb67ac60633672',
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     sceneId: '01KT2TQ8E692CA985WMB9SNXMX',
     shotNumber: 1,
   },
@@ -1118,8 +1097,6 @@ export const fixtureShots: Shot[] = [
     variantImageUrl:
       'https://picsum.photos/seed/01KT2TQA9A3SYCK47G14S0YB8Y-v/720/1280',
     variantImageStatus: 'completed',
-    variantWorkflowRunId:
-      'localhost-3000_variant-image_1780359131133-4f0fa1d5-6d63-46c2-9571-e3ed55dd781c',
     videoUrl:
       'https://test-videos.co.uk/vids/jellyfish/mp4/h264/360/Jellyfish_360_10s_1MB.mp4',
     videoPath:
@@ -1238,15 +1215,12 @@ export const fixtureShots: Shot[] = [
       'https://picsum.photos/seed/01KT2TQA9A3SYCK47G14S0YB8Y-p/720/1280',
     thumbnailInputHash:
       '9bd2ce2b9f5bd92ffed6f03961595a0a5a653fca894de0a247c3dfd6fa30979d',
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
     visualPromptInputHash:
       'ce5025d3e93003b0aa943a6e2de0135317b332454bdf1520957d56d5a00f8272',
     motionPromptInputHash:
       'd701fc7910fcb2f386b6b53283fc8905c46fcf9af1e63eee64b8f264e29fb299',
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     sceneId: '01KT2TQA9A3SYCK47G14S0YB8Y',
     shotNumber: 1,
   },
@@ -1264,8 +1238,6 @@ export const fixtureShots: Shot[] = [
     variantImageUrl:
       'https://picsum.photos/seed/01KT2TQAY2YNXFX1GVKP7HK43K-v/720/1280',
     variantImageStatus: 'completed',
-    variantWorkflowRunId:
-      'localhost-3000_variant-image_1780359136877-4d101880-3236-40b3-b6cc-9988c6104a5d',
     videoUrl:
       'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
     videoPath:
@@ -1380,16 +1352,50 @@ export const fixtureShots: Shot[] = [
       'https://picsum.photos/seed/01KT2TQAY2YNXFX1GVKP7HK43K-p/720/1280',
     thumbnailInputHash:
       'e848cc7ba9bea3ea864228edcc0178ee25954c3c9368a835e9e8073eb5b31b6a',
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
     visualPromptInputHash:
       '02b2e4d327ff65d6106eace0deb7d9972ff93ead0d90b4014a0711fd3e7c29d5',
     motionPromptInputHash:
       'a3b9ad1f8be7b282e117084326ec4b3203813cb8452a305f6cd0c9c1e60eaa59',
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     sceneId: '01KT2TQAY2YNXFX1GVKP7HK43K',
     shotNumber: 1,
   },
 ];
+
+/**
+ * The still IMAGE surface moved off `shots` onto the anchor frame in #989. Each
+ * fixture row carries the legacy `thumbnail*`/`image*` field names that the UI
+ * still reads (the `ShotWithImage` projection); here we mirror them back into a
+ * concrete anchor `Frame` (id == shot.id) so the row matches what `getShotsFn`
+ * returns at runtime.
+ */
+export const fixtureShots: ShotWithImage[] = fixtureShotRows.map((shot) => {
+  const frame: Frame = {
+    id: shot.id,
+    shotId: shot.id,
+    sequenceId: shot.sequenceId,
+    orderIndex: 0,
+    role: 'first',
+    source: 'generated',
+    imageUrl: shot.thumbnailUrl,
+    previewImageUrl: shot.previewThumbnailUrl,
+    imagePath: shot.thumbnailPath,
+    imageStatus: shot.thumbnailStatus,
+    imageWorkflowRunId: shot.thumbnailWorkflowRunId,
+    imageGeneratedAt: shot.thumbnailGeneratedAt,
+    imageError: shot.thumbnailError,
+    imageModel: shot.imageModel,
+    imagePrompt: shot.imagePrompt,
+    selectedImageVersionId: null,
+    selectedImagePromptVersionId: null,
+    imageInputHash: shot.thumbnailInputHash,
+    visualPromptInputHash: shot.visualPromptInputHash,
+    createdAt: shot.createdAt,
+    updatedAt: shot.updatedAt,
+  };
+  return projectShotWithImage(shot, frame, {
+    url: shot.variantImageUrl,
+    status: shot.variantImageStatus,
+  });
+});

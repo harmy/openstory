@@ -180,6 +180,39 @@ export function createFramesMethods(db: Database) {
       return frame;
     },
 
+    /**
+     * Write the frame's transient image GENERATION-TRACKING fields — the
+     * in-flight lifecycle that isn't owned by a selected version: status
+     * ('generating'/'failed'), the run id, the in-flight model, an error, the
+     * timestamp, and the cheap turbo `previewImageUrl` (#989 preview stand-in).
+     * The URL/identity mirror (`imageUrl`/`imagePath`/`imageInputHash`/the
+     * selection pointer) is still owned exclusively by `frameVariants.select`,
+     * so this can never silently repoint the selection.
+     */
+    setImageGenerationStatus: async (
+      frameId: string,
+      data: Pick<
+        Partial<NewFrame>,
+        | 'imageStatus'
+        | 'imageWorkflowRunId'
+        | 'imageModel'
+        | 'imageError'
+        | 'imageGeneratedAt'
+        | 'previewImageUrl'
+      >,
+      options?: { throwOnMissing?: boolean }
+    ): Promise<Frame | undefined> => {
+      const [frame] = await db
+        .update(frames)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(frames.id, frameId))
+        .returning();
+      if (!frame && options?.throwOnMissing !== false) {
+        throw new Error(`Frame ${frameId} not found`);
+      }
+      return frame;
+    },
+
     delete: async (frameId: string): Promise<boolean> => {
       const result = await db.delete(frames).where(eq(frames.id, frameId));
       // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- DB result may be undefined at runtime

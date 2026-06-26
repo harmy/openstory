@@ -19,6 +19,10 @@ import { DEFAULT_ASPECT_RATIO } from '@/lib/constants/aspect-ratios';
 import type { Shot, ShotVariant, NewShot } from '@/lib/db/schema';
 import { buildPromoteUpdate } from '@/functions/shots';
 import { buildShotImageWorkflowInput } from '@/lib/image/build-shot-image-input';
+import {
+  projectShotWithImage,
+  type ShotWithImage,
+} from '@/lib/shots/shot-with-image';
 import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
 import { VARIANT_TYPES, type VariantType } from '@/lib/db/schema/shot-variants';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
@@ -350,7 +354,11 @@ export function assertModelNotAlreadyAdded(
  * primary image to animate. A shot with no usable image is skipped — there is
  * nothing to feed image-to-video.
  */
-export function selectEligibleVideoShots(shots: readonly Shot[]): Shot[] {
+export function selectEligibleVideoShots(
+  // The still-image surface moved onto the anchor frame (#989); callers project
+  // it back via `projectShotWithImage` so the thumbnail* reads here are stable.
+  shots: readonly ShotWithImage[]
+): ShotWithImage[] {
   return shots.filter(
     (f) => f.thumbnailStatus === 'completed' && Boolean(f.thumbnailUrl)
   );
@@ -515,7 +523,20 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       );
       assertModelNotAlreadyAdded(existing, model, 'video');
       const allShots = await scopedDb.shots.listBySequence(sequence.id);
-      const eligible = selectEligibleVideoShots(allShots);
+      // Project each shot's anchor-frame image surface (#989) so eligibility and
+      // the per-shot `imageUrl` read below keep using the legacy field names.
+      await scopedDb.shots.ensureAnchorFrames(allShots);
+      const videoFramesById = new Map(
+        (await scopedDb.frames.listBySequence(sequence.id)).map((fr) => [
+          fr.id,
+          fr,
+        ])
+      );
+      const shotsWithImage = allShots.flatMap((shot) => {
+        const frame = videoFramesById.get(shot.id);
+        return frame ? [projectShotWithImage(shot, frame)] : [];
+      });
+      const eligible = selectEligibleVideoShots(shotsWithImage);
       if (eligible.length === 0) {
         throw new Error('No shots have a completed image to animate yet');
       }
@@ -606,12 +627,23 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
     if (!isValidTextToImageModel(model)) {
       throw new Error('Invalid image model');
     }
-    const existingImage = await scopedDb.shotVariants.listBySequence(
-      sequence.id,
-      'image'
-    );
-    assertModelNotAlreadyAdded(existingImage, model, 'image');
+    // Image variants live in `frame_variants` now (#989) — check the models that
+    // already have a version there rather than the retired `shot_variants(image)`.
+    const existingImageModels =
+      await scopedDb.frameVariants.listModelsForSequence(sequence.id);
+    if (existingImageModels.includes(model)) {
+      throw new Error(`Image model "${model}" has already been added`);
+    }
     const allShots = await scopedDb.shots.listBySequence(sequence.id);
+    // The image prompt lives on the anchor frame now (#989); load frames so each
+    // shot's stored prompt can seed its `/image` run.
+    await scopedDb.shots.ensureAnchorFrames(allShots);
+    const imageFramesById = new Map(
+      (await scopedDb.frames.listBySequence(sequence.id)).map((fr) => [
+        fr.id,
+        fr,
+      ])
+    );
     const [characters, locations, elements] = await Promise.all([
       scopedDb.characters.listWithSheets(sequence.id),
       scopedDb.sequenceLocations.listWithReferences(sequence.id),
@@ -632,6 +664,7 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
         characters,
         locations,
         elements,
+        imagePrompt: imageFramesById.get(f.id)?.imagePrompt ?? null,
         // Adding a model never repoints the primary — it lands as an alternate
         // variant only. Promote later with "Set". (#547)
         variantOnly: true,
@@ -655,18 +688,12 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
     // shouldn't abort the rest of the batch — mark that shot's pending row
     // failed (so it doesn't block a future re-add) and continue. Only throw if
     // every shot failed to trigger.
+    // No pre-seeded variant row: the IMAGE_WORKFLOW (variantOnly) appends the
+    // in-flight `frame_variants` 'model' version itself in set-generating-status,
+    // and its onFailure marks it failed — so there's nothing to pre-write here.
     let workflowRunId = '';
     let triggered = 0;
     for (const input of inputs) {
-      if (input.shotId) {
-        await scopedDb.shotVariants.upsert({
-          shotId: input.shotId,
-          sequenceId: sequence.id,
-          variantType: 'image',
-          model,
-          status: 'pending',
-        });
-      }
       try {
         workflowRunId = await triggerWorkflow('/image', input, {
           deduplicationId: `add-image-${input.shotId}-${model}-${Date.now()}`,
@@ -676,27 +703,13 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       } catch (error) {
         // Log every per-shot trigger failure so a systemic cause (e.g. a
         // transient binding issue hitting half the batch) leaves an aggregated
-        // Sentry trace rather than only a row's `error` column.
+        // Sentry trace rather than vanishing.
         logger.error('add-model: failed to trigger image workflow for shot', {
           err: error,
           sequenceId: sequence.id,
           shotId: input.shotId,
           model,
         });
-        if (input.shotId) {
-          await scopedDb.shotVariants.updateByShotAndModel(
-            input.shotId,
-            'image',
-            model,
-            {
-              status: 'failed',
-              error:
-                error instanceof Error
-                  ? error.message
-                  : 'Failed to trigger image generation',
-            }
-          );
-        }
       }
     }
     if (triggered === 0) {
@@ -781,7 +794,7 @@ export const setSequenceModelFn = createServerFn({ method: 'POST' })
     )
   )
   .handler(async ({ data, context }) => {
-    const { sequence, scopedDb } = context;
+    const { sequence, scopedDb, user } = context;
     const { variantType, model } = data;
 
     if (variantType === 'image' && !isValidTextToImageModel(model)) {
@@ -789,6 +802,44 @@ export const setSequenceModelFn = createServerFn({ method: 'POST' })
     }
     if (variantType === 'video' && !isValidImageToVideoModel(model)) {
       throw new Error('Invalid video model');
+    }
+
+    // Image variants live in `frame_variants` now (#989). The sequence-wide
+    // "Set" is a per-shot pointer repoint (the #677 fix applied in bulk): for
+    // every shot with a completed version for `model`, select it and reset that
+    // shot's now-stale video. frame.id == shot.id.
+    if (variantType === 'image') {
+      const versions = await scopedDb.frameVariants.listModelVersionsBySequence(
+        sequence.id
+      );
+      const latestByFrame = new Map<string, (typeof versions)[number]>();
+      for (const v of versions) {
+        if (v.model !== model || v.status !== 'completed' || !v.url) continue;
+        latestByFrame.set(v.frameId, v); // versions are asc id → last wins
+      }
+      if (latestByFrame.size === 0) {
+        throw new Error('That model has not generated anything to set');
+      }
+      let imageCount = 0;
+      for (const [frameId, version] of latestByFrame) {
+        await scopedDb.frameVariants.select(frameId, version.id, {
+          actorId: user.id,
+        });
+        await scopedDb.shots.update(
+          frameId,
+          {
+            videoUrl: null,
+            videoPath: null,
+            videoStatus: 'pending',
+            videoWorkflowRunId: null,
+            videoGeneratedAt: null,
+            videoError: null,
+          },
+          { throwOnMissing: false }
+        );
+        imageCount++;
+      }
+      return { count: imageCount, variantType, model };
     }
 
     const variants = await scopedDb.shotVariants.listBySequence(

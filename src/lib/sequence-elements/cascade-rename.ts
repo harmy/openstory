@@ -120,9 +120,15 @@ export type ShotRenameDelta = {
   motionPrompt?: string;
 };
 
-/** Compute per-shot deltas for a token rename. Shots with no references return null. */
+/**
+ * Compute per-shot deltas for a token rename. Shots with no references return
+ * null. The image prompt lives on the anchor frame now (#989), so callers pass
+ * each shot augmented with its frame's `imagePrompt`; the applier routes the
+ * resulting `delta.imagePrompt` to the frame, and `metadata`/`motionPrompt` to
+ * the shot.
+ */
 export function buildShotRenameDeltas(
-  shots: Shot[],
+  shots: ReadonlyArray<Shot & { imagePrompt: string | null }>,
   oldToken: string,
   newToken: string
 ): ShotRenameDelta[] {

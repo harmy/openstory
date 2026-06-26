@@ -1,8 +1,47 @@
 import type { Shot } from '@/types/database';
+import type { Frame } from '@/lib/db/schema';
+import {
+  projectShotWithImage,
+  type ShotWithImage,
+} from '@/lib/shots/shot-with-image';
 import type { Meta, StoryObj } from '@storybook/react';
 import { SceneListItem } from './scene-list-item';
 
-const mockShot: Shot = {
+// The still IMAGE surface moved off `shots` onto the anchor frame in #989. The
+// mock carries the legacy `thumbnail*`/`image*` names the card still reads (the
+// `ShotWithImage` projection); mirror them back onto a concrete anchor `Frame`
+// (id == shot.id) so the row matches what `getShotsFn` returns.
+const toShotWithImage = (shot: Omit<ShotWithImage, 'frame'>): ShotWithImage => {
+  const frame: Frame = {
+    id: shot.id,
+    shotId: shot.id,
+    sequenceId: shot.sequenceId,
+    orderIndex: 0,
+    role: 'first',
+    source: 'generated',
+    imageUrl: shot.thumbnailUrl,
+    previewImageUrl: shot.previewThumbnailUrl,
+    imagePath: shot.thumbnailPath,
+    imageStatus: shot.thumbnailStatus,
+    imageWorkflowRunId: shot.thumbnailWorkflowRunId,
+    imageGeneratedAt: shot.thumbnailGeneratedAt,
+    imageError: shot.thumbnailError,
+    imageModel: shot.imageModel,
+    imagePrompt: shot.imagePrompt,
+    selectedImageVersionId: null,
+    selectedImagePromptVersionId: null,
+    imageInputHash: shot.thumbnailInputHash,
+    visualPromptInputHash: shot.visualPromptInputHash,
+    createdAt: shot.createdAt,
+    updatedAt: shot.updatedAt,
+  };
+  return projectShotWithImage(shot, frame, {
+    url: shot.variantImageUrl,
+    status: shot.variantImageStatus,
+  });
+};
+
+const mockShot: ShotWithImage = toShotWithImage({
   id: 'shot-1',
   sequenceId: 'seq-1',
   sceneId: null,
@@ -14,9 +53,6 @@ const mockShot: Shot = {
   thumbnailPath: 'teams/mock/sequences/mock/frames/shot-1/thumbnail.jpg',
   variantImageUrl: null,
   variantImageStatus: 'pending',
-  variantWorkflowRunId: null,
-  variantImageGeneratedAt: null,
-  variantImageError: null,
   videoUrl: null,
   videoPath: null,
   thumbnailStatus: 'completed',
@@ -40,7 +76,6 @@ const mockShot: Shot = {
   audioError: null,
   audioModel: null,
   thumbnailInputHash: null,
-  variantImageInputHash: null,
   videoInputHash: null,
   audioInputHash: null,
   visualPromptInputHash: null,
@@ -126,7 +161,7 @@ const mockShot: Shot = {
   },
   createdAt: new Date(),
   updatedAt: new Date(),
-};
+});
 
 const meta: Meta<typeof SceneListItem> = {
   title: 'Scenes/SceneListItem',

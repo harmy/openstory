@@ -12,7 +12,7 @@ import {
 import { DEFAULT_MUSIC_MODEL, type AudioModel } from '@/lib/ai/models';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { cn } from '@/lib/utils';
-import type { Shot } from '@/types/database';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import { ChevronUp, Loader2, Video } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import type { BatchGenerateMotionArgs } from './scene-list';
@@ -20,7 +20,7 @@ import { SceneListItem } from './scene-list-item';
 import { SceneThumbnail } from './scene-thumbnail';
 
 type MobileSceneDrawerProps = {
-  shots?: Shot[];
+  shots?: ShotWithImage[];
   selectedShotId?: string;
   aspectRatio: AspectRatio;
   onSelectShot: (shotId: string) => void;
@@ -34,7 +34,7 @@ type MobileSceneDrawerProps = {
   initialMusicModel?: AudioModel;
 };
 
-const isCompleted = (shot: Shot) => {
+const isCompleted = (shot: ShotWithImage) => {
   return (
     shot.thumbnailStatus === 'completed' && shot.videoStatus === 'completed'
   );

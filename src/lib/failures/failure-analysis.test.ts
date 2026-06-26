@@ -1,9 +1,37 @@
 import { describe, expect, test } from 'vitest';
 import { analyzeFailures } from './failure-analysis';
-import type { Shot } from '@/lib/db/schema/shots';
+import type { Frame } from '@/lib/db/schema';
 import type { Sequence } from '@/lib/db/schema/sequences';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 
-function makeShot(overrides: Partial<Shot> = {}): Shot {
+// The still-image surface moved off `shots` onto the anchor `frame` in #989;
+// the API/client shape `ShotWithImage` preserves the legacy `thumbnail*` /
+// `image*` field names that `analyzeFailures` reads, so the fixture keeps them
+// (plus the raw anchor `frame`).
+function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
+  const frame: Frame = {
+    id: 'shot-1',
+    shotId: 'shot-1',
+    sequenceId: 'seq-1',
+    orderIndex: 0,
+    role: 'first',
+    source: 'generated',
+    imageUrl: 'https://example.com/thumb.jpg',
+    previewImageUrl: null,
+    imagePath: null,
+    imageStatus: 'completed',
+    imageWorkflowRunId: null,
+    imageGeneratedAt: null,
+    imageError: null,
+    imageModel: 'nano_banana_2',
+    imagePrompt: null,
+    selectedImageVersionId: null,
+    selectedImagePromptVersionId: null,
+    imageInputHash: null,
+    visualPromptInputHash: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
   return {
     id: 'shot-1',
     sequenceId: 'seq-1',
@@ -22,9 +50,6 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     imagePrompt: null,
     variantImageUrl: null,
     variantImageStatus: 'pending',
-    variantWorkflowRunId: null,
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     videoUrl: 'https://example.com/video.mp4',
     videoPath: null,
     videoStatus: 'completed',
@@ -40,10 +65,9 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     audioGeneratedAt: null,
     audioError: null,
     audioModel: null,
-    thumbnailInputHash: null,
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
+    thumbnailInputHash: null,
     visualPromptInputHash: null,
     motionPromptInputHash: null,
     selectedMotionPromptVersionId: null,
@@ -51,6 +75,7 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     metadata: null,
     createdAt: new Date(),
     updatedAt: new Date(),
+    frame,
     ...overrides,
   };
 }

@@ -369,27 +369,20 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
       const inputHash = await computeVisualPromptInputHash(narrowed);
 
       await step.do('save-visual-prompt-to-db', async () => {
-        const previous = await scopedDb.shotPromptVersions.getLatest(
-          shotId,
-          'visual'
-        );
+        // Visual prompt history lives on the anchor frame now (#989);
+        // frame.id == shotId.
+        const previous = await scopedDb.framePromptVersions.getLatest(shotId);
         const source = previous ? 'regenerated' : 'ai-generated';
 
-        // Clear `shot.imagePrompt` user-override when regenerating. The
-        // override would otherwise mask the freshly regenerated prompt in
-        // every downstream read (effective-prompt fallback chain), so a
-        // regen-prompt click on a previously user-edited shot would do
-        // nothing visible. The variant row above preserves the new prompt;
-        // the user's prior override is still in the prompt-history sheet
-        // and can be restored from there.
-        await scopedDb.shots.update(shotId, {
-          metadata: enrichedScene,
-          imagePrompt: null,
-        });
+        // Scene metadata stays on the shot; the prompt itself goes to
+        // `frame_prompt_versions`. Writing the new AI version mirrors its text
+        // onto `frame.imagePrompt` and repoints `selectedImagePromptVersionId`,
+        // so it supersedes any prior user-override automatically (the override
+        // is retained in the prompt history and can be restored).
+        await scopedDb.shots.update(shotId, { metadata: enrichedScene });
 
-        await scopedDb.shotPromptVersions.write({
-          shotId,
-          promptType: 'visual',
+        await scopedDb.framePromptVersions.write({
+          frameId: shotId,
           text: result.visual.fullPrompt,
           components: result.visual.components,
           source,

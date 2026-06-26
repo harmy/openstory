@@ -529,6 +529,19 @@ export const shotAccessMiddleware = createMiddleware({ type: 'function' })
     // Extract sequence from shot data (using the partial sequence from the query)
     const { sequence: rawSequence, ...shot } = shotData;
 
+    // Anchor frame (#989) — the shot's IMAGE surface (was the shots.thumbnail*
+    // columns). frame.id == shot.id, so this is a direct lookup. Every shot owns
+    // one (created at shot-create / backfilled by the Phase 2 migration); create
+    // it defensively if a legacy shot somehow predates the anchor.
+    let frame = await scopedDb.frames.getById(shot.id);
+    if (!frame) {
+      await scopedDb.shots.ensureAnchorFrames([shot]);
+      frame = await scopedDb.frames.getById(shot.id);
+    }
+    if (!frame) {
+      throw new NotFoundError('Shot is missing its anchor frame');
+    }
+
     // Type assertion needed because Drizzle's nested relation inference loses the $type<AspectRatio>() annotation
     const sequence: PartialSequence = {
       ...rawSequence,
@@ -538,6 +551,7 @@ export const shotAccessMiddleware = createMiddleware({ type: 'function' })
     return next({
       context: {
         shot,
+        frame,
         sequence,
         teamId,
         scopedDb,

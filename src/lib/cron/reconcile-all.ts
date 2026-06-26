@@ -19,6 +19,8 @@
 
 import { getDb } from '#db-client';
 import {
+  frameVariants,
+  frames,
   shots,
   shotVariants,
   sequenceElements,
@@ -56,9 +58,10 @@ export async function reconcileAllStuckJobs(): Promise<ReconcileCounts> {
   const counts: ReconcileCounts = {};
 
   const passes: Array<[string, () => Promise<number>]> = [
-    ['shots.thumbnail', () => reconcileShotsPass(db, 'thumbnail')],
+    // Image lives on frames / frame_variants now (#989).
+    ['frames.image', () => reconcileFramesImagePass(db)],
     ['shots.video', () => reconcileShotsPass(db, 'video')],
-    ['shots.variant_image', () => reconcileShotsPass(db, 'variantImage')],
+    ['frame_variants.status', () => reconcileFrameVariantsPass(db)],
     ['shots.audio', () => reconcileShotsPass(db, 'audio')],
     ['shot_variants.status', () => reconcileShotVariantsPass(db, 'primary')],
     [
@@ -101,7 +104,7 @@ export async function reconcileAllStuckJobs(): Promise<ReconcileCounts> {
   return counts;
 }
 
-type ShotPipeline = 'thumbnail' | 'video' | 'variantImage' | 'audio';
+type ShotPipeline = 'video' | 'audio';
 
 // Why we don't bump `updatedAt` on reconciler writes (applies to every pass
 // in this file): the staleness predicate is `updated_at < cutoff`. If pass A
@@ -113,20 +116,10 @@ type ShotPipeline = 'thumbnail' | 'video' | 'variantImage' | 'audio';
 // status column. The on-load reconciler doesn't have this issue because it
 // collects all stale entries from in-memory data before writing.
 const SHOTS_PIPELINE_COLUMNS = {
-  thumbnail: {
-    status: shots.thumbnailStatus,
-    runId: shots.thumbnailWorkflowRunId,
-    setStatus: (next: 'failed' | 'completed') => ({ thumbnailStatus: next }),
-  },
   video: {
     status: shots.videoStatus,
     runId: shots.videoWorkflowRunId,
     setStatus: (next: 'failed' | 'completed') => ({ videoStatus: next }),
-  },
-  variantImage: {
-    status: shots.variantImageStatus,
-    runId: shots.variantWorkflowRunId,
-    setStatus: (next: 'failed' | 'completed') => ({ variantImageStatus: next }),
   },
   audio: {
     status: shots.audioStatus,
@@ -134,6 +127,65 @@ const SHOTS_PIPELINE_COLUMNS = {
     setStatus: (next: 'failed' | 'completed') => ({ audioStatus: next }),
   },
 } as const;
+
+/**
+ * Reconcile stuck anchor-frame image generation (#989 — the old
+ * `shots.thumbnail*` pass). Frame image status with a known workflow run id.
+ */
+async function reconcileFramesImagePass(db: Database): Promise<number> {
+  const staleCutoff = new Date(Date.now() - STALE_THRESHOLD_MS);
+  const stuck = await db
+    .select({ id: frames.id, runId: frames.imageWorkflowRunId })
+    .from(frames)
+    .where(
+      and(
+        eq(frames.imageStatus, 'generating'),
+        lt(frames.updatedAt, staleCutoff)
+      )
+    )
+    .limit(MAX_ROWS_PER_PASS);
+  let updated = 0;
+  for (const row of stuck) {
+    const next = await resolveRunState(row.runId ?? '');
+    if (next === null || next === 'unknown') continue;
+    await db
+      .update(frames)
+      .set({ imageStatus: next })
+      .where(eq(frames.id, row.id));
+    updated++;
+  }
+  return updated;
+}
+
+/**
+ * Reconcile stuck `frame_variants` versions (model re-rolls + the 3×3 grid /
+ * upscaled framing tiles) — the image-variant analog of the retired
+ * `shots.variant_image` pass.
+ */
+async function reconcileFrameVariantsPass(db: Database): Promise<number> {
+  const staleCutoff = new Date(Date.now() - STALE_THRESHOLD_MS);
+  const stuck = await db
+    .select({ id: frameVariants.id, runId: frameVariants.workflowRunId })
+    .from(frameVariants)
+    .where(
+      and(
+        eq(frameVariants.status, 'generating'),
+        lt(frameVariants.updatedAt, staleCutoff)
+      )
+    )
+    .limit(MAX_ROWS_PER_PASS);
+  let updated = 0;
+  for (const row of stuck) {
+    const next = await resolveRunState(row.runId ?? '');
+    if (next === null || next === 'unknown') continue;
+    await db
+      .update(frameVariants)
+      .set({ status: next })
+      .where(eq(frameVariants.id, row.id));
+    updated++;
+  }
+  return updated;
+}
 
 async function reconcileShotsPass(
   db: Database,

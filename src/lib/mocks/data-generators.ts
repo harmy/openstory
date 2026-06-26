@@ -1,10 +1,17 @@
-import type { Shot, Style } from '@/types/database';
+import type { Frame } from '@/lib/db/schema';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
+import type { Style } from '@/types/database';
 import { faker } from '@faker-js/faker';
 
 // Set consistent seed for reproducible mock data
 faker.seed(123);
 
-const generateMockShot = (overrides?: Partial<Shot>): Shot => {
+// The still-image surface moved off `shots` onto the anchor `frame` in #989;
+// the mock keeps the legacy projected names (`thumbnail*`/`image*`) the UI
+// reads and derives the raw anchor `frame` from them.
+const generateMockShot = (
+  overrides?: Partial<ShotWithImage>
+): ShotWithImage => {
   const settings = [
     'City Street',
     'Forest',
@@ -15,7 +22,7 @@ const generateMockShot = (overrides?: Partial<Shot>): Shot => {
   ];
   const moods = ['Tense', 'Happy', 'Sad', 'Excited', 'Calm', 'Angry'];
 
-  return {
+  const shotBase: Omit<ShotWithImage, 'frame'> = {
     id: faker.string.ulid(),
     sequenceId: faker.string.ulid(),
     sceneId: null,
@@ -35,9 +42,6 @@ const generateMockShot = (overrides?: Partial<Shot>): Shot => {
     thumbnailPath: `teams/${faker.string.ulid()}/sequences/${faker.string.ulid()}/frames/${faker.string.ulid()}/thumbnail.jpg`,
     variantImageUrl: null,
     variantImageStatus: 'pending',
-    variantWorkflowRunId: null,
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     videoUrl: faker.datatype.boolean()
       ? `${faker.internet.url()}/video.mp4`
       : null,
@@ -83,7 +87,6 @@ const generateMockShot = (overrides?: Partial<Shot>): Shot => {
     audioError: null,
     audioModel: null,
     thumbnailInputHash: null,
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
     visualPromptInputHash: null,
@@ -167,8 +170,31 @@ const generateMockShot = (overrides?: Partial<Shot>): Shot => {
         },
       },
     },
-    ...overrides,
   };
+  const frame: Frame = {
+    id: shotBase.id,
+    shotId: shotBase.id,
+    sequenceId: shotBase.sequenceId,
+    orderIndex: 0,
+    role: 'first',
+    source: 'generated',
+    imageUrl: shotBase.thumbnailUrl,
+    previewImageUrl: shotBase.previewThumbnailUrl,
+    imagePath: shotBase.thumbnailPath,
+    imageStatus: shotBase.thumbnailStatus,
+    imageWorkflowRunId: shotBase.thumbnailWorkflowRunId,
+    imageGeneratedAt: shotBase.thumbnailGeneratedAt,
+    imageError: shotBase.thumbnailError,
+    imageModel: shotBase.imageModel,
+    imagePrompt: shotBase.imagePrompt,
+    selectedImageVersionId: null,
+    selectedImagePromptVersionId: null,
+    imageInputHash: shotBase.thumbnailInputHash,
+    visualPromptInputHash: shotBase.visualPromptInputHash,
+    createdAt: shotBase.createdAt,
+    updatedAt: shotBase.updatedAt,
+  };
+  return { ...shotBase, frame, ...overrides };
 };
 
 const generateMockStyle = (overrides?: Partial<Style>): Style => {
@@ -319,7 +345,7 @@ const generateMockStyle = (overrides?: Partial<Style>): Style => {
 export const generateMockShots = (
   count: number = 6,
   sequenceId?: string
-): Shot[] => {
+): ShotWithImage[] => {
   return Array.from({ length: count }, (_, index) =>
     generateMockShot({
       orderIndex: index + 1,

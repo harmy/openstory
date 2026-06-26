@@ -143,7 +143,9 @@ describe('reconcileAllStuckJobs — pass isolation', () => {
 
     const counts = await reconcileAllStuckJobs();
 
-    expect(counts['shots.thumbnail']).toBe(PASS_ERRORED);
+    // The first (now-throwing) pass is the frame image pass (#989 moved image
+    // off shots onto frames/frame_variants).
+    expect(counts['frames.image']).toBe(PASS_ERRORED);
     expect(counts['sequences.music']).toBeGreaterThan(0);
     expect(counts['sequence_elements.vision']).toBeGreaterThan(0);
   });
@@ -153,7 +155,8 @@ describe('reconcileAllStuckJobs — run-id-verified passes', () => {
   test('caps stuck-row selection at MAX_ROWS_PER_PASS (100) per verified pass', async () => {
     const { reconcileAllStuckJobs } = await import('./reconcile-all');
     await reconcileAllStuckJobs();
-    // 7 verified passes: 4 shots + 2 shot_variants + sequences.status.
+    // 7 verified (run-id) passes: frames.image + shots.video/audio +
+    // frame_variants.status + 2 shot_variants + sequences.status (#989).
     expect(limitArgs.filter((n) => n === 100)).toHaveLength(7);
   });
 

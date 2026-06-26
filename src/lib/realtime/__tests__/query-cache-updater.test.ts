@@ -11,7 +11,11 @@ import { QueryClient } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { shotKeys } from '@/hooks/use-shots';
-import type { Shot } from '@/lib/db/schema';
+import type { Frame, Shot } from '@/lib/db/schema';
+import {
+  projectShotWithImage,
+  type ShotWithImage,
+} from '@/lib/shots/shot-with-image';
 import { updateQueryCacheFromEvent } from '@/lib/realtime/query-cache-updater';
 
 const SEQ = 'seq-1';
@@ -19,8 +23,12 @@ const OLD_THUMB = 'https://cdn/old-thumb.jpg';
 const OLD_VIDEO = 'https://cdn/old-video.mp4';
 const NEW_URL = 'https://cdn/added-model-output.mp4';
 
-function makeShot(overrides: Partial<Shot> = {}): Shot {
-  return {
+// The shots-list cache holds `ShotWithImage` (#989): a Shot (no image columns)
+// plus the anchor frame's still surface projected back under the legacy
+// `thumbnail*` DTO names the realtime handlers read/write. Behaviour is
+// unchanged — only the type moved.
+function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
+  const shot: Shot = {
     id: 'shot-1',
     sequenceId: SEQ,
     sceneId: null,
@@ -28,19 +36,6 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     orderIndex: 0,
     description: 'A scene',
     durationMs: 3000,
-    thumbnailUrl: OLD_THUMB,
-    thumbnailPath: null,
-    thumbnailStatus: 'completed',
-    thumbnailWorkflowRunId: null,
-    thumbnailGeneratedAt: null,
-    thumbnailError: null,
-    imageModel: 'nano_banana_2',
-    imagePrompt: null,
-    variantImageUrl: null,
-    variantImageStatus: 'pending',
-    variantWorkflowRunId: null,
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     videoUrl: OLD_VIDEO,
     videoPath: null,
     videoStatus: 'completed',
@@ -49,6 +44,7 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     videoError: null,
     motionPrompt: null,
     motionModel: 'veo3',
+    selectedMotionPromptVersionId: null,
     audioUrl: null,
     audioPath: null,
     audioStatus: 'pending',
@@ -56,23 +52,41 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     audioGeneratedAt: null,
     audioError: null,
     audioModel: null,
-    thumbnailInputHash: null,
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
-    visualPromptInputHash: null,
     motionPromptInputHash: null,
-    selectedMotionPromptVersionId: null,
-    previewThumbnailUrl: null,
     metadata: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-    ...overrides,
   };
+  const frame: Frame = {
+    id: 'shot-1',
+    shotId: 'shot-1',
+    sequenceId: SEQ,
+    orderIndex: 0,
+    role: 'first',
+    source: 'generated',
+    imageUrl: OLD_THUMB,
+    previewImageUrl: null,
+    imagePath: null,
+    imageStatus: 'completed',
+    imageWorkflowRunId: null,
+    imageGeneratedAt: null,
+    imageError: null,
+    imageModel: 'nano_banana_2',
+    imagePrompt: null,
+    selectedImageVersionId: null,
+    selectedImagePromptVersionId: null,
+    imageInputHash: null,
+    visualPromptInputHash: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  return { ...projectShotWithImage(shot, frame), ...overrides };
 }
 
-function getCachedShot(qc: QueryClient): Shot | undefined {
-  return qc.getQueryData<Shot[]>(shotKeys.list(SEQ))?.[0];
+function getCachedShot(qc: QueryClient): ShotWithImage | undefined {
+  return qc.getQueryData<ShotWithImage[]>(shotKeys.list(SEQ))?.[0];
 }
 
 describe('updateQueryCacheFromEvent — variant-only guard (#547)', () => {

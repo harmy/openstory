@@ -1,6 +1,7 @@
-import type { Shot } from '@/lib/db/schema/shots';
+import type { Frame } from '@/lib/db/schema';
 import type { Style } from '@/lib/db/schema/libraries';
 import type { Sequence } from '@/lib/db/schema/sequences';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Stub the logger so the deliberate missing-style case below doesn't print an
@@ -69,8 +70,12 @@ function makeSequence(overrides: Partial<Sequence> = {}): Sequence {
   };
 }
 
-function makeShot(overrides: Partial<Shot> = {}): Shot {
-  return {
+// The still-image surface moved off `shots` onto the anchor `frame` in #989;
+// `buildSequenceListPage` projects `ShotWithImage` from each shot + its frame
+// (batched via `frames.getByIds`), so the fixture keeps the legacy projected
+// names AND mirrors them onto a concrete anchor `frame` (id == shot.id).
+function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
+  const base: Omit<ShotWithImage, 'frame'> = {
     id: 'shot-1',
     sequenceId: 'seq-1',
     sceneId: null,
@@ -88,9 +93,6 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     imagePrompt: null,
     variantImageUrl: null,
     variantImageStatus: 'pending',
-    variantWorkflowRunId: null,
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     videoUrl: null,
     videoPath: null,
     videoStatus: 'pending',
@@ -107,7 +109,6 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     audioError: null,
     audioModel: null,
     thumbnailInputHash: null,
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
     visualPromptInputHash: null,
@@ -119,6 +120,30 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     updatedAt: new Date(),
     ...overrides,
   };
+  const frame: Frame = {
+    id: base.id,
+    shotId: base.id,
+    sequenceId: base.sequenceId,
+    orderIndex: 0,
+    role: 'first',
+    source: 'generated',
+    imageUrl: base.thumbnailUrl,
+    previewImageUrl: base.previewThumbnailUrl,
+    imagePath: base.thumbnailPath,
+    imageStatus: base.thumbnailStatus,
+    imageWorkflowRunId: base.thumbnailWorkflowRunId,
+    imageGeneratedAt: base.thumbnailGeneratedAt,
+    imageError: base.thumbnailError,
+    imageModel: base.imageModel,
+    imagePrompt: base.imagePrompt,
+    selectedImageVersionId: null,
+    selectedImagePromptVersionId: null,
+    imageInputHash: base.thumbnailInputHash,
+    visualPromptInputHash: base.visualPromptInputHash,
+    createdAt: base.createdAt,
+    updatedAt: base.updatedAt,
+  };
+  return { ...base, frame };
 }
 
 function makeStyle(overrides: Partial<Style> = {}): Style {
@@ -160,9 +185,15 @@ function makeStyle(overrides: Partial<Style> = {}): Style {
  * A scopedDb stub exposing the batched shot + style fetches the builder uses.
  * `styles` defaults to a single 'style-1' row matching the default sequence.
  */
-function depsWithShots(shots: Shot[], styles: Style[] = [makeStyle()]) {
+function depsWithShots(
+  shots: ShotWithImage[],
+  styles: Style[] = [makeStyle()]
+) {
   return {
     sequences: { listShotsByIds: async () => shots },
+    // The image surface lives on each shot's anchor frame now (#989); the source
+    // batch-loads frames to project `ShotWithImage`.
+    frames: { getByIds: async () => shots.map((s) => s.frame) },
     styles: { listByIds: async () => styles },
   };
 }

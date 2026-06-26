@@ -1,8 +1,12 @@
-import type { Shot } from '@/types/database';
+import type { Frame } from '@/lib/db/schema';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import type { Meta, StoryObj } from '@storybook/react';
 import { fn } from 'storybook/test';
 import { SceneScriptPrompts, type TabValue } from './scene-script-prompts';
 
+// The still-image surface moved off `shots` onto the anchor `frame` in #989;
+// the component reads the legacy projected names (`thumbnail*`/`image*`), so the
+// fixture keeps them and adds the raw anchor `frame`.
 const mockShot = {
   id: 'shot-1',
   sequenceId: 'seq-1',
@@ -15,9 +19,6 @@ const mockShot = {
   thumbnailPath: 'teams/mock/sequences/mock/frames/shot-1/thumbnail.jpg',
   variantImageUrl: null,
   variantImageStatus: 'pending',
-  variantWorkflowRunId: null,
-  variantImageGeneratedAt: null,
-  variantImageError: null,
   videoUrl: null,
   videoPath: null,
   thumbnailStatus: 'completed',
@@ -41,7 +42,6 @@ const mockShot = {
   audioError: null,
   audioModel: null,
   thumbnailInputHash: null,
-  variantImageInputHash: null,
   videoInputHash: null,
   audioInputHash: null,
   visualPromptInputHash: null,
@@ -128,7 +128,30 @@ const mockShot = {
   },
   createdAt: new Date(),
   updatedAt: new Date(),
-} satisfies Shot;
+  frame: {
+    id: 'shot-1',
+    shotId: 'shot-1',
+    sequenceId: 'seq-1',
+    orderIndex: 0,
+    role: 'first',
+    source: 'generated',
+    imageUrl: 'https://picsum.photos/seed/coffee/320/180',
+    previewImageUrl: null,
+    imagePath: 'teams/mock/sequences/mock/frames/shot-1/thumbnail.jpg',
+    imageStatus: 'completed',
+    imageWorkflowRunId: null,
+    imageGeneratedAt: null,
+    imageError: null,
+    imageModel: 'nano_banana',
+    imagePrompt: null,
+    selectedImageVersionId: null,
+    selectedImagePromptVersionId: null,
+    imageInputHash: null,
+    visualPromptInputHash: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } satisfies Frame,
+} satisfies ShotWithImage;
 
 const meta: Meta<typeof SceneScriptPrompts> = {
   title: 'Scenes/SceneScriptPrompts',

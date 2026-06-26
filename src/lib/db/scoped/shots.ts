@@ -4,10 +4,28 @@
  */
 
 import type { Database } from '@/lib/db/client';
-import { shots } from '@/lib/db/schema';
-import type { Shot, NewShot } from '@/lib/db/schema';
+import { frames, shots } from '@/lib/db/schema';
+import type { NewFrame, Shot, NewShot } from '@/lib/db/schema';
 import type { Sequence } from '@/lib/db/schema/sequences';
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+
+/**
+ * Every shot owns an anchor frame (orderIndex 0, role 'first') — the i2v anchor
+ * and the shot's primary still. Since the image surface lives on `frames` (#989),
+ * shot creation must materialize that frame or the image path has nowhere to
+ * write. The anchor REUSES the shot's id (frame.id = shot.id) so lookups are a
+ * direct `frames.getById(shotId)`. `imageModel` / `imageStatus` keep their schema
+ * defaults here; the image workflow stamps the real values when generation runs.
+ */
+function anchorFrameValues(shot: Pick<Shot, 'id' | 'sequenceId'>): NewFrame {
+  return {
+    id: shot.id,
+    shotId: shot.id,
+    sequenceId: shot.sequenceId,
+    orderIndex: 0,
+    role: 'first',
+  };
+}
 
 type ShotWithSequence = Shot & {
   sequence: Pick<
@@ -25,9 +43,10 @@ type ShotWithSequence = Shot & {
 
 type ShotOrderBy = 'orderIndex' | 'createdAt' | 'updatedAt';
 
+// Image artifacts (thumbnail/variantImage) moved to `frames` in #989 — their
+// staleness is checked via `frameVariants.isStale` / `frames.isStale`. Only the
+// shot-owned video/audio artifacts remain here.
 const SHOT_ARTIFACT_HASH_COLUMNS = {
-  thumbnail: 'thumbnailInputHash',
-  variantImage: 'variantImageInputHash',
   video: 'videoInputHash',
   audio: 'audioInputHash',
 } as const satisfies Record<string, keyof Shot>;
@@ -39,12 +58,25 @@ type ShotFilters = {
   ascending?: boolean;
   limit?: number;
   offset?: number;
-  hasThumbnail?: boolean;
   hasVideo?: boolean;
 };
 
 export function createShotsMethods(db: Database) {
+  // Idempotently materialize the anchor frame for each created/upserted shot.
+  // onConflictDoNothing keeps an existing frame (and its image) intact on replay.
+  const ensureAnchorFrames = async (
+    rows: ReadonlyArray<Pick<Shot, 'id' | 'sequenceId'>>
+  ): Promise<void> => {
+    if (rows.length === 0) return;
+    await db
+      .insert(frames)
+      .values(rows.map(anchorFrameValues))
+      .onConflictDoNothing();
+  };
+
   return {
+    ensureAnchorFrames,
+
     getById: async (shotId: string): Promise<Shot | null> => {
       const result = await db.select().from(shots).where(eq(shots.id, shotId));
       return result[0] ?? null;
@@ -59,18 +91,13 @@ export function createShotsMethods(db: Database) {
         ascending = true,
         limit,
         offset,
-        hasThumbnail,
         hasVideo,
       } = options ?? {};
 
       const conditions = [eq(shots.sequenceId, sequenceId)];
 
-      if (hasThumbnail !== undefined && hasThumbnail) {
-        conditions.push(isNull(shots.thumbnailUrl));
-      }
-
       if (hasVideo !== undefined && hasVideo) {
-        conditions.push(isNull(shots.videoUrl));
+        conditions.push(sql`${shots.videoUrl} IS NULL`);
       }
 
       const orderColumn =
@@ -107,6 +134,7 @@ export function createShotsMethods(db: Database) {
           `Failed to create shot for sequence ${data.sequenceId}`
         );
       }
+      await ensureAnchorFrames([shot]);
       return shot;
     },
 
@@ -151,6 +179,7 @@ export function createShotsMethods(db: Database) {
           `Failed to upsert shot for sequence ${data.sequenceId} at orderIndex ${data.orderIndex}`
         );
       }
+      await ensureAnchorFrames([shot]);
       return shot;
     },
     delete: async (shotId: string): Promise<boolean> => {
@@ -174,6 +203,7 @@ export function createShotsMethods(db: Database) {
       for (let i = 0; i < shotData.length; i += BATCH_SIZE) {
         const batch = shotData.slice(i, i + BATCH_SIZE);
         const batchResults = await db.insert(shots).values(batch).returning();
+        await ensureAnchorFrames(batchResults);
         results.push(...batchResults);
       }
 
@@ -203,6 +233,7 @@ export function createShotsMethods(db: Database) {
             },
           })
           .returning();
+        await ensureAnchorFrames(batchResults);
         results.push(...batchResults);
       }
 

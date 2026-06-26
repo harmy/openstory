@@ -72,20 +72,22 @@ export type WriteShotPromptVersionInput = WriteShotPromptVersionBase &
       }
   );
 
-const cachedColumnsForType = (promptType: ShotPromptType) =>
-  promptType === 'visual'
-    ? {
-        text: shots.imagePrompt,
-        hash: shots.visualPromptInputHash,
-        textKey: 'imagePrompt' as const,
-        hashKey: 'visualPromptInputHash' as const,
-      }
-    : {
-        text: shots.motionPrompt,
-        hash: shots.motionPromptInputHash,
-        textKey: 'motionPrompt' as const,
-        hashKey: 'motionPromptInputHash' as const,
-      };
+const cachedColumnsForType = (promptType: ShotPromptType) => {
+  // Visual (image) prompt versions moved to `frame_prompt_versions` (#989) — the
+  // cached mirror lives on the anchor frame, not `shots`. Only the MOTION prompt
+  // still mirrors onto `shots`.
+  if (promptType === 'visual') {
+    throw new Error(
+      'Visual prompt versions moved to frame_prompt_versions (#989); use scopedDb.framePromptVersions'
+    );
+  }
+  return {
+    text: shots.motionPrompt,
+    hash: shots.motionPromptInputHash,
+    textKey: 'motionPrompt' as const,
+    hashKey: 'motionPromptInputHash' as const,
+  };
+};
 
 export function createShotPromptVersionsMethods(db: Database) {
   return {

@@ -26,6 +26,7 @@ import type { ScopedDb } from '@/lib/db/scoped';
 import { dbSceneId, type Character, type Sequence } from '@/lib/db/schema';
 import { analyzeFailures } from '@/lib/failures/failure-analysis';
 import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
+import { projectShotWithImage } from '@/lib/shots/shot-with-image';
 import { buildCharacterReferenceImages } from '@/lib/prompts/character-prompt';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import { triggerWorkflow } from '@/lib/workflow/client';
@@ -92,7 +93,17 @@ export async function executeSmartRetry(context: SmartRetryContext) {
   await assertNoActiveStoryboard(context.scopedDb, sequence.id);
 
   const shots = await context.scopedDb.shots.listBySequence(sequence.id);
-  const summary = analyzeFailures(shots, sequence);
+  // The still-image surface lives on each shot's anchor frame now (#989,
+  // frame.id == shot.id). Project it back under the legacy thumbnail*/image*
+  // names so the failure analysis and per-shot retry reads below are unchanged.
+  await context.scopedDb.shots.ensureAnchorFrames(shots);
+  const frameRows = await context.scopedDb.frames.listBySequence(sequence.id);
+  const framesById = new Map(frameRows.map((fr) => [fr.id, fr]));
+  const shotsWithImage = shots.flatMap((shot) => {
+    const frame = framesById.get(shot.id);
+    return frame ? [projectShotWithImage(shot, frame)] : [];
+  });
+  const summary = analyzeFailures(shotsWithImage, sequence);
 
   if (!summary.hasFailed) {
     throw new Error('No failures found to retry');
@@ -151,20 +162,22 @@ export async function executeSmartRetry(context: SmartRetryContext) {
   // sequence default. Load scenes once to avoid an N+1.
   const scenes = await context.scopedDb.scenes.listBySequence(sequence.id);
   const scenesById = new Map(scenes.map((s) => [s.id, s]));
-  const imageModelFor = (shot: (typeof shots)[number]) =>
+  const imageModelFor = (shot: (typeof shotsWithImage)[number]) =>
     resolveSceneImageModel(
       shot.sceneId ? scenesById.get(dbSceneId(shot.sceneId)) : null,
       sequence
     );
-  const videoModelFor = (shot: (typeof shots)[number]) =>
+  const videoModelFor = (shot: (typeof shotsWithImage)[number]) =>
     resolveSceneVideoModel(
       shot.sceneId ? scenesById.get(dbSceneId(shot.sceneId)) : null,
       sequence
     );
 
   // Collect failed items and estimate costs
-  const failedImageShots = shots.filter((f) => f.thumbnailStatus === 'failed');
-  const failedMotionShots = shots.filter(
+  const failedImageShots = shotsWithImage.filter(
+    (f) => f.thumbnailStatus === 'failed'
+  );
+  const failedMotionShots = shotsWithImage.filter(
     (f) => f.videoStatus === 'failed' && f.thumbnailUrl && f.motionPrompt
   );
   const hasMusicFailure =

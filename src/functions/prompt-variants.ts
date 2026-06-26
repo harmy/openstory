@@ -80,7 +80,13 @@ export function isPromptUpToDate(
   return storedHash !== null && storedHash === liveHash;
 }
 
-export type ShotPromptVariantWithAuthor = ShotPromptVersion & {
+// Visual prompt history now comes from `frame_prompt_versions` and motion from
+// `shot_prompt_versions` (#989). Both stores are normalized to this minimal,
+// store-agnostic row so `listShotPromptVariantsFn` returns one shape.
+export type ShotPromptVariantWithAuthor = Pick<
+  ShotPromptVersion,
+  'id' | 'source' | 'text' | 'inputHash' | 'createdAt'
+> & {
   createdByName: string | null;
 };
 
@@ -98,10 +104,35 @@ export const listShotPromptVariantsFn = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(shotListInput))
   .handler(
     async ({ context, data }): Promise<ShotPromptVariantWithAuthor[]> => {
-      return await context.scopedDb.shotPromptVersions.listByShotWithAuthor(
-        data.shotId,
-        data.promptType
-      );
+      // Visual prompt history moved to frame_prompt_versions (#989,
+      // frameId == shotId); motion history stays on shot_prompt_versions.
+      if (data.promptType === 'visual') {
+        const rows =
+          await context.scopedDb.framePromptVersions.listByFrameWithAuthor(
+            data.shotId
+          );
+        return rows.map((r) => ({
+          id: r.id,
+          source: r.source,
+          text: r.text,
+          inputHash: r.inputHash,
+          createdAt: r.createdAt,
+          createdByName: r.createdByName,
+        }));
+      }
+      const rows =
+        await context.scopedDb.shotPromptVersions.listByShotWithAuthor(
+          data.shotId,
+          data.promptType
+        );
+      return rows.map((r) => ({
+        id: r.id,
+        source: r.source,
+        text: r.text,
+        inputHash: r.inputHash,
+        createdAt: r.createdAt,
+        createdByName: r.createdByName,
+      }));
     }
   );
 
@@ -136,6 +167,27 @@ export const restoreShotPromptVariantFn = createServerFn({ method: 'POST' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(shotRestoreInput))
   .handler(async ({ context, data }) => {
+    // Visual prompt history lives in frame_prompt_versions (#989, frameId ==
+    // shotId); motion stays on shot_prompt_versions. ULIDs are globally unique,
+    // so a frame-store hit unambiguously identifies a visual restore.
+    const frameChosen =
+      await context.scopedDb.framePromptVersions.getByIdForFrame(
+        data.variantId,
+        data.shotId
+      );
+    if (frameChosen) {
+      const inserted = await context.scopedDb.framePromptVersions.write({
+        frameId: data.shotId,
+        text: frameChosen.text,
+        components: frameChosen.components,
+        source: 'restored',
+        inputHash: frameChosen.inputHash,
+        analysisModel: frameChosen.analysisModel,
+        createdBy: context.user.id,
+      });
+      return { variantId: inserted.id };
+    }
+
     const chosen = await context.scopedDb.shotPromptVersions.getByIdForShot(
       data.variantId,
       data.shotId
@@ -204,7 +256,7 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(shotRegenerateInput))
   .handler(async ({ context, data }) => {
-    const { shot, sequence, scopedDb, user, teamId } = context;
+    const { shot, frame, sequence, scopedDb, user, teamId } = context;
 
     if (!shot.metadata) {
       throw new Error('Shot has no scene metadata to regenerate from');
@@ -216,8 +268,9 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
       scene: shot.metadata,
       // Motion prompts are conditioned on the rendered still (#929); feeding
       // its URL here keeps this regen-bail check in lockstep with the
-      // generation-time stamp and the staleness verify. No-op for visual.
-      startingFrameImageUrl: shot.thumbnailUrl,
+      // generation-time stamp and the staleness verify. No-op for visual. The
+      // still lives on the anchor frame now (#989).
+      startingFrameImageUrl: frame.imageUrl,
     });
 
     // Bail if the cached input hash already matches the live recompute —
@@ -236,7 +289,7 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
         : await computeMotionPromptInputHash(narrowed);
     const storedHash =
       data.promptType === 'visual'
-        ? shot.visualPromptInputHash
+        ? frame.visualPromptInputHash
         : shot.motionPromptInputHash;
     if (!data.force && isPromptUpToDate(storedHash, liveHash)) {
       return { workflowRunId: null, alreadyUpToDate: true } as const;
@@ -265,10 +318,11 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
       emitStreaming: data.force === true,
       // Snapshot the rendered still at trigger time (#929) — the motion
       // workflow must NOT look it up mid-run, or a concurrent re-render could
-      // swap it. No-op for the visual path. `shot` was loaded at the top of
-      // this handler, so this is the image as it exists right now.
+      // swap it. No-op for the visual path. The still lives on the anchor frame
+      // now (#989), loaded at the top of this handler, so this is the image as
+      // it exists right now.
       ...(data.promptType === 'motion' && {
-        startingFrameImageUrl: shot.thumbnailUrl,
+        startingFrameImageUrl: frame.imageUrl,
       }),
     };
 
@@ -431,12 +485,15 @@ export const getDivergentVariantPromptDiffFn = createServerFn({
     // variants which have no field-level prompt diff.
     if (!variant.promptHash) return null;
     if (variant.variantType === 'audio') return null;
+    // Image variants moved to frame_variants (#989); `shot_variants` only holds
+    // video/audio now, so the only field-level prompt diff here is motion. (An
+    // image variant id never resolves via `shotVariants.getById`.)
+    if (variant.variantType === 'image') return null;
 
-    const promptType = variant.variantType === 'image' ? 'visual' : 'motion';
     const candidates =
       await context.scopedDb.shotPromptVersions.listCandidatesAtOrBefore(
         variant.shotId,
-        promptType,
+        'motion',
         variant.createdAt
       );
 
@@ -459,13 +516,12 @@ export const getDivergentVariantPromptDiffFn = createServerFn({
         `Shot ${variant.shotId} missing for variant ${variant.id}`
       );
     }
-    const live =
-      promptType === 'visual' ? shotRow.imagePrompt : shotRow.motionPrompt;
+    const live = shotRow.motionPrompt;
     if (!live) return null;
     if (live === matched.text) return null;
 
     return {
-      label: promptType === 'visual' ? 'Visual prompt' : 'Motion prompt',
+      label: 'Motion prompt',
       before: matched.text,
       after: live,
     };

@@ -132,12 +132,12 @@ export const generateShotImageFn = createServerFn({ method: 'POST' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(generateImageInputSchema))
   .handler(async ({ context, data }) => {
-    const { shot, sequence, user } = context;
+    const { shot, frame, sequence, user } = context;
 
-    // Priority: provided > stored > AI-generated > description
+    // Priority: provided > stored (anchor frame, #989) > AI-generated > description
     const prompt =
       data.prompt ||
-      shot.imagePrompt ||
+      frame.imagePrompt ||
       shot.metadata?.prompts?.visual?.fullPrompt ||
       shot.description;
 
@@ -286,10 +286,10 @@ export const generateShotVariantsFn = createServerFn({ method: 'POST' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(generateVariantsInputSchema))
   .handler(async ({ context, data }) => {
-    const { shot, sequence, user } = context;
+    const { shot, frame, sequence, user } = context;
 
-    if (!shot.thumbnailUrl) {
-      throw new Error('Shot must have a thumbnail image to generate variants');
+    if (!frame.imageUrl) {
+      throw new Error('Shot must have a still image to generate variants');
     }
 
     const allCharacters = await context.scopedDb.characters.listWithSheets(
@@ -326,7 +326,7 @@ export const generateShotVariantsFn = createServerFn({ method: 'POST' })
       teamId: sequence.teamId,
       sequenceId: sequence.id,
       shotId: shot.id,
-      thumbnailUrl: shot.thumbnailUrl,
+      thumbnailUrl: frame.imageUrl,
       scenePrompt: shot.metadata?.prompts?.visual?.fullPrompt,
       model: data.model,
       aspectRatio: sequence.aspectRatio,
@@ -374,10 +374,17 @@ export const selectShotVariantFn = createServerFn({ method: 'POST' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(selectVariantInputSchema))
   .handler(async ({ context, data }) => {
-    const { shot, sequence, user } = context;
+    const { shot, frame, sequence, user } = context;
 
-    if (!shot.variantImageUrl) {
-      throw new Error('Shot has no variant image to select from');
+    // The 3×3 grid sheet is the latest `kind:'framing'` `frame_variants` version
+    // (#989). Selecting a tile spawns a new framing version (the upscaled tile)
+    // pointing back at this sheet, then repoints the selection — never an
+    // overwrite.
+    const sheet = await context.scopedDb.frameVariants.getLatestGridSheet(
+      frame.id
+    );
+    if (!sheet?.url) {
+      throw new Error('Shot has no variant grid to select from');
     }
 
     const gridConfig = getVariantGridConfig(sequence.aspectRatio);
@@ -394,25 +401,11 @@ export const selectShotVariantFn = createServerFn({ method: 'POST' })
     // and WASM-processing the grid image in-Worker. FAL fetches the cropped
     // tile directly from this URL when upscaling.
     const cropResult = await cropTileFromGrid({
-      gridImageUrl: shot.variantImageUrl,
+      gridImageUrl: sheet.url,
       row,
       col,
       gridCols: gridConfig.cols,
       gridRows: gridConfig.rows,
-    });
-
-    // Set cropped thumbnail URL and clear stale motion fields
-    await context.scopedDb.shots.update(shot.id, {
-      thumbnailUrl: cropResult.url,
-      thumbnailPath: null,
-      thumbnailStatus: 'generating',
-      thumbnailError: null,
-      videoUrl: null,
-      videoPath: null,
-      videoStatus: 'pending',
-      videoWorkflowRunId: null,
-      videoGeneratedAt: null,
-      videoError: null,
     });
 
     // Fetch character and location references for upscale consistency
@@ -448,6 +441,9 @@ export const selectShotVariantFn = createServerFn({ method: 'POST' })
       aspectRatio: sequence.aspectRatio,
       characterReferences,
       locationReferences,
+      // The framing version the upscaled tile derives from (#989) — the upscale
+      // workflow records it as `frame_variants.sourceVariantId`.
+      sourceVariantId: sheet.id,
     };
 
     const workflowRunId = await triggerWorkflow(
@@ -481,31 +477,32 @@ export const setImageFromVariantFn = createServerFn({ method: 'POST' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(setImageFromVariantInputSchema))
   .handler(async ({ context, data }) => {
-    const { shot } = context;
+    const { shot, frame } = context;
 
-    const variant = await context.scopedDb.shotVariants.getByShotAndModel(
-      shot.id,
-      'image',
-      data.model
-    );
-
-    if (!variant || variant.status !== 'completed' || !variant.url) {
+    // The model's image versions live in `frame_variants` now (#989). Pick the
+    // latest completed one and SELECT it — a pointer repoint that mirrors its
+    // image fields onto the frame + logs `image.selected`. This is the #677 fix:
+    // selecting a model is a retained version + repoint, never an overwrite, so
+    // the old "set image shows old image" / false-staleness bugs disappear (the
+    // version carries its own inputHash; the mirror adopts it).
+    const versions = await context.scopedDb.frameVariants.listByGroup({
+      frameId: frame.id,
+      kind: 'model',
+      model: data.model,
+    });
+    const latest = [...versions]
+      .reverse()
+      .find((v) => v.status === 'completed' && v.url);
+    if (!latest) {
       throw new Error('No completed variant found for this model');
     }
 
+    await context.scopedDb.frameVariants.select(frame.id, latest.id, {
+      actorId: context.user.id,
+    });
+
+    // A new still invalidates downstream video (still on `shots` until Phase 3).
     await context.scopedDb.shots.update(shot.id, {
-      thumbnailUrl: variant.url,
-      thumbnailPath: variant.storagePath,
-      thumbnailStatus: 'completed',
-      thumbnailError: null,
-      imageModel: data.model,
-      // Adopt the promoted variant's input hash so the staleness check (which
-      // re-derives the current hash with the now-updated imageModel) compares
-      // like-for-like. Without this it diffs the new model's hash against the
-      // OLD model's stored hash and always reports a false "stale". (#545)
-      thumbnailInputHash: variant.inputHash,
-      // Clear stale video fields — the video was generated from the previous
-      // image, so it must be regenerated.
       videoUrl: null,
       videoPath: null,
       videoStatus: 'pending',
@@ -514,7 +511,7 @@ export const setImageFromVariantFn = createServerFn({ method: 'POST' })
       videoError: null,
     });
 
-    return { shotId: shot.id, thumbnailUrl: variant.url };
+    return { shotId: shot.id, thumbnailUrl: latest.url };
   });
 
 const setVideoFromVariantInputSchema = z.object({

@@ -24,7 +24,7 @@ import type { Database } from '@/lib/db/client';
 import { frameVariants, frames } from '@/lib/db/schema';
 import type { FrameVariant, NewFrameVariant } from '@/lib/db/schema';
 import type { FrameVariantKind } from '@/lib/db/schema/frame-variants';
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { buildFrameImageMirror } from './frames';
 import { buildEventInsert } from './sequence-events';
 
@@ -61,6 +61,26 @@ export function createFrameVariantsMethods(db: Database) {
         );
       }
       return version;
+    },
+
+    /**
+     * Mark any still-'generating' version for a workflow run as failed. Used by
+     * the image workflow's `onFailure`, which only has the run id (not the
+     * version id minted in the generating step).
+     */
+    markFailedByWorkflowRun: async (
+      workflowRunId: string,
+      error: string
+    ): Promise<void> => {
+      await db
+        .update(frameVariants)
+        .set({ status: 'failed', error, updatedAt: new Date() })
+        .where(
+          and(
+            eq(frameVariants.workflowRunId, workflowRunId),
+            eq(frameVariants.status, 'generating')
+          )
+        );
     },
 
     /** Update generation tracking on an in-flight version (status/url/error/…). */
@@ -110,6 +130,43 @@ export function createFrameVariantsMethods(db: Database) {
         .orderBy(asc(frameVariants.id));
     },
 
+    /**
+     * All `kind:'model'` versions across a sequence, oldest-first (excludes
+     * discarded). The image analog of the retired `shotVariants.listBySequence`
+     * — the coverage UI reduces these to latest-per-(frameId, model). frameId
+     * == the shot's id, so existing shot-keyed client logic keeps working.
+     */
+    listModelVersionsBySequence: async (
+      sequenceId: string
+    ): Promise<FrameVariant[]> => {
+      return await db
+        .select()
+        .from(frameVariants)
+        .where(
+          and(
+            eq(frameVariants.sequenceId, sequenceId),
+            eq(frameVariants.kind, 'model'),
+            isNull(frameVariants.discardedAt)
+          )
+        )
+        .orderBy(asc(frameVariants.id));
+    },
+
+    /** Distinct `kind:'model'` model names that have a version in a sequence. */
+    listModelsForSequence: async (sequenceId: string): Promise<string[]> => {
+      const rows = await db
+        .selectDistinct({ model: frameVariants.model })
+        .from(frameVariants)
+        .where(
+          and(
+            eq(frameVariants.sequenceId, sequenceId),
+            eq(frameVariants.kind, 'model'),
+            isNull(frameVariants.discardedAt)
+          )
+        );
+      return rows.map((r) => r.model);
+    },
+
     /** All versions for a frame, oldest-first. Excludes discarded by default. */
     listByFrame: async (
       frameId: string,
@@ -124,6 +181,57 @@ export function createFrameVariantsMethods(db: Database) {
         .from(frameVariants)
         .where(and(...conditions))
         .orderBy(asc(frameVariants.id));
+    },
+
+    /**
+     * The current 3×3 grid SHEET for a frame: the latest `kind:'framing'`
+     * version with no `sourceVariantId` (the raw sheet — a chosen tile points
+     * its `sourceVariantId` at the sheet it was cropped from). Drives the
+     * picker's `variantImageUrl`. Returns null when no grid has been generated.
+     */
+    getLatestGridSheet: async (
+      frameId: string
+    ): Promise<FrameVariant | null> => {
+      const rows = await db
+        .select()
+        .from(frameVariants)
+        .where(
+          and(
+            eq(frameVariants.frameId, frameId),
+            eq(frameVariants.kind, 'framing'),
+            isNull(frameVariants.sourceVariantId),
+            isNull(frameVariants.discardedAt)
+          )
+        )
+        .orderBy(desc(frameVariants.id))
+        .limit(1);
+      return rows[0] ?? null;
+    },
+
+    /**
+     * Batch of the latest grid sheet per frame across a sequence (for list
+     * projection). Returns a Map keyed by frameId; frames with no grid are
+     * absent. One query, reduced to newest-per-frame in app code.
+     */
+    listLatestGridSheetsBySequence: async (
+      sequenceId: string
+    ): Promise<Map<string, FrameVariant>> => {
+      const rows = await db
+        .select()
+        .from(frameVariants)
+        .where(
+          and(
+            eq(frameVariants.sequenceId, sequenceId),
+            eq(frameVariants.kind, 'framing'),
+            isNull(frameVariants.sourceVariantId),
+            isNull(frameVariants.discardedAt)
+          )
+        )
+        .orderBy(asc(frameVariants.id));
+      // asc by id (≈ time) → last write per frame wins.
+      const byFrame = new Map<string, FrameVariant>();
+      for (const row of rows) byFrame.set(row.frameId, row);
+      return byFrame;
     },
 
     /** The version the frame currently points at, or null if unset/dangling. */

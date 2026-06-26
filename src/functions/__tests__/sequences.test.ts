@@ -13,7 +13,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { Shot, ShotVariant } from '@/lib/db/schema';
+import type { Frame, Shot, ShotVariant } from '@/lib/db/schema';
+import {
+  projectShotWithImage,
+  type ShotWithImage,
+} from '@/lib/shots/shot-with-image';
 import {
   assertModelNotAlreadyAdded,
   buildAddAudioMusicInput,
@@ -54,28 +58,21 @@ function makeVariant(overrides: Partial<ShotVariant> = {}): ShotVariant {
   };
 }
 
-function makeShot(overrides: Partial<Shot> = {}): Shot {
-  return {
-    id: 'shot-1',
-    sequenceId: 'seq-1',
+// The shot read path returns `ShotWithImage` (#989): a Shot (no image columns)
+// plus the anchor frame's still surface projected back under the legacy
+// `thumbnail*`/`image*` names. The image-readiness helpers below read those
+// projected names, so the fixtures carry them.
+function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
+  const id = overrides.id ?? 'shot-1';
+  const sequenceId = overrides.sequenceId ?? 'seq-1';
+  const shot: Shot = {
+    id,
+    sequenceId,
     sceneId: null,
     shotNumber: null,
     orderIndex: 0,
     description: 'A scene',
     durationMs: 3000,
-    thumbnailUrl: 'https://cdn/thumb.jpg',
-    thumbnailPath: null,
-    thumbnailStatus: 'completed',
-    thumbnailWorkflowRunId: null,
-    thumbnailGeneratedAt: null,
-    thumbnailError: null,
-    imageModel: 'nano_banana_2',
-    imagePrompt: null,
-    variantImageUrl: null,
-    variantImageStatus: 'pending',
-    variantWorkflowRunId: null,
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     videoUrl: null,
     videoPath: null,
     videoStatus: 'pending',
@@ -92,18 +89,37 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     audioGeneratedAt: null,
     audioError: null,
     audioModel: null,
-    thumbnailInputHash: null,
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
-    visualPromptInputHash: null,
     motionPromptInputHash: null,
-    previewThumbnailUrl: null,
     metadata: null,
     createdAt: NOW,
     updatedAt: NOW,
-    ...overrides,
   };
+  const frame: Frame = {
+    id,
+    shotId: id,
+    sequenceId,
+    orderIndex: 0,
+    role: 'first',
+    source: 'generated',
+    imageUrl: 'https://cdn/thumb.jpg',
+    previewImageUrl: null,
+    imagePath: null,
+    imageStatus: 'completed',
+    imageWorkflowRunId: null,
+    imageGeneratedAt: null,
+    imageError: null,
+    imageModel: 'nano_banana_2',
+    imagePrompt: null,
+    selectedImageVersionId: null,
+    selectedImagePromptVersionId: null,
+    imageInputHash: null,
+    visualPromptInputHash: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+  return { ...projectShotWithImage(shot, frame), ...overrides };
 }
 
 describe('selectPromotableVariants (#547)', () => {
@@ -158,30 +174,19 @@ describe('selectPromotableVariants (#547)', () => {
 });
 
 describe('buildSequencePromoteUpdate (#547)', () => {
-  it('image: promotes the thumbnail and clears the now-stale video, no video-parity fields', () => {
+  it('image: throws — image promotion is retired (#989), selection is a frameVariants.select repoint', () => {
     const variant = makeVariant({
       variantType: 'image',
       url: 'https://cdn/img.png',
       storagePath: 'path/img.png',
       inputHash: 'hash-img',
     });
-    const update = buildSequencePromoteUpdate(
-      variant,
-      'image',
-      'flux_pro',
-      () => NOW
-    );
-    expect(update.thumbnailUrl).toBe('https://cdn/img.png');
-    expect(update.thumbnailStatus).toBe('completed');
-    expect(update.imageModel).toBe('flux_pro');
-    // The downstream video is invalidated by a new primary image.
-    expect(update.videoUrl).toBeNull();
-    expect(update.videoStatus).toBe('pending');
-    // Image promotion must not stamp the video-parity fields: motionModel is
-    // never set, and videoGeneratedAt is cleared to null (not stamped with a
-    // promotion timestamp the way the video case does).
-    expect(update.motionModel).toBeUndefined();
-    expect(update.videoGeneratedAt).toBeNull();
+    // Image variants moved to `frame_variants`; the still is chosen via a
+    // pointer repoint, never copied onto `shots`. `buildPromoteUpdate` (which
+    // this delegates to) rejects an image variant outright.
+    expect(() =>
+      buildSequencePromoteUpdate(variant, 'image', 'flux_pro', () => NOW)
+    ).toThrow(/not promoted/);
   });
 
   it('video: layers motionModel/durationMs/videoGeneratedAt on top of the base promote update', () => {

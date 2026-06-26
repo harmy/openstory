@@ -530,6 +530,11 @@ export interface UpscaleShotVariantWorkflowInput extends SequenceWorkflowContext
   characterReferences?: ReferenceImageDescription[];
   /** Location reference images for environment consistency during upscale */
   locationReferences?: ReferenceImageDescription[];
+  /**
+   * The grid-sheet `frame_variants` version the tile was cropped from (#989).
+   * Recorded as `frame_variants.sourceVariantId` on the upscaled framing version.
+   */
+  sourceVariantId?: string | null;
 }
 
 export interface UpscaleShotVariantWorkflowResult {

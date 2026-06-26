@@ -1,16 +1,12 @@
 /**
- * Cloudflare Workflows port of `upscaleShotVariantWorkflow`.
+ * Upscale a chosen 3×3 grid tile into the frame's primary still (#989).
  *
- * Mirrors the QStash version (`src/lib/workflows/upscale-shot-variant-workflow.ts`)
- * step for step — same step names, same control flow, same side effects. The
- * only differences are:
- *
- *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
- *     `createScopedWorkflow`. Failure parity comes from the base class
- *     (see `base-workflow.ts`).
- *   - Uses `step.do` instead of `context.run`.
- *   - Reads the workflow run id from `event.instanceId` instead of
- *     `context.workflowRunId`.
+ * The picked tile is cropped (a Cloudflare Image Resizing URL) by
+ * `selectShotVariantFn`, then this workflow upscales it and records the result
+ * as a `kind:'framing'` `frame_variants` version (`sourceVariantId` = the grid
+ * sheet it came from) and SELECTS it — a pointer repoint that mirrors the new
+ * still onto the frame, never an overwrite. Downstream video (still on `shots`
+ * until Phase 3) is reset because the anchor still changed.
  */
 
 import { IMAGE_MODELS } from '@/lib/ai/models';
@@ -67,51 +63,44 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
     step: WorkflowStep,
     scopedDb: ScopedDb
   ): Promise<UpscaleShotVariantWorkflowResult> {
-    const rawInput = event.payload;
-    // Back-compat: accept shotId or shotId from in-flight instances serialized before #906
-    // TODO(#906): remove shotId shim one release after deploy
-    const input = {
-      ...rawInput,
-      shotId:
-        rawInput.shotId ??
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- back-compat shim for in-flight CF Workflow instances serialized before #906
-        (rawInput as { shotId?: string }).shotId ??
-        undefined,
-    };
+    const input = event.payload;
     const workflowRunId = event.instanceId;
 
-    const { sequenceId, teamId, shotId } = input;
+    const { sequenceId, teamId, shotId, userId } = input;
     if (!sequenceId || !teamId || !shotId) {
       throw new WorkflowValidationError('sequenceId and teamId are required');
     }
 
     logger.info(
-      `[UpscaleShotVariantWorkflow:cf] Starting upscale for shot ${shotId}`
+      `[UpscaleShotVariantWorkflow] Starting upscale for shot ${shotId}`
     );
 
     const upscaleResult = await step.do('upscale-image', async () => {
       await getGenerationChannel(sequenceId).emit('generation.image:progress', {
-        shotId: shotId,
+        shotId,
         status: 'generating',
       });
 
-      const shot = await scopedDb.shots.update(
-        shotId,
-        {
-          thumbnailStatus: 'generating',
-          thumbnailWorkflowRunId: workflowRunId,
-        },
-        { throwOnMissing: false }
-      );
-
-      if (!shot) {
+      const frame = await scopedDb.frames.getById(shotId);
+      if (!frame) {
         logger.info(
-          `[UpscaleShotVariantWorkflow:cf] Shot ${shotId} was deleted, skipping workflow`
+          `[UpscaleShotVariantWorkflow] Shot ${shotId} has no anchor frame, skipping`
         );
         return null;
       }
 
-      // Build enhanced prompt with character/location references (ensure roles are set)
+      // Record the in-flight framing version (the upscaled tile), pointing back
+      // at the grid sheet it was cropped from.
+      const version = await scopedDb.frameVariants.appendVersion({
+        frameId: shotId,
+        sequenceId,
+        kind: 'framing',
+        model: 'nano_banana_2',
+        sourceVariantId: input.sourceVariantId ?? null,
+        status: 'generating',
+        workflowRunId,
+      });
+
       const allReferences = [
         ...(input.characterReferences ?? []).map((r) => ({
           ...r,
@@ -129,12 +118,10 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
           IMAGE_MODELS.nano_banana_2.maxPromptLength
         );
 
-      // Determine output image size from sequence aspect ratio
       const imageSize = input.aspectRatio
         ? aspectRatioToImageSize(input.aspectRatio)
         : DEFAULT_IMAGE_SIZE;
 
-      // Cropped tile is primary source (first), char/loc refs appended after
       const result = await generateImageWithProvider(
         {
           model: 'nano_banana_2',
@@ -150,6 +137,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
         imageUrl: result.imageUrls[0],
         cost: result.metadata.cost ?? ZERO_MICROS,
         usedOwnKey: result.metadata.usedOwnKey,
+        versionId: version.id,
       };
     });
 
@@ -164,7 +152,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
         usedOwnKey: upscaleResult.usedOwnKey,
         description: 'Variant upscale (nano_banana_2)',
         idempotencyKey: `${event.instanceId}:upscale`,
-        metadata: { shotId: input.shotId, sequenceId: input.sequenceId },
+        metadata: { shotId, sequenceId },
         workflowName: 'UpscaleShotVariantWorkflow',
       });
     });
@@ -175,48 +163,52 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
       }
       const result = await uploadImageToStorage({
         imageUrl: upscaleResult.imageUrl,
-        teamId: teamId,
-        sequenceId: sequenceId,
-        shotId: input.shotId,
+        teamId,
+        sequenceId,
+        shotId,
       });
-
       if (!result.url) {
         throw new Error('Failed to upload upscaled image to storage');
       }
-
       return { url: result.url, path: result.path };
     });
 
-    await step.do('update-shot', async () => {
-      const updatedShot = await scopedDb.shots.update(
-        input.shotId,
+    await step.do('select-upscaled-version', async () => {
+      await scopedDb.frameVariants.update(upscaleResult.versionId, {
+        status: 'completed',
+        url: storageResult.url,
+        storagePath: storageResult.path || null,
+        generatedAt: new Date(),
+        error: null,
+      });
+
+      // Repoint the frame's selection at the upscaled tile (mirror + event).
+      await scopedDb.frameVariants.select(shotId, upscaleResult.versionId, {
+        actorId: userId,
+      });
+
+      // New still → reset the shot's downstream video.
+      await scopedDb.shots.update(
+        shotId,
         {
-          thumbnailUrl: storageResult.url,
-          thumbnailPath: storageResult.path || null,
-          thumbnailStatus: 'completed',
-          thumbnailGeneratedAt: new Date(),
+          videoUrl: null,
+          videoPath: null,
+          videoStatus: 'pending',
+          videoWorkflowRunId: null,
+          videoGeneratedAt: null,
+          videoError: null,
         },
         { throwOnMissing: false }
       );
 
-      if (!updatedShot) {
-        logger.info(
-          `[UpscaleShotVariantWorkflow:cf] Shot ${input.shotId} was deleted, skipping final update`
-        );
-        return;
-      }
-
-      await getGenerationChannel(input.sequenceId).emit(
-        'generation.image:progress',
-        {
-          shotId: input.shotId,
-          status: 'completed',
-          thumbnailUrl: storageResult.url,
-        }
-      );
+      await getGenerationChannel(sequenceId).emit('generation.image:progress', {
+        shotId,
+        status: 'completed',
+        thumbnailUrl: storageResult.url,
+      });
 
       logger.info(
-        `[UpscaleShotVariantWorkflow:cf] Upscale completed for shot ${input.shotId}`
+        `[UpscaleShotVariantWorkflow] Upscale completed + selected for shot ${shotId}`
       );
     });
 
@@ -236,24 +228,27 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
     scopedDb: ScopedDb;
   }): Promise<void> {
     const input = event.payload;
-
     logger.error(
-      `[UpscaleShotVariantWorkflow:cf] Upscale failed for shot ${input.shotId}: ${error}`
+      `[UpscaleShotVariantWorkflow] Upscale failed for shot ${input.shotId}: ${error}`
     );
+    if (!input.shotId || !input.teamId) return;
 
-    if (input.shotId && input.teamId) {
-      await scopedDb.shots.update(
-        input.shotId,
-        {
-          thumbnailStatus: 'completed',
-          thumbnailGeneratedAt: new Date(),
-        },
-        { throwOnMissing: false }
-      );
-
+    // Mark the in-flight framing version failed; the frame's PRIOR selection is
+    // untouched, so revert the UI to the real selected still rather than showing
+    // a false failure on a good image.
+    await scopedDb.frameVariants.markFailedByWorkflowRun(
+      event.instanceId,
+      error
+    );
+    if (input.sequenceId) {
+      const frame = await scopedDb.frames.getById(input.shotId);
       await getGenerationChannel(input.sequenceId).emit(
         'generation.image:progress',
-        { shotId: input.shotId, status: 'completed' }
+        {
+          shotId: input.shotId,
+          status: 'completed',
+          ...(frame?.imageUrl ? { thumbnailUrl: frame.imageUrl } : {}),
+        }
       );
     }
   }

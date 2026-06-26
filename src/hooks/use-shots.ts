@@ -1,6 +1,7 @@
 import type { Shot } from '@/types/database';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ShotVariant } from '@/lib/db/schema';
+import type { FrameVariant, ShotVariant } from '@/lib/db/schema';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import {
   getShotsFn,
   getDivergentVariantsFn,
@@ -86,12 +87,13 @@ export function useSequenceVideoVariants(sequenceId?: string) {
   });
 }
 
-// All image ShotVariant rows for a sequence (#547). Used by the header image
+// All image FrameVariant (kind:'model') rows for a sequence (#547/#989). Image
+// variants moved off `shot_variants` onto `frame_variants`; `frameId == shotId`
+// so the shot-keyed coverage logic keeps working. Used by the header image
 // dropdown for sequence-wide per-model coverage, and by the scenes view to
-// resolve each shot's displayed image through the active model's variant. Key
-// matches the scenes-view query + the image:progress cache invalidation.
+// resolve each shot's displayed image through the active model's variant.
 export function useSequenceImageVariants(sequenceId?: string) {
-  return useQuery<ShotVariant[]>({
+  return useQuery<FrameVariant[]>({
     queryKey: ['sequence-image-variants', sequenceId ?? ''],
     queryFn: async () => {
       if (!sequenceId) throw new Error('sequenceId is required');
@@ -191,7 +193,7 @@ export function useShotsBySequence(
     staleTime?: number;
   }
 ) {
-  return useQuery<Shot[]>({
+  return useQuery<ShotWithImage[]>({
     queryKey: shotKeys.list(sequenceId ?? ''),
     queryFn: async () => {
       if (!sequenceId) throw new Error('sequenceId is required');
@@ -232,15 +234,18 @@ export function useGenerateVariants() {
     },
     onSuccess: async (_, { sequenceId, shotId }) => {
       // Optimistically update shot status to 'generating'
-      queryClient.setQueryData<Shot>(shotKeys.detail(shotId), (oldShot) => {
-        if (!oldShot) return oldShot;
-        return {
-          ...oldShot,
-          variantImageStatus: 'generating' as const,
-        };
-      });
+      queryClient.setQueryData<ShotWithImage>(
+        shotKeys.detail(shotId),
+        (oldShot) => {
+          if (!oldShot) return oldShot;
+          return {
+            ...oldShot,
+            variantImageStatus: 'generating' as const,
+          };
+        }
+      );
 
-      queryClient.setQueryData<Shot[]>(
+      queryClient.setQueryData<ShotWithImage[]>(
         shotKeys.list(sequenceId),
         (oldShots) => {
           if (!oldShots) return oldShots;
@@ -294,16 +299,19 @@ export function useSelectVariant() {
     },
     onSuccess: async (data, { sequenceId, shotId }) => {
       // Update shot queries with new thumbnail
-      queryClient.setQueryData<Shot>(shotKeys.detail(shotId), (oldShot) => {
-        if (!oldShot) return oldShot;
-        return {
-          ...oldShot,
-          thumbnailUrl: data.thumbnailUrl,
-          thumbnailStatus: 'generating' as const, // Upscale is running
-        };
-      });
+      queryClient.setQueryData<ShotWithImage>(
+        shotKeys.detail(shotId),
+        (oldShot) => {
+          if (!oldShot) return oldShot;
+          return {
+            ...oldShot,
+            thumbnailUrl: data.thumbnailUrl,
+            thumbnailStatus: 'generating' as const, // Upscale is running
+          };
+        }
+      );
 
-      queryClient.setQueryData<Shot[]>(
+      queryClient.setQueryData<ShotWithImage[]>(
         shotKeys.list(sequenceId),
         (oldShots) => {
           if (!oldShots) return oldShots;
@@ -336,7 +344,9 @@ export function useSetImageFromVariant() {
   const queryClient = useQueryClient();
 
   return useMutation<
-    { shotId: string; thumbnailUrl: string },
+    // thumbnailUrl mirrors the selected frame variant's `imageUrl`, which is
+    // nullable until the image completes (#989).
+    { shotId: string; thumbnailUrl: string | null },
     Error,
     { sequenceId: string; shotId: string; model: string }
   >({
@@ -352,19 +362,22 @@ export function useSetImageFromVariant() {
       });
     },
     onSuccess: async (data, { sequenceId, shotId, model }) => {
-      queryClient.setQueryData<Shot>(shotKeys.detail(shotId), (oldShot) => {
-        if (!oldShot) return oldShot;
-        return {
-          ...oldShot,
-          thumbnailUrl: data.thumbnailUrl,
-          thumbnailStatus: 'completed' as const,
-          imageModel: model,
-          videoUrl: null,
-          videoStatus: 'pending' as const,
-        };
-      });
+      queryClient.setQueryData<ShotWithImage>(
+        shotKeys.detail(shotId),
+        (oldShot) => {
+          if (!oldShot) return oldShot;
+          return {
+            ...oldShot,
+            thumbnailUrl: data.thumbnailUrl,
+            thumbnailStatus: 'completed' as const,
+            imageModel: model,
+            videoUrl: null,
+            videoStatus: 'pending' as const,
+          };
+        }
+      );
 
-      queryClient.setQueryData<Shot[]>(
+      queryClient.setQueryData<ShotWithImage[]>(
         shotKeys.list(sequenceId),
         (oldShots) => {
           if (!oldShots) return oldShots;
@@ -416,17 +429,20 @@ export function useSetVideoFromVariant() {
       });
     },
     onSuccess: async (data, { sequenceId, shotId, model }) => {
-      queryClient.setQueryData<Shot>(shotKeys.detail(shotId), (oldShot) => {
-        if (!oldShot) return oldShot;
-        return {
-          ...oldShot,
-          videoUrl: data.videoUrl,
-          videoStatus: 'completed' as const,
-          motionModel: model,
-        };
-      });
+      queryClient.setQueryData<ShotWithImage>(
+        shotKeys.detail(shotId),
+        (oldShot) => {
+          if (!oldShot) return oldShot;
+          return {
+            ...oldShot,
+            videoUrl: data.videoUrl,
+            videoStatus: 'completed' as const,
+            motionModel: model,
+          };
+        }
+      );
 
-      queryClient.setQueryData<Shot[]>(
+      queryClient.setQueryData<ShotWithImage[]>(
         shotKeys.list(sequenceId),
         (oldShots) => {
           if (!oldShots) return oldShots;

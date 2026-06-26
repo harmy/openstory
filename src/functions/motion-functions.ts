@@ -28,6 +28,7 @@ import { dbSceneId } from '@/lib/db/schema';
 import type { BatchMotionMusicWorkflowInput } from '@/lib/workflow/types';
 
 import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
+import { projectShotWithImage } from '@/lib/shots/shot-with-image';
 import { rescanContinuityFromPrompt } from '@/lib/scenes/rescan-continuity-from-prompt';
 
 import { shotAccessMiddleware, sequenceAccessMiddleware } from './middleware';
@@ -43,9 +44,12 @@ export const generateShotMotionFn = createServerFn({ method: 'POST' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(generateMotionInputSchema))
   .handler(async ({ data, context }) => {
-    const { shot, sequence, teamId } = context;
+    const { shot, frame, sequence, teamId } = context;
 
-    if (!shot.thumbnailUrl) {
+    // The still image lives on the anchor frame now (#989). Capture into a const
+    // so the non-null narrowing survives the awaits before the workflow input.
+    const imageUrl = frame.imageUrl;
+    if (!imageUrl) {
       throw new Error('Shot has no thumbnail to generate motion from');
     }
 
@@ -104,7 +108,7 @@ export const generateShotMotionFn = createServerFn({ method: 'POST' })
       shots: [
         {
           shotId: shot.id,
-          imageUrl: shot.thumbnailUrl,
+          imageUrl,
           prompt,
           model,
           duration,
@@ -153,8 +157,20 @@ export const batchGenerateMotionFn = createServerFn({ method: 'POST' })
   .handler(async ({ data, context }) => {
     const { sequence, teamId, user } = context;
 
-    const allShots = await context.scopedDb.shots.listBySequence(sequence.id);
-    // Server determines eligible shots: thumbnail done, video pending/failed
+    // Project the anchor-frame image surface (#989) so the eligibility filter
+    // and downstream `shot.thumbnailUrl` reads keep working unchanged.
+    const rawShots = await context.scopedDb.shots.listBySequence(sequence.id);
+    const framesById = new Map(
+      (await context.scopedDb.frames.listBySequence(sequence.id)).map((f) => [
+        f.id,
+        f,
+      ])
+    );
+    const allShots = rawShots.flatMap((s) => {
+      const frame = framesById.get(s.id);
+      return frame ? [projectShotWithImage(s, frame)] : [];
+    });
+    // Server determines eligible shots: still done, video pending/failed
     const eligibleShots = allShots.filter(
       (f) =>
         f.thumbnailStatus === 'completed' &&

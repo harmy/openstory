@@ -27,14 +27,32 @@ export type ModelCoverage = {
 };
 
 /**
- * Build a per-model coverage map for a sequence from its `shot_variants` rows
- * of one type. Only primary rows count (divergent/discarded alternates are
- * excluded). The live primary model (when supplied) is marked `set`; every
- * other model reports how many scenes it has generated for so the dropdown can
- * show e.g. "8/10" while an added model is still filling in.
+ * Minimal coverage row. Covers both `shot_variants` (video/audio) and
+ * `frame_variants` (image, #989). Image rows have no `variantType` (every row
+ * is an image) and no `divergedAt` (image divergence is retired), so both are
+ * optional — a missing `variantType` matches the requested type, a missing
+ * `divergedAt` is treated as never divergent. `shotId` is the shot (== frameId
+ * for images) used for scene-granular counting.
+ */
+export type CoverageVariant = {
+  model: string;
+  status: ShotVariant['status'];
+  url: string | null;
+  shotId: string;
+  discardedAt: Date | null;
+  variantType?: VariantType;
+  divergedAt?: Date | null;
+};
+
+/**
+ * Build a per-model coverage map for a sequence from its variant rows of one
+ * type. Only primary rows count (divergent/discarded alternates are excluded).
+ * The live primary model (when supplied) is marked `set`; every other model
+ * reports how many scenes it has generated for so the dropdown can show e.g.
+ * "8/10" while an added model is still filling in.
  */
 export function computeSequenceModelCoverage(opts: {
-  variants: readonly ShotVariant[] | undefined;
+  variants: readonly CoverageVariant[] | undefined;
   variantType: VariantType;
   /** The live primary model (marked `set`), if any. */
   primaryModel?: string | null;
