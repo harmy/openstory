@@ -174,7 +174,7 @@ layer — change and event commit together or not at all.
 
 - **Anchor frame id = its shot id.** The #906 rename preserved old-frame ids onto
   `shots`, so reusing `shot.id` for the anchor frame is deterministic, a real
-  ULID (passes `isValidId`, sorts correctly), and lets the cutover backfill be a
+  ULID (passes `isValidId`, sorts correctly), and lets the backfill be a
   pure in-migration `INSERT … SELECT` whose child copies join on `shot_id`.
   Accepted tradeoff: a shot and its anchor frame **share** a ULID across tables —
   relies on table-scoped query/event keys. Anchor-only: last/key/multi-shot
@@ -186,11 +186,27 @@ layer — change and event commit together or not at all.
   caused a spurious `DROP TABLE sequences`; fixed by pinning the literal
   `'nano_banana_2'` + substituting `DEFAULT_IMAGE_MODEL` in the scoped create).
   Use a frozen literal; resolve the real default in app code.
-- **Migrations are still editable** — nothing durable has applied the
-  milestone-18 migrations (prod unseen; preview resets via close-PR → D1-delete
-  → reopen). So the deterministic cutover data-copy gets folded into the
-  additive migration _before_ prod deploy, when the schema is proven and
-  testable. It's a no-op on empty dev/preview.
+- **Expand / migrate / contract — every PR stays green on `main`.** The image
+  surface moves off `shots` in three separable steps, never one lossy drop:
+  - **Expand (Phase 0):** `CREATE TABLE` the new `frames`/variants/versions/events
+    **empty**. Purely additive — the app still reads and writes the `shots` image
+    columns, so typecheck/build/knip stay green and the PR merges on its own. The
+    new tables sit unused until their consumers land.
+  - **Migrate (Phases 1–2):** repoint the app's writes (image-gen workflow) and
+    reads through `frames`. After this, _new_ stills are written to `frames`.
+  - **Contract (Phase 6 / #993):** the migration that finally drops the `shots`
+    image columns runs the backfill **in the same migration, immediately before
+    the `DROP COLUMN`**: `INSERT … SELECT … WHERE NOT EXISTS` (anchor
+    `frame.id = shot.id`). Because the copy runs at drop time it captures _every_
+    shot regardless of when it was created — pre-redesign rows **and** anything
+    written straight to `shots` in the gap before the write path flipped — while
+    `WHERE NOT EXISTS` leaves rows the app already wrote to `frames` untouched.
+  - **Why not backfill in Phase 0?** A one-time Phase-0 copy would immediately
+    drift: the write path doesn't move until Phase 2, so every sequence created in
+    between would write to `shots` and never to `frames`, and a later blind drop
+    would lose them. The authoritative copy therefore belongs in the contract
+    migration, never the expand. (Same `INSERT … SELECT`, pure DML, no rebuild, no
+    FK-cascade trap — the #907 scenes 1:1 pattern.)
 
 ## Implementation plan — one PR per phase
 
@@ -199,20 +215,29 @@ next. Within a phase, work fans out across **disjoint files** so parallel edits
 never collide. **Stop at each phase's diff for review — no commit/push without
 sign-off.**
 
-### Phase 0 — Schema + additive migration
+### Phase 0 — Schema + additive migration (expand only)
 
-Frames, `frame_variants` (flat versions), `frame_prompt_versions`,
-`shot_prompt_versions`, `sequence_events`, image selection pointers; narrow
-`shots`/retire image columns. Regenerate the clean additive migration.
+`CREATE TABLE` the new `frames`, `frame_variants`, `frame_prompt_versions`, and
+`sequence_events` (with image selection pointers on `frames`). **Purely additive
+— nothing on `shots`/`shot_variants` is narrowed or renamed and no columns drop**,
+so the app compiles and runs unchanged and the PR is independently mergeable to
+`main`. The tables ship **empty**; they fill once their consumers land (writes in
+Phase 2). The `shots` image-column retirement, the `*_prompt_variants → *_versions`
+renames, and `shot.selectedMotionPromptVersionId` move to the phase that wires
+their readers (renames in Phase 1; column drop + backfill in the Phase 6 contract).
 **Video (`video_variants`) is deliberately NOT here** — see Phase 3.
-Gate: `bun db:generate` clean (no rebuild) + schema typechecks.
+Gate: `bun db:generate` clean (additive `CREATE TABLE` only — no rebuild, no
+`DROP`) + full typecheck + knip + build green + migration applies to a fresh chain.
 
 ### Phase 1 — Scoped-db access layer (the frozen contract)
 
 New scoped modules: `frames`, `frame_variants` (append version, list-by-group,
 **select/repoint**, discard/undiscard, resolve-current, staleness),
 `frame_prompt_versions`, `shot_prompt_versions`, and the `recordEvent` helper
-(same-batch emit). Trim image bits out of `scoped/shots.ts`; wire the aggregator.
+(same-batch emit). Land the additive `*_prompt_variants → *_prompt_versions`
+table renames + `shot.selectedMotionPromptVersionId` here (with their scoped-layer
+consumers, so the build stays green). Trim image bits out of `scoped/shots.ts`;
+wire the aggregator.
 Gate: typecheck.
 
 ### Phase 2 — Image generation
@@ -241,16 +266,22 @@ panel, version/variant pickers, scene player, **and the sequence activity
 timeline** (`sequence_events` feed).
 Gate: typecheck + storybook/build.
 
-### Phase 6 — Tests + e2e + cutover
+### Phase 6 — Tests + e2e + contract (drop the old shots columns)
 
-Update seeds/fixtures to the frames + versions shape; e2e green. Fold the
-deterministic in-migration data-copy (`frame.id = shot.id` anchors + child
-remaps) into the additive migration; reset preview D1.
+Update seeds/fixtures to the frames + versions shape; e2e green. This is the
+**contract** step: now that every reader/writer has moved to `frames` (Phases
+1–2/5), the migration retires the `shots` image columns — and carries the
+authoritative backfill `INSERT … SELECT … WHERE NOT EXISTS` (`frame.id = shot.id`)
+**immediately before** the `ALTER … DROP COLUMN`, so any shot still holding its
+still only in the old columns (pre-redesign rows + gap writes) is copied across
+before the drop. Gated `--allow-destructive` at commit; reset preview D1.
 Gate: full e2e; preview deploy clean.
 
 ## Cross-cutting rules
 
 - One reviewable PR per phase; the diff lands as an ordered stack, never a blob.
+  **Every PR must be independently mergeable to `main`** — a phase that retires a
+  column ships its forward data-copy in the same migration (see Backfill above).
 - Migrations additive/safe; destructive drops gated by
   `check-migrations --allow-destructive` at commit.
 - No commit/push without review; stop at each phase's diff.
