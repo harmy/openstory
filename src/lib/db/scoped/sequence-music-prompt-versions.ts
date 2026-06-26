@@ -64,8 +64,10 @@ export function createSequenceMusicPromptVersionsMethods(db: Database) {
      * `sequences`. Returns the inserted (or pre-existing matching) row.
      *
      * AI-generated rows are deduped on a unique partial index
-     * `(sequence_id, input_hash) WHERE input_hash IS NOT NULL` so QStash
-     * retries don't append duplicate history.
+     * `(sequence_id, input_hash) WHERE input_hash IS NOT NULL AND
+     * source != 'restored'` so workflow retries don't append duplicate history
+     * (the `source != 'restored'` clause lets a restore still append an audit
+     * row even when its hash matches an existing one).
      */
     write: async (
       input: WriteSequenceMusicPromptVersionInput

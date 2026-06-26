@@ -1,0 +1,293 @@
+/**
+ * Acceptance tests for the frame-variants helper (flat, append-only image
+ * versions + pointer selection). In-memory libSQL with the real migrations.
+ *
+ * Covers the core of the redesign: `select` repoints the frame's primary still
+ * by mirroring a version's image fields and appending an `image.selected` event
+ * atomically (one `db.batch`), the completed-only selection guard, the
+ * cross-frame ownership guard, discard/undiscard, listByGroup source matching,
+ * and isStale null-hash semantics.
+ */
+
+import type { Database } from '@/lib/db/client';
+import { generateId } from '@/lib/db/id';
+import {
+  frameVariants,
+  frames,
+  sequenceEvents,
+  sequences,
+  shots,
+  styles,
+  teams,
+  user,
+} from '@/lib/db/schema';
+import type { NewFrameVariant } from '@/lib/db/schema';
+import { relations } from '@/lib/db/schema/relations';
+import { type Client, createClient } from '@libsql/client';
+import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/libsql';
+import { migrate } from 'drizzle-orm/libsql/migrator';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createFrameVariantsMethods } from './frame-variants';
+
+let client: Client;
+let db: Database;
+let sequenceId = '';
+let shotId = '';
+let frameId = '';
+
+async function seed() {
+  await db.delete(sequenceEvents);
+  await db.delete(frameVariants);
+  await db.delete(frames);
+  await db.delete(shots);
+  await db.delete(sequences);
+  await db.delete(styles);
+  await db.delete(teams);
+  await db.delete(user);
+
+  const teamId = generateId();
+  sequenceId = generateId();
+  await db.insert(teams).values({ id: teamId, name: 'T', slug: 't' });
+  const [style] = await db
+    .insert(styles)
+    .values({
+      teamId,
+      name: 'default',
+      config: {
+        mood: 'neutral',
+        artStyle: 'cinematic',
+        lighting: 'natural',
+        colorPalette: ['#000', '#fff'],
+        cameraWork: 'static',
+        referenceFilms: [],
+        colorGrading: 'neutral',
+      },
+    })
+    .returning();
+  if (!style) throw new Error('test setup: style insert returned nothing');
+  await db
+    .insert(sequences)
+    .values({ id: sequenceId, teamId, title: 'S', styleId: style.id });
+  const [shot] = await db
+    .insert(shots)
+    .values({ sequenceId, orderIndex: 0 })
+    .returning();
+  if (!shot) throw new Error('test setup: shot insert returned nothing');
+  shotId = shot.id;
+  const [frame] = await db
+    .insert(frames)
+    .values({ shotId, sequenceId, orderIndex: 0, role: 'first' })
+    .returning();
+  if (!frame) throw new Error('test setup: frame insert returned nothing');
+  frameId = frame.id;
+}
+
+function variantInput(
+  overrides: Partial<NewFrameVariant> = {}
+): NewFrameVariant {
+  return {
+    frameId,
+    sequenceId,
+    kind: 'model',
+    model: 'nano_banana_2',
+    status: 'completed',
+    url: 'https://cdn/img.png',
+    storagePath: 'r2/img.png',
+    previewUrl: 'https://cdn/preview.png',
+    generatedAt: new Date('2026-06-26T00:00:00Z'),
+    inputHash: 'hash-1',
+    ...overrides,
+  };
+}
+
+beforeAll(async () => {
+  client = createClient({ url: ':memory:' });
+  db = drizzle({ client, relations });
+  await migrate(db, { migrationsFolder: './drizzle/migrations' });
+});
+
+afterAll(() => {
+  client.close();
+});
+
+beforeEach(async () => {
+  await seed();
+});
+
+describe('frameVariants.appendVersion', () => {
+  it('appends accumulating rows even for matching inputs (re-roll)', async () => {
+    const m = createFrameVariantsMethods(db);
+    const a = await m.appendVersion(variantInput());
+    const b = await m.appendVersion(variantInput());
+    expect(a.id).not.toBe(b.id);
+    expect(await m.listByFrame(frameId)).toHaveLength(2);
+  });
+});
+
+describe('frameVariants.select', () => {
+  it('mirrors the version onto the frame and appends an atomic image.selected event', async () => {
+    const m = createFrameVariantsMethods(db);
+    const v1 = await m.appendVersion(variantInput({ model: 'm1' }));
+    const v2 = await m.appendVersion(
+      variantInput({
+        model: 'm2',
+        url: 'https://cdn/v2.png',
+        storagePath: 'r2/v2.png',
+        previewUrl: 'https://cdn/v2-preview.png',
+        inputHash: 'hash-2',
+      })
+    );
+    const actorId = generateId();
+    await db.insert(user).values({ id: actorId, name: 'U', email: 'u@e.com' });
+
+    // Select v1 first so v2 select has a non-null prev pointer.
+    await m.select(frameId, v1.id, { actorId: null });
+    await m.select(frameId, v2.id, { actorId });
+
+    const [frame] = await db
+      .select()
+      .from(frames)
+      .where(eq(frames.id, frameId));
+    if (!frame) throw new Error('test setup: refresh failed');
+    expect(frame.selectedImageVersionId).toBe(v2.id);
+    expect(frame.imageUrl).toBe('https://cdn/v2.png');
+    expect(frame.imagePath).toBe('r2/v2.png');
+    expect(frame.previewImageUrl).toBe('https://cdn/v2-preview.png');
+    expect(frame.imageStatus).toBe('completed');
+    expect(frame.imageModel).toBe('m2');
+    expect(frame.imageInputHash).toBe('hash-2');
+
+    const events = await db
+      .select()
+      .from(sequenceEvents)
+      .where(eq(sequenceEvents.kind, 'image.selected'));
+    expect(events).toHaveLength(2);
+    const latest = events.find((e) => e.actorId === actorId);
+    if (!latest) throw new Error('expected actor event');
+    expect(latest.targetId).toBe(frameId);
+    expect(latest.data).toMatchObject({
+      versionId: v2.id,
+      model: 'm2',
+      prevVersionId: v1.id,
+    });
+  });
+
+  it('refuses to select a non-completed version (would blank the frame)', async () => {
+    const m = createFrameVariantsMethods(db);
+    const pending = await m.appendVersion(
+      variantInput({ status: 'pending', url: null })
+    );
+    await expect(
+      m.select(frameId, pending.id, { actorId: null })
+    ).rejects.toThrow(/not 'completed'/);
+
+    // The frame's pointer was never touched.
+    const [frame] = await db
+      .select()
+      .from(frames)
+      .where(eq(frames.id, frameId));
+    if (!frame) throw new Error('test setup: refresh failed');
+    expect(frame.selectedImageVersionId).toBeNull();
+    // And no event leaked out of the rejected batch.
+    expect(
+      await db
+        .select()
+        .from(sequenceEvents)
+        .where(eq(sequenceEvents.sequenceId, sequenceId))
+    ).toHaveLength(0);
+  });
+
+  it('throws for a version that belongs to another frame (cross-frame guard)', async () => {
+    const m = createFrameVariantsMethods(db);
+    const [sibling] = await db
+      .insert(frames)
+      .values({ shotId, sequenceId, orderIndex: 1, role: 'last' })
+      .returning();
+    if (!sibling) throw new Error('test setup: sibling frame missing');
+    const siblingVersion = await m.appendVersion(
+      variantInput({ frameId: sibling.id })
+    );
+    await expect(
+      m.select(frameId, siblingVersion.id, { actorId: null })
+    ).rejects.toThrow(/not found for frame/);
+  });
+});
+
+describe('frameVariants.discard / undiscard', () => {
+  it('soft-hides then restores a version, with matching events, in atomic batches', async () => {
+    const m = createFrameVariantsMethods(db);
+    const v = await m.appendVersion(variantInput());
+
+    const discardedAt = await m.discard(v.id, { actorId: null });
+    expect(discardedAt).toBeInstanceOf(Date);
+    expect(await m.listByFrame(frameId)).toHaveLength(0);
+    expect(
+      await m.listByFrame(frameId, { includeDiscarded: true })
+    ).toHaveLength(1);
+
+    await m.undiscard(v.id, { actorId: null });
+    expect(await m.listByFrame(frameId)).toHaveLength(1);
+
+    const kinds = (
+      await db
+        .select()
+        .from(sequenceEvents)
+        .where(eq(sequenceEvents.targetId, v.id))
+    ).map((e) => e.kind);
+    expect(kinds).toContain('image.discarded');
+    expect(kinds).toContain('image.undiscarded');
+  });
+});
+
+describe('frameVariants.listByGroup', () => {
+  it('matches null sourceVariantId explicitly so model groups do not collide with framing picks', async () => {
+    const m = createFrameVariantsMethods(db);
+    const modelVersion = await m.appendVersion(
+      variantInput({ kind: 'model', model: 'm1' })
+    );
+    await m.appendVersion(
+      variantInput({
+        kind: 'framing',
+        model: 'm1',
+        sourceVariantId: modelVersion.id,
+      })
+    );
+
+    const modelGroup = await m.listByGroup({
+      frameId,
+      kind: 'model',
+      model: 'm1',
+    });
+    expect(modelGroup).toHaveLength(1);
+    expect(modelGroup[0]?.id).toBe(modelVersion.id);
+
+    const framingGroup = await m.listByGroup({
+      frameId,
+      kind: 'framing',
+      model: 'm1',
+      sourceVariantId: modelVersion.id,
+    });
+    expect(framingGroup).toHaveLength(1);
+    expect(framingGroup[0]?.kind).toBe('framing');
+  });
+});
+
+describe('frameVariants.isStale', () => {
+  it('throws when the version does not exist', () => {
+    const m = createFrameVariantsMethods(db);
+    expect(m.isStale(generateId(), 'h')).rejects.toThrow(/not found/);
+  });
+
+  it('null stored hash → not stale; match → not stale; differ → stale', async () => {
+    const m = createFrameVariantsMethods(db);
+    const noHash = await m.appendVersion(variantInput({ inputHash: null }));
+    expect(await m.isStale(noHash.id, 'anything')).toBe(false);
+
+    const hashed = await m.appendVersion(
+      variantInput({ inputHash: 'h-match' })
+    );
+    expect(await m.isStale(hashed.id, 'h-match')).toBe(false);
+    expect(await m.isStale(hashed.id, 'h-new')).toBe(true);
+  });
+});

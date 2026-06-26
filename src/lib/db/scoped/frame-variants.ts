@@ -12,9 +12,10 @@
  * switch-model is a {@link select} repoint. `discardedAt` soft-hides a version
  * (undoable); there is no `divergedAt` (retired in the redesign).
  *
- * Every selection / discard repoint commits its frame-state change and its
- * `sequence_events` row in the SAME `db.batch()` (see {@link buildEventInsert}),
- * so the change and its activity entry are atomic.
+ * Every mutation commits its state change (the frame mirror for {@link select},
+ * the `discardedAt` write for discard / undiscard) and its `sequence_events`
+ * row in the SAME `db.batch()` (see {@link buildEventInsert}), so the change and
+ * its activity entry are atomic.
  *
  * See docs/architecture/scene-shot-frame-redesign.md.
  */
@@ -164,6 +165,14 @@ export function createFrameVariantsMethods(db: Database) {
       if (!version) {
         throw new Error(
           `FrameVariant ${versionId} not found for frame ${frameId}`
+        );
+      }
+      // Only a finished image may become the frame's primary still. Selecting a
+      // pending/failed version would mirror its null url + failed status onto
+      // the frame, silently blanking a good image.
+      if (version.status !== 'completed') {
+        throw new Error(
+          `FrameVariant ${versionId} is '${version.status}', not 'completed' — cannot select an unfinished image`
         );
       }
       const [frame] = await db

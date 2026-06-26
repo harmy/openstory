@@ -111,14 +111,14 @@ export function createFramePromptVersionsMethods(db: Database) {
           )
           .limit(1);
 
-        if (
-          existing &&
-          existing.text !== input.text &&
-          (input.source === 'ai-generated' || input.source === 'regenerated')
-        ) {
-          // Force-regen: same upstream hash, fresh completion. Bypass the
-          // partial unique index with a null input_hash so the new text is
-          // recorded; the cached hash below still tracks the real context.
+        if (existing && existing.text !== input.text) {
+          // Same upstream hash, genuinely new text. Two ways to get here: a
+          // force-regen (AI runs against unchanged inputs) or a user-edit whose
+          // live hash matches the row it edits. Either way the new text must
+          // land in history, so bypass the partial unique index with a null
+          // input_hash; the cached hash below still tracks the real context.
+          // (`restored` rows never reach this branch — the index excludes them,
+          // so their insert never conflicts.)
           const [forced] = await db
             .insert(framePromptVersions)
             .values({

@@ -59,6 +59,31 @@ export function buildFrameImageMirror(
 
 type FrameOrderBy = 'orderIndex' | 'createdAt' | 'updatedAt';
 
+/**
+ * Columns owned by the selection / mirror paths ({@link buildFrameImageMirror}
+ * via `frameVariants.select`, and `framePromptVersions.write`/`select`). They
+ * are excluded from the generic `update` input so a partial write can never
+ * leave the selection pointer and its mirrored columns diverged — the only way
+ * to move a selection is through those methods, which repoint + mirror (and log
+ * the event) atomically.
+ */
+type FrameMirrorColumn =
+  | 'selectedImageVersionId'
+  | 'imageUrl'
+  | 'imagePath'
+  | 'previewImageUrl'
+  | 'imageStatus'
+  | 'imageGeneratedAt'
+  | 'imageError'
+  | 'imageModel'
+  | 'imageInputHash'
+  | 'selectedImagePromptVersionId'
+  | 'imagePrompt'
+  | 'visualPromptInputHash';
+
+/** Fields `update` accepts — everything on a frame except the mirror columns. */
+export type FrameUpdateInput = Omit<Partial<NewFrame>, FrameMirrorColumn>;
+
 export function createFramesMethods(db: Database) {
   return {
     getById: async (frameId: string): Promise<Frame | null> => {
@@ -133,9 +158,15 @@ export function createFramesMethods(db: Database) {
       return frame;
     },
 
+    /**
+     * Update non-mirror frame fields. Selection pointers and their mirrored
+     * image / prompt columns are intentionally excluded (see
+     * {@link FrameUpdateInput}); move a selection via `frameVariants.select` or
+     * `framePromptVersions.write`/`select` instead.
+     */
     update: async (
       frameId: string,
-      data: Partial<NewFrame>,
+      data: FrameUpdateInput,
       options?: { throwOnMissing?: boolean }
     ): Promise<Frame | undefined> => {
       const [frame] = await db

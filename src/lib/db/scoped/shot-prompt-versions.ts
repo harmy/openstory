@@ -97,9 +97,11 @@ export function createShotPromptVersionsMethods(db: Database) {
      * The version row is the source of truth; the cached column on `shots`
      * is a read-path optimization. To make retries safe, AI-generated
      * rows are deduped by the unique partial index on
-     * `(shot_id, prompt_type, input_hash) WHERE input_hash IS NOT NULL`:
-     * an insert that conflicts with an existing row no-ops, the existing row
-     * is fetched, and the cached pointer is updated as normal.
+     * `(shot_id, prompt_type, input_hash) WHERE input_hash IS NOT NULL AND
+     * source != 'restored'`: an insert that conflicts with an existing row
+     * no-ops, the existing row is fetched, and the cached pointer is updated as
+     * normal. (The `source != 'restored'` clause is load-bearing — it lets a
+     * restore append an audit row even when its hash matches an existing one.)
      *
      * Force-regeneration corner case: an explicit user-triggered regen runs
      * the LLM against unchanged upstream inputs. The new completion's hash
@@ -149,15 +151,15 @@ export function createShotPromptVersionsMethods(db: Database) {
           )
           .limit(1);
 
-        if (
-          existing &&
-          existing.text !== input.text &&
-          (input.source === 'ai-generated' || input.source === 'regenerated')
-        ) {
-          // Force-regen path: same upstream hash but a fresh LLM completion.
-          // Bypass the partial unique index with a null `input_hash` so the
-          // new text lands in history. Restore/user-edit paths never reach
-          // this branch — they don't carry a non-null `inputHash` here.
+        if (existing && existing.text !== input.text) {
+          // Same upstream hash but genuinely new text. Two ways to get here: a
+          // force-regen (AI runs against unchanged inputs) or a user-edit whose
+          // live hash matches the row it edits. Either way the new text must
+          // land in history, so bypass the partial unique index with a null
+          // `input_hash`; the cached hash below still tracks the real `liveHash`
+          // so staleness detection stays correct. (`restored` rows never reach
+          // this branch — the partial index excludes them, so they never
+          // conflict on insert.)
           const [forced] = await db
             .insert(shotPromptVersions)
             .values({
