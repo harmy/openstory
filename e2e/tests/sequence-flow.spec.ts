@@ -87,10 +87,12 @@ Here's your caffeine fix. How's it going?
     `.trim();
 
       // Click a style to force React interaction and confirm hydration
-      // The style grid may be SSR-rendered before React hydrates
+      // The style grid may be SSR-rendered before React hydrates. Target style
+      // tiles by aria-label so the leading "Auto" / trailing "View all" tiles
+      // in the grid are never picked.
       const firstStyle = page
         .getByRole('grid', { name: 'Style selection' })
-        .getByRole('button')
+        .getByRole('button', { name: /^Select .+ style$/ })
         .first();
       await firstStyle.click();
 

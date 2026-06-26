@@ -10,6 +10,7 @@ import { GenerateSequenceIcon } from '@/components/icons/generate-sequence-icon'
 import { LocationSuggestionSelector } from '@/components/location-library/location-suggestion-selector';
 import { buildMentionItems } from '@/components/scenes/prompt-mention/mention-items';
 import { GenerationSettings } from '@/components/settings/generation-settings';
+import { RecommendedStyles } from '@/components/style/recommended-styles';
 import { StyleSelector } from '@/components/style/style-selector';
 import { TalentSuggestionSelector } from '@/components/talent/talent-suggestion-selector';
 import {
@@ -44,7 +45,7 @@ import {
 } from '@/hooks/use-sequence-elements';
 import { useSequenceLocations } from '@/hooks/use-sequence-locations';
 import { useCreateSequence } from '@/hooks/use-sequences';
-import { useStyles } from '@/hooks/use-styles';
+import { useRecommendedStyles, useStyles } from '@/hooks/use-styles';
 import { toEnhanceInputs } from '@/lib/ai/enhance-inputs';
 import {
   DEFAULT_IMAGE_MODEL,
@@ -554,6 +555,79 @@ export const ScriptView: FC<{
     stripeEnabled,
   } = useBillingGate();
 
+  // Style recommendations. We rank a *snapshot* of the script (not the live
+  // value) so the LLM call only fires on an explicit trigger — the "Recommend
+  // styles" button or a completed enhance — and editing the script afterwards
+  // doesn't re-spend a call on every keystroke. Repeats are free (cached by
+  // script hash in useRecommendedStyles).
+  const [recommendScript, setRecommendScript] = useState<string | null>(null);
+  const [autoSelected, setAutoSelected] = useState(false);
+  const {
+    data: recommendData,
+    isFetching: isRecommending,
+    isError: recommendFailed,
+    refetch: refetchRecommendations,
+  } = useRecommendedStyles(recommendScript, {
+    enabled: recommendScript !== null,
+  });
+  const recommendations = recommendData?.recommendations;
+  const topRecommendationId = recommendations?.[0]?.styleId;
+  // The shortlist ran but turned up nothing usable (or errored). Distinguish
+  // this from "never asked" so we can tell the user instead of silently
+  // reverting to the trigger button (which invites a re-click + re-charge).
+  const recommendRan = recommendScript !== null && !isRecommending;
+  const recommendEmpty =
+    recommendRan && !recommendFailed && recommendations?.length === 0;
+
+  const triggerRecommend = () => {
+    if (!requireAuth()) return;
+    if (needsBillingSetup) {
+      showGate();
+      return;
+    }
+    const text = (script ?? sequence?.script ?? '').trim();
+    if (text.length < 3) return;
+    // Same script after an error/empty run: refetch instead of no-op setState.
+    if (recommendScript === text) {
+      void refetchRecommendations();
+      return;
+    }
+    setRecommendScript(text);
+  };
+
+  // Manual style picks (grid, dialog, or recommended row) exit Auto mode.
+  const handleStyleSelect = (id: string) => {
+    setAutoSelected(false);
+    setStyleId(id);
+  };
+
+  // "Auto" = take the current top recommendation as a concrete, visible pick.
+  const handleSelectAuto = () => {
+    if (!topRecommendationId) return;
+    setAutoSelected(true);
+    setStyleId(topRecommendationId);
+  };
+
+  // Keep the visible Auto pick current when the shortlist refreshes (e.g. after
+  // a re-recommend on an edited script). Re-entry is impossible because neither
+  // dependency derives from the `styleId` written here (they come from the query
+  // data); the `s.styleId === … ? s : …` check is a redundant-render guard
+  // (returns the same state reference when nothing changed), not loop
+  // protection. We write the resolved id (rather than deriving it at render) so
+  // the concrete pick persists into the saved draft and survives a reload.
+  useEffect(() => {
+    if (!autoSelected) return;
+    if (!topRecommendationId) {
+      setAutoSelected(false);
+      return;
+    }
+    setContentState((s) =>
+      s.styleId === topRecommendationId
+        ? s
+        : { ...s, styleId: topRecommendationId }
+    );
+  }, [autoSelected, topRecommendationId]);
+
   const handleCancel = onCancel;
 
   const executeRegeneration = () => {
@@ -694,6 +768,13 @@ export const ScriptView: FC<{
         setScript(accumulated);
       }
       setEnhance('canUndoEnhance', true);
+      // Pre-warm the style shortlist off the freshly enhanced script so the
+      // picker (and any Auto pick) is ready the moment the user looks for it.
+      // Billing is already gated above (handleEnhance returns early when
+      // needsBillingSetup), so reaching here means the recommend call can bill.
+      if (!abortController.signal.aborted && accumulated.trim().length >= 3) {
+        setRecommendScript(accumulated.trim());
+      }
     } catch (error) {
       if (!abortController.signal.aborted) {
         setEnhance(
@@ -947,12 +1028,81 @@ export const ScriptView: FC<{
             <p className="text-sm text-destructive">{enhanceError}</p>
           )}
 
-          <div className="shrink-0">
+          <div className="shrink-0 flex flex-col gap-3">
+            {/* Recommend trigger, or the inline shortlist once it's running. */}
+            {recommendScript !== null &&
+            (isRecommending || (recommendations?.length ?? 0) > 0) ? (
+              <RecommendedStyles
+                recommendations={recommendations}
+                styles={styles}
+                selectedStyleId={styleId || sequence?.styleId || null}
+                onStyleSelect={handleStyleSelect}
+                isLoading={isRecommending}
+              />
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 self-start"
+                  disabled={
+                    loading ||
+                    (script ?? sequence?.script ?? '').trim().length < 3
+                  }
+                  onClick={triggerRecommend}
+                >
+                  <Sparkles className="size-3.5 text-primary" />
+                  Recommend styles
+                </Button>
+                {/* Tell the user when a billed run came back empty/errored,
+                    rather than silently resetting to the button. */}
+                {(recommendEmpty || recommendFailed) && (
+                  <p className="text-xs text-muted-foreground">
+                    {recommendFailed
+                      ? "Couldn't suggest styles — try again or pick one below."
+                      : 'No standout matches — try again or pick a style below.'}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Enhance also suggests styles for your script (billed like
+                  Enhance).
+                </p>
+              </div>
+            )}
+
+            {/* Auto resolved-pick pill — mirrors the recommended-model pill. */}
+            {autoSelected && selectedStyle && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Sparkles className="size-3.5 text-primary" />
+                <span>
+                  Auto →{' '}
+                  <span className="font-medium text-foreground">
+                    {selectedStyle.name}
+                  </span>
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto px-1.5 py-0.5 text-xs"
+                  onClick={() => setAutoSelected(false)}
+                >
+                  Reset
+                </Button>
+              </div>
+            )}
+
             <StyleSelector
               styles={styles}
               selectedStyleId={styleId || sequence?.styleId || null}
-              onStyleSelect={setStyleId}
+              onStyleSelect={handleStyleSelect}
               loading={isLoadingStyles}
+              onSelectAuto={handleSelectAuto}
+              autoEnabled={!!topRecommendationId}
+              autoActive={autoSelected}
+              recommendations={recommendations}
+              recommendationsLoading={isRecommending}
             />
           </div>
         </CardContent>

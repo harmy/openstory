@@ -1,4 +1,5 @@
 import { GalleryIcon } from '@/components/icons/gallery-icon';
+import { RecommendedStyles } from '@/components/style/recommended-styles';
 import { StyleGrid } from '@/components/style/style-grid';
 import { StyleSelectorButton } from '@/components/style/style-selector-button';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ import {
   styleCategoryLabel,
 } from '@/lib/style/style-assets';
 import { filterStyles } from '@/lib/utils/style-filters';
+import type { StyleRecommendation } from '@/hooks/use-styles';
 import type { Style } from '@/types/database';
 import { Search, X } from 'lucide-react';
 import type { ChangeEvent, FC, ReactNode } from 'react';
@@ -41,6 +43,8 @@ type StyleSelectionDialogProps = {
   styles?: Style[];
   selectedStyleId: string | null;
   onStyleSelect: (styleId: string) => void;
+  recommendations?: StyleRecommendation[];
+  recommendationsLoading?: boolean;
 };
 
 type StyleSelectionDialogContentProps = {
@@ -48,6 +52,8 @@ type StyleSelectionDialogContentProps = {
   selectedStyleId: string | null;
   onStyleSelect: (styleId: string) => void;
   onClose: () => void;
+  recommendations?: StyleRecommendation[];
+  recommendationsLoading?: boolean;
 };
 
 /**
@@ -58,6 +64,8 @@ const StyleSelectionDialogContent: FC<StyleSelectionDialogContentProps> = ({
   selectedStyleId,
   onStyleSelect,
   onClose,
+  recommendations,
+  recommendationsLoading = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -109,6 +117,17 @@ const StyleSelectionDialogContent: FC<StyleSelectionDialogContentProps> = ({
             Choose the visual style of your sequence
           </DialogDescription>
         </DialogHeader>
+
+        {/* Pinned "Recommended for your script" row — hidden when there's no
+            script-driven shortlist yet. */}
+        <RecommendedStyles
+          recommendations={recommendations}
+          styles={styles ?? []}
+          selectedStyleId={selectedStyleId}
+          onStyleSelect={handleStyleSelect}
+          isLoading={recommendationsLoading}
+          className="pt-2"
+        />
 
         <div className="flex flex-col gap-4 py-4">
           {/* Search */}
@@ -197,6 +216,8 @@ export const StyleSelectionDialog: FC<StyleSelectionDialogProps> = ({
   styles,
   selectedStyleId,
   onStyleSelect,
+  recommendations,
+  recommendationsLoading,
 }) => {
   const handleClose = useCallback(() => {
     onOpenChange(false);
@@ -209,6 +230,8 @@ export const StyleSelectionDialog: FC<StyleSelectionDialogProps> = ({
         selectedStyleId={selectedStyleId}
         onStyleSelect={onStyleSelect}
         onClose={handleClose}
+        recommendations={recommendations}
+        recommendationsLoading={recommendationsLoading}
       />
     </Dialog>
   );

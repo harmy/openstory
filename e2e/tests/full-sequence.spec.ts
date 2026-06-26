@@ -155,9 +155,10 @@ testWithUser.describe('Full Sequence Pipeline', () => {
       // 2. Select the first style tile. Target the tile by its accessible
       // name (`Select <name> style`) and wait for it to exist — the grid
       // container renders immediately (before styles load) and its only
-      // button is then the "View all" browse trigger, which would open the
-      // style dialog instead of selecting. Waiting for a real tile also
-      // confirms the styles query resolved and React has hydrated.
+      // buttons are then the "Auto" tile (when shown) and the "View all"
+      // browse trigger, which would open the style dialog instead of selecting.
+      // Waiting for a real tile also confirms the styles query resolved and
+      // React has hydrated.
       const firstStyle = page
         .getByRole('grid', { name: 'Style selection' })
         .getByRole('button', { name: /^Select .* style$/ })
