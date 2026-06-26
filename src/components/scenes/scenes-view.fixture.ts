@@ -392,6 +392,7 @@ export const fixtureShots: Shot[] = [
     motionPrompt:
       'Locked eye-level probe lens macro frame holds steady on a luminous serum droplet clinging to a glass dropper tip against a seamless warm ivory-to-blush gradient. The droplet releases and descends in ultra-slow motion, stretching into a languid weightless ribbon that narrows and falls below frame over the full duration. Soft edge light and gentle backlight keep the serum glowing translucent gold throughout the descent.',
     motionModel: 'veo3_1',
+    selectedMotionPromptVersionId: null,
     audioUrl: null,
     audioPath: null,
     audioStatus: 'pending',
@@ -540,6 +541,7 @@ export const fixtureShots: Shot[] = [
     motionPrompt:
       'Slow macro push-in descends straight down from directly above the porcelain surface while gently rotating two degrees clockwise. A generous curl of dense cream dispenses from below frame, coiling outward in a smooth, deliberate spiral that builds ridges and peaks. The forming swirl gradually fills the frame, transforming the surface texture into an abstract landscape of peaks and valleys. The low raking key light shifts subtly across the moving ridges, accentuating depth and sheen. A faint atmospheric hum underscores the intimate, tactile motion.',
     motionModel: 'kling_v3_pro',
+    selectedMotionPromptVersionId: null,
     audioUrl: null,
     audioPath: null,
     audioStatus: 'pending',
@@ -688,6 +690,7 @@ export const fixtureShots: Shot[] = [
     motionPrompt:
       'Low-angle macro lens positioned almost parallel to the skin surface executes an imperceptibly slow clockwise rotational drift. The fingertip presses gently downward, the cream yielding and spreading in a thin even veil while a subtle rose flush blooms outward from the contact point in extreme slow motion.',
     motionModel: 'kling_v3_pro',
+    selectedMotionPromptVersionId: null,
     audioUrl: null,
     audioPath: null,
     audioStatus: 'pending',
@@ -838,6 +841,7 @@ export const fixtureShots: Shot[] = [
     motionPrompt:
       'Probe-lens positioned low and slightly ahead of the path, the deep brown-rose lipstick bullet glides smoothly toward camera in extreme slow motion across luminous dewy wrist skin, laying down a saturated glossy color ribbon that blooms behind it. Rack focus shifts gradually from the moving bullet tip to the settling trail. Fine hairs along the wrist catch the rear illumination. The glistening pigment settles with soft sheen.',
     motionModel: 'kling_v3_pro',
+    selectedMotionPromptVersionId: null,
     audioUrl: null,
     audioPath: null,
     audioStatus: 'pending',
@@ -986,6 +990,7 @@ export const fixtureShots: Shot[] = [
     motionPrompt:
       "Slow barely perceptible push-in on a centered vertical portrait filling the 9:16 frame from chin to crown. The woman's face begins in complete stillness with eyes closed and lashes resting against luminous dewy skin, lips slightly parted. The eyes then open slowly and unhurriedly, the gaze turning direct, sovereign and steady toward camera. Subtle skin texture and warm gold rim light remain constant as framing tightens gently throughout the six-second shot.",
     motionModel: 'kling_v3_pro',
+    selectedMotionPromptVersionId: null,
     audioUrl: null,
     audioPath: null,
     audioStatus: 'pending',
@@ -1135,6 +1140,7 @@ export const fixtureShots: Shot[] = [
     motionPrompt:
       'Static locked frame with the hero product perfectly centered and motionless on a pure warm-white surface. Soft glowing key light from upper left casts a discreet golden edge light along its right silhouette. Background gradient holds steady from ivory to the softest peach. No camera movement. Product remains still and inevitable throughout the shot.',
     motionModel: 'kling_v3_pro',
+    selectedMotionPromptVersionId: null,
     audioUrl: null,
     audioPath: null,
     audioStatus: 'pending',
@@ -1280,6 +1286,7 @@ export const fixtureShots: Shot[] = [
     motionPrompt:
       'Camera locked in static straight-on framing on a centered white brand logo against a smooth warm ivory gradient. Logo remains perfectly still with no movement or animation. The frame holds clean and composed before a gentle fade begins at the close of the shot.',
     motionModel: 'kling_v3_pro',
+    selectedMotionPromptVersionId: null,
     audioUrl: null,
     audioPath: null,
     audioStatus: 'pending',

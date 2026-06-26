@@ -159,7 +159,7 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
       };
 
       await step.do('save-motion-prompt-to-db', async () => {
-        const previous = await scopedDb.shotPromptVariants.getLatest(
+        const previous = await scopedDb.shotPromptVersions.getLatest(
           shotId,
           'motion'
         );
@@ -174,7 +174,7 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
           motionPrompt: null,
         });
 
-        await scopedDb.shotPromptVariants.write({
+        await scopedDb.shotPromptVersions.write({
           shotId,
           promptType: 'motion',
           text: motionPrompt.fullPrompt,

@@ -46,6 +46,7 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     audioInputHash: null,
     visualPromptInputHash: null,
     motionPromptInputHash: null,
+    selectedMotionPromptVersionId: null,
     previewThumbnailUrl: null,
     metadata: null,
     createdAt: new Date(),

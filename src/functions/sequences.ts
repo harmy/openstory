@@ -867,7 +867,7 @@ export const generateMusicFn = createServerFn({ method: 'POST' })
     // revision; the variants helper updates the cached columns on `sequences`
     // alongside the row insert so a tags-only edit isn't dropped.
     if (data.prompt !== undefined || data.tags !== undefined) {
-      await context.scopedDb.sequenceMusicPromptVariants.write({
+      await context.scopedDb.sequenceMusicPromptVersions.write({
         sequenceId: sequence.id,
         prompt: effectivePrompt,
         tags: effectiveTags,

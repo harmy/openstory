@@ -88,6 +88,7 @@ const generateMockShot = (overrides?: Partial<Shot>): Shot => {
     audioInputHash: null,
     visualPromptInputHash: null,
     motionPromptInputHash: null,
+    selectedMotionPromptVersionId: null,
     previewThumbnailUrl: null,
     createdAt: faker.date.past(),
     updatedAt: faker.date.recent(),

@@ -81,8 +81,9 @@ export const frameVariants = snakeCase.table(
       .notNull(),
   },
   (table) => [
-    // List a variant's versions by time: filter (frameId, kind, model,
-    // sourceVariantId), order by createdAt.
+    // List a variant's versions by time: filter on (frameId, kind, model)
+    // (sourceVariantId is matched in app code, not indexed), order by id
+    // (ULID ≈ creation time).
     index('idx_frame_variants_group').on(
       table.frameId,
       table.kind,

@@ -1,22 +1,22 @@
 /**
- * Scoped Sequence Music Prompt Variants Sub-module
+ * Scoped Sequence Music Prompt Versions Sub-module
  *
- * Appends a new revision row to `sequence_music_prompt_variants` and
+ * Appends a new revision row to `sequence_music_prompt_versions` and
  * updates the cached `musicPrompt` / `musicTags` / `musicPromptInputHash`
  * columns on `sequences`. Sequential, not transactional — see the
- * equivalent docstring in `shot-prompt-variants.ts` for the durability
- * story.
+ * equivalent docstring in `shot-prompt-versions.ts` for the durability
+ * story. Renamed from `sequence-music-prompt-variants` in #988.
  *
  * See docs/architecture/workflow-snapshots-and-content-hash-staleness.md
  * § prompt versioning.
  */
 
 import type { Database } from '@/lib/db/client';
-import { sequenceMusicPromptVariants, sequences, user } from '@/lib/db/schema';
-import type { SequenceMusicPromptVariant } from '@/lib/db/schema';
+import { sequenceMusicPromptVersions, sequences, user } from '@/lib/db/schema';
+import type { SequenceMusicPromptVersion } from '@/lib/db/schema';
 import { and, desc, eq } from 'drizzle-orm';
 
-type WriteSequenceMusicPromptVariantBase = {
+type WriteSequenceMusicPromptVersionBase = {
   sequenceId: string;
   prompt: string;
   tags?: string | null;
@@ -30,14 +30,14 @@ type WriteSequenceMusicPromptVariantBase = {
  * detection silently breaks. User-edits forbid both fields so they cannot be
  * set by mistake.
  *
- * Restored rows carry the source variant's hash + analysisModel verbatim so
+ * Restored rows carry the source version's hash + analysisModel verbatim so
  * the cached `musicPromptInputHash` column keeps tracking the upstream
  * context that originally produced the prompt — restoring an old AI prompt
  * must NOT silently disable staleness detection. Both fields can be null
  * when the source is itself a user-edit (which never had a hash).
  */
-export type WriteSequenceMusicPromptVariantInput =
-  WriteSequenceMusicPromptVariantBase &
+export type WriteSequenceMusicPromptVersionInput =
+  WriteSequenceMusicPromptVersionBase &
     (
       | {
           source: 'ai-generated' | 'regenerated';
@@ -56,26 +56,28 @@ export type WriteSequenceMusicPromptVariantInput =
         }
     );
 
-export function createSequenceMusicPromptVariantsMethods(db: Database) {
+export function createSequenceMusicPromptVersionsMethods(db: Database) {
   return {
     /**
-     * Append a music prompt variant row and update the cached
+     * Append a music prompt version row and update the cached
      * `musicPrompt` / `musicTags` / `musicPromptInputHash` columns on
      * `sequences`. Returns the inserted (or pre-existing matching) row.
      *
      * AI-generated rows are deduped on a unique partial index
-     * `(sequence_id, input_hash) WHERE input_hash IS NOT NULL` so QStash
-     * retries don't append duplicate history.
+     * `(sequence_id, input_hash) WHERE input_hash IS NOT NULL AND
+     * source != 'restored'` so workflow retries don't append duplicate history
+     * (the `source != 'restored'` clause lets a restore still append an audit
+     * row even when its hash matches an existing one).
      */
     write: async (
-      input: WriteSequenceMusicPromptVariantInput
-    ): Promise<SequenceMusicPromptVariant> => {
+      input: WriteSequenceMusicPromptVersionInput
+    ): Promise<SequenceMusicPromptVersion> => {
       const nextHash = input.source === 'user-edit' ? null : input.inputHash;
       const analysisModel =
         input.source === 'user-edit' ? null : input.analysisModel;
 
       const [inserted] = await db
-        .insert(sequenceMusicPromptVariants)
+        .insert(sequenceMusicPromptVersions)
         .values({
           sequenceId: input.sequenceId,
           prompt: input.prompt,
@@ -88,23 +90,23 @@ export function createSequenceMusicPromptVariantsMethods(db: Database) {
         .onConflictDoNothing()
         .returning();
 
-      let variant: SequenceMusicPromptVariant | undefined = inserted;
-      if (!variant && nextHash !== null) {
+      let version: SequenceMusicPromptVersion | undefined = inserted;
+      if (!version && nextHash !== null) {
         const [existing] = await db
           .select()
-          .from(sequenceMusicPromptVariants)
+          .from(sequenceMusicPromptVersions)
           .where(
             and(
-              eq(sequenceMusicPromptVariants.sequenceId, input.sequenceId),
-              eq(sequenceMusicPromptVariants.inputHash, nextHash)
+              eq(sequenceMusicPromptVersions.sequenceId, input.sequenceId),
+              eq(sequenceMusicPromptVersions.inputHash, nextHash)
             )
           )
           .limit(1);
-        variant = existing;
+        version = existing;
       }
 
-      if (!variant) {
-        throw new Error('Failed to insert sequence music prompt variant');
+      if (!version) {
+        throw new Error('Failed to insert sequence music prompt version');
       }
 
       await db
@@ -117,29 +119,29 @@ export function createSequenceMusicPromptVariantsMethods(db: Database) {
         })
         .where(eq(sequences.id, input.sequenceId));
 
-      return variant;
+      return version;
     },
 
     /** Revision history for a sequence's music prompt, newest first. */
     listBySequence: async (
       sequenceId: string
-    ): Promise<SequenceMusicPromptVariant[]> => {
+    ): Promise<SequenceMusicPromptVersion[]> => {
       return await db
         .select()
-        .from(sequenceMusicPromptVariants)
-        .where(eq(sequenceMusicPromptVariants.sequenceId, sequenceId))
-        .orderBy(desc(sequenceMusicPromptVariants.createdAt));
+        .from(sequenceMusicPromptVersions)
+        .where(eq(sequenceMusicPromptVersions.sequenceId, sequenceId))
+        .orderBy(desc(sequenceMusicPromptVersions.createdAt));
     },
 
-    /** Most recent music prompt variant, or null if none exists. */
+    /** Most recent music prompt version, or null if none exists. */
     getLatest: async (
       sequenceId: string
-    ): Promise<SequenceMusicPromptVariant | null> => {
+    ): Promise<SequenceMusicPromptVersion | null> => {
       const [row] = await db
         .select()
-        .from(sequenceMusicPromptVariants)
-        .where(eq(sequenceMusicPromptVariants.sequenceId, sequenceId))
-        .orderBy(desc(sequenceMusicPromptVariants.createdAt))
+        .from(sequenceMusicPromptVersions)
+        .where(eq(sequenceMusicPromptVersions.sequenceId, sequenceId))
+        .orderBy(desc(sequenceMusicPromptVersions.createdAt))
         .limit(1);
       return row ?? null;
     },
@@ -148,35 +150,35 @@ export function createSequenceMusicPromptVariantsMethods(db: Database) {
     listBySequenceWithAuthor: async (
       sequenceId: string
     ): Promise<
-      Array<SequenceMusicPromptVariant & { createdByName: string | null }>
+      Array<SequenceMusicPromptVersion & { createdByName: string | null }>
     > => {
       const rows = await db
         .select({
-          variant: sequenceMusicPromptVariants,
+          version: sequenceMusicPromptVersions,
           createdByName: user.name,
         })
-        .from(sequenceMusicPromptVariants)
-        .leftJoin(user, eq(sequenceMusicPromptVariants.createdBy, user.id))
-        .where(eq(sequenceMusicPromptVariants.sequenceId, sequenceId))
-        .orderBy(desc(sequenceMusicPromptVariants.createdAt));
+        .from(sequenceMusicPromptVersions)
+        .leftJoin(user, eq(sequenceMusicPromptVersions.createdBy, user.id))
+        .where(eq(sequenceMusicPromptVersions.sequenceId, sequenceId))
+        .orderBy(desc(sequenceMusicPromptVersions.createdAt));
       return rows.map((r) => ({
-        ...r.variant,
+        ...r.version,
         createdByName: r.createdByName,
       }));
     },
 
-    /** Fetch a single music prompt variant scoped to its sequence. */
+    /** Fetch a single music prompt version scoped to its sequence. */
     getByIdForSequence: async (
-      variantId: string,
+      versionId: string,
       sequenceId: string
-    ): Promise<SequenceMusicPromptVariant | null> => {
+    ): Promise<SequenceMusicPromptVersion | null> => {
       const [row] = await db
         .select()
-        .from(sequenceMusicPromptVariants)
+        .from(sequenceMusicPromptVersions)
         .where(
           and(
-            eq(sequenceMusicPromptVariants.id, variantId),
-            eq(sequenceMusicPromptVariants.sequenceId, sequenceId)
+            eq(sequenceMusicPromptVersions.id, versionId),
+            eq(sequenceMusicPromptVersions.sequenceId, sequenceId)
           )
         )
         .limit(1);

@@ -13,8 +13,8 @@ import {
 } from '@/lib/ai/prompt-context';
 import {
   SHOT_PROMPT_TYPES,
-  type ShotPromptVariant,
-  type SequenceMusicPromptVariant,
+  type ShotPromptVersion,
+  type SequenceMusicPromptVersion,
 } from '@/lib/db/schema';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import { simpleHash } from '@/lib/utils/hash';
@@ -80,12 +80,12 @@ export function isPromptUpToDate(
   return storedHash !== null && storedHash === liveHash;
 }
 
-export type ShotPromptVariantWithAuthor = ShotPromptVariant & {
+export type ShotPromptVariantWithAuthor = ShotPromptVersion & {
   createdByName: string | null;
 };
 
 export type SequenceMusicPromptVariantWithAuthor =
-  SequenceMusicPromptVariant & { createdByName: string | null };
+  SequenceMusicPromptVersion & { createdByName: string | null };
 
 const shotListInput = z.object({
   sequenceId: ulidSchema,
@@ -98,7 +98,7 @@ export const listShotPromptVariantsFn = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(shotListInput))
   .handler(
     async ({ context, data }): Promise<ShotPromptVariantWithAuthor[]> => {
-      return await context.scopedDb.shotPromptVariants.listByShotWithAuthor(
+      return await context.scopedDb.shotPromptVersions.listByShotWithAuthor(
         data.shotId,
         data.promptType
       );
@@ -117,7 +117,7 @@ export const listSequenceMusicPromptVariantsFn = createServerFn({
       context,
       data,
     }): Promise<SequenceMusicPromptVariantWithAuthor[]> => {
-      return await context.scopedDb.sequenceMusicPromptVariants.listBySequenceWithAuthor(
+      return await context.scopedDb.sequenceMusicPromptVersions.listBySequenceWithAuthor(
         data.sequenceId
       );
     }
@@ -136,7 +136,7 @@ export const restoreShotPromptVariantFn = createServerFn({ method: 'POST' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(shotRestoreInput))
   .handler(async ({ context, data }) => {
-    const chosen = await context.scopedDb.shotPromptVariants.getByIdForShot(
+    const chosen = await context.scopedDb.shotPromptVersions.getByIdForShot(
       data.variantId,
       data.shotId
     );
@@ -144,7 +144,7 @@ export const restoreShotPromptVariantFn = createServerFn({ method: 'POST' })
       throw new Error('Prompt variant not found for this shot');
     }
 
-    const inserted = await context.scopedDb.shotPromptVariants.write({
+    const inserted = await context.scopedDb.shotPromptVersions.write({
       shotId: data.shotId,
       promptType: chosen.promptType,
       text: chosen.text,
@@ -170,7 +170,7 @@ export const restoreSequenceMusicPromptVariantFn = createServerFn({
   .inputValidator(zodValidator(sequenceRestoreInput))
   .handler(async ({ context, data }) => {
     const chosen =
-      await context.scopedDb.sequenceMusicPromptVariants.getByIdForSequence(
+      await context.scopedDb.sequenceMusicPromptVersions.getByIdForSequence(
         data.variantId,
         data.sequenceId
       );
@@ -178,7 +178,7 @@ export const restoreSequenceMusicPromptVariantFn = createServerFn({
       throw new Error('Music prompt variant not found for this sequence');
     }
 
-    const inserted = await context.scopedDb.sequenceMusicPromptVariants.write({
+    const inserted = await context.scopedDb.sequenceMusicPromptVersions.write({
       sequenceId: data.sequenceId,
       prompt: chosen.prompt,
       tags: chosen.tags,
@@ -373,7 +373,7 @@ export const getMusicPromptStalenessFn = createServerFn({ method: 'GET' })
       }
       const sceneSummaries = buildMusicSceneSummaries(scenes);
 
-      const latest = await scopedDb.sequenceMusicPromptVariants.getLatest(
+      const latest = await scopedDb.sequenceMusicPromptVersions.getLatest(
         sequence.id
       );
       const analysisModel =
@@ -434,7 +434,7 @@ export const getDivergentVariantPromptDiffFn = createServerFn({
 
     const promptType = variant.variantType === 'image' ? 'visual' : 'motion';
     const candidates =
-      await context.scopedDb.shotPromptVariants.listCandidatesAtOrBefore(
+      await context.scopedDb.shotPromptVersions.listCandidatesAtOrBefore(
         variant.shotId,
         promptType,
         variant.createdAt

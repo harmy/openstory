@@ -658,7 +658,7 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
       let referenceHash = shot.visualPromptInputHash;
       if (!referenceHash) {
         const fallback =
-          await scopedDb.shotPromptVariants.getLatestWithInputHash(
+          await scopedDb.shotPromptVersions.getLatestWithInputHash(
             shot.id,
             'visual'
           );
@@ -666,7 +666,7 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
       }
       if (referenceHash) {
         try {
-          const latest = await scopedDb.shotPromptVariants.getLatest(
+          const latest = await scopedDb.shotPromptVersions.getLatest(
             shot.id,
             'visual'
           );
@@ -692,7 +692,7 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
       let referenceHash = shot.motionPromptInputHash;
       if (!referenceHash) {
         const fallback =
-          await scopedDb.shotPromptVariants.getLatestWithInputHash(
+          await scopedDb.shotPromptVersions.getLatestWithInputHash(
             shot.id,
             'motion'
           );
@@ -700,7 +700,7 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
       }
       if (referenceHash) {
         try {
-          const latest = await scopedDb.shotPromptVariants.getLatest(
+          const latest = await scopedDb.shotPromptVersions.getLatest(
             shot.id,
             'motion'
           );
