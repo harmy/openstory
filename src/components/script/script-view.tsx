@@ -94,6 +94,10 @@ export const ScriptView: FC<{
   teamId?: string;
   sequence?: Sequence;
   flat?: boolean;
+  /** Extra classes merged onto the outer card — e.g. a height bound on the
+   *  logged-out new-sequence page so a large paste scrolls instead of growing
+   *  the page (#1000). */
+  className?: string;
   loading?: boolean;
   onSuccess?: (sequenceIds: string[]) => void;
   onCancel?: () => void;
@@ -108,6 +112,7 @@ export const ScriptView: FC<{
   loading = false,
   onSuccess,
   flat,
+  className,
   onCancel,
   initialScript,
   initialStyleId,
@@ -735,7 +740,8 @@ export const ScriptView: FC<{
     <PremiumCard
       className={cn(
         'relative flex flex-col min-h-0 max-h-full',
-        flat && 'border-none'
+        flat && 'border-none',
+        className
       )}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
