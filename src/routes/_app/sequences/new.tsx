@@ -168,10 +168,15 @@ function NewSequencePage() {
           </h1>
         </div>
         {/* `#compose` target: the "Try" links navigate here so the router
-            scrolls the composer into view (scrollRestoration handles it). */}
+            scrolls the composer into view (scrollRestoration handles it). The
+            card grows with its content but is capped (`max-h-[70dvh]` overrides
+            the default `max-h-full`, which can't bound here — no definite-height
+            ancestor like the signed-in `fullHeight` layout) so a large paste
+            scrolls inside the editor instead of growing the page (#1000). */}
         <div id="compose" className="scroll-mt-4">
           <ScriptView
             key={composerKey}
+            className="max-h-[70dvh]"
             loading={false}
             onSuccess={handleSuccess}
             initialScript={seedScript}
