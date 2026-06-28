@@ -13,13 +13,16 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
  * Every shot owns an anchor frame (orderIndex 0, role 'first') — the i2v anchor
  * and the shot's primary still. Since the image surface lives on `frames` (#989),
  * shot creation must materialize that frame or the image path has nowhere to
- * write. The anchor REUSES the shot's id (frame.id = shot.id) so lookups are a
- * direct `frames.getById(shotId)`. `imageModel` / `imageStatus` keep their schema
- * defaults here; the image workflow stamps the real values when generation runs.
+ * write. The frame gets its OWN generated id (NOT the shot's) — id-reuse was a
+ * one-time migration shortcut and is never assumed at runtime; the anchor is
+ * resolved by `(shotId, orderIndex 0)` via `frames.getAnchorByShot`. `imageModel`
+ * / `imageStatus` keep their schema defaults here; the image workflow stamps the
+ * real values when generation runs.
  */
 function anchorFrameValues(shot: Pick<Shot, 'id' | 'sequenceId'>): NewFrame {
   return {
-    id: shot.id,
+    // No explicit id: the schema's $defaultFn mints a fresh ULID. Replays dedupe
+    // on the (shotId, orderIndex) unique index via onConflictDoNothing below.
     shotId: shot.id,
     sequenceId: shot.sequenceId,
     orderIndex: 0,

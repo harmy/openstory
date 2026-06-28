@@ -104,7 +104,7 @@ function buildListItem(
 export async function buildSequenceListPage(params: {
   scopedDb: {
     sequences: Pick<ScopedDb['sequences'], 'listShotsByIds'>;
-    frames: Pick<ScopedDb['frames'], 'getByIds'>;
+    frames: Pick<ScopedDb['frames'], 'getAnchorsByShots'>;
     styles: Pick<ScopedDb['styles'], 'listByIds'>;
   };
   sequences: Sequence[];
@@ -121,17 +121,16 @@ export async function buildSequenceListPage(params: {
     scopedDb.styles.listByIds(sequences.map((s) => s.styleId)),
   ]);
 
-  // The still IMAGE surface lives on each shot's anchor frame now (#989,
-  // frame.id == shot.id). Batch-load the frames and project them back under the
-  // legacy thumbnail* names so `summarizeShotCounts` reads image readiness.
-  const framesById = new Map(
-    (await scopedDb.frames.getByIds(allShots.map((shot) => shot.id))).map(
-      (frame) => [frame.id, frame]
-    )
+  // The still IMAGE surface lives on each shot's anchor frame now (#989).
+  // Batch-load the anchor frames keyed by shotId (NOT id-reuse) and project them
+  // back under the legacy thumbnail* names so `summarizeShotCounts` reads image
+  // readiness.
+  const anchorsByShot = await scopedDb.frames.getAnchorsByShots(
+    allShots.map((shot) => shot.id)
   );
   const shotsById = new Map<string, ShotWithImage[]>();
   for (const shot of allShots) {
-    const frame = framesById.get(shot.id);
+    const frame = anchorsByShot.get(shot.id);
     if (!frame) continue;
     const withImage = projectShotWithImage(shot, frame);
     const bucket = shotsById.get(shot.sequenceId);

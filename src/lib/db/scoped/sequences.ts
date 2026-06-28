@@ -153,8 +153,12 @@ function createSequencesReadMethods(db: Database, teamId: string) {
             .select()
             .from(shots)
             .innerJoin(sequences, eq(shots.sequenceId, sequences.id))
-            // Anchor frame holds the image surface (#989); frame.id == shot.id.
-            .leftJoin(frames, eq(frames.id, shots.id))
+            // Anchor frame holds the image surface (#989) — the shot's first
+            // frame (orderIndex 0), joined by shotId (NOT id-reuse).
+            .leftJoin(
+              frames,
+              and(eq(frames.shotId, shots.id), eq(frames.orderIndex, 0))
+            )
             .where(
               and(
                 inArray(shots.sequenceId, batch),

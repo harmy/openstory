@@ -248,10 +248,12 @@ export async function createTestShot(
     updatedAt: now,
   });
 
-  // The still-image surface lives on the anchor frame now (#989,
-  // frame.id == shot.id).
+  // The still-image surface lives on each shot's anchor frame now (#989). The
+  // frame gets its OWN id (id-reuse was migration-only); it's resolved by
+  // (shotId, orderIndex 0).
+  const anchorFrameId = generateId();
   await db.insert(frames).values({
-    id: shotId,
+    id: anchorFrameId,
     shotId,
     sequenceId,
     orderIndex: 0,
@@ -268,7 +270,7 @@ export async function createTestShot(
   if (variantImageUrl !== null) {
     await db.insert(frameVariants).values({
       id: generateId(),
-      frameId: shotId,
+      frameId: anchorFrameId,
       sequenceId,
       kind: 'framing',
       model: 'nano_banana_2',
@@ -688,20 +690,21 @@ export async function getTestSequenceShots(sequenceId: string): Promise<
       audioStatus: true,
     },
   });
-  // The still-image surface lives on each shot's anchor frame now (#989,
-  // frame.id == shot.id); project it back under the legacy thumbnail* names.
+  // The still-image surface lives on each shot's anchor frame now (#989);
+  // project it back under the legacy thumbnail* names — keyed by shotId
+  // (orderIndex 0), never by id-reuse.
   const frameRows = await db
     .select({
-      id: frames.id,
+      shotId: frames.shotId,
       imageUrl: frames.imageUrl,
       imageStatus: frames.imageStatus,
     })
     .from(frames)
-    .where(eq(frames.sequenceId, sequenceId));
-  const framesById = new Map(frameRows.map((f) => [f.id, f]));
+    .where(and(eq(frames.sequenceId, sequenceId), eq(frames.orderIndex, 0)));
+  const framesByShot = new Map(frameRows.map((f) => [f.shotId, f]));
   return rows
     .map((row) => {
-      const frame = framesById.get(row.id);
+      const frame = framesByShot.get(row.id);
       return {
         id: row.id,
         orderIndex: row.orderIndex,
@@ -725,12 +728,13 @@ export async function getTestShot(shotId: string): Promise<{
   variantImageStatus: string | null;
 } | null> {
   const db = getDb();
-  // The still image lives on the anchor frame now (#989, frame.id == shot.id);
-  // the variant grid sheet is the latest kind:'framing' frame_variants version.
+  // The still image lives on the shot's anchor frame now (#989), resolved by
+  // (shotId, orderIndex 0) — never by id-reuse; the variant grid sheet is the
+  // latest kind:'framing' frame_variants version on that frame.
   const [frame] = await db
     .select({ id: frames.id, imageUrl: frames.imageUrl })
     .from(frames)
-    .where(eq(frames.id, shotId));
+    .where(and(eq(frames.shotId, shotId), eq(frames.orderIndex, 0)));
 
   if (!frame) return null;
 
@@ -739,7 +743,7 @@ export async function getTestShot(shotId: string): Promise<{
     .from(frameVariants)
     .where(
       and(
-        eq(frameVariants.frameId, shotId),
+        eq(frameVariants.frameId, frame.id),
         eq(frameVariants.kind, 'framing'),
         isNull(frameVariants.sourceVariantId)
       )

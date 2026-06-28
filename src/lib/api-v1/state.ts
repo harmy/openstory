@@ -177,7 +177,7 @@ export function buildSequenceSummary(params: {
 export async function buildSequenceState(
   scopedDb: {
     shots: Pick<ScopedDb['shots'], 'listBySequence'>;
-    frames: Pick<ScopedDb['frames'], 'listBySequence'>;
+    frames: Pick<ScopedDb['frames'], 'listAnchorsBySequence'>;
     styles: Pick<ScopedDb['styles'], 'getById'>;
   },
   sequence: Sequence,
@@ -187,17 +187,17 @@ export async function buildSequenceState(
   // toShareableUrl.
   origin: string
 ): Promise<SequenceState> {
-  const [shots, frameRows, style] = await Promise.all([
+  const [shots, anchorRows, style] = await Promise.all([
     scopedDb.shots.listBySequence(sequence.id),
-    scopedDb.frames.listBySequence(sequence.id),
+    scopedDb.frames.listAnchorsBySequence(sequence.id),
     scopedDb.styles.getById(sequence.styleId),
   ]);
-  // The still IMAGE surface lives on each shot's anchor frame now (#989,
-  // frame.id == shot.id). Project it back under the legacy thumbnail* names so
-  // the image-readiness reads below are unchanged.
-  const framesById = new Map(frameRows.map((f) => [f.id, f]));
+  // The still IMAGE surface lives on each shot's anchor frame now (#989).
+  // Project it back under the legacy thumbnail* names — keyed by shotId, never
+  // by id-reuse — so the image-readiness reads below are unchanged.
+  const anchorsByShot = new Map(anchorRows.map((f) => [f.shotId, f]));
   const shotsWithImage = shots.flatMap((shot) => {
-    const frame = framesById.get(shot.id);
+    const frame = anchorsByShot.get(shot.id);
     return frame ? [projectShotWithImage(shot, frame)] : [];
   });
   const ordered = [...shotsWithImage].sort(

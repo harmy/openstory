@@ -237,9 +237,11 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
                   analysisModel: sequence.analysisModel,
                 },
                 scene: shot.metadata,
-                // i2v anchor still lives on the anchor frame now (#989).
+                // i2v anchor still lives on the anchor frame now (#989) —
+                // resolved by shotId, never by id-reuse.
                 startingFrameImageUrl:
-                  (await scopedDb.frames.getById(shot.id))?.imageUrl ?? null,
+                  (await scopedDb.frames.getAnchorByShot(shot.id))?.imageUrl ??
+                  null,
               });
               userEditInputHash = await computeMotionPromptInputHash(ctx);
               userEditAnalysisModel = ctx.analysisModel;

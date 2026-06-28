@@ -111,7 +111,7 @@ export class ShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<ShotVariant
         if (!input.shotId || !input.sequenceId) {
           return { params, versionId: '' };
         }
-        const frame = await scopedDb.frames.getById(input.shotId);
+        const frame = await scopedDb.frames.getAnchorByShot(input.shotId);
         if (!frame) {
           logger.info(
             `[ShotVariantWorkflow] Shot ${input.shotId} has no anchor frame, skipping`
@@ -120,7 +120,7 @@ export class ShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<ShotVariant
         }
 
         const version = await scopedDb.frameVariants.appendVersion({
-          frameId: input.shotId,
+          frameId: frame.id,
           sequenceId: input.sequenceId,
           kind: 'framing',
           model,

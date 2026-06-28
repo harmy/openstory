@@ -18,7 +18,7 @@
 import type { Database } from '@/lib/db/client';
 import { frameVariants, frames } from '@/lib/db/schema';
 import type { Frame, FrameVariant, NewFrame } from '@/lib/db/schema';
-import { asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 
 /** A frame plus the `frame_variants` version it currently points at (if any). */
 export type ResolvedFrame = {
@@ -97,6 +97,48 @@ export function createFramesMethods(db: Database) {
     getByIds: async (frameIds: string[]): Promise<Frame[]> => {
       if (frameIds.length === 0) return [];
       return await db.select().from(frames).where(inArray(frames.id, frameIds));
+    },
+
+    /**
+     * The shot's anchor frame — its first frame (role 'first', orderIndex 0):
+     * the i2v anchor and the shot's primary still. Resolved BY SHOT, never by
+     * id-reuse. The migration backfilled anchors with `frame.id = shot.id`, but
+     * that equality is a one-time migration artifact and must NOT be assumed at
+     * runtime — newly created frames get their own id (#989). Returns null when
+     * the shot has no frame yet (callers handle absence).
+     */
+    getAnchorByShot: async (shotId: string): Promise<Frame | null> => {
+      const result = await db
+        .select()
+        .from(frames)
+        .where(and(eq(frames.shotId, shotId), eq(frames.orderIndex, 0)));
+      return result[0] ?? null;
+    },
+
+    /**
+     * Anchor frame (orderIndex 0) for each given shot, keyed by `shotId`. One
+     * row per shot via the `(shotId, orderIndex)` unique index; shots without a
+     * frame are absent from the map.
+     */
+    getAnchorsByShots: async (
+      shotIds: string[]
+    ): Promise<Map<string, Frame>> => {
+      if (shotIds.length === 0) return new Map();
+      const rows = await db
+        .select()
+        .from(frames)
+        .where(and(inArray(frames.shotId, shotIds), eq(frames.orderIndex, 0)));
+      return new Map(rows.map((f) => [f.shotId, f]));
+    },
+
+    /** Anchor frame (orderIndex 0) of every shot in a sequence. */
+    listAnchorsBySequence: async (sequenceId: string): Promise<Frame[]> => {
+      return await db
+        .select()
+        .from(frames)
+        .where(
+          and(eq(frames.sequenceId, sequenceId), eq(frames.orderIndex, 0))
+        );
     },
 
     /** Frames of a shot, ordered (0 = first/anchor by default). */

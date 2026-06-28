@@ -93,14 +93,18 @@ export async function executeSmartRetry(context: SmartRetryContext) {
   await assertNoActiveStoryboard(context.scopedDb, sequence.id);
 
   const shots = await context.scopedDb.shots.listBySequence(sequence.id);
-  // The still-image surface lives on each shot's anchor frame now (#989,
-  // frame.id == shot.id). Project it back under the legacy thumbnail*/image*
-  // names so the failure analysis and per-shot retry reads below are unchanged.
+  // The still-image surface lives on each shot's anchor frame now (#989).
+  // Project it back under the legacy thumbnail*/image* names — keyed by shotId,
+  // never by id-reuse — so the failure analysis and per-shot retry reads below
+  // are unchanged.
   await context.scopedDb.shots.ensureAnchorFrames(shots);
-  const frameRows = await context.scopedDb.frames.listBySequence(sequence.id);
-  const framesById = new Map(frameRows.map((fr) => [fr.id, fr]));
+  const anchorsByShot = new Map(
+    (await context.scopedDb.frames.listAnchorsBySequence(sequence.id)).map(
+      (fr) => [fr.shotId, fr]
+    )
+  );
   const shotsWithImage = shots.flatMap((shot) => {
-    const frame = framesById.get(shot.id);
+    const frame = anchorsByShot.get(shot.id);
     return frame ? [projectShotWithImage(shot, frame)] : [];
   });
   const summary = analyzeFailures(shotsWithImage, sequence);

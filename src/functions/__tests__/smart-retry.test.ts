@@ -142,7 +142,8 @@ function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
     ...overrides,
   };
   const frame: Frame = {
-    id: base.id,
+    // Own id — distinct from the shot id (#989); only shotId links them.
+    id: `frame-${base.id}`,
     shotId: base.id,
     sequenceId: base.sequenceId,
     orderIndex: 0,
@@ -193,15 +194,16 @@ function makeContext(
   const listBySequence = vi.fn(async () => shots);
   const ensureAnchorFrames = vi.fn(async () => {});
   // The image surface lives on each shot's anchor frame now (#989); the source
-  // projects `ShotWithImage` from `shots` + `frames`, so expose the frames here.
-  const listFramesBySequence = vi.fn(async () => shots.map((s) => s.frame));
+  // projects `ShotWithImage` from `shots` + anchor `frames`, so expose the
+  // anchors here (keyed by shotId, never id-reuse).
+  const listAnchorsBySequence = vi.fn(async () => shots.map((s) => s.frame));
   const listWithSheets = vi.fn(async () => []);
   // Scenes own model selection (#909); when none are passed the list is empty →
   // shots inherit the sequence default, preserving the legacy single-model path.
   const listScenesBySequence = vi.fn(async () => scenes);
   const stub = {
     shots: { listBySequence, ensureAnchorFrames },
-    frames: { listBySequence: listFramesBySequence },
+    frames: { listAnchorsBySequence },
     scenes: { listBySequence: listScenesBySequence },
     characters: { listWithSheets },
     sequence: vi.fn(() => ({ updateStatus, updateMusicFields })),

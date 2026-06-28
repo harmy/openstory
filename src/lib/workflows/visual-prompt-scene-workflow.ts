@@ -369,9 +369,12 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
       const inputHash = await computeVisualPromptInputHash(narrowed);
 
       await step.do('save-visual-prompt-to-db', async () => {
-        // Visual prompt history lives on the anchor frame now (#989);
-        // frame.id == shotId.
-        const previous = await scopedDb.framePromptVersions.getLatest(shotId);
+        // Visual prompt history lives on the shot's anchor frame now (#989) —
+        // resolved by shotId, never by id-reuse.
+        const frame = await scopedDb.frames.getAnchorByShot(shotId);
+        const previous = frame
+          ? await scopedDb.framePromptVersions.getLatest(frame.id)
+          : null;
         const source = previous ? 'regenerated' : 'ai-generated';
 
         // Scene metadata stays on the shot; the prompt itself goes to
@@ -381,14 +384,20 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
         // is retained in the prompt history and can be restored).
         await scopedDb.shots.update(shotId, { metadata: enrichedScene });
 
-        await scopedDb.framePromptVersions.write({
-          frameId: shotId,
-          text: result.visual.fullPrompt,
-          components: result.visual.components,
-          source,
-          inputHash,
-          analysisModel: analysisModelId,
-        });
+        if (frame) {
+          await scopedDb.framePromptVersions.write({
+            frameId: frame.id,
+            text: result.visual.fullPrompt,
+            components: result.visual.components,
+            source,
+            inputHash,
+            analysisModel: analysisModelId,
+          });
+        } else {
+          logger.warn(
+            `[VisualPromptSceneWorkflow] Shot ${shotId} has no anchor frame; visual prompt not persisted`
+          );
+        }
 
         await getGenerationChannel(sequenceId).emit('generation.shot:updated', {
           shotId,

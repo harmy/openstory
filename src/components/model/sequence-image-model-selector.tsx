@@ -52,22 +52,18 @@ export const SequenceImageModelSelector = ({
     return map;
   }, [shots]);
 
-  // Image variants are frame_variants (#989); key on `frameId` (== shotId) so
-  // coverage still counts at scene granularity exactly as before.
-  const coverageVariants = useMemo(
-    () => variants?.map((v) => ({ ...v, shotId: v.frameId })),
-    [variants]
-  );
-
+  // Image variants are frame_variants (#989); each row already carries its
+  // owning `shotId` (frame ids ≠ shot ids), so coverage counts at scene
+  // granularity directly.
   const coverage = useMemo(
     () =>
       computeSequenceModelCoverage({
-        variants: coverageVariants,
+        variants,
         variantType: 'image',
         primaryModel: sequenceImageModel,
         shotToScene,
       }),
-    [coverageVariants, sequenceImageModel, shotToScene]
+    [variants, sequenceImageModel, shotToScene]
   );
 
   if (!models || models.length === 0) {

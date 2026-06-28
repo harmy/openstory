@@ -299,13 +299,10 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
     const skippedDeletedShotIds = affectedShotIds.filter(
       (id) => !liveShotIds.has(id)
     );
-    // The still image surface lives on the anchor frame now (#989);
-    // frame.id == shot.id.
-    const liveFramesByShot = new Map(
-      (await scopedDb.frames.getByIds(liveShots.map((s) => s.id))).map((f) => [
-        f.id,
-        f,
-      ])
+    // The still image surface lives on each shot's anchor frame now (#989) —
+    // keyed by shotId (NOT id-reuse).
+    const liveFramesByShot = await scopedDb.frames.getAnchorsByShots(
+      liveShots.map((s) => s.id)
     );
 
     // Flip every affected shot to `generating` and emit progress events
@@ -320,7 +317,7 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
         const frame = liveFramesByShot.get(shot.id);
         if (frame?.imageUrl) {
           await scopedDb.frames.setImageGenerationStatus(
-            shot.id,
+            frame.id,
             { imageStatus: 'generating', imageError: null },
             { throwOnMissing: false }
           );

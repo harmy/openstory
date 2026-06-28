@@ -530,13 +530,13 @@ export const shotAccessMiddleware = createMiddleware({ type: 'function' })
     const { sequence: rawSequence, ...shot } = shotData;
 
     // Anchor frame (#989) — the shot's IMAGE surface (was the shots.thumbnail*
-    // columns). frame.id == shot.id, so this is a direct lookup. Every shot owns
-    // one (created at shot-create / backfilled by the Phase 2 migration); create
-    // it defensively if a legacy shot somehow predates the anchor.
-    let frame = await scopedDb.frames.getById(shot.id);
+    // columns): its first frame (orderIndex 0), resolved by shotId, never by
+    // id-reuse. Every shot owns one (created at shot-create / backfilled by the
+    // Phase 2 migration); create it defensively if a legacy shot predates it.
+    let frame = await scopedDb.frames.getAnchorByShot(shot.id);
     if (!frame) {
       await scopedDb.shots.ensureAnchorFrames([shot]);
-      frame = await scopedDb.frames.getById(shot.id);
+      frame = await scopedDb.frames.getAnchorByShot(shot.id);
     }
     if (!frame) {
       throw new NotFoundError('Shot is missing its anchor frame');

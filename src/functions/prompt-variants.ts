@@ -104,12 +104,13 @@ export const listShotPromptVariantsFn = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(shotListInput))
   .handler(
     async ({ context, data }): Promise<ShotPromptVariantWithAuthor[]> => {
-      // Visual prompt history moved to frame_prompt_versions (#989,
-      // frameId == shotId); motion history stays on shot_prompt_versions.
+      // Visual prompt history moved to frame_prompt_versions (#989); motion
+      // history stays on shot_prompt_versions. Use the resolved anchor frame id
+      // (never the shot id).
       if (data.promptType === 'visual') {
         const rows =
           await context.scopedDb.framePromptVersions.listByFrameWithAuthor(
-            data.shotId
+            context.frame.id
           );
         return rows.map((r) => ({
           id: r.id,
@@ -167,17 +168,18 @@ export const restoreShotPromptVariantFn = createServerFn({ method: 'POST' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(shotRestoreInput))
   .handler(async ({ context, data }) => {
-    // Visual prompt history lives in frame_prompt_versions (#989, frameId ==
-    // shotId); motion stays on shot_prompt_versions. ULIDs are globally unique,
-    // so a frame-store hit unambiguously identifies a visual restore.
+    // Visual prompt history lives in frame_prompt_versions (#989); motion stays
+    // on shot_prompt_versions. ULIDs are globally unique, so a frame-store hit
+    // unambiguously identifies a visual restore. Use the resolved anchor frame
+    // id (never the shot id).
     const frameChosen =
       await context.scopedDb.framePromptVersions.getByIdForFrame(
         data.variantId,
-        data.shotId
+        context.frame.id
       );
     if (frameChosen) {
       const inserted = await context.scopedDb.framePromptVersions.write({
-        frameId: data.shotId,
+        frameId: context.frame.id,
         text: frameChosen.text,
         components: frameChosen.components,
         source: 'restored',

@@ -184,11 +184,15 @@ export function createAdminMethods(db: Database) {
   async function getShotsForSequence(
     sequenceId: string
   ): Promise<ShotWithImage[]> {
-    // Project the anchor-frame image surface (#989); frame.id == shot.id.
+    // Project the anchor-frame image surface (#989) — the shot's first frame
+    // (orderIndex 0), joined by shotId (NOT id-reuse).
     const rows = await db
       .select()
       .from(shots)
-      .leftJoin(frames, eq(frames.id, shots.id))
+      .leftJoin(
+        frames,
+        and(eq(frames.shotId, shots.id), eq(frames.orderIndex, 0))
+      )
       .where(eq(shots.sequenceId, sequenceId))
       .orderBy(asc(shots.orderIndex));
     return rows.map((row) =>

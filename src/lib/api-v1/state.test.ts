@@ -49,7 +49,8 @@ const build = (
 // The still-image surface moved off `shots` onto the anchor `frame` in #989;
 // `buildSequenceState` projects `ShotWithImage` from each shot + its frame, so
 // the fixture keeps the legacy projected names (`thumbnail*`/`image*`) AND
-// mirrors them onto a concrete anchor `frame` (id == shot.id).
+// mirrors them onto a concrete anchor `frame` whose id is DISTINCT from the
+// shot id (only `shotId` links them — never id-reuse).
 function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
   const base: Omit<ShotWithImage, 'frame'> = {
     id: 'shot-1',
@@ -97,7 +98,7 @@ function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
     ...overrides,
   };
   const frame: Frame = {
-    id: base.id,
+    id: `frame-${base.id}`,
     shotId: base.id,
     sequenceId: base.sequenceId,
     orderIndex: 0,
@@ -204,7 +205,7 @@ function depsWithShots(
     shots: { listBySequence: async () => shots },
     // The image surface lives on each shot's anchor frame now (#989); the source
     // projects `ShotWithImage` from `shots` + `frames`.
-    frames: { listBySequence: async () => shots.map((s) => s.frame) },
+    frames: { listAnchorsBySequence: async () => shots.map((s) => s.frame) },
     styles: { getById: async () => style },
   };
 }

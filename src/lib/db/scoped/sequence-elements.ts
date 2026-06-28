@@ -270,13 +270,16 @@ export function createSequenceElementsMethods(db: Database) {
         .select()
         .from(shots)
         .where(eq(shots.sequenceId, sequenceId))) as Shot[];
-      // The image prompt lives on the anchor frame now (#989); frame.id == shotId.
+      // The image prompt lives on each shot's anchor frame now (#989) — keyed
+      // by shotId (orderIndex 0), never by id-reuse.
       const frameRows = await db
-        .select({ id: frames.id, imagePrompt: frames.imagePrompt })
+        .select({ shotId: frames.shotId, imagePrompt: frames.imagePrompt })
         .from(frames)
-        .where(eq(frames.sequenceId, sequenceId));
+        .where(
+          and(eq(frames.sequenceId, sequenceId), eq(frames.orderIndex, 0))
+        );
       const imagePromptByShot = new Map(
-        frameRows.map((f) => [f.id, f.imagePrompt])
+        frameRows.map((f) => [f.shotId, f.imagePrompt])
       );
       const shotsWithImagePrompt = allShots.map((s) => ({
         ...s,

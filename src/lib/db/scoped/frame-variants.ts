@@ -28,6 +28,14 @@ import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { buildFrameImageMirror } from './frames';
 import { buildEventInsert } from './sequence-events';
 
+/**
+ * An image `FrameVariant` plus the id of the shot whose anchor frame owns it.
+ * Frame ids are NOT shot ids (#989), so sequence-wide listings that the client
+ * keys by shot (coverage markers, per-shot variant filtering) carry the owning
+ * `shotId` explicitly rather than reusing `frameId`.
+ */
+export type ImageVariantWithShot = FrameVariant & { shotId: string };
+
 /** The grouping key that makes a flat row set read as a "variant". */
 type VariantGroup = {
   frameId: string;
@@ -138,10 +146,13 @@ export function createFrameVariantsMethods(db: Database) {
      */
     listModelVersionsBySequence: async (
       sequenceId: string
-    ): Promise<FrameVariant[]> => {
-      return await db
-        .select()
+    ): Promise<ImageVariantWithShot[]> => {
+      // Join the owning frame to surface its `shotId` — the client keys image
+      // coverage / per-shot filtering by shot, and frame ids ≠ shot ids (#989).
+      const rows = await db
+        .select({ variant: frameVariants, shotId: frames.shotId })
         .from(frameVariants)
+        .innerJoin(frames, eq(frames.id, frameVariants.frameId))
         .where(
           and(
             eq(frameVariants.sequenceId, sequenceId),
@@ -150,6 +161,7 @@ export function createFrameVariantsMethods(db: Database) {
           )
         )
         .orderBy(asc(frameVariants.id));
+      return rows.map((r) => ({ ...r.variant, shotId: r.shotId }));
     },
 
     /** Distinct `kind:'model'` model names that have a version in a sequence. */

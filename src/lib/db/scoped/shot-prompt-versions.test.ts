@@ -12,9 +12,9 @@
  *     transactionally — see the helper docstring for the durability story).
  *
  * The VISUAL (image) prompt path moved to `frame_prompt_versions` in #989
- * (keyed by frameId == shotId) and is covered by
- * `frame-prompt-versions.test.ts`; the shot helper now owns only the MOTION
- * prompt, so these tests exercise it via `promptType: 'motion'`.
+ * (keyed by the anchor frame id, resolved from the shot — frame ids ≠ shot ids)
+ * and is covered by `frame-prompt-versions.test.ts`; the shot helper now owns
+ * only the MOTION prompt, so these tests exercise it via `promptType: 'motion'`.
  */
 
 import type { Database } from '@/lib/db/client';

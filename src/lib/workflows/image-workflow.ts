@@ -127,7 +127,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
           return { params, versionId: '' };
         }
 
-        const frame = await scopedDb.frames.getById(input.shotId);
+        const frame = await scopedDb.frames.getAnchorByShot(input.shotId);
         if (!frame) {
           logger.info(
             `[ImageWorkflow] Shot ${input.shotId} has no anchor frame (deleted?), skipping`
@@ -173,7 +173,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
           }
 
           await scopedDb.framePromptVersions.write({
-            frameId: input.shotId,
+            frameId: frame.id,
             text: input.prompt,
             source: 'user-edit',
             inputHash: userEditInputHash,
@@ -187,7 +187,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
         // state, so the picker can't trip staleness on the live selection.
         if (!input.variantOnly) {
           await scopedDb.frames.setImageGenerationStatus(
-            input.shotId,
+            frame.id,
             {
               imageStatus: 'generating',
               imageWorkflowRunId: workflowRunId,
@@ -198,7 +198,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
         }
 
         const version = await scopedDb.frameVariants.appendVersion({
-          frameId: input.shotId,
+          frameId: frame.id,
           sequenceId: input.sequenceId,
           kind: 'model',
           model,
@@ -291,6 +291,16 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
         const { model } = prep.params;
         const versionId = prep.versionId;
 
+        // Resolve the anchor frame (frame id ≠ shot id, #989) for the event
+        // target + selection repoint below.
+        const frame = await scopedDb.frames.getAnchorByShot(shotId);
+        if (!frame) {
+          logger.info(
+            `[ImageWorkflow] Shot ${shotId} lost its anchor frame before select; skipping`
+          );
+          return { imageUrl: upload.url };
+        }
+
         // Complete the in-flight version. Its inputHash IS the snapshot hash —
         // staleness of this version is its own concern (immutable once done).
         await scopedDb.frameVariants.update(versionId, {
@@ -309,7 +319,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
           actorId: input.userId,
           kind: 'image.generated',
           targetType: 'frame',
-          targetId: shotId,
+          targetId: frame.id,
           summary: `Generated ${model} image`,
           data: { versionId, model, variantOnly: input.variantOnly ?? false },
         });
@@ -346,7 +356,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
         }
 
         // Select = pointer repoint + mirror + `image.selected` event (atomic).
-        await scopedDb.frameVariants.select(shotId, versionId, {
+        await scopedDb.frameVariants.select(frame.id, versionId, {
           actorId: input.userId,
         });
         // A new still invalidates the shot's downstream video (still on `shots`
@@ -375,19 +385,22 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
       imageUrl = writeResult.imageUrl;
     } else if (imageUrl && shotId && input.skipStorage) {
       await step.do('store-preview-url', async () => {
-        const updatedFrame = await scopedDb.frames.setImageGenerationStatus(
-          shotId,
-          {
-            previewImageUrl: imageUrl,
-            imageGeneratedAt: new Date(),
-            imageError: null,
-          },
-          { throwOnMissing: false }
-        );
+        const anchor = await scopedDb.frames.getAnchorByShot(shotId);
+        const updatedFrame = anchor
+          ? await scopedDb.frames.setImageGenerationStatus(
+              anchor.id,
+              {
+                previewImageUrl: imageUrl,
+                imageGeneratedAt: new Date(),
+                imageError: null,
+              },
+              { throwOnMissing: false }
+            )
+          : null;
 
         if (!updatedFrame) {
           logger.info(
-            `[ImageWorkflow] Frame ${shotId} was deleted, skipping preview update`
+            `[ImageWorkflow] Shot ${shotId} has no anchor frame, skipping preview update`
           );
           return;
         }
@@ -420,11 +433,14 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     // Variant-only: leave the primary frame untouched on failure too — only
     // this model's in-flight version flips to 'failed' below.
     if (!input.variantOnly) {
-      await scopedDb.frames.setImageGenerationStatus(
-        input.shotId,
-        { imageStatus: 'failed', imageError: error },
-        { throwOnMissing: false }
-      );
+      const anchor = await scopedDb.frames.getAnchorByShot(input.shotId);
+      if (anchor) {
+        await scopedDb.frames.setImageGenerationStatus(
+          anchor.id,
+          { imageStatus: 'failed', imageError: error },
+          { throwOnMissing: false }
+        );
+      }
     }
     await scopedDb.frameVariants.markFailedByWorkflowRun(
       event.instanceId,

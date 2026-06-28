@@ -160,14 +160,13 @@ export const batchGenerateMotionFn = createServerFn({ method: 'POST' })
     // Project the anchor-frame image surface (#989) so the eligibility filter
     // and downstream `shot.thumbnailUrl` reads keep working unchanged.
     const rawShots = await context.scopedDb.shots.listBySequence(sequence.id);
-    const framesById = new Map(
-      (await context.scopedDb.frames.listBySequence(sequence.id)).map((f) => [
-        f.id,
-        f,
-      ])
+    const anchorsByShot = new Map(
+      (await context.scopedDb.frames.listAnchorsBySequence(sequence.id)).map(
+        (f) => [f.shotId, f]
+      )
     );
     const allShots = rawShots.flatMap((s) => {
-      const frame = framesById.get(s.id);
+      const frame = anchorsByShot.get(s.id);
       return frame ? [projectShotWithImage(s, frame)] : [];
     });
     // Server determines eligible shots: still done, video pending/failed

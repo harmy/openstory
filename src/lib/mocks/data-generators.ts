@@ -172,7 +172,8 @@ const generateMockShot = (
     },
   };
   const frame: Frame = {
-    id: shotBase.id,
+    // Own id — the anchor frame is NOT the shot (#989); only shotId links them.
+    id: faker.string.ulid(),
     shotId: shotBase.id,
     sequenceId: shotBase.sequenceId,
     orderIndex: 0,

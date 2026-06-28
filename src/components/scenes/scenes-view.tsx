@@ -52,6 +52,7 @@ import {
   type AspectRatio,
 } from '@/lib/constants/aspect-ratios';
 import type { FrameVariant, SceneRow, ShotVariant } from '@/lib/db/schema';
+import type { ImageVariantWithShot } from '@/lib/db/scoped/frame-variants';
 import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import { analyzeFailures } from '@/lib/failures/failure-analysis';
 import type { GenerationPhaseConfig } from '@/lib/realtime/generation-stream.reducer';
@@ -281,7 +282,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   );
 
   // Fetch image variants for this sequence (frame_variants kind:'model', #989)
-  const { data: imageVariants } = useQuery<FrameVariant[]>({
+  const { data: imageVariants } = useQuery<ImageVariantWithShot[]>({
     queryKey: ['sequence-image-variants', sequenceId],
     queryFn: () => getSequenceImageVariantsFn({ data: { sequenceId } }),
     staleTime: 30_000,
@@ -311,16 +312,16 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   // model's image for each shot (falling back to the legacy thumbnail when the
   // model has no completed image for a shot).
   const { activeImageModel } = useActiveImageModel(sequenceId);
-  // Image variants are frame_variants now; `frameId == shotId`, so the map stays
-  // keyed by shot id. The query already returns only kind:'model', non-discarded
-  // rows.
+  // Image variants are frame_variants now; each carries its owning `shotId`
+  // (frame ids ≠ shot ids, #989), so key the map by shot id. The query already
+  // returns only kind:'model', non-discarded rows.
   const imageVariantsByShot = useMemo(() => {
     const map = new Map<string, FrameVariant[]>();
     if (!imageVariants) return map;
     for (const v of imageVariants) {
-      const list = map.get(v.frameId) ?? [];
+      const list = map.get(v.shotId) ?? [];
       list.push(v);
-      map.set(v.frameId, list);
+      map.set(v.shotId, list);
     }
     return map;
   }, [imageVariants]);
@@ -534,10 +535,11 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     return r?.image ?? r?.video;
   }, [generationState.shotRetries, curSelectedShotId]);
 
-  // Filter variants for the currently selected shot
+  // Filter variants for the currently selected shot (by owning shotId — frame
+  // ids ≠ shot ids, #989).
   const selectedShotVariants = useMemo(() => {
     if (!imageVariants || !curSelectedShotId) return undefined;
-    return imageVariants.filter((v) => v.frameId === curSelectedShotId);
+    return imageVariants.filter((v) => v.shotId === curSelectedShotId);
   }, [imageVariants, curSelectedShotId]);
 
   // The image-prompt tab targets the scene's look model (#909); its variant +

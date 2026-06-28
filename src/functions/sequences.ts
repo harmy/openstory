@@ -526,14 +526,14 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       // Project each shot's anchor-frame image surface (#989) so eligibility and
       // the per-shot `imageUrl` read below keep using the legacy field names.
       await scopedDb.shots.ensureAnchorFrames(allShots);
-      const videoFramesById = new Map(
-        (await scopedDb.frames.listBySequence(sequence.id)).map((fr) => [
-          fr.id,
+      const anchorsByShot = new Map(
+        (await scopedDb.frames.listAnchorsBySequence(sequence.id)).map((fr) => [
+          fr.shotId,
           fr,
         ])
       );
       const shotsWithImage = allShots.flatMap((shot) => {
-        const frame = videoFramesById.get(shot.id);
+        const frame = anchorsByShot.get(shot.id);
         return frame ? [projectShotWithImage(shot, frame)] : [];
       });
       const eligible = selectEligibleVideoShots(shotsWithImage);
@@ -807,7 +807,7 @@ export const setSequenceModelFn = createServerFn({ method: 'POST' })
     // Image variants live in `frame_variants` now (#989). The sequence-wide
     // "Set" is a per-shot pointer repoint (the #677 fix applied in bulk): for
     // every shot with a completed version for `model`, select it and reset that
-    // shot's now-stale video. frame.id == shot.id.
+    // shot's now-stale video.
     if (variantType === 'image') {
       const versions = await scopedDb.frameVariants.listModelVersionsBySequence(
         sequence.id
@@ -820,23 +820,34 @@ export const setSequenceModelFn = createServerFn({ method: 'POST' })
       if (latestByFrame.size === 0) {
         throw new Error('That model has not generated anything to set');
       }
+      // Resolve each frame's owning shot — frame ids are NOT shot ids (#989) —
+      // so the now-stale video reset targets the right shot row.
+      const shotIdByFrame = new Map(
+        (await scopedDb.frames.getByIds([...latestByFrame.keys()])).map((f) => [
+          f.id,
+          f.shotId,
+        ])
+      );
       let imageCount = 0;
       for (const [frameId, version] of latestByFrame) {
         await scopedDb.frameVariants.select(frameId, version.id, {
           actorId: user.id,
         });
-        await scopedDb.shots.update(
-          frameId,
-          {
-            videoUrl: null,
-            videoPath: null,
-            videoStatus: 'pending',
-            videoWorkflowRunId: null,
-            videoGeneratedAt: null,
-            videoError: null,
-          },
-          { throwOnMissing: false }
-        );
+        const ownerShotId = shotIdByFrame.get(frameId);
+        if (ownerShotId) {
+          await scopedDb.shots.update(
+            ownerShotId,
+            {
+              videoUrl: null,
+              videoPath: null,
+              videoStatus: 'pending',
+              videoWorkflowRunId: null,
+              videoGeneratedAt: null,
+              videoError: null,
+            },
+            { throwOnMissing: false }
+          );
+        }
         imageCount++;
       }
       return { count: imageCount, variantType, model };

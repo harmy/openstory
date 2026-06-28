@@ -1,6 +1,7 @@
 import type { Shot } from '@/types/database';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { FrameVariant, ShotVariant } from '@/lib/db/schema';
+import type { ShotVariant } from '@/lib/db/schema';
+import type { ImageVariantWithShot } from '@/lib/db/scoped/frame-variants';
 import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import {
   getShotsFn,
@@ -87,13 +88,12 @@ export function useSequenceVideoVariants(sequenceId?: string) {
   });
 }
 
-// All image FrameVariant (kind:'model') rows for a sequence (#547/#989). Image
-// variants moved off `shot_variants` onto `frame_variants`; `frameId == shotId`
-// so the shot-keyed coverage logic keeps working. Used by the header image
+// All image FrameVariant (kind:'model') rows for a sequence (#547/#989), each
+// carrying its owning `shotId` (frame ids ≠ shot ids). Used by the header image
 // dropdown for sequence-wide per-model coverage, and by the scenes view to
 // resolve each shot's displayed image through the active model's variant.
 export function useSequenceImageVariants(sequenceId?: string) {
-  return useQuery<FrameVariant[]>({
+  return useQuery<ImageVariantWithShot[]>({
     queryKey: ['sequence-image-variants', sequenceId ?? ''],
     queryFn: async () => {
       if (!sequenceId) throw new Error('sequenceId is required');

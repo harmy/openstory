@@ -81,7 +81,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
         status: 'generating',
       });
 
-      const frame = await scopedDb.frames.getById(shotId);
+      const frame = await scopedDb.frames.getAnchorByShot(shotId);
       if (!frame) {
         logger.info(
           `[UpscaleShotVariantWorkflow] Shot ${shotId} has no anchor frame, skipping`
@@ -92,7 +92,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
       // Record the in-flight framing version (the upscaled tile), pointing back
       // at the grid sheet it was cropped from.
       const version = await scopedDb.frameVariants.appendVersion({
-        frameId: shotId,
+        frameId: frame.id,
         sequenceId,
         kind: 'framing',
         model: 'nano_banana_2',
@@ -183,7 +183,15 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
       });
 
       // Repoint the frame's selection at the upscaled tile (mirror + event).
-      await scopedDb.frameVariants.select(shotId, upscaleResult.versionId, {
+      // Resolve the anchor frame by shotId (frame id ≠ shot id, #989).
+      const frame = await scopedDb.frames.getAnchorByShot(shotId);
+      if (!frame) {
+        logger.info(
+          `[UpscaleShotVariantWorkflow] Shot ${shotId} has no anchor frame, skipping select`
+        );
+        return;
+      }
+      await scopedDb.frameVariants.select(frame.id, upscaleResult.versionId, {
         actorId: userId,
       });
 
@@ -241,7 +249,7 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
       error
     );
     if (input.sequenceId) {
-      const frame = await scopedDb.frames.getById(input.shotId);
+      const frame = await scopedDb.frames.getAnchorByShot(input.shotId);
       await getGenerationChannel(input.sequenceId).emit(
         'generation.image:progress',
         {

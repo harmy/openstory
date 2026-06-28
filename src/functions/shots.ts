@@ -50,15 +50,16 @@ export const getShotsFn = createServerFn({ method: 'GET' })
     // Guarantee every shot has its anchor frame, then project the image surface
     // (#989) back under the legacy thumbnail*/image* names so the UI is unchanged.
     await scopedDb.shots.ensureAnchorFrames(shotRows);
-    const [frameRows, gridSheets] = await Promise.all([
-      scopedDb.frames.listBySequence(sequence.id),
+    const [anchorRows, gridSheets] = await Promise.all([
+      scopedDb.frames.listAnchorsBySequence(sequence.id),
       scopedDb.frameVariants.listLatestGridSheetsBySequence(sequence.id),
     ]);
-    const framesById = new Map(frameRows.map((f) => [f.id, f]));
+    const anchorsByShot = new Map(anchorRows.map((f) => [f.shotId, f]));
     return shotRows.flatMap((shot) => {
-      const frame = framesById.get(shot.id);
+      const frame = anchorsByShot.get(shot.id);
       if (!frame) return [];
-      const sheet = gridSheets.get(shot.id);
+      // Grid sheets are keyed by frame id (#989), resolved from the anchor.
+      const sheet = gridSheets.get(frame.id);
       const gridSheet: ShotGridSheet | null = sheet
         ? { url: sheet.url, status: sheet.status }
         : null;
@@ -303,8 +304,9 @@ export const undiscardVariantFn = createServerFn({ method: 'POST' })
 export const getSequenceImageVariantsFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
   .handler(async ({ context }) => {
-    // Image variants moved to `frame_variants` (#989). frameId == shotId, so
-    // the client coverage logic (keyed by shotId) keeps working unchanged.
+    // Image variants moved to `frame_variants` (#989). Each row carries its
+    // owning `shotId` (frame ids ≠ shot ids) so the client coverage logic keyed
+    // by shot keeps working.
     return context.scopedDb.frameVariants.listModelVersionsBySequence(
       context.sequence.id
     );
@@ -524,7 +526,7 @@ export const updateShotFn = createServerFn({ method: 'POST' })
       editedImagePrompt.length > 0
     ) {
       await context.scopedDb.framePromptVersions.write({
-        frameId: shotId,
+        frameId: context.frame.id,
         text: editedImagePrompt,
         source: 'user-edit',
         inputHash: null,
