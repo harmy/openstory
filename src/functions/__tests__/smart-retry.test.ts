@@ -16,8 +16,9 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
-import type { Shot, Sequence } from '@/lib/db/schema';
+import type { Frame, Sequence } from '@/lib/db/schema';
 import type { ScopedDb } from '@/lib/db/scoped';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import { estimateImageCost } from '@/lib/billing/cost-estimation';
 import { addMicros, ZERO_MICROS } from '@/lib/billing/money';
 
@@ -89,8 +90,13 @@ function makeSequence(overrides: Partial<Sequence> = {}): Sequence {
   };
 }
 
-function makeShot(overrides: Partial<Shot> = {}): Shot {
-  return {
+// The still-image surface moved off `shots` onto the anchor `frame` in #989;
+// `executeSmartRetry` projects `ShotWithImage` from each shot + its frame, so the
+// fixture keeps the legacy projected names (`thumbnail*`/`image*`) AND mirrors
+// them onto a concrete anchor `frame` (id == shot.id) so the projection the
+// source builds reflects the per-test overrides.
+function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
+  const base: Omit<ShotWithImage, 'frame'> = {
     id: 'shot-1',
     sequenceId: 'seq_1',
     sceneId: null,
@@ -108,9 +114,6 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     imagePrompt: null,
     variantImageUrl: null,
     variantImageStatus: 'pending',
-    variantWorkflowRunId: null,
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     videoUrl: null,
     videoPath: null,
     videoStatus: 'pending',
@@ -128,7 +131,6 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     audioError: null,
     audioModel: null,
     thumbnailInputHash: null,
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
     visualPromptInputHash: null,
@@ -139,6 +141,31 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     updatedAt: NOW,
     ...overrides,
   };
+  const frame: Frame = {
+    // Own id — distinct from the shot id (#989); only shotId links them.
+    id: `frame-${base.id}`,
+    shotId: base.id,
+    sequenceId: base.sequenceId,
+    orderIndex: 0,
+    role: 'first',
+    source: 'generated',
+    imageUrl: base.thumbnailUrl,
+    previewImageUrl: base.previewThumbnailUrl,
+    imagePath: base.thumbnailPath,
+    imageStatus: base.thumbnailStatus,
+    imageWorkflowRunId: base.thumbnailWorkflowRunId,
+    imageGeneratedAt: base.thumbnailGeneratedAt,
+    imageError: base.thumbnailError,
+    imageModel: base.imageModel,
+    imagePrompt: base.imagePrompt,
+    selectedImageVersionId: null,
+    selectedImagePromptVersionId: null,
+    imageInputHash: base.thumbnailInputHash,
+    visualPromptInputHash: base.visualPromptInputHash,
+    createdAt: base.createdAt,
+    updatedAt: base.updatedAt,
+  };
+  return { ...base, frame };
 }
 
 /** Minimal scene shape the retry path reads (#909): id + model overrides. */
@@ -159,18 +186,24 @@ function makeScene(overrides: Partial<SceneStub> & { id: string }): SceneStub {
 
 function makeContext(
   sequence: Sequence,
-  shots: Shot[],
+  shots: ShotWithImage[],
   scenes: SceneStub[] = []
 ) {
   const updateStatus = vi.fn();
   const updateMusicFields = vi.fn();
   const listBySequence = vi.fn(async () => shots);
+  const ensureAnchorFrames = vi.fn(async () => {});
+  // The image surface lives on each shot's anchor frame now (#989); the source
+  // projects `ShotWithImage` from `shots` + anchor `frames`, so expose the
+  // anchors here (keyed by shotId, never id-reuse).
+  const listAnchorsBySequence = vi.fn(async () => shots.map((s) => s.frame));
   const listWithSheets = vi.fn(async () => []);
   // Scenes own model selection (#909); when none are passed the list is empty →
   // shots inherit the sequence default, preserving the legacy single-model path.
   const listScenesBySequence = vi.fn(async () => scenes);
   const stub = {
-    shots: { listBySequence },
+    shots: { listBySequence, ensureAnchorFrames },
+    frames: { listAnchorsBySequence },
     scenes: { listBySequence: listScenesBySequence },
     characters: { listWithSheets },
     sequence: vi.fn(() => ({ updateStatus, updateMusicFields })),

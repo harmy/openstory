@@ -42,7 +42,7 @@ import {
   useShotStaleness,
 } from '@/hooks/use-shot-staleness';
 import { sequenceKeys } from '@/hooks/use-sequences';
-import type { ShotVariant } from '@/lib/db/schema';
+import type { FrameVariant, ShotVariant } from '@/lib/db/schema';
 import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_VIDEO_MODEL,
@@ -57,7 +57,7 @@ import {
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
 import { useShotPromptStream } from '@/lib/realtime/use-shot-prompt-stream';
-import type { Shot } from '@/types/database';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CopyIcon, History, Loader2, Minimize2, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -105,7 +105,7 @@ function isValidTabValue(value: string): value is TabValue {
 }
 
 type SceneScriptPromptsProps = {
-  shot?: Shot | undefined;
+  shot?: ShotWithImage | undefined;
   sequenceId: string;
   selectedTab: TabValue;
   onTabChange: (tab: TabValue) => void;
@@ -117,7 +117,8 @@ type SceneScriptPromptsProps = {
     type: 'image' | 'motion' | 'scene-variants'
   ) => void;
   aspectRatio?: AspectRatio;
-  variantForSelectedModel?: ShotVariant;
+  /** Image variant (frame_variants, #989) for the scene's look model. */
+  variantForSelectedModel?: FrameVariant;
   /** The selected scene's video variant for the effective video model (#545). */
   videoVariantForSelectedModel?: ShotVariant;
   /**
@@ -606,7 +607,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     onRegenerateStart(shot.id, 'image');
 
     // Optimistic update for shot list query
-    queryClient.setQueryData<Shot[]>(
+    queryClient.setQueryData<ShotWithImage[]>(
       shotKeys.list(shot.sequenceId),
       (oldShots) => {
         if (!oldShots) return oldShots;
@@ -624,15 +625,18 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     );
 
     // Optimistic update for individual shot query
-    queryClient.setQueryData<Shot>(shotKeys.detail(shot.id), (oldShot) => {
-      if (!oldShot) return oldShot;
-      return {
-        ...oldShot,
-        thumbnailStatus: 'generating' as const,
-        imagePrompt: editedImagePrompt || oldShot.imagePrompt,
-        imageModel: regenImageModel,
-      };
-    });
+    queryClient.setQueryData<ShotWithImage>(
+      shotKeys.detail(shot.id),
+      (oldShot) => {
+        if (!oldShot) return oldShot;
+        return {
+          ...oldShot,
+          thumbnailStatus: 'generating' as const,
+          imagePrompt: editedImagePrompt || oldShot.imagePrompt,
+          imageModel: regenImageModel,
+        };
+      }
+    );
 
     try {
       await generateShotImageFn({
@@ -682,7 +686,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     onRegenerateStart(shot.id, 'motion');
 
     // Optimistic update for shot list query
-    queryClient.setQueryData<Shot[]>(
+    queryClient.setQueryData<ShotWithImage[]>(
       shotKeys.list(shot.sequenceId),
       (oldShots) => {
         if (!oldShots) return oldShots;
@@ -700,15 +704,18 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     );
 
     // Optimistic update for individual shot query
-    queryClient.setQueryData<Shot>(shotKeys.detail(shot.id), (oldShot) => {
-      if (!oldShot) return oldShot;
-      return {
-        ...oldShot,
-        videoStatus: 'generating' as const,
-        motionPrompt: editedMotionPrompt || oldShot.motionPrompt,
-        motionModel: regenMotionModel,
-      };
-    });
+    queryClient.setQueryData<ShotWithImage>(
+      shotKeys.detail(shot.id),
+      (oldShot) => {
+        if (!oldShot) return oldShot;
+        return {
+          ...oldShot,
+          videoStatus: 'generating' as const,
+          motionPrompt: editedMotionPrompt || oldShot.motionPrompt,
+          motionModel: regenMotionModel,
+        };
+      }
+    );
 
     const motionModelForCall = regenMotionModel;
     const supportsAudio = videoModelSupportsAudio(motionModelForCall);

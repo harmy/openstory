@@ -123,6 +123,50 @@ describe('frameVariants.appendVersion', () => {
     expect(a.id).not.toBe(b.id);
     expect(await m.listByFrame(frameId)).toHaveLength(2);
   });
+
+  it('is idempotent for an in-flight append of the same workflow run (CF step retry)', async () => {
+    const m = createFrameVariantsMethods(db);
+    const input = variantInput({
+      status: 'generating',
+      url: null,
+      storagePath: null,
+      previewUrl: null,
+      generatedAt: null,
+      workflowRunId: 'run-1',
+    });
+    const a = await m.appendVersion(input);
+    // A retried step re-appends with the same run id — must reuse, not duplicate.
+    const b = await m.appendVersion(input);
+    expect(b.id).toBe(a.id);
+    expect(await m.listByFrame(frameId)).toHaveLength(1);
+  });
+
+  it('still appends a fresh in-flight row for a different workflow run (re-roll)', async () => {
+    const m = createFrameVariantsMethods(db);
+    const a = await m.appendVersion(
+      variantInput({ status: 'generating', url: null, workflowRunId: 'run-1' })
+    );
+    const b = await m.appendVersion(
+      variantInput({ status: 'generating', url: null, workflowRunId: 'run-2' })
+    );
+    expect(b.id).not.toBe(a.id);
+    expect(await m.listByFrame(frameId)).toHaveLength(2);
+  });
+
+  it('does not reuse a completed row of the same run when appending in-flight', async () => {
+    const m = createFrameVariantsMethods(db);
+    // A prior version of this run already completed; a new in-flight append for
+    // the same run id must still create a fresh row (idempotency is scoped to
+    // still-generating rows, so a finished version is never resurrected).
+    const done = await m.appendVersion(
+      variantInput({ status: 'completed', workflowRunId: 'run-1' })
+    );
+    const next = await m.appendVersion(
+      variantInput({ status: 'generating', url: null, workflowRunId: 'run-1' })
+    );
+    expect(next.id).not.toBe(done.id);
+    expect(await m.listByFrame(frameId)).toHaveLength(2);
+  });
 });
 
 describe('frameVariants.select', () => {

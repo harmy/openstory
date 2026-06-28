@@ -7,10 +7,14 @@
  *     recoverable by reading the variant chain.
  *   - Regenerating a prompt produces a `'regenerated'` row with a populated
  *     `input_hash`.
- *   - The cached pointer (`shots.imagePrompt` / `motionPrompt` and the
- *     matching `*PromptInputHash`) is updated by the helper sequentially
- *     after the variant insert (not transactionally — see the helper
- *     docstring for the durability story).
+ *   - The cached pointer (`shots.motionPrompt` and `motionPromptInputHash`) is
+ *     updated by the helper sequentially after the variant insert (not
+ *     transactionally — see the helper docstring for the durability story).
+ *
+ * The VISUAL (image) prompt path moved to `frame_prompt_versions` in #989
+ * (keyed by the anchor frame id, resolved from the shot — frame ids ≠ shot ids)
+ * and is covered by `frame-prompt-versions.test.ts`; the shot helper now owns
+ * only the MOTION prompt, so these tests exercise it via `promptType: 'motion'`.
  */
 
 import type { Database } from '@/lib/db/client';
@@ -105,8 +109,8 @@ describe('shot_prompt_variants helper', () => {
     await db
       .update(shots)
       .set({
-        imagePrompt: 'AI-generated prompt v1',
-        visualPromptInputHash: 'hash-v1',
+        motionPrompt: 'AI-generated prompt v1',
+        motionPromptInputHash: 'hash-v1',
       })
       .where(eq(shots.id, shotId));
 
@@ -114,7 +118,7 @@ describe('shot_prompt_variants helper', () => {
     // uncomputable at write time) writes null to both the row and the cache.
     const variant = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'User edited prompt',
       source: 'user-edit',
       inputHash: null,
@@ -130,8 +134,8 @@ describe('shot_prompt_variants helper', () => {
       .from(shots)
       .where(eq(shots.id, shotId));
     if (!refreshed) throw new Error('test setup: refresh failed');
-    expect(refreshed.imagePrompt).toBe('User edited prompt');
-    expect(refreshed.visualPromptInputHash).toBeNull();
+    expect(refreshed.motionPrompt).toBe('User edited prompt');
+    expect(refreshed.motionPromptInputHash).toBeNull();
   });
 
   it('user-edit with a real inputHash stamps both the row and the cached column', async () => {
@@ -140,14 +144,14 @@ describe('shot_prompt_variants helper', () => {
     await db
       .update(shots)
       .set({
-        imagePrompt: 'AI-generated prompt v1',
-        visualPromptInputHash: 'hash-v1',
+        motionPrompt: 'AI-generated prompt v1',
+        motionPromptInputHash: 'hash-v1',
       })
       .where(eq(shots.id, shotId));
 
     const variant = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'User edited prompt',
       source: 'user-edit',
       inputHash: 'hash-at-edit-time',
@@ -162,8 +166,8 @@ describe('shot_prompt_variants helper', () => {
       .from(shots)
       .where(eq(shots.id, shotId));
     if (!refreshed) throw new Error('test setup: refresh failed');
-    expect(refreshed.imagePrompt).toBe('User edited prompt');
-    expect(refreshed.visualPromptInputHash).toBe('hash-at-edit-time');
+    expect(refreshed.motionPrompt).toBe('User edited prompt');
+    expect(refreshed.motionPromptInputHash).toBe('hash-at-edit-time');
   });
 
   it('regenerated prompt populates input_hash on both the row and the cached column', async () => {
@@ -171,7 +175,7 @@ describe('shot_prompt_variants helper', () => {
 
     const variant = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI prompt v2',
       source: 'regenerated',
       inputHash: 'context-hash-abc',
@@ -186,8 +190,8 @@ describe('shot_prompt_variants helper', () => {
       .from(shots)
       .where(eq(shots.id, shotId));
     if (!refreshed) throw new Error('test setup: refresh failed');
-    expect(refreshed.imagePrompt).toBe('AI prompt v2');
-    expect(refreshed.visualPromptInputHash).toBe('context-hash-abc');
+    expect(refreshed.motionPrompt).toBe('AI prompt v2');
+    expect(refreshed.motionPromptInputHash).toBe('context-hash-abc');
   });
 
   it('preserves prior AI text in the variant chain after a user edit (recoverable history)', async () => {
@@ -195,7 +199,7 @@ describe('shot_prompt_variants helper', () => {
 
     await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI prompt v1',
       source: 'ai-generated',
       inputHash: 'context-hash-1',
@@ -203,14 +207,14 @@ describe('shot_prompt_variants helper', () => {
     });
     await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'User edited prompt',
       source: 'user-edit',
       inputHash: null,
       analysisModel: null,
     });
 
-    const history = await methods.listByShot(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'motion');
     expect(history).toHaveLength(2);
     // Newest first.
     const [latest, prior] = history;
@@ -228,26 +232,26 @@ describe('shot_prompt_variants helper', () => {
     // corrupt prompt history.
     const methods = createShotPromptVersionsMethods(db);
 
-    const previousBeforeFirst = await methods.getLatest(shotId, 'visual');
+    const previousBeforeFirst = await methods.getLatest(shotId, 'motion');
     expect(previousBeforeFirst).toBeNull();
     const firstSource = previousBeforeFirst ? 'regenerated' : 'ai-generated';
 
     await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI prompt v1',
       source: firstSource,
       inputHash: 'hash-v1',
       analysisModel: 'anthropic/claude-haiku-4.5',
     });
 
-    const previousBeforeSecond = await methods.getLatest(shotId, 'visual');
+    const previousBeforeSecond = await methods.getLatest(shotId, 'motion');
     expect(previousBeforeSecond?.source).toBe('ai-generated');
     const secondSource = previousBeforeSecond ? 'regenerated' : 'ai-generated';
 
     await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI prompt v2',
       source: secondSource,
       inputHash: 'hash-v2',
@@ -256,14 +260,14 @@ describe('shot_prompt_variants helper', () => {
 
     await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'User polished it',
       source: 'user-edit',
       inputHash: null,
       analysisModel: null,
     });
 
-    const history = await methods.listByShot(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'motion');
     expect(history.map((r) => r.source)).toEqual([
       'user-edit',
       'regenerated',
@@ -277,8 +281,8 @@ describe('shot_prompt_variants helper', () => {
     if (!refreshed) throw new Error('test setup: refresh failed');
     // Cached column reflects the latest write (user-edit) and the hash is
     // cleared since the cached value is no longer derived from upstream.
-    expect(refreshed.imagePrompt).toBe('User polished it');
-    expect(refreshed.visualPromptInputHash).toBeNull();
+    expect(refreshed.motionPrompt).toBe('User polished it');
+    expect(refreshed.motionPromptInputHash).toBeNull();
   });
 
   it('AI write is idempotent on (shot, type, input_hash) — a retry returns the existing row', async () => {
@@ -286,7 +290,7 @@ describe('shot_prompt_variants helper', () => {
 
     const first = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI prompt v1',
       source: 'ai-generated',
       inputHash: 'context-hash-1',
@@ -295,7 +299,7 @@ describe('shot_prompt_variants helper', () => {
 
     const retried = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI prompt v1',
       source: 'ai-generated',
       inputHash: 'context-hash-1',
@@ -304,7 +308,7 @@ describe('shot_prompt_variants helper', () => {
 
     expect(retried.id).toBe(first.id);
 
-    const history = await methods.listByShot(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'motion');
     expect(history).toHaveLength(1);
   });
 
@@ -319,7 +323,7 @@ describe('shot_prompt_variants helper', () => {
 
     const first = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI prompt v1',
       source: 'ai-generated',
       inputHash: 'context-hash-1',
@@ -328,7 +332,7 @@ describe('shot_prompt_variants helper', () => {
 
     const forced = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'Fresh LLM completion against same inputs',
       source: 'regenerated',
       inputHash: 'context-hash-1',
@@ -342,7 +346,7 @@ describe('shot_prompt_variants helper', () => {
     expect(forced.source).toBe('regenerated');
     expect(forced.text).toBe('Fresh LLM completion against same inputs');
 
-    const history = await methods.listByShot(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'motion');
     expect(history).toHaveLength(2);
     const [latest, prior] = history;
     if (!latest || !prior) throw new Error('test setup: history missing rows');
@@ -354,12 +358,12 @@ describe('shot_prompt_variants helper', () => {
       .from(shots)
       .where(eq(shots.id, shotId));
     if (!refreshed) throw new Error('test setup: refresh failed');
-    expect(refreshed.imagePrompt).toBe(
+    expect(refreshed.motionPrompt).toBe(
       'Fresh LLM completion against same inputs'
     );
     // Cached hash still reflects the live upstream so staleness detection
     // doesn't fire spuriously after a force regeneration.
-    expect(refreshed.visualPromptInputHash).toBe('context-hash-1');
+    expect(refreshed.motionPromptInputHash).toBe('context-hash-1');
   });
 
   it('idempotent retry of the same text at the same hash still de-dupes (does not fall through to the null-hash branch)', async () => {
@@ -370,7 +374,7 @@ describe('shot_prompt_variants helper', () => {
 
     await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI prompt v1',
       source: 'ai-generated',
       inputHash: 'context-hash-1',
@@ -379,14 +383,14 @@ describe('shot_prompt_variants helper', () => {
 
     await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI prompt v1',
       source: 'regenerated',
       inputHash: 'context-hash-1',
       analysisModel: 'anthropic/claude-haiku-4.5',
     });
 
-    const history = await methods.listByShot(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'motion');
     expect(history).toHaveLength(1);
   });
 
@@ -395,7 +399,7 @@ describe('shot_prompt_variants helper', () => {
 
     await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI v1',
       source: 'ai-generated',
       inputHash: 'hash-a',
@@ -403,46 +407,15 @@ describe('shot_prompt_variants helper', () => {
     });
     await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI v2',
       source: 'regenerated',
       inputHash: 'hash-b',
       analysisModel: 'anthropic/claude-haiku-4.5',
     });
 
-    const history = await methods.listByShot(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'motion');
     expect(history).toHaveLength(2);
-  });
-
-  it('motion prompts use the motionPrompt cached column independently of visual', async () => {
-    const methods = createShotPromptVersionsMethods(db);
-
-    await methods.write({
-      shotId,
-      promptType: 'visual',
-      text: 'visual',
-      source: 'ai-generated',
-      inputHash: 'visual-hash',
-      analysisModel: 'anthropic/claude-haiku-4.5',
-    });
-    await methods.write({
-      shotId,
-      promptType: 'motion',
-      text: 'motion',
-      source: 'ai-generated',
-      inputHash: 'motion-hash',
-      analysisModel: 'anthropic/claude-haiku-4.5',
-    });
-
-    const [refreshed] = await db
-      .select()
-      .from(shots)
-      .where(eq(shots.id, shotId));
-    if (!refreshed) throw new Error('test setup: refresh failed');
-    expect(refreshed.imagePrompt).toBe('visual');
-    expect(refreshed.motionPrompt).toBe('motion');
-    expect(refreshed.visualPromptInputHash).toBe('visual-hash');
-    expect(refreshed.motionPromptInputHash).toBe('motion-hash');
   });
 
   it('getByIdForShot refuses to return a sibling shot variant (cross-shot guard)', async () => {
@@ -461,7 +434,7 @@ describe('shot_prompt_variants helper', () => {
 
     const ownVariant = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'belongs to shot A',
       source: 'ai-generated',
       inputHash: 'hash-A',
@@ -486,7 +459,7 @@ describe('shot_prompt_variants helper', () => {
     // Original AI-generated prompt with a stored hash.
     const original = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI prompt v1',
       source: 'ai-generated',
       inputHash: 'context-hash-1',
@@ -499,7 +472,7 @@ describe('shot_prompt_variants helper', () => {
     // cached hash from the source row.
     await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'User edited prompt',
       source: 'user-edit',
       inputHash: null,
@@ -511,7 +484,7 @@ describe('shot_prompt_variants helper', () => {
     // that drops the hash here silently disables staleness forever.
     const restored = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: original.text,
       components: original.components,
       parameters: original.parameters,
@@ -527,7 +500,7 @@ describe('shot_prompt_variants helper', () => {
     expect(restored.id).not.toBe(original.id);
     expect(restored.source).toBe('restored');
 
-    const history = await methods.listByShot(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'motion');
     expect(history).toHaveLength(3);
     expect(history.map((r) => r.source)).toEqual([
       'restored',
@@ -540,8 +513,8 @@ describe('shot_prompt_variants helper', () => {
       .from(shots)
       .where(eq(shots.id, shotId));
     if (!refreshed) throw new Error('test setup: refresh failed');
-    expect(refreshed.imagePrompt).toBe('AI prompt v1');
-    expect(refreshed.visualPromptInputHash).toBe('context-hash-1');
+    expect(refreshed.motionPrompt).toBe('AI prompt v1');
+    expect(refreshed.motionPromptInputHash).toBe('context-hash-1');
   });
 
   it('restoring an AI prompt that is currently live still appends a restored row (audit trail)', async () => {
@@ -551,7 +524,7 @@ describe('shot_prompt_variants helper', () => {
 
     const original = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI prompt v1',
       source: 'ai-generated',
       inputHash: 'context-hash-1',
@@ -560,7 +533,7 @@ describe('shot_prompt_variants helper', () => {
 
     const restored = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: original.text,
       components: original.components,
       parameters: original.parameters,
@@ -573,7 +546,7 @@ describe('shot_prompt_variants helper', () => {
     expect(restored.source).toBe('restored');
     expect(restored.inputHash).toBe('context-hash-1');
 
-    const history = await methods.listByShot(shotId, 'visual');
+    const history = await methods.listByShot(shotId, 'motion');
     expect(history).toHaveLength(2);
   });
 
@@ -582,7 +555,7 @@ describe('shot_prompt_variants helper', () => {
 
     const userEdit = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'Hand-written prompt',
       source: 'user-edit',
       inputHash: null,
@@ -593,7 +566,7 @@ describe('shot_prompt_variants helper', () => {
     // the source had none, so the restored row keeps null.
     const restored = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: userEdit.text,
       components: userEdit.components,
       parameters: userEdit.parameters,
@@ -611,7 +584,7 @@ describe('shot_prompt_variants helper', () => {
     // 1) An AI prompt with a real hash.
     const ai = await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'AI prompt',
       source: 'ai-generated',
       inputHash: 'ai-hash-1',
@@ -620,7 +593,7 @@ describe('shot_prompt_variants helper', () => {
     // 2) A later user-edit with no upstream context (null hash).
     await methods.write({
       shotId,
-      promptType: 'visual',
+      promptType: 'motion',
       text: 'Hand-typed prompt',
       source: 'user-edit',
       inputHash: null,
@@ -628,29 +601,13 @@ describe('shot_prompt_variants helper', () => {
     });
 
     // getLatest returns the most recent row regardless of hash.
-    const latest = await methods.getLatest(shotId, 'visual');
+    const latest = await methods.getLatest(shotId, 'motion');
     expect(latest?.inputHash).toBeNull();
 
     // getLatestWithInputHash skips the user-edit and returns the AI row.
-    const latestHashed = await methods.getLatestWithInputHash(shotId, 'visual');
+    const latestHashed = await methods.getLatestWithInputHash(shotId, 'motion');
     expect(latestHashed?.id).toBe(ai.id);
     expect(latestHashed?.inputHash).toBe('ai-hash-1');
-  });
-
-  it('getLatestWithInputHash isolates by promptType (visual vs motion)', async () => {
-    const methods = createShotPromptVersionsMethods(db);
-
-    await methods.write({
-      shotId,
-      promptType: 'visual',
-      text: 'Visual prompt',
-      source: 'ai-generated',
-      inputHash: 'visual-hash',
-      analysisModel: 'anthropic/claude-haiku-4.5',
-    });
-
-    const motionMatch = await methods.getLatestWithInputHash(shotId, 'motion');
-    expect(motionMatch).toBeNull();
   });
 });
 

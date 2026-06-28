@@ -369,33 +369,35 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
       const inputHash = await computeVisualPromptInputHash(narrowed);
 
       await step.do('save-visual-prompt-to-db', async () => {
-        const previous = await scopedDb.shotPromptVersions.getLatest(
-          shotId,
-          'visual'
-        );
+        // Visual prompt history lives on the shot's anchor frame now (#989) —
+        // resolved by shotId, never by id-reuse.
+        const frame = await scopedDb.frames.getAnchorByShot(shotId);
+        const previous = frame
+          ? await scopedDb.framePromptVersions.getLatest(frame.id)
+          : null;
         const source = previous ? 'regenerated' : 'ai-generated';
 
-        // Clear `shot.imagePrompt` user-override when regenerating. The
-        // override would otherwise mask the freshly regenerated prompt in
-        // every downstream read (effective-prompt fallback chain), so a
-        // regen-prompt click on a previously user-edited shot would do
-        // nothing visible. The variant row above preserves the new prompt;
-        // the user's prior override is still in the prompt-history sheet
-        // and can be restored from there.
-        await scopedDb.shots.update(shotId, {
-          metadata: enrichedScene,
-          imagePrompt: null,
-        });
+        // Scene metadata stays on the shot; the prompt itself goes to
+        // `frame_prompt_versions`. Writing the new AI version mirrors its text
+        // onto `frame.imagePrompt` and repoints `selectedImagePromptVersionId`,
+        // so it supersedes any prior user-override automatically (the override
+        // is retained in the prompt history and can be restored).
+        await scopedDb.shots.update(shotId, { metadata: enrichedScene });
 
-        await scopedDb.shotPromptVersions.write({
-          shotId,
-          promptType: 'visual',
-          text: result.visual.fullPrompt,
-          components: result.visual.components,
-          source,
-          inputHash,
-          analysisModel: analysisModelId,
-        });
+        if (frame) {
+          await scopedDb.framePromptVersions.write({
+            frameId: frame.id,
+            text: result.visual.fullPrompt,
+            components: result.visual.components,
+            source,
+            inputHash,
+            analysisModel: analysisModelId,
+          });
+        } else {
+          logger.warn(
+            `[VisualPromptSceneWorkflow] Shot ${shotId} has no anchor frame; visual prompt not persisted`
+          );
+        }
 
         await getGenerationChannel(sequenceId).emit('generation.shot:updated', {
           shotId,

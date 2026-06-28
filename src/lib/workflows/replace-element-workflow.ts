@@ -299,6 +299,11 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
     const skippedDeletedShotIds = affectedShotIds.filter(
       (id) => !liveShotIds.has(id)
     );
+    // The still image surface lives on each shot's anchor frame now (#989) —
+    // keyed by shotId (NOT id-reuse).
+    const liveFramesByShot = await scopedDb.frames.getAnchorsByShots(
+      liveShots.map((s) => s.id)
+    );
 
     // Flip every affected shot to `generating` and emit progress events
     // BEFORE fanning out per-shot edits. Otherwise the user can navigate to
@@ -309,26 +314,26 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
     // as in-flight.
     await step.do('mark-shots-generating', async () => {
       for (const shot of liveShots) {
-        const updates: Record<string, unknown> = {};
-        if (shot.thumbnailUrl) {
-          updates.thumbnailStatus = 'generating';
-          updates.thumbnailError = null;
+        const frame = liveFramesByShot.get(shot.id);
+        if (frame?.imageUrl) {
+          await scopedDb.frames.setImageGenerationStatus(
+            frame.id,
+            { imageStatus: 'generating', imageError: null },
+            { throwOnMissing: false }
+          );
+          await safeEmit(sequenceId, `image-progress:${shot.id}`, () =>
+            getGenerationChannel(sequenceId).emit('generation.image:progress', {
+              shotId: shot.id,
+              status: 'generating',
+            })
+          );
         }
         if (shot.videoUrl) {
-          updates.videoStatus = 'generating';
-          updates.videoError = null;
-        }
-        if (Object.keys(updates).length === 0) continue;
-        await scopedDb.shots.update(shot.id, updates, {
-          throwOnMissing: false,
-        });
-        await safeEmit(sequenceId, `image-progress:${shot.id}`, () =>
-          getGenerationChannel(sequenceId).emit('generation.image:progress', {
-            shotId: shot.id,
-            status: 'generating',
-          })
-        );
-        if (shot.videoUrl) {
+          await scopedDb.shots.update(
+            shot.id,
+            { videoStatus: 'generating', videoError: null },
+            { throwOnMissing: false }
+          );
           await safeEmit(sequenceId, `video-progress:${shot.id}`, () =>
             getGenerationChannel(sequenceId).emit('generation.video:progress', {
               shotId: shot.id,
@@ -357,9 +362,10 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
     // sibling shots.
     const imageSpawnPromises = liveShots.map(
       async (shot, index): Promise<ShotResult> => {
-        const sourceImageUrl = shot.thumbnailUrl;
+        const frame = liveFramesByShot.get(shot.id);
+        const sourceImageUrl = frame?.imageUrl;
         if (!sourceImageUrl) {
-          // Replacement is only meaningful when a primary thumbnail exists;
+          // Replacement is only meaningful when a primary still exists;
           // text-to-image regeneration would silently invent a shot from
           // prose alone.
           return {
@@ -369,11 +375,11 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
           };
         }
 
-        // Prefer the shot's own model when it supports edits, so the swap
+        // Prefer the frame's own model when it supports edits, so the swap
         // reads as a continuation of the original render. Fall back to the
         // workflow's edit-capable default otherwise.
         const shotModel = safeTextToImageModel(
-          shot.imageModel,
+          frame.imageModel,
           DEFAULT_IMAGE_MODEL
         );
         const model = supportsReferenceImages(shotModel)

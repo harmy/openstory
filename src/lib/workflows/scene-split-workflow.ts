@@ -236,7 +236,6 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
                     // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                     (ev.scene.metadata?.durationSeconds || 3) * 1000
                   ),
-                  thumbnailStatus: 'generating',
                   videoStatus: 'pending',
                 } satisfies NewShot);
               }
@@ -287,7 +286,6 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
                     // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                     (ev.scene.metadata?.durationSeconds || 3) * 1000
                   ),
-                  thumbnailStatus: 'generating',
                   videoStatus: 'pending',
                 } satisfies NewShot);
 
@@ -462,7 +460,6 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
                 // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard
                 (scene.metadata?.durationSeconds || 3) * 1000
               ),
-              thumbnailStatus: 'generating',
               videoStatus: 'pending',
             }) satisfies NewShot
         );

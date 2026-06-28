@@ -10,6 +10,11 @@ import {
 } from '@/lib/ai/input-hash';
 import { loadNarrowShotPromptContext } from '@/lib/ai/prompt-context';
 import type { ShotVariant, NewShot } from '@/lib/db/schema';
+import {
+  projectShotWithImage,
+  projectShotMissingFrame,
+  type ShotGridSheet,
+} from '@/lib/shots/shot-with-image';
 import { getGenerationChannel } from '@/lib/realtime';
 import { getVideoDownloadUrl } from '@/lib/motion/video-storage';
 import {
@@ -41,7 +46,35 @@ const shotIdInputSchema = z.object({
 export const getShotsFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
   .handler(async ({ context }) => {
-    return context.scopedDb.shots.listBySequence(context.sequence.id);
+    const { scopedDb, sequence } = context;
+    const shotRows = await scopedDb.shots.listBySequence(sequence.id);
+    // Guarantee every shot has its anchor frame, then project the image surface
+    // (#989) back under the legacy thumbnail*/image* names so the UI is unchanged.
+    await scopedDb.shots.ensureAnchorFrames(shotRows);
+    const [anchorRows, gridSheets] = await Promise.all([
+      scopedDb.frames.listAnchorsBySequence(sequence.id),
+      scopedDb.frameVariants.listLatestGridSheetsBySequence(sequence.id),
+    ]);
+    const anchorsByShot = new Map(anchorRows.map((f) => [f.shotId, f]));
+    return shotRows.map((shot) => {
+      const frame = anchorsByShot.get(shot.id);
+      // `ensureAnchorFrames` above guarantees an anchor for every shot, so this
+      // is normally unreachable. If it ever isn't, preserve the shot with a null
+      // image surface (matching the sibling read paths in sequences/admin)
+      // rather than silently dropping it from the scenes list.
+      if (!frame) {
+        logger.error(
+          `getShotsFn: shot ${shot.id} has no anchor frame after ensureAnchorFrames`
+        );
+        return projectShotMissingFrame(shot);
+      }
+      // Grid sheets are keyed by frame id (#989), resolved from the anchor.
+      const sheet = gridSheets.get(frame.id);
+      const gridSheet: ShotGridSheet | null = sheet
+        ? { url: sheet.url, status: sheet.status }
+        : null;
+      return projectShotWithImage(shot, frame, gridSheet);
+    });
   });
 
 /**
@@ -74,15 +107,21 @@ export const getShotsForSequencesFn = createServerFn({ method: 'GET' })
 export const getShotFn = createServerFn({ method: 'GET' })
   .middleware([shotAccessMiddleware])
   .handler(async ({ context }) => {
-    return context.shot;
+    const sheet = await context.scopedDb.frameVariants.getLatestGridSheet(
+      context.frame.id
+    );
+    return projectShotWithImage(
+      context.shot,
+      context.frame,
+      sheet ? { url: sheet.url, status: sheet.status } : null
+    );
   });
 
 export const getSequenceImageModelsFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
   .handler(async ({ context }) => {
-    const models = await context.scopedDb.shotVariants.listModelsForSequence(
-      context.sequence.id,
-      'image'
+    const models = await context.scopedDb.frameVariants.listModelsForSequence(
+      context.sequence.id
     );
     // Preview thumbnails are generated with a hidden internal model
     // (PREVIEW_IMAGE_MODEL = flux_2_turbo) and stored as image variants. Hide
@@ -111,17 +150,19 @@ export const getDivergentVariantsFn = createServerFn({ method: 'GET' })
     );
   });
 
-type PromoteProgressEvent =
-  | 'image:progress'
-  | 'video:progress'
-  | 'audio:progress';
-type PromoteProgressUrlField = 'thumbnailUrl' | 'videoUrl' | 'audioUrl';
+type PromoteProgressEvent = 'video:progress' | 'audio:progress';
+type PromoteProgressUrlField = 'videoUrl' | 'audioUrl';
 
 /**
  * Build the per-variantType `shots` update payload and matching realtime
  * progress event metadata for a promote-variant operation. Exported (and
  * pure) for unit testing — the server-fn handler wraps this in auth +
  * persistence.
+ *
+ * Image promotion is retired (#989): image variants live in `frame_variants`
+ * and selection is a pointer repoint via `setImageFromVariantFn` /
+ * `frameVariants.select`, not a divergent-alternate promote. This only handles
+ * the video/audio variants that still live on `shot_variants`.
  */
 export function buildPromoteUpdate(variant: ShotVariant): {
   update: Partial<NewShot>;
@@ -134,23 +175,9 @@ export function buildPromoteUpdate(variant: ShotVariant): {
 
   switch (variant.variantType) {
     case 'image':
-      update.thumbnailUrl = variant.url;
-      update.thumbnailPath = variant.storagePath;
-      update.thumbnailStatus = 'completed';
-      update.thumbnailError = null;
-      update.thumbnailInputHash = variant.inputHash;
-      update.imageModel = variant.model;
-      // Downstream video is now misaligned with the new image — mark stale
-      // by clearing it; the user will regenerate.
-      update.videoUrl = null;
-      update.videoPath = null;
-      update.videoStatus = 'pending';
-      update.videoWorkflowRunId = null;
-      update.videoGeneratedAt = null;
-      update.videoError = null;
-      progressEvent = 'image:progress';
-      progressUrlField = 'thumbnailUrl';
-      break;
+      throw new Error(
+        'Image variants are not promoted — select via frameVariants.select (#989)'
+      );
     case 'video':
       update.videoUrl = variant.url;
       update.videoPath = variant.storagePath;
@@ -230,30 +257,13 @@ export const promoteVariantFn = createServerFn({ method: 'POST' })
               status: 'completed',
               audioUrl: url,
             }
-          : progressEvent === 'video:progress'
-            ? {
-                shotId: shot.id,
-                status: 'completed',
-                videoUrl: url,
-                model: variant.model,
-              }
-            : {
-                shotId: shot.id,
-                status: 'completed',
-                thumbnailUrl: url,
-                model: variant.model,
-              }
+          : {
+              shotId: shot.id,
+              status: 'completed',
+              videoUrl: url,
+              model: variant.model,
+            }
       );
-      // Promoting an image clears the downstream video — emit a paired
-      // video:progress event so listeners deriving motion-banner state from
-      // realtime (not just cache) reset immediately.
-      if (variant.variantType === 'image') {
-        await channel.emit('generation.video:progress', {
-          shotId: shot.id,
-          status: 'pending',
-          videoUrl: undefined,
-        });
-      }
     } catch (error) {
       logger.error('realtime emit failed', { err: error });
     }
@@ -304,9 +314,11 @@ export const undiscardVariantFn = createServerFn({ method: 'POST' })
 export const getSequenceImageVariantsFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
   .handler(async ({ context }) => {
-    return context.scopedDb.shotVariants.listBySequence(
-      context.sequence.id,
-      'image'
+    // Image variants moved to `frame_variants` (#989). Each row carries its
+    // owning `shotId` (frame ids ≠ shot ids) so the client coverage logic keyed
+    // by shot keeps working.
+    return context.scopedDb.frameVariants.listModelVersionsBySequence(
+      context.sequence.id
     );
   });
 
@@ -389,31 +401,10 @@ export const updateShotFn = createServerFn({ method: 'POST' })
         ReturnType<typeof context.scopedDb.sequences.getById>
       > | null = null;
       if (context.shot.metadata) {
-        if (context.shot.imagePrompt && !context.shot.visualPromptInputHash) {
-          try {
-            preEditSequenceForSplice ??=
-              await context.scopedDb.sequences.getById(sequenceId);
-            if (preEditSequenceForSplice) {
-              const ctx = await loadNarrowShotPromptContext({
-                scopedDb: context.scopedDb,
-                sequence: {
-                  id: preEditSequenceForSplice.id,
-                  styleId: preEditSequenceForSplice.styleId,
-                  aspectRatio: preEditSequenceForSplice.aspectRatio,
-                  analysisModel: preEditSequenceForSplice.analysisModel,
-                },
-                scene: context.shot.metadata,
-              });
-              updateData.visualPromptInputHash =
-                await computeVisualPromptInputHash(ctx);
-            }
-          } catch (err) {
-            logger.warn(
-              `Could not bootstrap visual hash for shot ${shotId}; staleness will remain untracked for this prompt`,
-              { err }
-            );
-          }
-        }
+        // (Visual-prompt-hash bootstrap removed in #989 — the image prompt and
+        // its hash live on the anchor frame / `frame_prompt_versions` now, and
+        // `getShotStalenessFn` already falls back to
+        // `framePromptVersions.getLatestWithInputHash`.)
         if (context.shot.motionPrompt && !context.shot.motionPromptInputHash) {
           try {
             preEditSequenceForSplice ??=
@@ -428,7 +419,7 @@ export const updateShotFn = createServerFn({ method: 'POST' })
                   analysisModel: preEditSequenceForSplice.analysisModel,
                 },
                 scene: context.shot.metadata,
-                startingFrameImageUrl: context.shot.thumbnailUrl,
+                startingFrameImageUrl: context.frame.imageUrl,
               });
               updateData.motionPromptInputHash =
                 await computeMotionPromptInputHash(ctx);
@@ -503,7 +494,7 @@ export const updateShotFn = createServerFn({ method: 'POST' })
     // UPDATE with no extra reads.
     const imagePromptChanged =
       updateData.imagePrompt !== undefined &&
-      updateData.imagePrompt !== context.shot.imagePrompt;
+      updateData.imagePrompt !== context.frame.imagePrompt;
     const motionPromptChanged =
       updateData.motionPrompt !== undefined &&
       updateData.motionPrompt !== context.shot.motionPrompt;
@@ -534,7 +525,27 @@ export const updateShotFn = createServerFn({ method: 'POST' })
       }
     }
 
-    return context.scopedDb.shots.update(shotId, updateData);
+    // The image prompt lives on the anchor frame (#989), not a `shots` column.
+    // Persist a changed prompt as a user-edit `frame_prompt_versions` row (which
+    // mirrors it onto `frame.imagePrompt` + repoints the pointer), then drop it
+    // from the shots UPDATE.
+    const { imagePrompt: editedImagePrompt, ...shotUpdate } = updateData;
+    if (
+      imagePromptChanged &&
+      typeof editedImagePrompt === 'string' &&
+      editedImagePrompt.length > 0
+    ) {
+      await context.scopedDb.framePromptVersions.write({
+        frameId: context.frame.id,
+        text: editedImagePrompt,
+        source: 'user-edit',
+        inputHash: null,
+        analysisModel: null,
+        createdBy: context.user.id,
+      });
+    }
+
+    return context.scopedDb.shots.update(shotId, shotUpdate);
   });
 
 export const deleteShotFn = createServerFn({ method: 'POST' })
@@ -591,15 +602,16 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(shotIdInputSchema))
   .handler(async ({ context }) => {
-    const { shot, sequence, scopedDb } = context;
+    const { shot, frame, sequence, scopedDb } = context;
 
     let thumbnail: 'stale' | 'fresh' | 'untracked' = 'untracked';
     // Effective prompt: same fallback chain as `buildRegenerateShotSnapshot`
-    // and `generateShotImageFn`. `shot.imagePrompt` alone misses
-    // AI-generated shots (where `imagePrompt` stays null) and shots whose
-    // visual prompt was regenerated (which only updates metadata). See #713.
+    // and `generateShotImageFn`. `frame.imagePrompt` alone misses AI-generated
+    // shots (where it stays null) and shots whose visual prompt was regenerated
+    // (which only updates metadata). The image prompt lives on the anchor frame
+    // since #989. See #713.
     const effectivePrompt =
-      shot.imagePrompt || shot.metadata?.prompts?.visual?.fullPrompt;
+      frame.imagePrompt || shot.metadata?.prompts?.visual?.fullPrompt;
     if (effectivePrompt) {
       // Distinguish "stored hash absent" from "stored hash matches". A null
       // stored hash means the image predates hash tracking (or was generated
@@ -608,7 +620,7 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
       // 'fresh'. Once the user regenerates the image once under the new code
       // path, this column populates and the live-vs-stored comparison takes
       // over.
-      if (shot.thumbnailInputHash === null) {
+      if (frame.imageInputHash === null) {
         thumbnail = 'untracked';
       } else {
         try {
@@ -620,18 +632,19 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
 
           const snapshot = await buildRegenerateShotSnapshot({
             shot,
+            imagePrompt: frame.imagePrompt,
             characters,
             locations,
             elements,
             imageModel: safeTextToImageModel(
-              shot.imageModel,
+              frame.imageModel,
               DEFAULT_IMAGE_MODEL
             ),
             aspectRatio: sequence.aspectRatio,
           });
 
           thumbnail =
-            snapshot.snapshotInputHash !== shot.thumbnailInputHash
+            snapshot.snapshotInputHash !== frame.imageInputHash
               ? 'stale'
               : 'fresh';
         } catch (error) {
@@ -655,21 +668,17 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
     // shots whose cached column was nulled by a pre-fix user-edit. Without
     // the fallback, those shots are stuck at `'untracked'` permanently.
     if (shot.metadata) {
-      let referenceHash = shot.visualPromptInputHash;
+      // Visual prompt history moved to `frame_prompt_versions` (#989); the
+      // cached hash mirror lives on the anchor frame.
+      let referenceHash = frame.visualPromptInputHash;
       if (!referenceHash) {
         const fallback =
-          await scopedDb.shotPromptVersions.getLatestWithInputHash(
-            shot.id,
-            'visual'
-          );
+          await scopedDb.framePromptVersions.getLatestWithInputHash(frame.id);
         referenceHash = fallback?.inputHash ?? null;
       }
       if (referenceHash) {
         try {
-          const latest = await scopedDb.shotPromptVersions.getLatest(
-            shot.id,
-            'visual'
-          );
+          const latest = await scopedDb.framePromptVersions.getLatest(frame.id);
           const ctx = await loadNarrowShotPromptContext({
             scopedDb,
             sequence,
@@ -709,7 +718,7 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
             sequence,
             scene: shot.metadata,
             analysisModelOverride: latest?.analysisModel ?? null,
-            startingFrameImageUrl: shot.thumbnailUrl,
+            startingFrameImageUrl: frame.imageUrl,
           });
           const liveHash = await computeMotionPromptInputHash(ctx);
           motionPrompt = liveHash !== referenceHash ? 'stale' : 'fresh';

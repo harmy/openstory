@@ -16,7 +16,7 @@ import {
   getAspectRatioClassName,
 } from '@/lib/constants/aspect-ratios';
 import { cn } from '@/lib/utils';
-import type { Shot } from '@/types/database';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import { AppImage } from '@/components/ui/app-image';
 import {
   AlertCircle,
@@ -32,7 +32,7 @@ import { VideoPlayer } from './video-player';
 import { VideoStateOverlay } from './video-state-overlay';
 
 type ScenePlayerProps = {
-  shots?: Shot[];
+  shots?: ShotWithImage[];
   selectedShotId?: string;
   aspectRatio: AspectRatio;
   /**

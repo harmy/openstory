@@ -51,7 +51,9 @@ import {
   DEFAULT_ASPECT_RATIO,
   type AspectRatio,
 } from '@/lib/constants/aspect-ratios';
-import type { SceneRow, Shot, ShotVariant } from '@/lib/db/schema';
+import type { FrameVariant, SceneRow, ShotVariant } from '@/lib/db/schema';
+import type { ImageVariantWithShot } from '@/lib/db/scoped/frame-variants';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import { analyzeFailures } from '@/lib/failures/failure-analysis';
 import type { GenerationPhaseConfig } from '@/lib/realtime/generation-stream.reducer';
 import { useGenerationStream } from '@/lib/realtime/use-generation-stream';
@@ -64,12 +66,26 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 /**
+ * Minimal coverage row shared by video (`shot_variants`) and image
+ * (`frame_variants`, #989) variants. Image variants have no `divergedAt`
+ * (divergence is retired for images), so it's optional and treated as never
+ * divergent.
+ */
+type SceneModelVariant = {
+  model: string;
+  status: ShotVariant['status'];
+  url: string | null;
+  discardedAt: Date | null;
+  divergedAt?: Date | null;
+};
+
+/**
  * Per-model generation status across a scene's shots (#909) — feeds the scene
  * bar's ✓/⟳/! dropdown markers. The scene's chosen model is marked `set`;
  * completed wins over in-flight/failed. Divergent/discarded alternates ignored.
  */
-function buildSceneModelStatuses(
-  variantsByShot: Map<string, ShotVariant[]>,
+function buildSceneModelStatuses<V extends SceneModelVariant>(
+  variantsByShot: Map<string, V[]>,
   shotIds: ReadonlySet<string>,
   setModel: string
 ): Map<string, ModelGenerationStatus> {
@@ -78,7 +94,7 @@ function buildSceneModelStatuses(
   const failed = new Set<string>();
   for (const shotId of shotIds) {
     for (const v of variantsByShot.get(shotId) ?? []) {
-      if (v.divergedAt !== null || v.discardedAt !== null) continue;
+      if ((v.divergedAt ?? null) !== null || v.discardedAt !== null) continue;
       if (v.status === 'completed' && v.url) completed.add(v.model);
       else if (v.status === 'generating' || v.status === 'pending')
         generating.add(v.model);
@@ -99,7 +115,7 @@ type ScenesViewProps = {
 
 const CompareWithPromptDiff: React.FC<{
   sequenceId: string;
-  shot: Shot;
+  shot: ShotWithImage;
   variant: ShotVariant;
   onClose: () => void;
   onPromote: () => void;
@@ -211,7 +227,7 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     refetchInterval: (query) => {
       const seq = query.state.data;
       if (!seq) return false;
-      const cachedShots = queryClient.getQueryData<Shot[]>(
+      const cachedShots = queryClient.getQueryData<ShotWithImage[]>(
         shotKeys.list(sequenceId)
       );
       return cachedShots?.some((f) => f.videoStatus === 'generating')
@@ -265,8 +281,8 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     shouldPoll ? { refetchInterval: 2000 } : undefined
   );
 
-  // Fetch image variants for this sequence
-  const { data: imageVariants } = useQuery<ShotVariant[]>({
+  // Fetch image variants for this sequence (frame_variants kind:'model', #989)
+  const { data: imageVariants } = useQuery<ImageVariantWithShot[]>({
     queryKey: ['sequence-image-variants', sequenceId],
     queryFn: () => getSequenceImageVariantsFn({ data: { sequenceId } }),
     staleTime: 30_000,
@@ -296,11 +312,13 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
   // model's image for each shot (falling back to the legacy thumbnail when the
   // model has no completed image for a shot).
   const { activeImageModel } = useActiveImageModel(sequenceId);
+  // Image variants are frame_variants now; each carries its owning `shotId`
+  // (frame ids ≠ shot ids, #989), so key the map by shot id. The query already
+  // returns only kind:'model', non-discarded rows.
   const imageVariantsByShot = useMemo(() => {
-    const map = new Map<string, ShotVariant[]>();
+    const map = new Map<string, FrameVariant[]>();
     if (!imageVariants) return map;
     for (const v of imageVariants) {
-      if (v.variantType !== 'image') continue;
       const list = map.get(v.shotId) ?? [];
       list.push(v);
       map.set(v.shotId, list);
@@ -324,7 +342,6 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
         ?.some(
           (v) =>
             v.model === activeImageModel &&
-            v.divergedAt === null &&
             v.discardedAt === null &&
             v.status === 'completed' &&
             v.url
@@ -518,12 +535,11 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
     return r?.image ?? r?.video;
   }, [generationState.shotRetries, curSelectedShotId]);
 
-  // Filter variants for the currently selected shot
+  // Filter variants for the currently selected shot (by owning shotId — frame
+  // ids ≠ shot ids, #989).
   const selectedShotVariants = useMemo(() => {
     if (!imageVariants || !curSelectedShotId) return undefined;
-    return imageVariants.filter(
-      (v) => v.shotId === curSelectedShotId && v.variantType === 'image'
-    );
+    return imageVariants.filter((v) => v.shotId === curSelectedShotId);
   }, [imageVariants, curSelectedShotId]);
 
   // The image-prompt tab targets the scene's look model (#909); its variant +
@@ -657,7 +673,6 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
           ?.find(
             (v) =>
               v.model === activeImageModel &&
-              v.divergedAt === null &&
               v.discardedAt === null &&
               v.status === 'completed' &&
               v.url
@@ -831,12 +846,14 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
       // derived banner state shows the banner immediately — no separate state.
       const eligibleSet = new Set(eligibleShotIds);
       const now = new Date();
-      queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
-        old?.map((f) =>
-          eligibleSet.has(f.id)
-            ? { ...f, videoStatus: 'generating', updatedAt: now }
-            : f
-        )
+      queryClient.setQueryData<ShotWithImage[]>(
+        shotKeys.list(sequenceId),
+        (old) =>
+          old?.map((f) =>
+            eligibleSet.has(f.id)
+              ? { ...f, videoStatus: 'generating', updatedAt: now }
+              : f
+          )
       );
       if (includeMusic) {
         queryClient.setQueryData<Sequence>(
@@ -874,10 +891,12 @@ export const ScenesView: React.FC<ScenesViewProps> = ({ sequenceId }) => {
           removeAllFromSet(prev, eligibleShotIds)
         );
         // Roll back optimistic cache updates
-        queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
-          old?.map((f) =>
-            eligibleSet.has(f.id) ? { ...f, videoStatus: 'pending' } : f
-          )
+        queryClient.setQueryData<ShotWithImage[]>(
+          shotKeys.list(sequenceId),
+          (old) =>
+            old?.map((f) =>
+              eligibleSet.has(f.id) ? { ...f, videoStatus: 'pending' } : f
+            )
         );
         if (includeMusic) {
           void queryClient.invalidateQueries({

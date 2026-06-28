@@ -1,18 +1,20 @@
 /**
- * Cloudflare Workflows port of `generateImageWorkflow`.
+ * Image generation workflow (#989: writes to `frames` / `frame_variants`).
  *
- * Mirrors the QStash version (`src/lib/workflows/image-workflow.ts`) step
- * for step — same step names, same control flow, same side effects. The
- * only differences are:
- *
- *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
- *     `createScopedWorkflow`. Failure parity comes from the base class
- *     (see `base-workflow.ts`).
- *   - Uses `step.do` instead of `context.run`.
- *   - Reads the workflow run id from `event.instanceId` instead of
- *     `context.workflowRunId`.
- *   - Calls the snapshot DTO computers directly instead of going through
- *     the `context.snapshot.*` extension. */
+ * The still image is the FRAME's surface now. Each run:
+ *   1. set-generating-status — flips the anchor frame to 'generating', records a
+ *      user-edited prompt as a `frame_prompt_versions` row, and APPENDS an
+ *      in-flight `frame_variants` version (kind='model').
+ *   2. generate-image / deduct-credits / upload-image — unchanged.
+ *   3. persist-result — completes the version, emits `image.generated`, then
+ *      SELECT-OR-NOT: a new selection is a pointer repoint
+ *      (`frameVariants.select`, which mirrors + emits `image.selected`), never an
+ *      overwrite. `variantOnly` (adding a model) appends without selecting; a
+ *      mid-flight input drift (snapshot ≠ current) appends a retained,
+ *      stale-flagged version without repointing the primary. The old
+ *      divergent-alternate machinery (`persistImageResult` / `divergedAt`) is
+ *      retired — divergence is just "a version you didn't select".
+ */
 
 import { computeVisualPromptInputHash } from '@/lib/ai/input-hash';
 import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS } from '@/lib/ai/models';
@@ -41,7 +43,6 @@ import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import {
   computeImageWorkflowHashCurrent,
   computeImageWorkflowHashFromDto,
-  persistImageResult,
 } from '@/lib/workflows/image-workflow-snapshot';
 import { shouldRecordUserEdit } from '@/lib/workflows/user-edit-predicate';
 import { getLogger } from '@/lib/observability/logger';
@@ -54,23 +55,21 @@ type ImageWorkflowResult = {
   sequenceId?: string;
 };
 
+/** Output of `set-generating-status`: the generation params plus the id of the
+ * in-flight `frame_variants` version it appended (empty when there's no frame
+ * context, e.g. preview mode or a shotless ad-hoc generation). */
+type PrepResult = {
+  params: ImageGenerationParams;
+  versionId: string;
+};
+
 export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInput> {
   protected override async runImpl(
     event: Readonly<WorkflowEvent<ImageWorkflowInput>>,
     step: WorkflowStep,
     scopedDb: ScopedDb
   ): Promise<ImageWorkflowResult> {
-    const rawInput = event.payload;
-    // Back-compat: accept shotId or shotId from in-flight instances serialized before #906
-    // TODO(#906): remove shotId shim one release after deploy
-    const input = {
-      ...rawInput,
-      shotId:
-        rawInput.shotId ??
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- back-compat shim for in-flight CF Workflow instances serialized before #906
-        (rawInput as { shotId?: string }).shotId ??
-        undefined,
-    };
+    const input = event.payload;
     const workflowRunId = event.instanceId;
 
     if (input.sceneSnapshot) {
@@ -90,9 +89,9 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
         ? input.snapshotInputHash
         : null;
 
-    const generationParams = await step.do(
+    const prep = await step.do(
       'set-generating-status',
-      async (): Promise<ImageGenerationParams | null> => {
+      async (): Promise<PrepResult | null> => {
         if (!input.prompt.trim()) {
           throw new WorkflowValidationError(
             'Prompt is required for image generation'
@@ -100,110 +99,11 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
         }
 
         logger.info(
-          `[ImageWorkflow:cf] Starting image generation for user ${input.userId}`
+          `[ImageWorkflow] Starting image generation for user ${input.userId}`
         );
 
         const model = input.model ?? DEFAULT_IMAGE_MODEL;
-
-        if (input.shotId) {
-          // Variant-only (#547) must not touch the live primary columns — read
-          // the shot instead of stamping `imageModel`/`thumbnailStatus`, so
-          // adding a model can't flip the primary or trip staleness. The
-          // per-model `shot_variants` row (opened below) carries the in-flight
-          // state instead.
-          const shot = input.variantOnly
-            ? await scopedDb.shots.getById(input.shotId)
-            : await scopedDb.shots.update(
-                input.shotId,
-                {
-                  thumbnailStatus: 'generating',
-                  thumbnailWorkflowRunId: workflowRunId,
-                  imageModel: model,
-                },
-                { throwOnMissing: false }
-              );
-
-          if (!shot) {
-            logger.info(
-              `[ImageWorkflow:cf] Shot ${input.shotId} was deleted, skipping`
-            );
-            return null;
-          }
-
-          if (
-            shouldRecordUserEdit({
-              userEditedPrompt: input.userEditedPrompt,
-              prompt: input.prompt,
-              currentPrompt: shot.imagePrompt,
-            })
-          ) {
-            let userEditInputHash: string | null = null;
-            let userEditAnalysisModel: string | null = null;
-            try {
-              if (shot.metadata && input.sequenceId) {
-                const sequence = await scopedDb.sequences.getById(
-                  input.sequenceId
-                );
-                if (sequence) {
-                  const ctx = await loadNarrowShotPromptContext({
-                    scopedDb,
-                    sequence: {
-                      id: sequence.id,
-                      styleId: sequence.styleId,
-                      aspectRatio: sequence.aspectRatio,
-                      analysisModel: sequence.analysisModel,
-                    },
-                    scene: shot.metadata,
-                  });
-                  userEditInputHash = await computeVisualPromptInputHash(ctx);
-                  userEditAnalysisModel = ctx.analysisModel;
-                }
-              }
-            } catch (err) {
-              logger.warn(
-                `[ImageWorkflow:cf] Could not compute upstream hash for user-edit on shot ${input.shotId}; recording with null hash`,
-                {
-                  err,
-                }
-              );
-            }
-
-            await scopedDb.shotPromptVersions.write({
-              shotId: input.shotId,
-              promptType: 'visual',
-              text: input.prompt,
-              source: 'user-edit',
-              inputHash: userEditInputHash,
-              analysisModel: userEditAnalysisModel,
-              createdBy: input.userId,
-            });
-          }
-
-          if (input.sequenceId) {
-            await scopedDb.shotVariants.upsert({
-              shotId: input.shotId,
-              sequenceId: input.sequenceId,
-              variantType: 'image',
-              model,
-              status: 'generating',
-              workflowRunId,
-            });
-          }
-
-          await getGenerationChannel(input.sequenceId).emit(
-            'generation.image:progress',
-            {
-              shotId: input.shotId,
-              status: 'generating',
-              model,
-              // Variant-only (#547): don't flip the primary shot to
-              // "generating" in cache — this run only fills a variant row.
-              variantOnly: input.variantOnly,
-            }
-          );
-        }
-
-        return {
+        const params: ImageGenerationParams = {
           model,
           prompt: buildReferenceImagePrompt(
             input.prompt,
@@ -218,11 +118,109 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
               (ref: ReferenceImageDescription) => ref.referenceImageUrl
             ) ?? [],
           traceName: 'shot-image',
-        } satisfies ImageGenerationParams;
+        };
+
+        // No frame context (preview mode, or shotless ad-hoc): generate without
+        // touching the DB — no version, no status flip. The caller stores the
+        // preview URL on the frame in the skipStorage branch below.
+        if (!input.shotId || !input.sequenceId || input.skipStorage) {
+          return { params, versionId: '' };
+        }
+
+        const frame = await scopedDb.frames.getAnchorByShot(input.shotId);
+        if (!frame) {
+          logger.info(
+            `[ImageWorkflow] Shot ${input.shotId} has no anchor frame (deleted?), skipping`
+          );
+          return null;
+        }
+
+        if (
+          shouldRecordUserEdit({
+            userEditedPrompt: input.userEditedPrompt,
+            prompt: input.prompt,
+            currentPrompt: frame.imagePrompt,
+          })
+        ) {
+          let userEditInputHash: string | null = null;
+          let userEditAnalysisModel: string | null = null;
+          try {
+            const shot = await scopedDb.shots.getById(input.shotId);
+            if (shot?.metadata) {
+              const sequence = await scopedDb.sequences.getById(
+                input.sequenceId
+              );
+              if (sequence) {
+                const ctx = await loadNarrowShotPromptContext({
+                  scopedDb,
+                  sequence: {
+                    id: sequence.id,
+                    styleId: sequence.styleId,
+                    aspectRatio: sequence.aspectRatio,
+                    analysisModel: sequence.analysisModel,
+                  },
+                  scene: shot.metadata,
+                });
+                userEditInputHash = await computeVisualPromptInputHash(ctx);
+                userEditAnalysisModel = ctx.analysisModel;
+              }
+            }
+          } catch (err) {
+            logger.warn(
+              `[ImageWorkflow] Could not compute upstream hash for user-edit on frame ${input.shotId}; recording with null hash`,
+              { err }
+            );
+          }
+
+          await scopedDb.framePromptVersions.write({
+            frameId: frame.id,
+            text: input.prompt,
+            source: 'user-edit',
+            inputHash: userEditInputHash,
+            analysisModel: userEditAnalysisModel,
+            createdBy: input.userId,
+          });
+        }
+
+        // Variant-only (adding a model) must not flip the primary frame to
+        // 'generating' — only this model's new version carries the in-flight
+        // state, so the picker can't trip staleness on the live selection.
+        if (!input.variantOnly) {
+          await scopedDb.frames.setImageGenerationStatus(
+            frame.id,
+            {
+              imageStatus: 'generating',
+              imageWorkflowRunId: workflowRunId,
+              imageModel: model,
+            },
+            { throwOnMissing: false }
+          );
+        }
+
+        const version = await scopedDb.frameVariants.appendVersion({
+          frameId: frame.id,
+          sequenceId: input.sequenceId,
+          kind: 'model',
+          model,
+          status: 'generating',
+          workflowRunId,
+        });
+
+        await getGenerationChannel(input.sequenceId).emit(
+          'generation.image:progress',
+          {
+            shotId: input.shotId,
+            status: 'generating',
+            model,
+            variantOnly: input.variantOnly,
+          }
+        );
+
+        return { params, versionId: version.id };
       }
     );
 
-    if (!generationParams) {
+    if (!prep) {
       return {
         imageUrl: '',
         shotId: input.shotId,
@@ -233,17 +231,11 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     // Generate the image. CF's default per-step retry handles content-flag and
     // transient errors (#881): a stochastic rejection clears on a fresh
     // same-model call; a deterministic content-checker hit exhausts the retries
-    // and fails with its real message — recorded on the shot by onFailure and
-    // surfaced in the failure banner.
+    // and fails with its real message — recorded on the frame by onFailure.
     const imageResult = await step.do('generate-image', async (ctx) => {
       logger.info(
-        `[ImageWorkflow:cf] Generating image ${input.shotId} with model ${generationParams.model} (attempt ${ctx.attempt})`
+        `[ImageWorkflow] Generating image ${input.shotId} with model ${prep.params.model} (attempt ${ctx.attempt})`
       );
-      // `ctx.attempt` is 1 on the first run and increments on each CF retry —
-      // surface that as in-flight retry state so the scenes UI shows
-      // "Retrying…" instead of an indistinguishable hung spinner (#882). No
-      // fixed denominator: this leans on CF's default retry budget (above), so
-      // `maxAttempts` reflects the resolved config when present, else is omitted.
       if (ctx.attempt > 1 && input.shotId && input.sequenceId) {
         await getGenerationChannel(input.sequenceId).emit(
           'generation.image:progress',
@@ -255,12 +247,12 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
             ...(ctx.config.retries?.limit !== undefined && {
               maxAttempts: ctx.config.retries.limit + 1,
             }),
-            model: generationParams.model,
+            model: prep.params.model,
             variantOnly: input.variantOnly,
           }
         );
       }
-      return generateImageWithProvider(generationParams, { scopedDb });
+      return generateImageWithProvider(prep.params, { scopedDb });
     });
 
     const imageCostMicros = imageResult.metadata.cost ?? ZERO_MICROS;
@@ -271,14 +263,14 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
           scopedDb,
           costMicros: imageCostMicros,
           usedOwnKey: imageResult.metadata.usedOwnKey,
-          description: `Image generation (${generationParams.model})`,
+          description: `Image generation (${prep.params.model})`,
           idempotencyKey: `${event.instanceId}:image`,
           metadata: {
-            model: generationParams.model,
+            model: prep.params.model,
             shotId: input.shotId,
             sequenceId: input.sequenceId,
           },
-          workflowName: 'ImageWorkflow:cf',
+          workflowName: 'ImageWorkflow',
         });
       });
     }
@@ -291,70 +283,144 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
 
     if (imageUrl && shotId && sequenceId && teamId && !input.skipStorage) {
       const upload = await step.do('upload-image', async () => {
-        return uploadImageToStorage({
-          imageUrl,
-          teamId,
-          sequenceId,
-          shotId,
-        });
+        return uploadImageToStorage({ imageUrl, teamId, sequenceId, shotId });
       });
 
       const writeResult = await step.do('persist-result', async () => {
         const promptHash = input.prompt ? simpleHash(input.prompt) : null;
-        const { model } = generationParams;
+        const { model } = prep.params;
+        const versionId = prep.versionId;
 
+        // Resolve the anchor frame (frame id ≠ shot id, #989) for the event
+        // target + selection repoint below.
+        const frame = await scopedDb.frames.getAnchorByShot(shotId);
+        if (!frame) {
+          logger.info(
+            `[ImageWorkflow] Shot ${shotId} lost its anchor frame before select; skipping`
+          );
+          return { imageUrl: upload.url };
+        }
+
+        // Complete the in-flight version. Its inputHash IS the snapshot hash —
+        // staleness of this version is its own concern (immutable once done).
+        await scopedDb.frameVariants.update(versionId, {
+          status: 'completed',
+          url: upload.url,
+          storagePath: upload.path,
+          previewUrl: null,
+          generatedAt: new Date(),
+          error: null,
+          promptHash,
+          inputHash: snapshotHash,
+        });
+
+        await scopedDb.sequenceEvents.record({
+          sequenceId,
+          actorId: input.userId,
+          kind: 'image.generated',
+          targetType: 'frame',
+          targetId: frame.id,
+          summary: `Generated ${model} image`,
+          data: { versionId, model, variantOnly: input.variantOnly ?? false },
+        });
+
+        const channel = getGenerationChannel(sequenceId);
+
+        // Adding a model — leave the primary selection untouched.
+        if (input.variantOnly) {
+          await channel.emit('generation.image:progress', {
+            shotId,
+            status: 'completed',
+            thumbnailUrl: upload.url,
+            model,
+            variantOnly: true,
+          });
+          return { imageUrl: upload.url };
+        }
+
+        // Mid-flight input drift: keep the version (stale-flagged via its
+        // inputHash) but DON'T repoint — the prior selection stays the primary.
         const currentHash = snapshotHash
           ? await computeImageWorkflowHashCurrent(input, scopedDb)
           : null;
+        if (snapshotHash && currentHash !== snapshotHash) {
+          logger.info(
+            `[ImageWorkflow] Frame ${shotId} drifted (snapshot=${snapshotHash.slice(0, 8)} current=${currentHash?.slice(0, 8)}); retained version ${versionId} unselected`
+          );
+          // Reset the frame's in-flight status to a TERMINAL value — otherwise it
+          // stays 'generating' forever (the only path that clears it is
+          // `select`, which drift intentionally skips), leaving a perpetual
+          // spinner over the prior good still. The mirror/selection are
+          // untouched, so the prior selection (if any) remains the primary: a
+          // frame with a prior selection settles back to 'completed', a
+          // never-selected frame to 'pending'. Mirrors the reset the retired
+          // `buildDivergentRevertWrites` used to guarantee.
+          const driftStatus = frame.selectedImageVersionId
+            ? 'completed'
+            : 'pending';
+          await scopedDb.frames.setImageGenerationStatus(
+            frame.id,
+            {
+              imageStatus: driftStatus,
+              imageWorkflowRunId: null,
+              imageError: null,
+            },
+            { throwOnMissing: false }
+          );
+          await channel.emit('generation.image:progress', {
+            shotId,
+            status: driftStatus,
+            model,
+          });
+          return { imageUrl: upload.url };
+        }
 
-        const outcome = await persistImageResult({
-          scopedDb,
-          shotId,
-          sequenceId,
-          model,
-          upload,
-          snapshotHash,
-          currentHash,
-          promptHash,
-          variantOnly: input.variantOnly,
-          emit: async (event2, payload) => {
-            await getGenerationChannel(sequenceId).emit(event2, payload);
-          },
+        // Select = pointer repoint + mirror + `image.selected` event (atomic).
+        await scopedDb.frameVariants.select(frame.id, versionId, {
+          actorId: input.userId,
         });
-
-        if (outcome.status === 'shot-deleted') {
-          logger.info(
-            `[ImageWorkflow:cf] Shot ${shotId} was deleted, skipping persist`
-          );
-          return null;
-        }
-
-        if (outcome.status === 'divergent' && snapshotHash) {
-          logger.info(
-            `[ImageWorkflow:cf] Diverged shot ${shotId}: snapshot=${snapshotHash.slice(0, 8)} current=${currentHash?.slice(0, 8)}; routed alternate to shot_variants`
-          );
-        } else {
-          logger.info(`[ImageWorkflow:cf] Uploaded to storage: ${upload.path}`);
-        }
-
-        return { imageUrl: outcome.imageUrl };
-      });
-      if (writeResult) imageUrl = writeResult.imageUrl;
-    } else if (imageUrl && shotId && input.skipStorage) {
-      await step.do('store-preview-url', async () => {
-        const updatedShot = await scopedDb.shots.update(
+        // A new still invalidates the shot's downstream video (still on `shots`
+        // until Phase 3) — reset it so the user regenerates motion.
+        await scopedDb.shots.update(
           shotId,
           {
-            previewThumbnailUrl: imageUrl,
-            thumbnailGeneratedAt: new Date(),
-            thumbnailError: null,
+            videoUrl: null,
+            videoPath: null,
+            videoStatus: 'pending',
+            videoWorkflowRunId: null,
+            videoGeneratedAt: null,
+            videoError: null,
           },
           { throwOnMissing: false }
         );
+        await channel.emit('generation.image:progress', {
+          shotId,
+          status: 'completed',
+          thumbnailUrl: upload.url,
+          model,
+        });
+        logger.info(`[ImageWorkflow] Uploaded + selected: ${upload.path}`);
+        return { imageUrl: upload.url };
+      });
+      imageUrl = writeResult.imageUrl;
+    } else if (imageUrl && shotId && input.skipStorage) {
+      await step.do('store-preview-url', async () => {
+        const anchor = await scopedDb.frames.getAnchorByShot(shotId);
+        const updatedFrame = anchor
+          ? await scopedDb.frames.setImageGenerationStatus(
+              anchor.id,
+              {
+                previewImageUrl: imageUrl,
+                imageGeneratedAt: new Date(),
+                imageError: null,
+              },
+              { throwOnMissing: false }
+            )
+          : null;
 
-        if (!updatedShot) {
+        if (!updatedFrame) {
           logger.info(
-            `[ImageWorkflow:cf] Shot ${shotId} was deleted, skipping preview update`
+            `[ImageWorkflow] Shot ${shotId} has no anchor frame, skipping preview update`
           );
           return;
         }
@@ -381,30 +447,28 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     scopedDb: ScopedDb;
   }): Promise<void> {
     const input = event.payload;
-    const previewMode = input.skipStorage;
-    if (previewMode) return;
-
+    if (input.skipStorage) return;
     if (!input.shotId || !input.teamId) return;
 
-    // Variant-only (#547): leave the primary columns untouched on failure too —
-    // only this model's variant row is flipped to `failed` below.
+    // Variant-only: leave the primary frame untouched on failure too — only
+    // this model's in-flight version flips to 'failed' below.
     if (!input.variantOnly) {
-      await scopedDb.shots.update(
-        input.shotId,
-        { thumbnailStatus: 'failed', thumbnailError: error },
-        { throwOnMissing: false }
-      );
+      const anchor = await scopedDb.frames.getAnchorByShot(input.shotId);
+      if (anchor) {
+        await scopedDb.frames.setImageGenerationStatus(
+          anchor.id,
+          { imageStatus: 'failed', imageError: error },
+          { throwOnMissing: false }
+        );
+      }
     }
+    await scopedDb.frameVariants.markFailedByWorkflowRun(
+      event.instanceId,
+      error
+    );
 
     const model = input.model ?? DEFAULT_IMAGE_MODEL;
     if (input.sequenceId) {
-      await scopedDb.shotVariants.updateByShotAndModel(
-        input.shotId,
-        'image',
-        model,
-        { status: 'failed', error }
-      );
-
       try {
         await getGenerationChannel(input.sequenceId).emit(
           'generation.image:progress',
@@ -412,30 +476,21 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
             shotId: input.shotId,
             status: 'failed',
             model,
-            // Carry the reason so the cache updater writes `thumbnailError`
-            // live — otherwise the FailureSummaryBanner shows "Unknown error"
-            // until a full refetch (#881). Skip for variant-only (the primary
-            // row isn't touched).
             ...(input.variantOnly ? {} : { error }),
-            // Variant-only (#547): a failed alternate must not flip the primary
-            // thumbnail to "failed" in cache (the DB write above is already
-            // guarded on variantOnly).
             variantOnly: input.variantOnly,
           }
         );
       } catch (emitError) {
         logger.error(
-          `[ImageWorkflow:cf] Failed to emit failure event for sequence ${input.sequenceId} shot ${input.shotId}:`,
-          {
-            err: emitError,
-          }
+          `[ImageWorkflow] Failed to emit failure event for sequence ${input.sequenceId} shot ${input.shotId}:`,
+          { err: emitError }
         );
       }
     }
 
     if (isContentRejectionError(error)) {
       logger.warn(
-        `[ImageWorkflow:cf] shot ${input.shotId} failed a content checker`,
+        `[ImageWorkflow] frame ${input.shotId} failed a content checker`,
         {
           event: CONTENT_REJECTION_EVENT,
           kind: 'image',
@@ -448,7 +503,7 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
     }
 
     logger.error(
-      `[ImageWorkflow:cf] Image generation failed for shot ${input.shotId}: ${error}`
+      `[ImageWorkflow] Image generation failed for frame ${input.shotId}: ${error}`
     );
   }
 }

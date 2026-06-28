@@ -5,6 +5,7 @@ import { sequenceCharacterKeys } from '@/hooks/use-sequence-characters';
 import { sequenceLocationKeys } from '@/hooks/use-sequence-locations';
 import { sequenceKeys } from '@/hooks/use-sequences';
 import type { Shot, Sequence } from '@/types/database';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import type { QueryClient } from '@tanstack/react-query';
 
 /**
@@ -77,7 +78,9 @@ function isValidMusicStatus(
   );
 }
 
-function isValidShotStatus(status: unknown): status is Shot['thumbnailStatus'] {
+function isValidShotStatus(
+  status: unknown
+): status is ShotWithImage['thumbnailStatus'] {
   return (
     status === 'pending' ||
     status === 'generating' ||
@@ -113,8 +116,9 @@ export function updateQueryCacheFromEvent(
       // The metadata is validated by the realtime schema before reaching here
       const metadata = data.metadata;
       if (isSceneMetadata(metadata)) {
-        queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
-          old?.map((f) => (f.id === shotId ? { ...f, metadata } : f))
+        queryClient.setQueryData<ShotWithImage[]>(
+          shotKeys.list(sequenceId),
+          (old) => old?.map((f) => (f.id === shotId ? { ...f, metadata } : f))
         );
       }
       break;
@@ -135,29 +139,31 @@ export function updateQueryCacheFromEvent(
       // queries below so the new model appears in the dropdown.
       const variantOnly = data.variantOnly === true;
       if (!variantOnly) {
-        queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
-          old?.map((f) =>
-            f.id === shotId
-              ? {
-                  ...f,
-                  thumbnailUrl: thumbnailUrl ?? f.thumbnailUrl,
-                  previewThumbnailUrl:
-                    previewThumbnailUrl ?? f.previewThumbnailUrl,
-                  thumbnailStatus: isValidShotStatus(status)
-                    ? status
-                    : f.thumbnailStatus,
-                  // Surface the failure reason live (#881): set on `failed`,
-                  // clear when a new attempt starts/succeeds, and leave
-                  // untouched for status-less emits (e.g. preview-url).
-                  thumbnailError:
-                    status === 'failed'
-                      ? (errorMessage ?? f.thumbnailError)
-                      : isValidShotStatus(status)
-                        ? null
-                        : f.thumbnailError,
-                }
-              : f
-          )
+        queryClient.setQueryData<ShotWithImage[]>(
+          shotKeys.list(sequenceId),
+          (old) =>
+            old?.map((f) =>
+              f.id === shotId
+                ? {
+                    ...f,
+                    thumbnailUrl: thumbnailUrl ?? f.thumbnailUrl,
+                    previewThumbnailUrl:
+                      previewThumbnailUrl ?? f.previewThumbnailUrl,
+                    thumbnailStatus: isValidShotStatus(status)
+                      ? status
+                      : f.thumbnailStatus,
+                    // Surface the failure reason live (#881): set on `failed`,
+                    // clear when a new attempt starts/succeeds, and leave
+                    // untouched for status-less emits (e.g. preview-url).
+                    thumbnailError:
+                      status === 'failed'
+                        ? (errorMessage ?? f.thumbnailError)
+                        : isValidShotStatus(status)
+                          ? null
+                          : f.thumbnailError,
+                  }
+                : f
+            )
         );
       }
       // Refresh variant data so model switcher and variant overlay stay current.
@@ -191,25 +197,27 @@ export function updateQueryCacheFromEvent(
       // below so the new model appears in the dropdown.
       const variantOnly = data.variantOnly === true;
       if (!variantOnly) {
-        queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
-          old?.map((f) =>
-            f.id === shotId
-              ? {
-                  ...f,
-                  videoUrl: videoUrl ?? f.videoUrl,
-                  videoStatus: isValidShotStatus(status)
-                    ? status
-                    : f.videoStatus,
-                  // Surface the failure reason live (#881) — see image handler.
-                  videoError:
-                    status === 'failed'
-                      ? (errorMessage ?? f.videoError)
-                      : isValidShotStatus(status)
-                        ? null
-                        : f.videoError,
-                }
-              : f
-          )
+        queryClient.setQueryData<ShotWithImage[]>(
+          shotKeys.list(sequenceId),
+          (old) =>
+            old?.map((f) =>
+              f.id === shotId
+                ? {
+                    ...f,
+                    videoUrl: videoUrl ?? f.videoUrl,
+                    videoStatus: isValidShotStatus(status)
+                      ? status
+                      : f.videoStatus,
+                    // Surface the failure reason live (#881) — see image handler.
+                    videoError:
+                      status === 'failed'
+                        ? (errorMessage ?? f.videoError)
+                        : isValidShotStatus(status)
+                          ? null
+                          : f.videoError,
+                  }
+                : f
+            )
         );
       }
       // Refresh video variant data so the model switcher and per-model overlay
@@ -235,18 +243,20 @@ export function updateQueryCacheFromEvent(
     case 'generation.variant-image:progress': {
       const variantImageUrl = getOptionalString(data, 'variantImageUrl');
       const status = data.status;
-      queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
-        old?.map((f) =>
-          f.id === shotId
-            ? {
-                ...f,
-                variantImageUrl: variantImageUrl ?? f.variantImageUrl,
-                variantImageStatus: isValidShotStatus(status)
-                  ? status
-                  : f.variantImageStatus,
-              }
-            : f
-        )
+      queryClient.setQueryData<ShotWithImage[]>(
+        shotKeys.list(sequenceId),
+        (old) =>
+          old?.map((f) =>
+            f.id === shotId
+              ? {
+                  ...f,
+                  variantImageUrl: variantImageUrl ?? f.variantImageUrl,
+                  variantImageStatus: isValidShotStatus(status)
+                    ? status
+                    : f.variantImageStatus,
+                }
+              : f
+          )
       );
       break;
     }
@@ -443,12 +453,14 @@ export function updateQueryCacheFromEvent(
     case 'generation.error':
       // Update shot status if shotId present
       if (shotId) {
-        queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
-          old?.map((f) =>
-            f.id === shotId
-              ? { ...f, thumbnailStatus: 'failed', videoStatus: 'failed' }
-              : f
-          )
+        queryClient.setQueryData<ShotWithImage[]>(
+          shotKeys.list(sequenceId),
+          (old) =>
+            old?.map((f) =>
+              f.id === shotId
+                ? { ...f, thumbnailStatus: 'failed', videoStatus: 'failed' }
+                : f
+            )
         );
       }
       break;
@@ -458,21 +470,23 @@ export function updateQueryCacheFromEvent(
       const sceneId = getString(data, 'sceneId');
       const title = getString(data, 'title');
       if (sceneId && title) {
-        queryClient.setQueryData<Shot[]>(shotKeys.list(sequenceId), (old) =>
-          old?.map((f) => {
-            if (f.metadata?.sceneId !== sceneId || !f.metadata.metadata)
-              return f;
-            return {
-              ...f,
-              metadata: {
-                ...f.metadata,
+        queryClient.setQueryData<ShotWithImage[]>(
+          shotKeys.list(sequenceId),
+          (old) =>
+            old?.map((f) => {
+              if (f.metadata?.sceneId !== sceneId || !f.metadata.metadata)
+                return f;
+              return {
+                ...f,
                 metadata: {
-                  ...f.metadata.metadata,
-                  title,
+                  ...f.metadata,
+                  metadata: {
+                    ...f.metadata.metadata,
+                    title,
+                  },
                 },
-              },
-            };
-          })
+              };
+            })
         );
       }
       break;

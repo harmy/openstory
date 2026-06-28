@@ -9,13 +9,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { cn } from '@/lib/utils';
 import { stripMarkdown } from '@/lib/utils/markdown-plain';
-import type { Shot } from '@/types/database';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import { Check, Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { SceneThumbnail } from './scene-thumbnail';
 
 type SceneListItemProps = {
-  shot?: Shot | undefined;
+  shot?: ShotWithImage | undefined;
   aspectRatio: AspectRatio;
   isActive?: boolean;
   isCompleted?: boolean;

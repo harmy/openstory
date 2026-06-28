@@ -5,6 +5,7 @@
 
 import type { Shot } from '@/lib/db/schema/shots';
 import type { Sequence } from '@/lib/db/schema/sequences';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 
 type FailureCategory =
   | 'image'
@@ -82,7 +83,10 @@ function buildHeadline(
 }
 
 export function analyzeFailures(
-  shots: Shot[],
+  // The image surface (thumbnailStatus/thumbnailUrl/thumbnailError) moved onto
+  // the anchor frame in #989; callers project it back via `projectShotWithImage`
+  // so the failure heuristics here read the same legacy field names.
+  shots: ShotWithImage[],
   sequence: Sequence
 ): FailureSummary {
   const groups: FailureGroup[] = [];

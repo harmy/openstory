@@ -24,9 +24,17 @@ import type { Database } from '@/lib/db/client';
 import { frameVariants, frames } from '@/lib/db/schema';
 import type { FrameVariant, NewFrameVariant } from '@/lib/db/schema';
 import type { FrameVariantKind } from '@/lib/db/schema/frame-variants';
-import { and, asc, eq, isNull } from 'drizzle-orm';
-import { buildFrameImageMirror } from './frames';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { buildFrameImageMirror, type CompletedFrameVariant } from './frames';
 import { buildEventInsert } from './sequence-events';
+
+/**
+ * An image `FrameVariant` plus the id of the shot whose anchor frame owns it.
+ * Frame ids are NOT shot ids (#989), so sequence-wide listings that the client
+ * keys by shot (coverage markers, per-shot variant filtering) carry the owning
+ * `shotId` explicitly rather than reusing `frameId`.
+ */
+export type ImageVariantWithShot = FrameVariant & { shotId: string };
 
 /** The grouping key that makes a flat row set read as a "variant". */
 type VariantGroup = {
@@ -50,10 +58,30 @@ export function createFrameVariantsMethods(db: Database) {
     /**
      * Append a new version row. Pure append — even when the inputs match an
      * existing version (a deliberate re-roll), a fresh row is created so the
-     * history accumulates. Idempotency for workflow retries is the caller's
-     * concern (Phase 2), not enforced here.
+     * history accumulates.
+     *
+     * The ONE exception is an in-flight append (`status: 'generating'` with a
+     * `workflowRunId`): these are written inside multi-write workflow steps
+     * (image `set-generating-status`, upscale `upscale-image`), so a Cloudflare
+     * step retry after a partial failure would otherwise append a SECOND
+     * orphan 'generating' row for the same run. We make that idempotent on
+     * `(frameId, workflowRunId)` — re-rolls are unaffected because each carries
+     * a fresh `workflowRunId`; only a retry of the same run reuses its row.
      */
     appendVersion: async (data: NewFrameVariant): Promise<FrameVariant> => {
+      if (data.status === 'generating' && data.workflowRunId) {
+        const [existing] = await db
+          .select()
+          .from(frameVariants)
+          .where(
+            and(
+              eq(frameVariants.frameId, data.frameId),
+              eq(frameVariants.workflowRunId, data.workflowRunId),
+              eq(frameVariants.status, 'generating')
+            )
+          );
+        if (existing) return existing;
+      }
       const [version] = await db.insert(frameVariants).values(data).returning();
       if (!version) {
         throw new Error(
@@ -61,6 +89,26 @@ export function createFrameVariantsMethods(db: Database) {
         );
       }
       return version;
+    },
+
+    /**
+     * Mark any still-'generating' version for a workflow run as failed. Used by
+     * the image workflow's `onFailure`, which only has the run id (not the
+     * version id minted in the generating step).
+     */
+    markFailedByWorkflowRun: async (
+      workflowRunId: string,
+      error: string
+    ): Promise<void> => {
+      await db
+        .update(frameVariants)
+        .set({ status: 'failed', error, updatedAt: new Date() })
+        .where(
+          and(
+            eq(frameVariants.workflowRunId, workflowRunId),
+            eq(frameVariants.status, 'generating')
+          )
+        );
     },
 
     /** Update generation tracking on an in-flight version (status/url/error/…). */
@@ -110,6 +158,47 @@ export function createFrameVariantsMethods(db: Database) {
         .orderBy(asc(frameVariants.id));
     },
 
+    /**
+     * All `kind:'model'` versions across a sequence, oldest-first (excludes
+     * discarded). The image analog of the retired `shotVariants.listBySequence`
+     * — the coverage UI reduces these to latest-per-(frameId, model). frameId
+     * == the shot's id, so existing shot-keyed client logic keeps working.
+     */
+    listModelVersionsBySequence: async (
+      sequenceId: string
+    ): Promise<ImageVariantWithShot[]> => {
+      // Join the owning frame to surface its `shotId` — the client keys image
+      // coverage / per-shot filtering by shot, and frame ids ≠ shot ids (#989).
+      const rows = await db
+        .select({ variant: frameVariants, shotId: frames.shotId })
+        .from(frameVariants)
+        .innerJoin(frames, eq(frames.id, frameVariants.frameId))
+        .where(
+          and(
+            eq(frameVariants.sequenceId, sequenceId),
+            eq(frameVariants.kind, 'model'),
+            isNull(frameVariants.discardedAt)
+          )
+        )
+        .orderBy(asc(frameVariants.id));
+      return rows.map((r) => ({ ...r.variant, shotId: r.shotId }));
+    },
+
+    /** Distinct `kind:'model'` model names that have a version in a sequence. */
+    listModelsForSequence: async (sequenceId: string): Promise<string[]> => {
+      const rows = await db
+        .selectDistinct({ model: frameVariants.model })
+        .from(frameVariants)
+        .where(
+          and(
+            eq(frameVariants.sequenceId, sequenceId),
+            eq(frameVariants.kind, 'model'),
+            isNull(frameVariants.discardedAt)
+          )
+        );
+      return rows.map((r) => r.model);
+    },
+
     /** All versions for a frame, oldest-first. Excludes discarded by default. */
     listByFrame: async (
       frameId: string,
@@ -124,6 +213,57 @@ export function createFrameVariantsMethods(db: Database) {
         .from(frameVariants)
         .where(and(...conditions))
         .orderBy(asc(frameVariants.id));
+    },
+
+    /**
+     * The current 3×3 grid SHEET for a frame: the latest `kind:'framing'`
+     * version with no `sourceVariantId` (the raw sheet — a chosen tile points
+     * its `sourceVariantId` at the sheet it was cropped from). Drives the
+     * picker's `variantImageUrl`. Returns null when no grid has been generated.
+     */
+    getLatestGridSheet: async (
+      frameId: string
+    ): Promise<FrameVariant | null> => {
+      const rows = await db
+        .select()
+        .from(frameVariants)
+        .where(
+          and(
+            eq(frameVariants.frameId, frameId),
+            eq(frameVariants.kind, 'framing'),
+            isNull(frameVariants.sourceVariantId),
+            isNull(frameVariants.discardedAt)
+          )
+        )
+        .orderBy(desc(frameVariants.id))
+        .limit(1);
+      return rows[0] ?? null;
+    },
+
+    /**
+     * Batch of the latest grid sheet per frame across a sequence (for list
+     * projection). Returns a Map keyed by frameId; frames with no grid are
+     * absent. One query, reduced to newest-per-frame in app code.
+     */
+    listLatestGridSheetsBySequence: async (
+      sequenceId: string
+    ): Promise<Map<string, FrameVariant>> => {
+      const rows = await db
+        .select()
+        .from(frameVariants)
+        .where(
+          and(
+            eq(frameVariants.sequenceId, sequenceId),
+            eq(frameVariants.kind, 'framing'),
+            isNull(frameVariants.sourceVariantId),
+            isNull(frameVariants.discardedAt)
+          )
+        )
+        .orderBy(asc(frameVariants.id));
+      // asc by id (≈ time) → last write per frame wins.
+      const byFrame = new Map<string, FrameVariant>();
+      for (const row of rows) byFrame.set(row.frameId, row);
+      return byFrame;
     },
 
     /** The version the frame currently points at, or null if unset/dangling. */
@@ -175,6 +315,16 @@ export function createFrameVariantsMethods(db: Database) {
           `FrameVariant ${versionId} is '${version.status}', not 'completed' — cannot select an unfinished image`
         );
       }
+      // `version` is a single object type, so the guard above narrows reads of
+      // `version.status` but not `version` as a whole — re-affirm the completed
+      // status in a typed local so the mirror builder's precondition is met
+      // without an unsafe assertion.
+      const completedVersion: CompletedFrameVariant = {
+        ...version,
+        status: 'completed',
+      };
+      const mirrorUpdate = buildFrameImageMirror(db, frameId, completedVersion);
+
       const [frame] = await db
         .select({
           sequenceId: frames.sequenceId,
@@ -187,7 +337,7 @@ export function createFrameVariantsMethods(db: Database) {
       }
 
       await db.batch([
-        buildFrameImageMirror(db, frameId, version),
+        mirrorUpdate,
         buildEventInsert(db, {
           sequenceId: frame.sequenceId,
           actorId: opts.actorId,

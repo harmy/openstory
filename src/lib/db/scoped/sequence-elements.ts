@@ -10,7 +10,7 @@ import type {
   NewSequenceElement,
   SequenceElement,
 } from '@/lib/db/schema';
-import { shots, sequenceElements, sequences } from '@/lib/db/schema';
+import { frames, shots, sequenceElements, sequences } from '@/lib/db/schema';
 import {
   buildShotRenameDeltas,
   replaceTokenInText,
@@ -270,15 +270,45 @@ export function createSequenceElementsMethods(db: Database) {
         .select()
         .from(shots)
         .where(eq(shots.sequenceId, sequenceId))) as Shot[];
-      const deltas = buildShotRenameDeltas(allShots, oldToken, newToken);
-      const shotStatements = deltas.map((delta) => {
+      // The image prompt lives on each shot's anchor frame now (#989) — keyed
+      // by shotId (orderIndex 0), never by id-reuse.
+      const frameRows = await db
+        .select({ shotId: frames.shotId, imagePrompt: frames.imagePrompt })
+        .from(frames)
+        .where(
+          and(eq(frames.sequenceId, sequenceId), eq(frames.orderIndex, 0))
+        );
+      const imagePromptByShot = new Map(
+        frameRows.map((f) => [f.shotId, f.imagePrompt])
+      );
+      const shotsWithImagePrompt = allShots.map((s) => ({
+        ...s,
+        imagePrompt: imagePromptByShot.get(s.id) ?? null,
+      }));
+      const deltas = buildShotRenameDeltas(
+        shotsWithImagePrompt,
+        oldToken,
+        newToken
+      );
+      // metadata/motionPrompt → shots; imagePrompt mirror → the anchor frame.
+      const shotStatements = deltas.flatMap((delta) => {
         const set: Record<string, unknown> = { updatedAt: now };
         if (delta.metadata !== undefined) set.metadata = delta.metadata;
-        if (delta.imagePrompt !== undefined)
-          set.imagePrompt = delta.imagePrompt;
         if (delta.motionPrompt !== undefined)
           set.motionPrompt = delta.motionPrompt;
-        return db.update(shots).set(set).where(eq(shots.id, delta.shotId));
+        return [
+          ...(Object.keys(set).length > 1
+            ? [db.update(shots).set(set).where(eq(shots.id, delta.shotId))]
+            : []),
+          ...(delta.imagePrompt !== undefined
+            ? [
+                db
+                  .update(frames)
+                  .set({ imagePrompt: delta.imagePrompt, updatedAt: now })
+                  .where(eq(frames.id, delta.shotId)),
+              ]
+            : []),
+        ];
       });
 
       const [elementRows] = await db.batch([

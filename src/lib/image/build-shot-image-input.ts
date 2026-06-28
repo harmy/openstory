@@ -72,6 +72,12 @@ export async function buildShotImageWorkflowInput(opts: {
   continuity?: Scene['continuity'];
   /** Prompt override (e.g. a user edit). Defaults to the shot's prompt chain. */
   prompt?: string;
+  /**
+   * The frame's stored image prompt (mirror of the selected prompt version) —
+   * moved off `shots` onto the anchor frame in #989. Callers pass
+   * `frame.imagePrompt`.
+   */
+  imagePrompt?: string | null;
   userEditedPrompt?: boolean;
   /**
    * Variant-only (#547): the resulting `/image` run writes only this model's
@@ -91,10 +97,10 @@ export async function buildShotImageWorkflowInput(opts: {
     elements,
   } = opts;
 
-  // Priority: provided > stored > AI-generated > description.
+  // Priority: provided > stored (frame) > AI-generated > description.
   const prompt =
     opts.prompt ||
-    shot.imagePrompt ||
+    opts.imagePrompt ||
     shot.metadata?.prompts?.visual?.fullPrompt ||
     shot.description;
   if (!prompt) return null;

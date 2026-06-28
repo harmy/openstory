@@ -1,10 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import type { Shot, ShotVariant } from '@/lib/db/schema';
+import type { Frame, ShotVariant } from '@/lib/db/schema';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import { DivergenceCompareDialog } from './divergence-compare-dialog';
 
 const NOW = new Date('2026-04-29T00:00:00Z');
 
-const baseShot: Shot = {
+// The still-image surface moved off `shots` onto the anchor `frame` in #989;
+// the dialog reads the legacy projected names (`thumbnail*`/`image*`), so the
+// fixture keeps them and adds the raw anchor `frame`.
+const baseShot: ShotWithImage = {
   id: 'shot-1',
   sequenceId: 'seq-1',
   sceneId: null,
@@ -17,9 +21,6 @@ const baseShot: Shot = {
   thumbnailPath: null,
   variantImageUrl: null,
   variantImageStatus: 'pending',
-  variantWorkflowRunId: null,
-  variantImageGeneratedAt: null,
-  variantImageError: null,
   videoUrl: null,
   videoPath: null,
   thumbnailStatus: 'completed',
@@ -43,7 +44,6 @@ const baseShot: Shot = {
   audioError: null,
   audioModel: null,
   thumbnailInputHash: 'live-hash',
-  variantImageInputHash: null,
   videoInputHash: null,
   audioInputHash: null,
   visualPromptInputHash: null,
@@ -51,6 +51,29 @@ const baseShot: Shot = {
   metadata: null,
   createdAt: NOW,
   updatedAt: NOW,
+  frame: {
+    id: 'shot-1',
+    shotId: 'shot-1',
+    sequenceId: 'seq-1',
+    orderIndex: 0,
+    role: 'first',
+    source: 'generated',
+    imageUrl: 'https://images.unsplash.com/photo-1502872364588-894d7d6ddfab',
+    previewImageUrl: null,
+    imagePath: null,
+    imageStatus: 'completed',
+    imageWorkflowRunId: null,
+    imageGeneratedAt: null,
+    imageError: null,
+    imageModel: 'nano_banana_2',
+    imagePrompt: null,
+    selectedImageVersionId: null,
+    selectedImagePromptVersionId: null,
+    imageInputHash: 'live-hash',
+    visualPromptInputHash: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  } satisfies Frame,
 };
 
 function makeVariant(

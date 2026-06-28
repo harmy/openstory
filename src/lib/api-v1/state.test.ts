@@ -1,6 +1,7 @@
-import type { Shot } from '@/lib/db/schema/shots';
+import type { Frame } from '@/lib/db/schema';
 import type { Style } from '@/lib/db/schema/libraries';
 import type { Sequence } from '@/lib/db/schema/sequences';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Stub the logger so the "style failed to resolve" anomaly path is observable
@@ -45,8 +46,13 @@ const build = (
   origin = TEST_ORIGIN
 ) => buildSequenceStateRaw(deps, sequence, origin);
 
-function makeShot(overrides: Partial<Shot> = {}): Shot {
-  return {
+// The still-image surface moved off `shots` onto the anchor `frame` in #989;
+// `buildSequenceState` projects `ShotWithImage` from each shot + its frame, so
+// the fixture keeps the legacy projected names (`thumbnail*`/`image*`) AND
+// mirrors them onto a concrete anchor `frame` whose id is DISTINCT from the
+// shot id (only `shotId` links them — never id-reuse).
+function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
+  const base: Omit<ShotWithImage, 'frame'> = {
     id: 'shot-1',
     sequenceId: 'seq-1',
     sceneId: null,
@@ -64,9 +70,6 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     imagePrompt: null,
     variantImageUrl: null,
     variantImageStatus: 'pending',
-    variantWorkflowRunId: null,
-    variantImageGeneratedAt: null,
-    variantImageError: null,
     videoUrl: null,
     videoPath: null,
     videoStatus: 'pending',
@@ -83,7 +86,6 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     audioError: null,
     audioModel: null,
     thumbnailInputHash: null,
-    variantImageInputHash: null,
     videoInputHash: null,
     audioInputHash: null,
     visualPromptInputHash: null,
@@ -95,6 +97,30 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     updatedAt: new Date(),
     ...overrides,
   };
+  const frame: Frame = {
+    id: `frame-${base.id}`,
+    shotId: base.id,
+    sequenceId: base.sequenceId,
+    orderIndex: 0,
+    role: 'first',
+    source: 'generated',
+    imageUrl: base.thumbnailUrl,
+    previewImageUrl: base.previewThumbnailUrl,
+    imagePath: base.thumbnailPath,
+    imageStatus: base.thumbnailStatus,
+    imageWorkflowRunId: base.thumbnailWorkflowRunId,
+    imageGeneratedAt: base.thumbnailGeneratedAt,
+    imageError: base.thumbnailError,
+    imageModel: base.imageModel,
+    imagePrompt: base.imagePrompt,
+    selectedImageVersionId: null,
+    selectedImagePromptVersionId: null,
+    imageInputHash: base.thumbnailInputHash,
+    visualPromptInputHash: base.visualPromptInputHash,
+    createdAt: base.createdAt,
+    updatedAt: base.updatedAt,
+  };
+  return { ...base, frame };
 }
 
 function makeSequence(overrides: Partial<Sequence> = {}): Sequence {
@@ -171,9 +197,15 @@ function makeStyle(overrides: Partial<Style> = {}): Style {
   };
 }
 
-function depsWithShots(shots: Shot[], style: Style | null = makeStyle()) {
+function depsWithShots(
+  shots: ShotWithImage[],
+  style: Style | null = makeStyle()
+) {
   return {
     shots: { listBySequence: async () => shots },
+    // The image surface lives on each shot's anchor frame now (#989); the source
+    // projects `ShotWithImage` from `shots` + `frames`.
+    frames: { listAnchorsBySequence: async () => shots.map((s) => s.frame) },
     styles: { getById: async () => style },
   };
 }

@@ -18,7 +18,7 @@
 import type { Database } from '@/lib/db/client';
 import { frameVariants, frames } from '@/lib/db/schema';
 import type { Frame, FrameVariant, NewFrame } from '@/lib/db/schema';
-import { asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 
 /** A frame plus the `frame_variants` version it currently points at (if any). */
 export type ResolvedFrame = {
@@ -27,10 +27,24 @@ export type ResolvedFrame = {
 };
 
 /**
+ * A frame variant that has finished generating — the ONLY kind that may become
+ * a frame's primary still. Mirroring a pending/failed version would copy its
+ * null url + non-completed status onto the frame, silently blanking a good
+ * image. Encoding the precondition in {@link buildFrameImageMirror}'s signature
+ * keeps it compile-time enforced rather than relying on a runtime guard living
+ * in the (sibling-module) caller.
+ */
+export type CompletedFrameVariant = FrameVariant & { status: 'completed' };
+
+/**
  * Build (without executing) the UPDATE that mirrors a selected version's image
  * fields onto its frame, so a caller can compose it into the same `db.batch()`
  * as the selection-pointer write and the activity event. Returns the drizzle
  * statement; the caller owns execution.
+ *
+ * Requires a {@link CompletedFrameVariant} — the caller must narrow to a
+ * finished version first (see `frameVariants.select`), so this can never mirror
+ * an unfinished image.
  *
  * Mirrors the output fields only — `role` / `source` / `orderIndex` are frame
  * identity and never change on a selection repoint.
@@ -38,7 +52,7 @@ export type ResolvedFrame = {
 export function buildFrameImageMirror(
   db: Database,
   frameId: string,
-  version: FrameVariant
+  version: CompletedFrameVariant
 ) {
   return db
     .update(frames)
@@ -97,6 +111,48 @@ export function createFramesMethods(db: Database) {
     getByIds: async (frameIds: string[]): Promise<Frame[]> => {
       if (frameIds.length === 0) return [];
       return await db.select().from(frames).where(inArray(frames.id, frameIds));
+    },
+
+    /**
+     * The shot's anchor frame — its first frame (role 'first', orderIndex 0):
+     * the i2v anchor and the shot's primary still. Resolved BY SHOT, never by
+     * id-reuse. The migration backfilled anchors with `frame.id = shot.id`, but
+     * that equality is a one-time migration artifact and must NOT be assumed at
+     * runtime — newly created frames get their own id (#989). Returns null when
+     * the shot has no frame yet (callers handle absence).
+     */
+    getAnchorByShot: async (shotId: string): Promise<Frame | null> => {
+      const result = await db
+        .select()
+        .from(frames)
+        .where(and(eq(frames.shotId, shotId), eq(frames.orderIndex, 0)));
+      return result[0] ?? null;
+    },
+
+    /**
+     * Anchor frame (orderIndex 0) for each given shot, keyed by `shotId`. One
+     * row per shot via the `(shotId, orderIndex)` unique index; shots without a
+     * frame are absent from the map.
+     */
+    getAnchorsByShots: async (
+      shotIds: string[]
+    ): Promise<Map<string, Frame>> => {
+      if (shotIds.length === 0) return new Map();
+      const rows = await db
+        .select()
+        .from(frames)
+        .where(and(inArray(frames.shotId, shotIds), eq(frames.orderIndex, 0)));
+      return new Map(rows.map((f) => [f.shotId, f]));
+    },
+
+    /** Anchor frame (orderIndex 0) of every shot in a sequence. */
+    listAnchorsBySequence: async (sequenceId: string): Promise<Frame[]> => {
+      return await db
+        .select()
+        .from(frames)
+        .where(
+          and(eq(frames.sequenceId, sequenceId), eq(frames.orderIndex, 0))
+        );
     },
 
     /** Frames of a shot, ordered (0 = first/anchor by default). */
@@ -167,6 +223,39 @@ export function createFramesMethods(db: Database) {
     update: async (
       frameId: string,
       data: FrameUpdateInput,
+      options?: { throwOnMissing?: boolean }
+    ): Promise<Frame | undefined> => {
+      const [frame] = await db
+        .update(frames)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(frames.id, frameId))
+        .returning();
+      if (!frame && options?.throwOnMissing !== false) {
+        throw new Error(`Frame ${frameId} not found`);
+      }
+      return frame;
+    },
+
+    /**
+     * Write the frame's transient image GENERATION-TRACKING fields — the
+     * in-flight lifecycle that isn't owned by a selected version: status
+     * ('generating'/'failed'), the run id, the in-flight model, an error, the
+     * timestamp, and the cheap turbo `previewImageUrl` (#989 preview stand-in).
+     * The URL/identity mirror (`imageUrl`/`imagePath`/`imageInputHash`/the
+     * selection pointer) is still owned exclusively by `frameVariants.select`,
+     * so this can never silently repoint the selection.
+     */
+    setImageGenerationStatus: async (
+      frameId: string,
+      data: Pick<
+        Partial<NewFrame>,
+        | 'imageStatus'
+        | 'imageWorkflowRunId'
+        | 'imageModel'
+        | 'imageError'
+        | 'imageGeneratedAt'
+        | 'previewImageUrl'
+      >,
       options?: { throwOnMissing?: boolean }
     ): Promise<Frame | undefined> => {
       const [frame] = await db

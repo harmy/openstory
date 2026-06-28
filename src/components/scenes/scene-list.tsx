@@ -4,7 +4,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DEFAULT_MUSIC_MODEL, type AudioModel } from '@/lib/ai/models';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
-import type { Shot, ShotVariant } from '@/lib/db/schema';
+import type { ShotVariant } from '@/lib/db/schema';
+import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import { Loader2, Video } from 'lucide-react';
 import { memo, useMemo, useRef, useState } from 'react';
 import { SceneListItem } from './scene-list-item';
@@ -19,7 +20,7 @@ export type BatchGenerateMotionArgs = {
 };
 
 type SceneListProps = {
-  shots?: Shot[] | undefined;
+  shots?: ShotWithImage[] | undefined;
   selectedShotId?: string;
   aspectRatio: AspectRatio;
   onSelectShot: (shotId: string) => void;
@@ -44,7 +45,7 @@ type SceneListProps = {
   modelMissingLabel?: string | null;
 };
 
-const isCompleted = (shot: Shot) =>
+const isCompleted = (shot: ShotWithImage) =>
   shot.thumbnailStatus === 'completed' && shot.videoStatus === 'completed';
 
 const SceneListComponent: React.FC<SceneListProps> = ({
@@ -140,7 +141,7 @@ const SceneListComponent: React.FC<SceneListProps> = ({
     !motionPromptsReady ||
     (includeMusic && !musicPromptsReady);
 
-  const renderShotCard = (shot: Shot) => {
+  const renderShotCard = (shot: ShotWithImage) => {
     const divergent = divergentByShotId.get(shot.id);
     return (
       <SceneListItem
