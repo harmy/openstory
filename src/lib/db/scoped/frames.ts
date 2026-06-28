@@ -27,10 +27,24 @@ export type ResolvedFrame = {
 };
 
 /**
+ * A frame variant that has finished generating — the ONLY kind that may become
+ * a frame's primary still. Mirroring a pending/failed version would copy its
+ * null url + non-completed status onto the frame, silently blanking a good
+ * image. Encoding the precondition in {@link buildFrameImageMirror}'s signature
+ * keeps it compile-time enforced rather than relying on a runtime guard living
+ * in the (sibling-module) caller.
+ */
+export type CompletedFrameVariant = FrameVariant & { status: 'completed' };
+
+/**
  * Build (without executing) the UPDATE that mirrors a selected version's image
  * fields onto its frame, so a caller can compose it into the same `db.batch()`
  * as the selection-pointer write and the activity event. Returns the drizzle
  * statement; the caller owns execution.
+ *
+ * Requires a {@link CompletedFrameVariant} — the caller must narrow to a
+ * finished version first (see `frameVariants.select`), so this can never mirror
+ * an unfinished image.
  *
  * Mirrors the output fields only — `role` / `source` / `orderIndex` are frame
  * identity and never change on a selection repoint.
@@ -38,7 +52,7 @@ export type ResolvedFrame = {
 export function buildFrameImageMirror(
   db: Database,
   frameId: string,
-  version: FrameVariant
+  version: CompletedFrameVariant
 ) {
   return db
     .update(frames)

@@ -214,23 +214,31 @@ testWithUser.describe('Variant Selection', () => {
     // Confirmation dialog should appear
     await expect(page.getByText('Select this variant?')).toBeVisible();
 
+    // Selecting a tile no longer writes the thumbnail synchronously (#989).
+    // `selectShotVariantFn` runs the full synchronous path — reads the latest
+    // framing grid sheet from frame_variants, crops the chosen tile, checks
+    // credits, and triggers the upscale workflow — then returns. The actual
+    // still REPOINT happens asynchronously inside that workflow (covered by
+    // upscale-shot-variant-workflow.test.ts's persistUpscaleSelection), and
+    // normal e2e no-ops workflow triggers (workflow/client.ts), so there is no
+    // synchronous DB thumbnail change to observe here. Assert the interaction
+    // round-trips cleanly instead: the select POST returns 200 and the flow
+    // completes without an error toast.
+    const selectResponse = page.waitForResponse(
+      (resp) =>
+        resp.request().method() === 'POST' &&
+        (resp.request().postData() ?? '').includes('variantIndex') &&
+        resp.status() === 200,
+      { timeout: 15_000 }
+    );
+
     // Confirm selection
     await page.getByRole('button', { name: 'Confirm' }).click();
+    await selectResponse;
 
-    // Dialog should close
+    // Dialog should close and no failure toast should surface.
     await expect(page.getByText('Select this variant?')).not.toBeVisible();
-
-    // Wait for the API call to complete and verify database was updated
-    // The thumbnailUrl should have changed from the original
-    await expect
-      .poll(
-        async () => {
-          const shotAfter = await getTestShot(testShot.id);
-          return shotAfter?.thumbnailUrl;
-        },
-        { timeout: 20_000 }
-      )
-      .not.toBe(originalThumbnailUrl);
+    await expect(page.getByText('Failed to select variant')).not.toBeVisible();
   });
 });
 

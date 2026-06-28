@@ -25,7 +25,7 @@ import { frameVariants, frames } from '@/lib/db/schema';
 import type { FrameVariant, NewFrameVariant } from '@/lib/db/schema';
 import type { FrameVariantKind } from '@/lib/db/schema/frame-variants';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
-import { buildFrameImageMirror } from './frames';
+import { buildFrameImageMirror, type CompletedFrameVariant } from './frames';
 import { buildEventInsert } from './sequence-events';
 
 /**
@@ -58,10 +58,30 @@ export function createFrameVariantsMethods(db: Database) {
     /**
      * Append a new version row. Pure append — even when the inputs match an
      * existing version (a deliberate re-roll), a fresh row is created so the
-     * history accumulates. Idempotency for workflow retries is the caller's
-     * concern (Phase 2), not enforced here.
+     * history accumulates.
+     *
+     * The ONE exception is an in-flight append (`status: 'generating'` with a
+     * `workflowRunId`): these are written inside multi-write workflow steps
+     * (image `set-generating-status`, upscale `upscale-image`), so a Cloudflare
+     * step retry after a partial failure would otherwise append a SECOND
+     * orphan 'generating' row for the same run. We make that idempotent on
+     * `(frameId, workflowRunId)` — re-rolls are unaffected because each carries
+     * a fresh `workflowRunId`; only a retry of the same run reuses its row.
      */
     appendVersion: async (data: NewFrameVariant): Promise<FrameVariant> => {
+      if (data.status === 'generating' && data.workflowRunId) {
+        const [existing] = await db
+          .select()
+          .from(frameVariants)
+          .where(
+            and(
+              eq(frameVariants.frameId, data.frameId),
+              eq(frameVariants.workflowRunId, data.workflowRunId),
+              eq(frameVariants.status, 'generating')
+            )
+          );
+        if (existing) return existing;
+      }
       const [version] = await db.insert(frameVariants).values(data).returning();
       if (!version) {
         throw new Error(
@@ -295,6 +315,16 @@ export function createFrameVariantsMethods(db: Database) {
           `FrameVariant ${versionId} is '${version.status}', not 'completed' — cannot select an unfinished image`
         );
       }
+      // `version` is a single object type, so the guard above narrows reads of
+      // `version.status` but not `version` as a whole — re-affirm the completed
+      // status in a typed local so the mirror builder's precondition is met
+      // without an unsafe assertion.
+      const completedVersion: CompletedFrameVariant = {
+        ...version,
+        status: 'completed',
+      };
+      const mirrorUpdate = buildFrameImageMirror(db, frameId, completedVersion);
+
       const [frame] = await db
         .select({
           sequenceId: frames.sequenceId,
@@ -307,7 +337,7 @@ export function createFrameVariantsMethods(db: Database) {
       }
 
       await db.batch([
-        buildFrameImageMirror(db, frameId, version),
+        mirrorUpdate,
         buildEventInsert(db, {
           sequenceId: frame.sequenceId,
           actorId: opts.actorId,

@@ -12,6 +12,7 @@ import { loadNarrowShotPromptContext } from '@/lib/ai/prompt-context';
 import type { ShotVariant, NewShot } from '@/lib/db/schema';
 import {
   projectShotWithImage,
+  projectShotMissingFrame,
   type ShotGridSheet,
 } from '@/lib/shots/shot-with-image';
 import { getGenerationChannel } from '@/lib/realtime';
@@ -55,15 +56,24 @@ export const getShotsFn = createServerFn({ method: 'GET' })
       scopedDb.frameVariants.listLatestGridSheetsBySequence(sequence.id),
     ]);
     const anchorsByShot = new Map(anchorRows.map((f) => [f.shotId, f]));
-    return shotRows.flatMap((shot) => {
+    return shotRows.map((shot) => {
       const frame = anchorsByShot.get(shot.id);
-      if (!frame) return [];
+      // `ensureAnchorFrames` above guarantees an anchor for every shot, so this
+      // is normally unreachable. If it ever isn't, preserve the shot with a null
+      // image surface (matching the sibling read paths in sequences/admin)
+      // rather than silently dropping it from the scenes list.
+      if (!frame) {
+        logger.error(
+          `getShotsFn: shot ${shot.id} has no anchor frame after ensureAnchorFrames`
+        );
+        return projectShotMissingFrame(shot);
+      }
       // Grid sheets are keyed by frame id (#989), resolved from the anchor.
       const sheet = gridSheets.get(frame.id);
       const gridSheet: ShotGridSheet | null = sheet
         ? { url: sheet.url, status: sheet.status }
         : null;
-      return [projectShotWithImage(shot, frame, gridSheet)];
+      return projectShotWithImage(shot, frame, gridSheet);
     });
   });
 

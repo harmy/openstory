@@ -47,6 +47,12 @@ export type ShotWithImage = Shot & {
  */
 export function projectShotMissingFrame(shot: Shot): ShotWithImage {
   const frame: Frame = {
+    // Synthetic in-memory placeholder ONLY — never persisted and never used for
+    // a frame_variants lookup. `id: shot.id` deliberately resurrects the
+    // migration-only frame.id == shot.id equality the rest of the codebase
+    // forbids at runtime (frames.ts `getAnchorByShot`); it is safe solely
+    // because a frameless shot has no variants to resolve by frame id. Do NOT
+    // pass this id to any `frame_variants`/`frame_prompt_versions` query.
     id: shot.id,
     shotId: shot.id,
     sequenceId: shot.sequenceId,
@@ -60,8 +66,10 @@ export function projectShotMissingFrame(shot: Shot): ShotWithImage {
     imageWorkflowRunId: null,
     imageGeneratedAt: null,
     imageError: null,
-    // Frozen literal (matches the column default); the real model is stamped
-    // when an image is generated.
+    // Must match the `frames.imageModel` SQL column default (a deliberately
+    // frozen literal — see schema/frames.ts on why it is NOT the mutable
+    // DEFAULT_IMAGE_MODEL constant). Irrelevant in practice: a frameless shot
+    // has no image, so this never-relied-on fallback is just shape-filling.
     imageModel: 'nano_banana_2',
     imagePrompt: null,
     selectedImageVersionId: null,

@@ -347,9 +347,29 @@ export class ImageWorkflow extends OpenStoryWorkflowEntrypoint<ImageWorkflowInpu
           logger.info(
             `[ImageWorkflow] Frame ${shotId} drifted (snapshot=${snapshotHash.slice(0, 8)} current=${currentHash?.slice(0, 8)}); retained version ${versionId} unselected`
           );
+          // Reset the frame's in-flight status to a TERMINAL value — otherwise it
+          // stays 'generating' forever (the only path that clears it is
+          // `select`, which drift intentionally skips), leaving a perpetual
+          // spinner over the prior good still. The mirror/selection are
+          // untouched, so the prior selection (if any) remains the primary: a
+          // frame with a prior selection settles back to 'completed', a
+          // never-selected frame to 'pending'. Mirrors the reset the retired
+          // `buildDivergentRevertWrites` used to guarantee.
+          const driftStatus = frame.selectedImageVersionId
+            ? 'completed'
+            : 'pending';
+          await scopedDb.frames.setImageGenerationStatus(
+            frame.id,
+            {
+              imageStatus: driftStatus,
+              imageWorkflowRunId: null,
+              imageError: null,
+            },
+            { throwOnMissing: false }
+          );
           await channel.emit('generation.image:progress', {
             shotId,
-            status: 'pending',
+            status: driftStatus,
             model,
           });
           return { imageUrl: upload.url };

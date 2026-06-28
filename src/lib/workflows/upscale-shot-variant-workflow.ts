@@ -17,6 +17,7 @@ import {
   DEFAULT_IMAGE_SIZE,
 } from '@/lib/constants/aspect-ratios';
 import type { ScopedDb } from '@/lib/db/scoped';
+import type { NewFrameVariant, NewShot } from '@/lib/db/schema';
 import { generateImageWithProvider } from '@/lib/image/image-generation';
 import { uploadImageToStorage } from '@/lib/image/image-storage';
 import { buildReferenceImagePrompt } from '@/lib/prompts/reference-image-prompt';
@@ -56,6 +57,96 @@ OUTPUT
 - Aspect ratio: match the original exactly.
 - Resolution: upscale to animation-ready quality.
 - No text overlays, borders, watermarks, or new graphics added by the model.`;
+
+/** The frame/variant/shot writes `persistUpscaleSelection` needs — a narrow
+ * slice of {@link ScopedDb} so unit tests can inject a small spy. */
+export type PersistUpscaleScopedDb = {
+  frameVariants: {
+    update: (
+      versionId: string,
+      data: Partial<NewFrameVariant>
+    ) => Promise<{ id: string }>;
+    select: (
+      frameId: string,
+      versionId: string,
+      opts: { actorId: string | null }
+    ) => Promise<{ id: string }>;
+  };
+  frames: {
+    // The helper only needs the anchor's id (frame id ≠ shot id, #989).
+    getAnchorByShot: (shotId: string) => Promise<{ id: string } | null>;
+  };
+  shots: {
+    update: (
+      shotId: string,
+      data: Partial<NewShot>,
+      options?: { throwOnMissing?: boolean }
+    ) => Promise<{ id: string } | undefined>;
+  };
+};
+
+type UpscaleImageProgress = {
+  shotId: string;
+  status: 'completed';
+  thumbnailUrl: string;
+};
+
+/**
+ * Complete the in-flight upscaled framing version and REPOINT the frame's
+ * primary still at it (pointer + mirror, via `frameVariants.select`), then reset
+ * the shot's downstream video because the anchor still changed. Extracted from
+ * the workflow's `select-upscaled-version` step so the repoint outcome is
+ * unit-testable without the fal/storage/credit steps. The anchor is resolved BY
+ * SHOT (frame id ≠ shot id, #989); returns `{ selected: false }` (a no-op past
+ * the version completion) if it vanished mid-flight.
+ */
+export async function persistUpscaleSelection(params: {
+  scopedDb: PersistUpscaleScopedDb;
+  shotId: string;
+  versionId: string;
+  url: string;
+  path: string | null;
+  actorId: string;
+  generatedAt: Date;
+  emit: (payload: UpscaleImageProgress) => Promise<void>;
+}): Promise<{ selected: boolean }> {
+  const { scopedDb, shotId, versionId, url, path, actorId, generatedAt, emit } =
+    params;
+
+  await scopedDb.frameVariants.update(versionId, {
+    status: 'completed',
+    url,
+    storagePath: path,
+    generatedAt,
+    error: null,
+  });
+
+  const frame = await scopedDb.frames.getAnchorByShot(shotId);
+  if (!frame) {
+    logger.info(
+      `[UpscaleShotVariantWorkflow] Shot ${shotId} has no anchor frame, skipping select`
+    );
+    return { selected: false };
+  }
+
+  await scopedDb.frameVariants.select(frame.id, versionId, { actorId });
+
+  await scopedDb.shots.update(
+    shotId,
+    {
+      videoUrl: null,
+      videoPath: null,
+      videoStatus: 'pending',
+      videoWorkflowRunId: null,
+      videoGeneratedAt: null,
+      videoError: null,
+    },
+    { throwOnMissing: false }
+  );
+
+  await emit({ shotId, status: 'completed', thumbnailUrl: url });
+  return { selected: true };
+}
 
 export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<UpscaleShotVariantWorkflowInput> {
   protected override async runImpl(
@@ -174,50 +265,27 @@ export class UpscaleShotVariantWorkflow extends OpenStoryWorkflowEntrypoint<Upsc
     });
 
     await step.do('select-upscaled-version', async () => {
-      await scopedDb.frameVariants.update(upscaleResult.versionId, {
-        status: 'completed',
+      // Completes the version + repoints the frame's still + resets video.
+      const { selected } = await persistUpscaleSelection({
+        scopedDb,
+        shotId,
+        versionId: upscaleResult.versionId,
         url: storageResult.url,
-        storagePath: storageResult.path || null,
-        generatedAt: new Date(),
-        error: null,
-      });
-
-      // Repoint the frame's selection at the upscaled tile (mirror + event).
-      // Resolve the anchor frame by shotId (frame id ≠ shot id, #989).
-      const frame = await scopedDb.frames.getAnchorByShot(shotId);
-      if (!frame) {
-        logger.info(
-          `[UpscaleShotVariantWorkflow] Shot ${shotId} has no anchor frame, skipping select`
-        );
-        return;
-      }
-      await scopedDb.frameVariants.select(frame.id, upscaleResult.versionId, {
+        path: storageResult.path || null,
         actorId: userId,
+        generatedAt: new Date(),
+        emit: (payload) =>
+          getGenerationChannel(sequenceId).emit(
+            'generation.image:progress',
+            payload
+          ),
       });
 
-      // New still → reset the shot's downstream video.
-      await scopedDb.shots.update(
-        shotId,
-        {
-          videoUrl: null,
-          videoPath: null,
-          videoStatus: 'pending',
-          videoWorkflowRunId: null,
-          videoGeneratedAt: null,
-          videoError: null,
-        },
-        { throwOnMissing: false }
-      );
-
-      await getGenerationChannel(sequenceId).emit('generation.image:progress', {
-        shotId,
-        status: 'completed',
-        thumbnailUrl: storageResult.url,
-      });
-
-      logger.info(
-        `[UpscaleShotVariantWorkflow] Upscale completed + selected for shot ${shotId}`
-      );
+      if (selected) {
+        logger.info(
+          `[UpscaleShotVariantWorkflow] Upscale completed + selected for shot ${shotId}`
+        );
+      }
     });
 
     return {
