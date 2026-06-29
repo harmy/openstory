@@ -13,6 +13,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 import { generateId } from '../id';
+import { renderSegments } from './render-segments';
 import { scenes } from './scenes';
 import { sequences } from './sequences';
 
@@ -73,6 +74,15 @@ export const shots = snakeCase.table(
     // it yet (it stays null), so the repoint is wired in a later phase.
     selectedMotionPromptVersionId: text(),
     motionModel: text({ length: 100 }), // Model used for motion/video generation (nullable - inherits from sequence if not set)
+    // The render segment this shot belongs to (#990) — a scene's video is tiled
+    // into ≤cap segments (`render_segments`); per-shot rendering is the
+    // degenerate one-shot segment. Membership lives here (order from
+    // `orderIndex`); the segment owns the video selection pointer. NULL until
+    // the shot is first rendered/assigned. Deliberately `set null` (not cascade)
+    // so deleting a segment orphans its shots rather than vanishing them.
+    renderSegmentId: text().references(() => renderSegments.id, {
+      onDelete: 'set null',
+    }),
     // Audio/music generation status tracking
     audioUrl: text(),
     audioPath: text(), // R2 storage path (not signed URL)

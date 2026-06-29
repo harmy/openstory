@@ -20,8 +20,10 @@ import { createFramesMethods } from '@/lib/db/scoped/frames';
 import { createScenesMethods } from '@/lib/db/scoped/scenes';
 import { createSequenceEventsMethods } from '@/lib/db/scoped/sequence-events';
 import { createShotPromptVersionsMethods } from '@/lib/db/scoped/shot-prompt-versions';
+import { createRenderSegmentsMethods } from '@/lib/db/scoped/render-segments';
 import { createShotVariantsMethods } from '@/lib/db/scoped/shot-variants';
 import { createShotsMethods } from '@/lib/db/scoped/shots';
+import { createVideoVariantsMethods } from '@/lib/db/scoped/video-variants';
 import { createLibraryMethods } from '@/lib/db/scoped/library';
 import {
   createLocationSheetsMethods,
@@ -292,6 +294,10 @@ export function createScopedDb(teamId: string, userId: string) {
     scenes: createScenesMethods(db),
     shots: createShotsMethods(db),
     shotVariants: createShotVariantsMethods(db),
+    // SSF redesign (#990) — render segments (scene render units) + flat video
+    // versions per (segment, model); replaces the shot_variants video slice.
+    renderSegments: createRenderSegmentsMethods(db),
+    videoVariants: createVideoVariantsMethods(db),
     shotPromptVersions: createShotPromptVersionsMethods(db),
     // SSF redesign (#988) — frames are the IMAGE unit (still keyframes per
     // shot); frame_variants the flat image versions; frame_prompt_versions the

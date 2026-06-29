@@ -17,6 +17,7 @@ import {
 } from '@/lib/shots/shot-with-image';
 import { getGenerationChannel } from '@/lib/realtime';
 import { getVideoDownloadUrl } from '@/lib/motion/video-storage';
+import { projectVideoVariants } from '@/lib/motion/video-variant-projection';
 import {
   bulkShotSchema,
   singleShotSchema,
@@ -136,9 +137,9 @@ export const getSequenceImageModelsFn = createServerFn({ method: 'GET' })
 export const getSequenceVideoModelsFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
   .handler(async ({ context }) => {
-    return context.scopedDb.shotVariants.listModelsForSequence(
-      context.sequence.id,
-      'video'
+    // Video models now come from `video_variants` (#990).
+    return context.scopedDb.videoVariants.listModelsForSequence(
+      context.sequence.id
     );
   });
 
@@ -325,10 +326,14 @@ export const getSequenceImageVariantsFn = createServerFn({ method: 'GET' })
 export const getSequenceVideoVariantsFn = createServerFn({ method: 'GET' })
   .middleware([sequenceAccessMiddleware])
   .handler(async ({ context }) => {
-    return context.scopedDb.shotVariants.listBySequence(
-      context.sequence.id,
-      'video'
+    // Video lives in `video_variants` now (#990). Project it into the legacy
+    // per-(shot, model) `ShotVariant` shape so the scenes-view switcher /
+    // coverage keep reading the same fields (latest version per shot+model;
+    // `divergedAt` always null — selection is a pointer).
+    const versions = await context.scopedDb.videoVariants.listBySequence(
+      context.sequence.id
     );
+    return projectVideoVariants(versions);
   });
 
 export const createShotFn = createServerFn({ method: 'POST' })

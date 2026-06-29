@@ -16,14 +16,14 @@ import {
 import { multiplyMicros } from '@/lib/billing/money';
 import { requireCredits } from '@/lib/billing/preflight';
 import { DEFAULT_ASPECT_RATIO } from '@/lib/constants/aspect-ratios';
-import type { Shot, ShotVariant, NewShot } from '@/lib/db/schema';
-import { buildPromoteUpdate } from '@/functions/shots';
+import type { Shot } from '@/lib/db/schema';
 import { buildShotImageWorkflowInput } from '@/lib/image/build-shot-image-input';
 import {
   projectShotWithImage,
   type ShotWithImage,
 } from '@/lib/shots/shot-with-image';
 import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
+import { buildVideoManifest } from '@/lib/motion/render-segments';
 import { VARIANT_TYPES, type VariantType } from '@/lib/db/schema/shot-variants';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import {
@@ -517,10 +517,9 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       if (!isValidImageToVideoModel(model)) {
         throw new Error('Invalid video model');
       }
-      const existing = await scopedDb.shotVariants.listBySequence(
-        sequence.id,
-        'video'
-      );
+      // Video lives in `video_variants` now (#990); a row's covered shots are
+      // in its manifest, but the add-guard only needs (model, status).
+      const existing = await scopedDb.videoVariants.listBySequence(sequence.id);
       assertModelNotAlreadyAdded(existing, model, 'video');
       const allShots = await scopedDb.shots.listBySequence(sequence.id);
       // Project each shot's anchor-frame image surface (#989) so eligibility and
@@ -547,12 +546,34 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
         { errorMessage: 'Insufficient credits to add this video model' }
       );
 
+      // Open a `pending` `video_variants` version per eligible shot so the
+      // switcher shows the added model in flight (#990). Each shot's render
+      // segment is resolved (materializing the degenerate one-shot segment on
+      // first use); the manifest snapshots the shot's selected motion-prompt +
+      // anchor-frame image versions. The motion-batch workflow (variantOnly)
+      // then appends the generating → completed versions for this model.
       for (const f of eligible) {
-        await scopedDb.shotVariants.upsert({
-          shotId: f.id,
+        if (!f.sceneId) continue;
+        const renderSegmentId = await scopedDb.renderSegments.ensureForShot({
+          id: f.id,
+          sceneId: f.sceneId,
           sequenceId: sequence.id,
-          variantType: 'video',
+          renderSegmentId: f.renderSegmentId,
+        });
+        await scopedDb.videoVariants.appendVersion({
+          renderSegmentId,
+          sequenceId: sequence.id,
           model,
+          manifest: buildVideoManifest([
+            {
+              shotId: f.id,
+              motionPromptVersionId: f.selectedMotionPromptVersionId ?? null,
+              frameVersionId: f.frame.selectedImageVersionId ?? null,
+              durationMs:
+                f.durationMs ??
+                (f.metadata?.metadata?.durationSeconds ?? 3) * 1000,
+            },
+          ]),
           status: 'pending',
         });
       }
@@ -725,54 +746,6 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
   });
 
 /**
- * Select the variant rows eligible to be promoted to the live primary for
- * `model` (#547). A row qualifies only when it is this model's LIVE completed
- * output: `status === 'completed'` with a `url`, and neither a divergent
- * (`divergedAt`) nor a user-discarded (`discardedAt`) alternate. Excluding
- * divergent/discarded is load-bearing — promoting one would resurrect an output
- * the user explicitly rejected onto the primary across the whole sequence.
- */
-export function selectPromotableVariants(
-  variants: readonly ShotVariant[],
-  model: string
-): ShotVariant[] {
-  return variants.filter(
-    (v) =>
-      v.model === model &&
-      v.status === 'completed' &&
-      Boolean(v.url) &&
-      v.divergedAt === null &&
-      v.discardedAt === null
-  );
-}
-
-/**
- * Build the primary-column update that promotes `variant` to the live primary
- * (#547). Reuses `buildPromoteUpdate` (which matches the per-scene
- * `setImageFromVariantFn` exactly for image, incl. clearing the now-stale
- * video). `buildPromoteUpdate`'s video case omits the motion-model / duration /
- * generated-at that `setVideoFromVariantFn` records, so layer those on for
- * parity. `now` is injectable for deterministic tests.
- */
-export function buildSequencePromoteUpdate(
-  variant: ShotVariant,
-  variantType: 'image' | 'video',
-  model: string,
-  now: () => Date = () => new Date()
-): Partial<NewShot> {
-  const { update } = buildPromoteUpdate(variant);
-  if (variantType === 'video') {
-    return {
-      ...update,
-      motionModel: model,
-      durationMs: variant.durationMs,
-      videoGeneratedAt: now(),
-    };
-  }
-  return update;
-}
-
-/**
  * Promote a model to the live primary across the WHOLE sequence (#547) — the
  * sequence-wide "Set" that pairs with the header image/video dropdowns. For
  * every shot that has a completed `shot_variants` row for `model`, copies that
@@ -853,38 +826,55 @@ export const setSequenceModelFn = createServerFn({ method: 'POST' })
       return { count: imageCount, variantType, model };
     }
 
-    const variants = await scopedDb.shotVariants.listBySequence(
-      sequence.id,
-      variantType
-    );
-    const promotable = selectPromotableVariants(variants, model);
-    if (promotable.length === 0) {
+    // Video lives in `video_variants` now (#990). The sequence-wide "Set" is a
+    // per-shot pointer repoint (the #677 fix applied in bulk, mirroring the
+    // image branch above): for every shot with a completed version for `model`,
+    // select it — `videoVariants.select` mirrors `shots.video*`, repoints the
+    // scene `renderPlan`, and logs the event.
+    const versions = await scopedDb.videoVariants.listBySequence(sequence.id);
+    const latestByShot = new Map<string, (typeof versions)[number]>();
+    for (const version of versions) {
+      if (
+        version.model !== model ||
+        version.status !== 'completed' ||
+        !version.url
+      ) {
+        continue;
+      }
+      // versions are asc id → last write wins (latest per shot).
+      for (const entry of version.manifest) {
+        latestByShot.set(entry.shotId, version);
+      }
+    }
+    if (latestByShot.size === 0) {
       throw new Error('That model has not generated anything to set');
     }
 
     let count = 0;
-    for (const variant of promotable) {
-      const shotUpdate = buildSequencePromoteUpdate(
-        variant,
-        variantType,
-        model
-      );
-      const updated = await scopedDb.shots.update(variant.shotId, shotUpdate, {
-        throwOnMissing: false,
-      });
-      if (updated) count++;
+    for (const [shotId, version] of latestByShot) {
+      try {
+        await scopedDb.videoVariants.select(shotId, version.id, {
+          actorId: user.id,
+        });
+        count++;
+      } catch (error) {
+        // A shot deleted mid-promotion is benign — skip it. Any other failure is
+        // surfaced via the count mismatch warning below.
+        logger.warn('set-model: failed to select video for shot', {
+          err: error,
+          sequenceId: sequence.id,
+          shotId,
+          model,
+        });
+      }
     }
 
-    // A shot deleted mid-promotion is benign (throwOnMissing:false skips it),
-    // but a promoted count short of the promotable set otherwise points at a
-    // real problem (e.g. a scoping mismatch) — surface it rather than letting
-    // the lower count pass silently.
-    if (count !== promotable.length) {
+    if (count !== latestByShot.size) {
       logger.warn('set-model: promoted fewer shots than promotable', {
         sequenceId: sequence.id,
         model,
         variantType,
-        promotable: promotable.length,
+        promotable: latestByShot.size,
         promoted: count,
       });
     }

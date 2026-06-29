@@ -148,6 +148,39 @@ export function computeShotVideoInputHash(
   });
 }
 
+/**
+ * One covered shot's contribution to a video render's input hash (#990). The
+ * referenced version ids are the snapshot: when a shot's selected motion-prompt
+ * or anchor-frame version changes, the render's hash diverges → stale.
+ */
+export type VideoManifestHashEntry = {
+  shotId: string;
+  motionPromptVersionId: string | null;
+  frameVersionId: string | null;
+  durationMs: number;
+};
+
+/**
+ * Hash a video render's manifest → O(1) staleness for a `video_variants`
+ * version. Order-sensitive (the manifest is ordered by render position), so
+ * the entries are NOT sorted.
+ */
+export function computeVideoManifestInputHash(
+  manifest: readonly VideoManifestHashEntry[],
+  model: string
+): Promise<string> {
+  return sha256Hex({
+    artifact: 'video:manifest',
+    model,
+    manifest: manifest.map((e) => ({
+      shotId: e.shotId,
+      motionPromptVersionId: e.motionPromptVersionId,
+      frameVersionId: e.frameVersionId,
+      durationMs: e.durationMs,
+    })),
+  });
+}
+
 export type ShotAudioHashInput = {
   musicPrompt: string;
   /** Unordered set of music tags. */

@@ -92,6 +92,7 @@ const generateMockShot = (
     visualPromptInputHash: null,
     motionPromptInputHash: null,
     selectedMotionPromptVersionId: null,
+    renderSegmentId: null,
     previewThumbnailUrl: null,
     createdAt: faker.date.past(),
     updatedAt: faker.date.recent(),

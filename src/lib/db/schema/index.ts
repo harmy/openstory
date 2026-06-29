@@ -18,6 +18,11 @@ import { shots } from './shots';
 
 import { shotVariants } from './shot-variants';
 
+// SSF redesign (#990) — render segments (scene render units) + flat video
+// versions (replaces shot_variants video slice).
+import { renderSegments } from './render-segments';
+import { videoVariants } from './video-variants';
+
 // SSF redesign (#987) — additive image/event surface. Empty until #988+ wire it.
 import { frames } from './frames';
 import { frameVariants } from './frame-variants';
@@ -100,6 +105,26 @@ export type { NewShot, Shot } from './shots';
 export { shotVariants };
 
 export type { ShotVariant, NewShotVariant } from './shot-variants';
+
+// Render Segments (#990 — scene render units; a scene is tiled into ≤cap
+// contiguous-shot segments, membership via shots.renderSegmentId).
+export { renderSegments };
+
+/** @public consumed from #990+ */
+export type { RenderSegment, NewRenderSegment } from './render-segments';
+
+// Video Variants (#990 — flat video render versions; replaces the shot_variants
+// video slice). Keyed by (renderSegmentId, model); manifest snapshots the
+// referenced prompt/frame versions.
+export { videoVariants };
+
+/** @public consumed from #990+ */
+export type {
+  VideoVariant,
+  NewVideoVariant,
+  VideoManifest,
+  VideoManifestEntry,
+} from './video-variants';
 
 /**
  * SSF redesign (#987) — the still-image + activity-log surface, added ahead of
@@ -306,6 +331,9 @@ export const schema = {
   scenes,
   shots,
   shotVariants,
+  // SSF redesign (#990) — render segments + flat video render versions
+  renderSegments,
+  videoVariants,
   // SSF redesign (#987) — additive image/event surface
   frames,
   frameVariants,

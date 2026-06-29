@@ -521,39 +521,38 @@ const setVideoFromVariantInputSchema = z.object({
 });
 
 /**
- * Promote a model's video variant to the shot's primary video (#545) — the
- * motion analog of `setImageFromVariantFn`. Copies the variant's url/path into
- * `shots.video*` so the player and exports use it, non-destructively (the
- * variant row is retained, so the viewer can switch back). Unlike the image
- * version there is nothing downstream to invalidate — video is the terminal
- * artifact.
+ * Repoint a shot's primary video to a model's latest render (#545, re-routed to
+ * `video_variants` in #990) — the motion analog of `setImageFromVariantFn`.
+ * Selection is a pointer now: `videoVariants.select` mirrors the version onto
+ * `shots.video*` (so the player and exports use it), repoints the scene
+ * `renderPlan` segment, and logs a `video.selected` event — atomically and
+ * non-destructively (the version is retained, so the viewer can switch back).
  */
 export const setVideoFromVariantFn = createServerFn({ method: 'POST' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(setVideoFromVariantInputSchema))
   .handler(async ({ context, data }) => {
-    const { shot } = context;
-
-    const variant = await context.scopedDb.shotVariants.getByShotAndModel(
-      shot.id,
-      'video',
-      data.model
-    );
-
-    if (!variant || variant.status !== 'completed' || !variant.url) {
+    const { shot, scopedDb } = context;
+    // No render segment ⇒ the shot was never rendered, so no version to select.
+    if (!shot.renderSegmentId) {
       throw new Error('No completed video variant found for this model');
     }
 
-    await context.scopedDb.shots.update(shot.id, {
-      videoUrl: variant.url,
-      videoPath: variant.storagePath,
-      videoStatus: 'completed',
-      videoError: null,
-      videoGeneratedAt: new Date(),
-      videoInputHash: variant.inputHash,
-      durationMs: variant.durationMs,
-      motionModel: data.model,
+    // Pick the latest completed version for (segment, model).
+    const versions = await scopedDb.videoVariants.listByGroup({
+      renderSegmentId: shot.renderSegmentId,
+      model: data.model,
+    });
+    const completed = versions.filter((v) => v.status === 'completed' && v.url);
+    const latest = completed[completed.length - 1];
+    if (!latest || !latest.url) {
+      throw new Error('No completed video variant found for this model');
+    }
+    const videoUrl = latest.url;
+
+    await scopedDb.videoVariants.select(shot.id, latest.id, {
+      actorId: scopedDb.userId,
     });
 
-    return { shotId: shot.id, videoUrl: variant.url };
+    return { shotId: shot.id, videoUrl };
   });

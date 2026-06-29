@@ -21,7 +21,10 @@ import {
   CONTENT_REJECTION_RETRY_EVENT,
   isContentRejectionError,
 } from '@/lib/ai/content-rejection';
-import { computeMotionPromptInputHash } from '@/lib/ai/input-hash';
+import {
+  computeMotionPromptInputHash,
+  computeVideoManifestInputHash,
+} from '@/lib/ai/input-hash';
 import { falCostFromUnits } from '@/lib/ai/fal-cost';
 import { DEFAULT_VIDEO_MODEL, IMAGE_TO_VIDEO_MODELS } from '@/lib/ai/models';
 import { loadNarrowShotPromptContext } from '@/lib/ai/prompt-context';
@@ -35,14 +38,14 @@ import {
   submitMotionJob,
 } from '@/lib/motion/motion-generation';
 import { uploadVideoToStorage } from '@/lib/motion/video-storage';
+import { buildVideoManifest } from '@/lib/motion/render-segments';
 import { endSpanSuccess, startGenAISpan } from '@/lib/observability/tracer';
 import { getGenerationChannel } from '@/lib/realtime';
-import { simpleHash } from '@/lib/utils/hash';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
 import type { MotionWorkflowInput } from '@/lib/workflow/types';
 import {
-  buildMotionGeneratingWrites,
+  buildMotionGeneratingShotWrite,
   persistMotionCompletion,
   persistMotionFailure,
 } from '@/lib/workflows/motion-workflow-persist';
@@ -191,119 +194,164 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
     });
 
     // Step 1: Set status to generating and store model being used
-    const { shotDeleted } = await step.do('set-generating-status', async () => {
-      if (!input.shotId) return { shotDeleted: false };
+    const { shotDeleted, videoVersionId, sceneId } = await step.do(
+      'set-generating-status',
+      async (): Promise<{
+        shotDeleted: boolean;
+        videoVersionId: string | null;
+        sceneId: string | null;
+      }> => {
+        if (!input.shotId) {
+          return { shotDeleted: false, videoVersionId: null, sceneId: null };
+        }
 
-      const generatingWrites = buildMotionGeneratingWrites({
-        model,
-        workflowRunId,
-      });
+        const generatingShotWrite = buildMotionGeneratingShotWrite({
+          model,
+          workflowRunId,
+        });
 
-      // Variant-only (#547): don't stamp the legacy `shots.video*` columns —
-      // read the shot instead. The per-model `shot_variants` row (opened
-      // below) carries the in-flight state; the primary video is left intact.
-      const shot = input.variantOnly
-        ? await scopedDb.shots.getById(input.shotId)
-        : await scopedDb.shots.update(input.shotId, generatingWrites.shot, {
-            throwOnMissing: false,
-          });
+        // Variant-only (#547): don't stamp the legacy `shots.video*` columns —
+        // read the shot instead. The per-model `video_variants` version (opened
+        // below) carries the in-flight state; the primary video is left intact.
+        const shot = input.variantOnly
+          ? await scopedDb.shots.getById(input.shotId)
+          : await scopedDb.shots.update(input.shotId, generatingShotWrite, {
+              throwOnMissing: false,
+            });
 
-      if (!shot) {
-        logger.info(
-          `[MotionWorkflow:cf] Shot ${input.shotId} was deleted, skipping workflow`
-        );
-        return { shotDeleted: true };
-      }
+        if (!shot) {
+          logger.info(
+            `[MotionWorkflow:cf] Shot ${input.shotId} was deleted, skipping workflow`
+          );
+          return { shotDeleted: true, videoVersionId: null, sceneId: null };
+        }
 
-      if (
-        shouldRecordUserEdit({
-          userEditedPrompt: input.userEditedPrompt,
-          prompt: input.prompt,
-          currentPrompt: shot.motionPrompt,
-        })
-      ) {
-        let userEditInputHash: string | null = null;
-        let userEditAnalysisModel: string | null = null;
-        try {
-          if (shot.metadata && input.sequenceId) {
-            const sequence = await scopedDb.sequences.getById(input.sequenceId);
-            if (sequence) {
-              const ctx = await loadNarrowShotPromptContext({
-                scopedDb,
-                sequence: {
-                  id: sequence.id,
-                  styleId: sequence.styleId,
-                  aspectRatio: sequence.aspectRatio,
-                  analysisModel: sequence.analysisModel,
-                },
-                scene: shot.metadata,
-                // i2v anchor still lives on the anchor frame now (#989) —
-                // resolved by shotId, never by id-reuse.
-                startingFrameImageUrl:
-                  (await scopedDb.frames.getAnchorByShot(shot.id))?.imageUrl ??
-                  null,
-              });
-              userEditInputHash = await computeMotionPromptInputHash(ctx);
-              userEditAnalysisModel = ctx.analysisModel;
+        if (
+          shouldRecordUserEdit({
+            userEditedPrompt: input.userEditedPrompt,
+            prompt: input.prompt,
+            currentPrompt: shot.motionPrompt,
+          })
+        ) {
+          let userEditInputHash: string | null = null;
+          let userEditAnalysisModel: string | null = null;
+          try {
+            if (shot.metadata && input.sequenceId) {
+              const sequence = await scopedDb.sequences.getById(
+                input.sequenceId
+              );
+              if (sequence) {
+                const ctx = await loadNarrowShotPromptContext({
+                  scopedDb,
+                  sequence: {
+                    id: sequence.id,
+                    styleId: sequence.styleId,
+                    aspectRatio: sequence.aspectRatio,
+                    analysisModel: sequence.analysisModel,
+                  },
+                  scene: shot.metadata,
+                  // i2v anchor still lives on the anchor frame now (#989) —
+                  // resolved by shotId, never by id-reuse.
+                  startingFrameImageUrl:
+                    (await scopedDb.frames.getAnchorByShot(shot.id))
+                      ?.imageUrl ?? null,
+                });
+                userEditInputHash = await computeMotionPromptInputHash(ctx);
+                userEditAnalysisModel = ctx.analysisModel;
+              }
             }
+          } catch (err) {
+            logger.warn(
+              `[MotionWorkflow:cf] Could not compute upstream hash for user-edit on shot ${input.shotId}; recording with null hash`,
+              {
+                err,
+              }
+            );
           }
-        } catch (err) {
-          logger.warn(
-            `[MotionWorkflow:cf] Could not compute upstream hash for user-edit on shot ${input.shotId}; recording with null hash`,
+
+          await scopedDb.shotPromptVersions.write({
+            shotId: input.shotId,
+            promptType: 'motion',
+            text: input.prompt,
+            source: 'user-edit',
+            inputHash: userEditInputHash,
+            analysisModel: userEditAnalysisModel,
+            createdBy: input.userId,
+          });
+        }
+
+        // Open an append-only `video_variants` *version* for this render (#990,
+        // replaces the retired `shot_variants` video slice). It is keyed by
+        // (sceneId, model, shotSetKey); per-shot rendering is the degenerate
+        // segment shotSetKey = shotId. The manifest snapshots the inputs the
+        // render consumes — the shot's selected motion-prompt + anchor-frame
+        // image versions (the references ARE the snapshot) + the value-snapshot
+        // duration. The legacy `shots.video*` columns above stay the cached
+        // mirror of whichever version the shot's selection points at.
+        const renderSceneId = shot.sceneId;
+        let openedVideoVersionId: string | null = null;
+        if (input.sequenceId) {
+          if (!renderSceneId) {
+            throw new WorkflowValidationError(
+              `Shot ${input.shotId} has no scene; cannot open a video render version`
+            );
+          }
+          // Resolve (materializing on first use) the shot's render segment —
+          // per-shot rendering is the degenerate one-shot segment.
+          const renderSegmentId = await scopedDb.renderSegments.ensureForShot({
+            id: shot.id,
+            sceneId: renderSceneId,
+            sequenceId: input.sequenceId,
+            renderSegmentId: shot.renderSegmentId,
+          });
+          const anchorFrame = await scopedDb.frames.getAnchorByShot(shot.id);
+          const manifest = buildVideoManifest([
             {
-              err,
+              shotId: input.shotId,
+              motionPromptVersionId: shot.selectedMotionPromptVersionId ?? null,
+              frameVersionId: anchorFrame?.selectedImageVersionId ?? null,
+              durationMs: duration * 1000,
+            },
+          ]);
+          const version = await scopedDb.videoVariants.appendVersion({
+            renderSegmentId,
+            sequenceId: input.sequenceId,
+            model,
+            manifest,
+            inputHash: await computeVideoManifestInputHash(manifest, model),
+            status: 'generating',
+            workflowRunId,
+          });
+          openedVideoVersionId = version.id;
+        }
+
+        try {
+          await getGenerationChannel(input.sequenceId).emit(
+            'generation.video:progress',
+            {
+              shotId: input.shotId,
+              status: 'generating',
+              model,
+              // Variant-only (#547): don't flip the primary shot to
+              // "generating" in cache — this run only fills a variant version.
+              variantOnly: input.variantOnly,
+            }
+          );
+        } catch (emitError) {
+          logger.error(
+            `[MotionWorkflow:cf] Failed to emit generation.video:progress for shot ${input.shotId}:`,
+            {
+              err: emitError,
             }
           );
         }
-
-        await scopedDb.shotPromptVersions.write({
-          shotId: input.shotId,
-          promptType: 'motion',
-          text: input.prompt,
-          source: 'user-edit',
-          inputHash: userEditInputHash,
-          analysisModel: userEditAnalysisModel,
-          createdBy: input.userId,
-        });
+        return {
+          shotDeleted: false,
+          videoVersionId: openedVideoVersionId,
+          sceneId: renderSceneId,
+        };
       }
-
-      // Dual-write: stamp a `generating` shot_variants row for this model so
-      // the scenes-view video-model switcher (#545) shows it in flight. The
-      // legacy `shots.video*` columns above are a last-write-wins default
-      // across models (matching the image template — whichever model child
-      // finishes last lands there); per-model output lives in shot_variants.
-      if (input.sequenceId) {
-        await scopedDb.shotVariants.upsert({
-          shotId: input.shotId,
-          sequenceId: input.sequenceId,
-          variantType: 'video',
-          model,
-          ...generatingWrites.variant,
-        });
-      }
-
-      try {
-        await getGenerationChannel(input.sequenceId).emit(
-          'generation.video:progress',
-          {
-            shotId: input.shotId,
-            status: 'generating',
-            model,
-            // Variant-only (#547): don't flip the primary shot to
-            // "generating" in cache — this run only fills a variant row.
-            variantOnly: input.variantOnly,
-          }
-        );
-      } catch (emitError) {
-        logger.error(
-          `[MotionWorkflow:cf] Failed to emit generation.video:progress for shot ${input.shotId}:`,
-          {
-            err: emitError,
-          }
-        );
-      }
-      return { shotDeleted: false };
-    });
+    );
 
     if (shotDeleted) {
       return { videoUrl: '', duration: 0 };
@@ -649,17 +697,29 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
 
       videoUrl = storageResult.url;
 
-      // Step 5: Update shot with video path, URL, and status — dual-writing
-      // the completed video onto the legacy columns AND this model's
-      // shot_variants row (see motion-workflow-persist).
+      // Step 5: Finalize the render — flip the `video_variants` version to
+      // `completed` and (for a primary render) repoint the shot's selection,
+      // mirroring `shots.video*` + the scene `renderPlan` (#990, see
+      // motion-workflow-persist).
       await step.do('update-shot', async () => {
+        if (!videoVersionId || !sceneId || !input.sequenceId) {
+          // No open version (shotId present without the sequence-scoped
+          // dual-write) — nothing to finalize. The set-generating guard makes
+          // this unreachable for real triggers; logged for safety.
+          logger.warn(
+            `[MotionWorkflow:cf] No video version to finalize for shot ${shotId}; skipping`
+          );
+          return;
+        }
         const outcome = await persistMotionCompletion({
           scopedDb,
           shotId,
+          sequenceId: input.sequenceId,
+          sceneId,
+          videoVersionId,
           model,
           upload: { url: storageResult.url, path: storageResult.path },
-          durationMs: duration * 1000,
-          promptHash: input.prompt ? simpleHash(input.prompt) : null,
+          actorId: input.userId,
           variantOnly: input.variantOnly,
           emit: async (event, payload) => {
             try {
@@ -704,7 +764,6 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
       await persistMotionFailure({
         scopedDb,
         shotId,
-        sequenceId,
         model,
         error,
         workflowRunId: event.instanceId,

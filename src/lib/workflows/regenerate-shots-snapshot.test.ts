@@ -89,6 +89,7 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     audioInputHash: null,
     motionPromptInputHash: null,
     selectedMotionPromptVersionId: null,
+    renderSegmentId: null,
     metadata: {
       sceneId: 's1',
       sceneNumber: 1,
