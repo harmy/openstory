@@ -4,9 +4,8 @@
  *
  * Pins the append-only version store + selection-as-pointer contract: append
  * (with generating-retry idempotency), list-by-group ordering / discard
- * filtering, `select` (shot pointer + `shots.video*` mirror + scene `renderPlan`
- * repoint + `video.selected` event, all atomic), discard/undiscard, and
- * staleness.
+ * filtering, `select` (segment pointer + `shots.video*` mirror + `video.selected`
+ * event, all atomic), discard/undiscard, and staleness.
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';

@@ -8,8 +8,9 @@
  * segment = the whole scene; long scenes split; per-shot rendering is the
  * degenerate case (one shot per segment).
  *
- * A segment's identity is its ordered shotIds (`shotSetKey`) — the key under
- * which `video_variants` versions for that segment accumulate.
+ * A segment is a persisted `render_segments` row; its `id` (with the model) is
+ * the key under which `video_variants` versions for that segment accumulate. Its
+ * membership is the ordered shotIds it covers (`shots.renderSegmentId`).
  *
  * The cap is sourced per-model from the model's JSON Schema duration set (the
  * same source `snapDuration` snaps to), never a hardcoded constant.
@@ -83,29 +84,16 @@ export function tileSceneIntoSegments(
   return segments;
 }
 
-/** Inputs for one manifest entry — the per-shot snapshot a render consumes. */
-export type ManifestEntryInput = {
-  shotId: string;
-  motionPromptVersionId: string | null;
-  frameVersionId: string | null;
-  durationMs: number;
-};
-
 /**
- * Assemble a render manifest from ordered per-shot snapshots. The manifest
- * references the immutable `shot_prompt_versions` / `frame_variants` rows the
- * render consumed (the reference is the snapshot) plus the value-snapshot
- * `durationMs`.
+ * Assemble a render manifest from ordered per-shot snapshots — the named seam
+ * where a `VideoManifest` is constructed. Each entry references the immutable
+ * `shot_prompt_versions` / `frame_variants` rows the render consumed (the
+ * reference is the snapshot) plus the value-snapshot `durationMs`. Returns a
+ * shallow copy (so callers can't mutate it post-build) without re-listing
+ * fields, so a future `VideoManifestEntry` field flows through untouched.
  */
 export function buildVideoManifest(
-  entries: readonly ManifestEntryInput[]
+  entries: readonly VideoManifestEntry[]
 ): VideoManifest {
-  return entries.map(
-    (e): VideoManifestEntry => ({
-      shotId: e.shotId,
-      motionPromptVersionId: e.motionPromptVersionId,
-      frameVersionId: e.frameVersionId,
-      durationMs: e.durationMs,
-    })
-  );
+  return entries.map((e) => ({ ...e }));
 }

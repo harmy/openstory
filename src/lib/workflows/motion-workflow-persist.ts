@@ -3,15 +3,16 @@
  * in #990).
  *
  * Motion generation now writes each render as an append-only `video_variants`
- * **version** (keyed by `(sceneId, model, shotSetKey)`), replacing the retired
+ * **version** (keyed by `(renderSegmentId, model)`), replacing the retired
  * `shot_variants` video slice. `set-generating-status` appends the in-flight
  * version (built in the workflow, which has the scene/manifest context); these
  * helpers finalize it:
  *
  * - completion: flip the version to `completed`, then (for a primary, non
  *   `variantOnly` render) repoint the shot's selection via
- *   `videoVariants.select` — which mirrors `shots.video*` + repoints the scene
- *   `renderPlan` segment + logs a `video.selected` event, all atomically.
+ *   `videoVariants.select` — which mirrors `shots.video*` + repoints the render
+ *   segment's `selectedVideoVersionId` pointer + logs a `video.selected` event,
+ *   all atomically.
  * - failure: mark the in-flight version `failed` (by workflow run id) and, for a
  *   primary render, flip the legacy `shots.video*` status so the failure banner
  *   shows on refetch.
@@ -115,8 +116,9 @@ export type PersistMotionOutcome =
 /**
  * Completed write. Flips the in-flight `video_variants` version to `completed`,
  * then — for a primary render — repoints the shot's selection
- * (`videoVariants.select` mirrors `shots.video*` + the scene `renderPlan` +
- * logs `video.selected`). A `variantOnly` render (an added model, #547) only
+ * (`videoVariants.select` mirrors `shots.video*` + the render segment's
+ * `selectedVideoVersionId` pointer + logs `video.selected`). A `variantOnly`
+ * render (an added model, #547) only
  * finalizes its version, leaving the primary selection untouched. A
  * `video.rendered` activity event is logged either way.
  *

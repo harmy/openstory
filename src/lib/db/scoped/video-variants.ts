@@ -225,9 +225,19 @@ export function createVideoVariantsMethods(db: Database) {
           `VideoVariant ${versionId} is '${version.status}', not 'completed' — cannot select an unfinished video`
         );
       }
+      // A completed version is expected to carry its output url/path; a missing
+      // one would mirror null onto the shot and blank a good video. Assert it
+      // here so `CompletedVideoVariant` (and the mirror) stays provably non-null.
+      if (!version.url || !version.storagePath) {
+        throw new Error(
+          `VideoVariant ${versionId} is 'completed' but missing its url/storagePath — cannot select`
+        );
+      }
       const completedVersion: CompletedVideoVariant = {
         ...version,
         status: 'completed',
+        url: version.url,
+        storagePath: version.storagePath,
       };
 
       const [shot] = await db
@@ -275,6 +285,14 @@ export function createVideoVariantsMethods(db: Database) {
     /**
      * Soft-hide a version (undoable). Commits the `discardedAt` write and a
      * `video.discarded` event in one batch. Returns the timestamp for an Undo.
+     *
+     * NOTE: discarding the version a segment's `selectedVideoVersionId`
+     * currently points at does NOT clear that pointer or the shot's mirrored
+     * `video*` columns — the discarded video keeps playing until the segment is
+     * reselected. This is deliberate (discard hides a version from the variant
+     * list; it is not "remove from playback") and undoable. If product wants a
+     * discard of the selected version to fall back to the previous one, that's a
+     * separate change (it has to decide what plays next).
      */
     discard: async (
       versionId: string,

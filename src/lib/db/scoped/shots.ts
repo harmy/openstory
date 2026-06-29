@@ -10,13 +10,20 @@ import type { Sequence } from '@/lib/db/schema/sequences';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 
 /**
- * A `video_variants` version that has finished generating — the ONLY kind that
- * may become a shot's primary video. Mirroring a pending/failed version would
- * copy its null url + non-completed status onto the shot, silently blanking a
- * good video. Encoding the precondition in {@link buildShotVideoMirror}'s
- * signature keeps it compile-time enforced (mirrors `CompletedFrameVariant`).
+ * A `video_variants` version that has finished generating AND has its output
+ * URL/path — the ONLY kind that may become a shot's primary video. Mirroring a
+ * pending/failed (or a `completed`-but-url-less) version would copy a null url
+ * onto the shot, silently blanking a good video. The intersection encodes BOTH
+ * halves of the precondition (`status` *and* url/path non-null) so
+ * {@link buildShotVideoMirror}'s `videoUrl`/`videoPath` writes are provably
+ * non-null at compile time (mirrors `CompletedFrameVariant`). The narrowing site
+ * (`videoVariants.select`) asserts the url/path, so this type is never forged.
  */
-export type CompletedVideoVariant = VideoVariant & { status: 'completed' };
+export type CompletedVideoVariant = VideoVariant & {
+  status: 'completed';
+  url: string;
+  storagePath: string;
+};
 
 /**
  * Build (without executing) the UPDATE that mirrors a selected video version's

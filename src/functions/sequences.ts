@@ -23,7 +23,6 @@ import {
   type ShotWithImage,
 } from '@/lib/shots/shot-with-image';
 import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
-import { buildVideoManifest } from '@/lib/motion/render-segments';
 import { VARIANT_TYPES, type VariantType } from '@/lib/db/schema/shot-variants';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import {
@@ -546,38 +545,14 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
         { errorMessage: 'Insufficient credits to add this video model' }
       );
 
-      // Open a `pending` `video_variants` version per eligible shot so the
-      // switcher shows the added model in flight (#990). Each shot's render
-      // segment is resolved (materializing the degenerate one-shot segment on
-      // first use); the manifest snapshots the shot's selected motion-prompt +
-      // anchor-frame image versions. The motion-batch workflow (variantOnly)
-      // then appends the generating → completed versions for this model.
-      for (const f of eligible) {
-        if (!f.sceneId) continue;
-        const renderSegmentId = await scopedDb.renderSegments.ensureForShot({
-          id: f.id,
-          sceneId: f.sceneId,
-          sequenceId: sequence.id,
-          renderSegmentId: f.renderSegmentId,
-        });
-        await scopedDb.videoVariants.appendVersion({
-          renderSegmentId,
-          sequenceId: sequence.id,
-          model,
-          manifest: buildVideoManifest([
-            {
-              shotId: f.id,
-              motionPromptVersionId: f.selectedMotionPromptVersionId ?? null,
-              frameVersionId: f.frame.selectedImageVersionId ?? null,
-              durationMs:
-                f.durationMs ??
-                (f.metadata?.metadata?.durationSeconds ?? 3) * 1000,
-            },
-          ]),
-          status: 'pending',
-        });
-      }
-
+      // No pre-seeded `video_variants` version here (mirrors the image branch
+      // below, #990): each shot's motion child opens its own in-flight
+      // `video_variants` version in `set-generating-status` (keyed by
+      // (renderSegmentId, model, workflowRunId), materializing the degenerate
+      // one-shot segment), and the workflow's `onFailure` marks it failed.
+      // Pre-seeding a `pending` row the workflow can't reconcile (it dedupes on
+      // the run id the pending row lacks) would orphan it and — being non-failed
+      // — permanently block re-adding the model via `assertModelNotAlreadyAdded`.
       const workflowInput: BatchMotionMusicWorkflowInput = {
         ...baseCtx,
         includeMusic: false,
@@ -615,31 +590,15 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
           failed: 0,
         } satisfies AddModelResult;
       } catch (error) {
+        // No compensating cleanup needed: nothing is pre-written, and a failed
+        // batch trigger means no motion child ran, so no `video_variants`
+        // version exists to mark failed (the model stays cleanly re-addable).
         logger.error('add-model: failed to trigger motion batch', {
           err: error,
           sequenceId: sequence.id,
           model,
           shots: eligible.length,
         });
-        // Mark the pre-stamped pending rows failed so the model can be re-added.
-        // Guard the compensating writes so they can't mask the original trigger
-        // error that we re-throw to the user.
-        try {
-          await Promise.all(
-            eligible.map((f) =>
-              scopedDb.shotVariants.updateByShotAndModel(f.id, 'video', model, {
-                status: 'failed',
-                error: 'Failed to trigger motion batch',
-              })
-            )
-          );
-        } catch (cleanupError) {
-          logger.error('add-model: failed to mark video rows failed', {
-            err: cleanupError,
-            sequenceId: sequence.id,
-            model,
-          });
-        }
         throw error;
       }
     }
@@ -830,7 +789,7 @@ export const setSequenceModelFn = createServerFn({ method: 'POST' })
     // per-shot pointer repoint (the #677 fix applied in bulk, mirroring the
     // image branch above): for every shot with a completed version for `model`,
     // select it — `videoVariants.select` mirrors `shots.video*`, repoints the
-    // scene `renderPlan`, and logs the event.
+    // render segment's `selectedVideoVersionId` pointer, and logs the event.
     const versions = await scopedDb.videoVariants.listBySequence(sequence.id);
     const latestByShot = new Map<string, (typeof versions)[number]>();
     for (const version of versions) {
@@ -858,15 +817,29 @@ export const setSequenceModelFn = createServerFn({ method: 'POST' })
         });
         count++;
       } catch (error) {
-        // A shot deleted mid-promotion is benign — skip it. Any other failure is
-        // surfaced via the count mismatch warning below.
-        logger.warn('set-model: failed to select video for shot', {
-          err: error,
-          sequenceId: sequence.id,
-          shotId,
-          model,
-        });
+        // Only a shot deleted mid-promotion is benign — skip just that shot.
+        // Every other failure (segment mismatch, missing version, DB/batch
+        // error) is a real problem: re-throw so it reaches the error boundary
+        // rather than being swallowed and reported as a successful "Set".
+        if (
+          error instanceof Error &&
+          error.message === `Shot ${shotId} not found`
+        ) {
+          logger.warn('set-model: skipped deleted shot during video set', {
+            sequenceId: sequence.id,
+            shotId,
+            model,
+          });
+          continue;
+        }
+        throw error;
       }
+    }
+
+    // Every candidate shot was deleted mid-promotion — nothing was set, so don't
+    // present a no-op as success.
+    if (count === 0) {
+      throw new Error('That model has not generated anything to set');
     }
 
     if (count !== latestByShot.size) {

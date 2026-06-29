@@ -6,14 +6,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  computeVideoManifestInputHash,
-  type VideoManifestHashEntry,
-} from './input-hash';
+import type { VideoManifestEntry } from '@/lib/db/schema';
+import { computeVideoManifestInputHash } from './input-hash';
 
 const entry = (
-  overrides: Partial<VideoManifestHashEntry> = {}
-): VideoManifestHashEntry => ({
+  overrides: Partial<VideoManifestEntry> = {}
+): VideoManifestEntry => ({
   shotId: 's1',
   motionPromptVersionId: 'mp1',
   frameVersionId: 'fv1',

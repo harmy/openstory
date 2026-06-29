@@ -150,12 +150,13 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
       );
     }
 
-    // Motion's dual-write (#545) opens this model's `shot_variants` row in
-    // `set-generating-status` and closes it in completion/`onFailure`, all of
-    // which need `sequenceId`. Every trigger sets both ids; assert it once here
-    // so a `sequenceId`-less caller fails loudly at the boundary rather than
-    // silently writing the legacy columns while skipping the variant half
-    // (which would leave the model invisible in the scenes-view switcher).
+    // Motion's dual-write (#545, re-routed to `video_variants` in #990) opens
+    // this model's `video_variants` version in `set-generating-status` and
+    // closes it in completion/`onFailure`, all of which need `sequenceId`. Every
+    // trigger sets both ids; assert it once here so a `sequenceId`-less caller
+    // fails loudly at the boundary rather than silently writing the legacy
+    // columns while skipping the variant half (which would leave the model
+    // invisible in the scenes-view switcher).
     if (input.shotId && !input.sequenceId) {
       throw new WorkflowValidationError(
         'sequenceId is required when shotId is set (motion dual-write)'
@@ -282,9 +283,9 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
 
         // Open an append-only `video_variants` *version* for this render (#990,
         // replaces the retired `shot_variants` video slice). It is keyed by
-        // (sceneId, model, shotSetKey); per-shot rendering is the degenerate
-        // segment shotSetKey = shotId. The manifest snapshots the inputs the
-        // render consumes — the shot's selected motion-prompt + anchor-frame
+        // (renderSegmentId, model); per-shot rendering is the degenerate
+        // one-shot segment whose id is the shot's id. The manifest snapshots the
+        // inputs the render consumes — the shot's selected motion-prompt + anchor-frame
         // image versions (the references ARE the snapshot) + the value-snapshot
         // duration. The legacy `shots.video*` columns above stay the cached
         // mirror of whichever version the shot's selection points at.
@@ -699,8 +700,8 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
 
       // Step 5: Finalize the render — flip the `video_variants` version to
       // `completed` and (for a primary render) repoint the shot's selection,
-      // mirroring `shots.video*` + the scene `renderPlan` (#990, see
-      // motion-workflow-persist).
+      // mirroring `shots.video*` + the render segment's selection pointer (#990,
+      // see motion-workflow-persist).
       await step.do('update-shot', async () => {
         if (!videoVersionId || !sceneId || !input.sequenceId) {
           // No open version (shotId present without the sequence-scoped
@@ -758,7 +759,8 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
     const model = input.model || DEFAULT_VIDEO_MODEL;
 
     // Motion is always sequence-scoped (every trigger sets both ids), and the
-    // dual-write needs sequenceId for the shot_variants row — so gate on both.
+    // dual-write needs sequenceId for the `video_variants` version — so gate on
+    // both.
     if (input.shotId && input.sequenceId) {
       const { shotId, sequenceId } = input;
       await persistMotionFailure({

@@ -7,7 +7,7 @@
  *
  *   - completed: flip the version to `completed`, log `video.rendered`, and (for
  *     a primary render) repoint the shot's selection via `videoVariants.select`
- *     (which mirrors `shots.video*` + the scene `renderPlan`). A `variantOnly`
+ *     (which mirrors `shots.video*` + the render segment's selection pointer). A `variantOnly`
  *     render skips the select. Shot-deleted mid-flight skips the select too.
  *   - failed: mark the version failed by workflow run id and (primary only) flip
  *     the legacy `shots.video*` status.

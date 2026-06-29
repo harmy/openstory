@@ -149,36 +149,21 @@ export function computeShotVideoInputHash(
 }
 
 /**
- * One covered shot's contribution to a video render's input hash (#990). The
- * referenced version ids are the snapshot: when a shot's selected motion-prompt
- * or anchor-frame version changes, the render's hash diverges → stale.
- */
-export type VideoManifestHashEntry = {
-  shotId: string;
-  motionPromptVersionId: string | null;
-  frameVersionId: string | null;
-  durationMs: number;
-};
-
-/**
  * Hash a video render's manifest → O(1) staleness for a `video_variants`
- * version. Order-sensitive (the manifest is ordered by render position), so
- * the entries are NOT sorted.
+ * version. The `VideoManifestEntry` rows ARE the snapshot: each referenced
+ * motion-prompt / anchor-frame version id (plus the value-snapshot duration)
+ * folds into the hash, so when a shot's selected prompt or frame version
+ * changes the render diverges → stale. The manifest is hashed directly (not
+ * field-by-field) so a future manifest field automatically participates in
+ * staleness instead of silently dropping out (cf. the #767 drift class).
+ * Order-sensitive (the manifest is ordered by render position), so entries are
+ * NOT sorted.
  */
 export function computeVideoManifestInputHash(
-  manifest: readonly VideoManifestHashEntry[],
+  manifest: readonly VideoManifestEntry[],
   model: string
 ): Promise<string> {
-  return sha256Hex({
-    artifact: 'video:manifest',
-    model,
-    manifest: manifest.map((e) => ({
-      shotId: e.shotId,
-      motionPromptVersionId: e.motionPromptVersionId,
-      frameVersionId: e.frameVersionId,
-      durationMs: e.durationMs,
-    })),
-  });
+  return sha256Hex({ artifact: 'video:manifest', model, manifest });
 }
 
 export type ShotAudioHashInput = {
@@ -331,7 +316,7 @@ import type {
   Scene,
 } from './scene-analysis.schema';
 import type { MusicSceneSummary } from '@/lib/workflow/types';
-import type { StyleConfig } from '@/lib/db/schema';
+import type { StyleConfig, VideoManifestEntry } from '@/lib/db/schema';
 
 export type PromptSceneContextHashInput = {
   /**
