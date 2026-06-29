@@ -54,6 +54,8 @@ export const relations = defineRelations(schema, (r) => ({
     scenes: r.many.scenes(),
     shots: r.many.shots(),
     frames: r.many.frames(),
+    renderSegments: r.many.renderSegments(),
+    videoVariants: r.many.videoVariants(),
     events: r.many.sequenceEvents(),
     characters: r.many.characters(),
     locations: r.many.sequenceLocations(),
@@ -68,6 +70,33 @@ export const relations = defineRelations(schema, (r) => ({
       to: r.sequences.id,
     }),
     shots: r.many.shots(),
+    renderSegments: r.many.renderSegments(),
+  },
+
+  // ---- Render Segments (SSF #990 — scene render units) ----
+  renderSegments: {
+    scene: r.one.scenes({
+      from: r.renderSegments.sceneId,
+      to: r.scenes.id,
+    }),
+    sequence: r.one.sequences({
+      from: r.renderSegments.sequenceId,
+      to: r.sequences.id,
+    }),
+    shots: r.many.shots(),
+    videoVariants: r.many.videoVariants(),
+  },
+
+  // ---- Video Variants (SSF #990 — flat video render versions per segment) ----
+  videoVariants: {
+    renderSegment: r.one.renderSegments({
+      from: r.videoVariants.renderSegmentId,
+      to: r.renderSegments.id,
+    }),
+    sequence: r.one.sequences({
+      from: r.videoVariants.sequenceId,
+      to: r.sequences.id,
+    }),
   },
 
   // ---- Shots ----
@@ -79,6 +108,10 @@ export const relations = defineRelations(schema, (r) => ({
     scene: r.one.scenes({
       from: r.shots.sceneId,
       to: r.scenes.id,
+    }),
+    renderSegment: r.one.renderSegments({
+      from: r.shots.renderSegmentId,
+      to: r.renderSegments.id,
     }),
     frames: r.many.frames(),
     variants: r.many.shotVariants(),

@@ -71,6 +71,7 @@ function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
     visualPromptInputHash: null,
     motionPromptInputHash: null,
     selectedMotionPromptVersionId: null,
+    renderSegmentId: null,
     previewThumbnailUrl: null,
     metadata: null,
     createdAt: new Date(),

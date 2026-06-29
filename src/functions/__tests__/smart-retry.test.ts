@@ -123,6 +123,7 @@ function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
     motionPrompt: 'slow pan',
     motionModel: null,
     selectedMotionPromptVersionId: null,
+    renderSegmentId: null,
     audioUrl: null,
     audioPath: null,
     audioStatus: 'pending',

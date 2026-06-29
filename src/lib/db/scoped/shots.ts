@@ -5,9 +5,61 @@
 
 import type { Database } from '@/lib/db/client';
 import { frames, shots } from '@/lib/db/schema';
-import type { NewFrame, Shot, NewShot } from '@/lib/db/schema';
+import type { NewFrame, Shot, NewShot, VideoVariant } from '@/lib/db/schema';
 import type { Sequence } from '@/lib/db/schema/sequences';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+
+/**
+ * A `video_variants` version that has finished generating AND has its output
+ * URL/path — the ONLY kind that may become a shot's primary video. Mirroring a
+ * pending/failed (or a `completed`-but-url-less) version would copy a null url
+ * onto the shot, silently blanking a good video. The intersection encodes BOTH
+ * halves of the precondition (`status` *and* url/path non-null) so
+ * {@link buildShotVideoMirror}'s `videoUrl`/`videoPath` writes are provably
+ * non-null at compile time (mirrors `CompletedFrameVariant`). The narrowing site
+ * (`videoVariants.select`) asserts the url/path, so this type is never forged.
+ */
+export type CompletedVideoVariant = VideoVariant & {
+  status: 'completed';
+  url: string;
+  storagePath: string;
+};
+
+/**
+ * Build (without executing) the UPDATE that mirrors a selected video version's
+ * output onto its shot for playback, so a caller can compose it into the same
+ * `db.batch()` as the segment selection repoint and the activity event. The
+ * selection pointer itself lives on `render_segments.selectedVideoVersionId`
+ * (#990); the shot's `video*` columns are the cached playback mirror. Returns
+ * the drizzle statement; the caller owns execution.
+ *
+ * `durationMs` is the manifest's summed duration (a multi-shot segment's video
+ * spans all its shots); the per-shot value carried on the shot is informational.
+ */
+export function buildShotVideoMirror(
+  db: Database,
+  shotId: string,
+  version: CompletedVideoVariant
+) {
+  const durationMs = version.manifest.reduce(
+    (sum, entry) => sum + entry.durationMs,
+    0
+  );
+  return db
+    .update(shots)
+    .set({
+      videoUrl: version.url,
+      videoPath: version.storagePath,
+      videoStatus: version.status,
+      videoGeneratedAt: version.generatedAt,
+      videoError: version.error,
+      motionModel: version.model,
+      videoInputHash: version.inputHash,
+      ...(durationMs > 0 ? { durationMs } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(shots.id, shotId));
+}
 
 /**
  * Every shot owns an anchor frame (orderIndex 0, role 'first') — the i2v anchor

@@ -106,7 +106,8 @@ export const scenes = snakeCase.table(
     videoError: text(),
     videoInputHash: text(),
     // How the scene render is assembled (e.g. multi-shot vs per-shot). Free
-    // text until #910 defines the strategy enum.
+    // text until #910 defines the strategy enum. The scene's render tiling is
+    // the `render_segments` table (#990), not a column here.
     renderStrategy: text(),
     createdAt: integer({ mode: 'timestamp' })
       .$defaultFn(() => new Date())

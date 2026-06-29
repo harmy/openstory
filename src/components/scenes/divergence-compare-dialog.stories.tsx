@@ -36,6 +36,7 @@ const baseShot: ShotWithImage = {
   motionPrompt: null,
   motionModel: null,
   selectedMotionPromptVersionId: null,
+  renderSegmentId: null,
   audioUrl: null,
   audioPath: null,
   audioStatus: 'pending',

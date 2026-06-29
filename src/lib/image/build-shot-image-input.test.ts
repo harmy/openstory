@@ -49,6 +49,7 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
     audioInputHash: null,
     motionPromptInputHash: null,
     selectedMotionPromptVersionId: null,
+    renderSegmentId: null,
     metadata: null,
     createdAt: NOW,
     updatedAt: NOW,

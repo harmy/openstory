@@ -68,6 +68,7 @@ const mockShot: ShotWithImage = toShotWithImage({
   motionPrompt: '',
   motionModel: 'veo3',
   selectedMotionPromptVersionId: null,
+  renderSegmentId: null,
   audioUrl: null,
   audioPath: null,
   audioStatus: 'pending',

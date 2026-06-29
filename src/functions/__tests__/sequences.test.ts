@@ -3,17 +3,13 @@
  * set-model server fns (#547). The TanStack server-fn middleware chain (auth,
  * sequence access, scoped DB, workflow triggers) is exercised end-to-end by the
  * e2e suite; here we pin the logic that decides:
- *   - which variant rows are promotable to the live primary
- *     (`selectPromotableVariants`) — guards against resurrecting a
- *     divergent/discarded alternate across the whole sequence,
- *   - the per-variantType promote update (`buildSequencePromoteUpdate`),
  *   - the duplicate-model guard (`assertModelNotAlreadyAdded`) — a failed add
  *     must be re-addable,
  *   - the video eligibility filter (`selectEligibleVideoShots`).
  */
 
 import { describe, expect, it } from 'vitest';
-import type { Frame, Shot, ShotVariant } from '@/lib/db/schema';
+import type { Frame, Shot } from '@/lib/db/schema';
 import {
   projectShotWithImage,
   type ShotWithImage,
@@ -21,42 +17,11 @@ import {
 import {
   assertModelNotAlreadyAdded,
   buildAddAudioMusicInput,
-  buildSequencePromoteUpdate,
   selectEligibleVideoShots,
-  selectPromotableVariants,
   sumShotDurationsSeconds,
 } from '@/functions/sequences';
 
 const NOW = new Date('2026-06-03T00:00:00.000Z');
-
-function makeVariant(overrides: Partial<ShotVariant> = {}): ShotVariant {
-  return {
-    id: 'variant-1',
-    shotId: 'shot-1',
-    sequenceId: 'seq-1',
-    variantType: 'image',
-    model: 'flux_pro',
-    url: 'https://cdn/variant.png',
-    storagePath: 'sequences/seq-1/shot-1/flux_pro.png',
-    previewUrl: null,
-    shotVariantUrl: null,
-    shotVariantPath: null,
-    shotVariantStatus: 'pending',
-    shotVariantWorkflowRunId: null,
-    status: 'completed',
-    workflowRunId: null,
-    generatedAt: NOW,
-    error: null,
-    promptHash: 'prompt-1',
-    inputHash: 'input-1',
-    divergedAt: null,
-    discardedAt: null,
-    durationMs: null,
-    createdAt: NOW,
-    updatedAt: NOW,
-    ...overrides,
-  };
-}
 
 // The shot read path returns `ShotWithImage` (#989): a Shot (no image columns)
 // plus the anchor frame's still surface projected back under the legacy
@@ -82,6 +47,7 @@ function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
     motionPrompt: null,
     motionModel: null,
     selectedMotionPromptVersionId: null,
+    renderSegmentId: null,
     audioUrl: null,
     audioPath: null,
     audioStatus: 'pending',
@@ -121,98 +87,6 @@ function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
   };
   return { ...projectShotWithImage(shot, frame), ...overrides };
 }
-
-describe('selectPromotableVariants (#547)', () => {
-  it('includes a live, completed row with a url for the target model', () => {
-    const variants = [makeVariant()];
-    expect(selectPromotableVariants(variants, 'flux_pro')).toHaveLength(1);
-  });
-
-  it('excludes rows for a different model', () => {
-    const variants = [makeVariant({ model: 'other_model' })];
-    expect(selectPromotableVariants(variants, 'flux_pro')).toEqual([]);
-  });
-
-  it('excludes rows that are not completed', () => {
-    const variants = [
-      makeVariant({ id: 'v-pending', status: 'pending' }),
-      makeVariant({ id: 'v-generating', status: 'generating' }),
-      makeVariant({ id: 'v-failed', status: 'failed' }),
-    ];
-    expect(selectPromotableVariants(variants, 'flux_pro')).toEqual([]);
-  });
-
-  it('excludes rows with no url (null or empty)', () => {
-    const variants = [
-      makeVariant({ id: 'v-null', url: null }),
-      makeVariant({ id: 'v-empty', url: '' }),
-    ];
-    expect(selectPromotableVariants(variants, 'flux_pro')).toEqual([]);
-  });
-
-  it('excludes divergent alternates (would resurrect a non-primary output)', () => {
-    const variants = [makeVariant({ divergedAt: NOW })];
-    expect(selectPromotableVariants(variants, 'flux_pro')).toEqual([]);
-  });
-
-  it('excludes user-discarded alternates', () => {
-    const variants = [makeVariant({ discardedAt: NOW })];
-    expect(selectPromotableVariants(variants, 'flux_pro')).toEqual([]);
-  });
-
-  it('returns only the matching live rows from a mixed set', () => {
-    const variants = [
-      makeVariant({ id: 'keep-1', shotId: 'f1' }),
-      makeVariant({ id: 'keep-2', shotId: 'f2' }),
-      makeVariant({ id: 'drop-model', model: 'other' }),
-      makeVariant({ id: 'drop-diverged', shotId: 'f3', divergedAt: NOW }),
-      makeVariant({ id: 'drop-pending', shotId: 'f4', status: 'pending' }),
-    ];
-    const result = selectPromotableVariants(variants, 'flux_pro');
-    expect(result.map((v) => v.id)).toEqual(['keep-1', 'keep-2']);
-  });
-});
-
-describe('buildSequencePromoteUpdate (#547)', () => {
-  it('image: throws — image promotion is retired (#989), selection is a frameVariants.select repoint', () => {
-    const variant = makeVariant({
-      variantType: 'image',
-      url: 'https://cdn/img.png',
-      storagePath: 'path/img.png',
-      inputHash: 'hash-img',
-    });
-    // Image variants moved to `frame_variants`; the still is chosen via a
-    // pointer repoint, never copied onto `shots`. `buildPromoteUpdate` (which
-    // this delegates to) rejects an image variant outright.
-    expect(() =>
-      buildSequencePromoteUpdate(variant, 'image', 'flux_pro', () => NOW)
-    ).toThrow(/not promoted/);
-  });
-
-  it('video: layers motionModel/durationMs/videoGeneratedAt on top of the base promote update', () => {
-    const variant = makeVariant({
-      variantType: 'video',
-      url: 'https://cdn/vid.mp4',
-      storagePath: 'path/vid.mp4',
-      inputHash: 'hash-vid',
-      durationMs: 5000,
-    });
-    const update = buildSequencePromoteUpdate(
-      variant,
-      'video',
-      'kling_25',
-      () => NOW
-    );
-    expect(update.videoUrl).toBe('https://cdn/vid.mp4');
-    expect(update.videoStatus).toBe('completed');
-    expect(update.videoInputHash).toBe('hash-vid');
-    // The three fields buildPromoteUpdate's video case omits, layered for
-    // parity with the per-scene setVideoFromVariantFn.
-    expect(update.motionModel).toBe('kling_25');
-    expect(update.durationMs).toBe(5000);
-    expect(update.videoGeneratedAt).toBe(NOW);
-  });
-});
 
 describe('assertModelNotAlreadyAdded (#547)', () => {
   it('throws when a non-failed row exists for the model', () => {
