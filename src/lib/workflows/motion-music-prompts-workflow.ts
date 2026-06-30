@@ -28,7 +28,7 @@ import { spawnAndAwaitChild } from '@/lib/workflow/await-child';
 import type {
   MotionMusicPromptsWorkflowInput,
   MotionMusicPromptsWorkflowResult,
-  MotionPromptWorkflowInput,
+  MotionPromptBatchWorkflowInput,
   MusicPromptWorkflowInput,
   MusicPromptWorkflowResult,
 } from '@/lib/workflow/types';
@@ -100,32 +100,35 @@ export class MotionMusicPromptsWorkflow extends OpenStoryWorkflowEntrypoint<Moti
 
     // Run motion prompts and music design in parallel via Pattern 3.
     const [motionPrompts, musicDesign] = await Promise.all([
-      spawnAndAwaitChild<MotionPromptWorkflowInput, MotionPromptsResult>(step, {
-        binding: this.env.MOTION_PROMPT_WORKFLOW,
-        parentBindingName: 'MOTION_MUSIC_PROMPTS_WORKFLOW',
-        parentInstanceId: event.instanceId,
-        childId: `motion-prompts:${sequenceId}`,
-        childPayload: {
-          userId,
-          teamId,
-          sequenceId,
-          scenes: scenesWithSnappedDurations,
-          aspectRatio,
-          characterBible,
-          locationBible,
-          elementBible,
-          styleConfig,
-          analysisModelId,
-          shotMapping,
-          startingFrameImageUrls,
-        },
-        spawnStepName: 'spawn-motion-prompts',
-        awaitStepName: 'await-motion-prompts',
-        // Must exceed the child's own await budget: motion-prompts awaits
-        // each per-scene grandchild for 30 minutes, plus notify lag under a
-        // burst.
-        timeout: '45 minutes',
-      }),
+      spawnAndAwaitChild<MotionPromptBatchWorkflowInput, MotionPromptsResult>(
+        step,
+        {
+          binding: this.env.MOTION_PROMPT_BATCH_WORKFLOW,
+          parentBindingName: 'MOTION_MUSIC_PROMPTS_WORKFLOW',
+          parentInstanceId: event.instanceId,
+          childId: `motion-prompts-batch:${sequenceId}`,
+          childPayload: {
+            userId,
+            teamId,
+            sequenceId,
+            scenes: scenesWithSnappedDurations,
+            aspectRatio,
+            characterBible,
+            locationBible,
+            elementBible,
+            styleConfig,
+            analysisModelId,
+            shotMapping,
+            startingFrameImageUrls,
+          },
+          spawnStepName: 'spawn-motion-prompts',
+          awaitStepName: 'await-motion-prompts',
+          // Must exceed the child's own await budget: motion-prompts awaits
+          // each per-scene grandchild for 30 minutes, plus notify lag under a
+          // burst.
+          timeout: '45 minutes',
+        }
+      ),
       spawnAndAwaitChild<MusicPromptWorkflowInput, MusicPromptWorkflowResult>(
         step,
         {

@@ -56,8 +56,8 @@ import type {
   SceneSplitWorkflowResult,
   TalentMatchingWorkflowInput,
   TalentMatchingWorkflowOutput,
-  VisualPromptWorkflowInput,
-  VisualPromptWorkflowResult,
+  FramePromptBatchWorkflowInput,
+  FramePromptBatchWorkflowResult,
 } from '@/lib/workflow/types';
 import { findMissingElementEntries } from '@/lib/workflows/element-sheet-workflow';
 import {
@@ -383,13 +383,13 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
           timeout: '60 minutes',
         }),
         spawnAndAwaitChild<
-          VisualPromptWorkflowInput,
-          VisualPromptWorkflowResult
+          FramePromptBatchWorkflowInput,
+          FramePromptBatchWorkflowResult
         >(step, {
-          binding: this.env.VISUAL_PROMPT_WORKFLOW,
+          binding: this.env.FRAME_PROMPT_BATCH_WORKFLOW,
           parentBindingName: PARENT_BINDING_NAME,
           parentInstanceId,
-          childId: `visual-prompts:${sequenceId ?? 'no-seq'}`,
+          childId: `frame-prompts-batch:${sequenceId ?? 'no-seq'}`,
           childPayload: {
             userId: input.userId,
             teamId: input.teamId,

@@ -1,7 +1,7 @@
 /**
  * Cloudflare Workflows port of `visualPromptWorkflow`.
  *
- * Mirrors the QStash version (`src/lib/workflows/visual-prompt-workflow.ts`)
+ * Mirrors the QStash version (`src/lib/workflows/frame-prompt-batch-workflow.ts`)
  * step for step — same step names, same control flow, same side effects. The
  * only differences are:
  *
@@ -10,7 +10,7 @@
  *     (see `base-workflow.ts`).
  *   - Uses `step.do` instead of `context.run`.
  *   - The QStash original fanned out N scenes via `context.invoke`; this port
- *     fans out to the `VisualPromptSceneWorkflow` child via Pattern 3
+ *     fans out to the `FramePromptWorkflow` child via Pattern 3
  *     (`spawnAndAwaitChild`) so the parent stays thin and each scene's spawn /
  *     await pair gets its own retry budget. See await-child.ts.
  *   - Reads payload from `event.payload` instead of `context.requestPayload`. */
@@ -20,17 +20,17 @@ import type { ScopedDb } from '@/lib/db/scoped';
 import { spawnAndAwaitChild } from '@/lib/workflow/await-child';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import type {
-  VisualPromptSceneWorkflowInput,
-  VisualPromptWorkflowInput,
-  VisualPromptWorkflowResult,
+  FramePromptWorkflowInput,
+  FramePromptBatchWorkflowInput,
+  FramePromptBatchWorkflowResult,
 } from '@/lib/workflow/types';
 import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
 import { getLogger } from '@/lib/observability/logger';
 
-const logger = getLogger(['openstory', 'workflow', 'visual-prompt']);
+const logger = getLogger(['openstory', 'workflow', 'frame-prompt-batch']);
 
-// NOTE: `VISUAL_PROMPT_WORKFLOW` is not yet declared on `CloudflareEnv` —
+// NOTE: `FRAME_PROMPT_BATCH_WORKFLOW` is not yet declared on `CloudflareEnv` —
 // the parent binding gets wired into `src/lib/workflow/types.ts` and
 // `wrangler.jsonc` as part of the follow-on infra PR. Until then, the
 // `parentBindingName` below is a string cast; the runtime lookup in
@@ -38,20 +38,21 @@ const logger = getLogger(['openstory', 'workflow', 'visual-prompt']);
 // itself were spawned as a child (it's a top-level orchestrator today, so
 // `_parent` is always undefined and the cast is dormant).
 // TODO(#728-wire-up): drop the cast once types.ts knows about
-// VISUAL_PROMPT_WORKFLOW.
+// FRAME_PROMPT_BATCH_WORKFLOW.
 // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- binding name not yet declared on CloudflareEnv; see TODO above
-const PARENT_BINDING_NAME = 'VISUAL_PROMPT_WORKFLOW' as unknown as Parameters<
-  typeof spawnAndAwaitChild
->[1]['parentBindingName'];
+const PARENT_BINDING_NAME =
+  'FRAME_PROMPT_BATCH_WORKFLOW' as unknown as Parameters<
+    typeof spawnAndAwaitChild
+  >[1]['parentBindingName'];
 
-type VisualPromptSceneResult = { sceneId: string; visual: VisualPrompt };
+type FramePromptResult = { sceneId: string; visual: VisualPrompt };
 
-export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualPromptWorkflowInput> {
+export class FramePromptBatchWorkflow extends OpenStoryWorkflowEntrypoint<FramePromptBatchWorkflowInput> {
   protected override async runImpl(
-    event: Readonly<WorkflowEvent<VisualPromptWorkflowInput>>,
+    event: Readonly<WorkflowEvent<FramePromptBatchWorkflowInput>>,
     step: WorkflowStep,
-    _scopedDb: ScopedDb
-  ): Promise<VisualPromptWorkflowResult> {
+    scopedDb: ScopedDb
+  ): Promise<FramePromptBatchWorkflowResult> {
     const input = event.payload;
     const {
       scenes,
@@ -69,11 +70,26 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
       return { scenes: [], visualPromptsBySceneId: {} };
     }
 
-    const visualPromptSceneBinding = this.env.VISUAL_PROMPT_SCENE_WORKFLOW;
+    const visualPromptSceneBinding = this.env.FRAME_PROMPT_WORKFLOW;
+
+    // Resolve each shot's anchor frame id ONCE, up front, and pass it to the
+    // per-scene children so they never read the DB (#991). The anchor frame's
+    // *identity* is immutable (only its selected image/version mutates), so
+    // this single batched read is not the racy category the no-DB-reads rule
+    // targets — it just spares each child a lookup. Keyed by shotId.
+    const frameIdByShotId = await step.do('resolve-anchor-frames', async () => {
+      const shotIds = (shotMapping ?? [])
+        .map((m) => m.shotId)
+        .filter((id): id is string => Boolean(id));
+      const anchors = await scopedDb.frames.getAnchorsByShots(shotIds);
+      const out: Record<string, string> = {};
+      for (const [shotId, frame] of anchors) out[shotId] = frame.id;
+      return out;
+    });
 
     // ============================================================
     // PHASE 3: Visual Prompt Generation — fan out one
-    // VisualPromptSceneWorkflow child per scene. Spawns happen in parallel
+    // FramePromptWorkflow child per scene. Spawns happen in parallel
     // via Promise.all; the awaits are wrapped in Promise.allSettled so a
     // single timed-out child does not tank the entire parent run (matches
     // the per-scene retry semantics the QStash version got from
@@ -84,7 +100,11 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
       const sceneAfter =
         sceneIndex < scenes.length - 1 ? scenes[sceneIndex + 1] : undefined;
 
-      const childPayload: VisualPromptSceneWorkflowInput = {
+      const shotId = shotMapping?.find(
+        (f) => f.analysisSceneId === scene.sceneId
+      )?.shotId;
+
+      const childPayload: FramePromptWorkflowInput = {
         scene,
         sceneBefore,
         sceneAfter,
@@ -97,19 +117,20 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
         teamId: input.teamId,
         userId: input.userId,
         sequenceId: input.sequenceId,
-        // Shot id of the scene to save the visual prompt to
-        shotId: shotMapping?.find((f) => f.analysisSceneId === scene.sceneId)
-          ?.shotId,
+        // Shot id of the scene to save the visual prompt to, plus its anchor
+        // frame id resolved up front (#991: the child does not read the DB).
+        shotId,
+        frameId: shotId ? (frameIdByShotId[shotId] ?? null) : null,
       };
 
       const childResult = await spawnAndAwaitChild<
-        VisualPromptSceneWorkflowInput,
-        VisualPromptSceneResult
+        FramePromptWorkflowInput,
+        FramePromptResult
       >(step, {
         binding: visualPromptSceneBinding,
         parentBindingName: PARENT_BINDING_NAME,
         parentInstanceId: event.instanceId,
-        childId: `visual-prompt-scene:${sequenceId ?? 'no-seq'}:${scene.sceneId}`,
+        childId: `frame-prompt:${sequenceId ?? 'no-seq'}:${scene.sceneId}`,
         childPayload,
         spawnStepName: `spawn-vp-scene-${sceneIndex}`,
         awaitStepName: `await-vp-scene-${sceneIndex}`,
@@ -125,10 +146,10 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
     // QStash original's `merge-visual-prompts` step name keeps trace parity.
     const scenesWithVisualPrompts = await step.do(
       'merge-visual-prompts',
-      async (): Promise<VisualPromptWorkflowResult> => {
+      async (): Promise<FramePromptBatchWorkflowResult> => {
         const successResults: Array<{
           scene: Scene;
-          childResult: VisualPromptSceneResult;
+          childResult: FramePromptResult;
         }> = [];
         const failedSceneIds: string[] = [];
 
@@ -136,7 +157,7 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
           const scene = scenes[index];
           if (outcome.status === 'rejected') {
             logger.error(
-              `[VisualPromptWorkflow:cf] Child visual-prompt-scene failed for scene ${scene?.sceneId ?? `index ${index}`}:`,
+              `[FramePromptBatchWorkflow:cf] Child frame-prompt failed for scene ${scene?.sceneId ?? `index ${index}`}:`,
               {
                 err: outcome.reason,
               }
@@ -152,7 +173,7 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
           // class's re-wrap only runs at the runImpl catch boundary; a throw
           // inside step.do gets retried by CF's step machinery first.
           throw new NonRetryableError(
-            `visual-prompt-scene child(ren) returned no body for scene(s) [${failedSceneIds.join(', ')}]. ` +
+            `frame-prompt child(ren) returned no body for scene(s) [${failedSceneIds.join(', ')}]. ` +
               `Check sub-workflow logs for the upstream failure.`,
             'WorkflowValidationError'
           );
@@ -189,12 +210,12 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
   protected override onFailure({
     error,
   }: {
-    event: Readonly<WorkflowEvent<VisualPromptWorkflowInput>>;
+    event: Readonly<WorkflowEvent<FramePromptBatchWorkflowInput>>;
     error: string;
     scopedDb: ScopedDb;
   }): void {
     logger.error(
-      `[VisualPromptWorkflow:cf] Visual prompt generation failed: ${error}`
+      `[FramePromptBatchWorkflow:cf] Visual prompt generation failed: ${error}`
     );
   }
 }

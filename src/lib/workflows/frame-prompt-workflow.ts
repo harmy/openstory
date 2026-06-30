@@ -1,7 +1,7 @@
 /**
  * Cloudflare Workflows port of `visualPromptSceneWorkflow`.
  *
- * Mirrors the QStash version (`src/lib/workflows/visual-prompt-scene-workflow.ts`)
+ * Mirrors the QStash version (`src/lib/workflows/frame-prompt-workflow.ts`)
  * step for step — same step names, same control flow, same side effects. The
  * only differences are:
  *
@@ -40,13 +40,13 @@ import { getChatPrompt } from '@/lib/prompts';
 import { getShotPromptChannel, getGenerationChannel } from '@/lib/realtime';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import { WorkflowValidationError } from '@/lib/workflow/errors';
-import type { VisualPromptSceneWorkflowInput } from '@/lib/workflow/types';
+import type { FramePromptWorkflowInput } from '@/lib/workflow/types';
 import { chat, type TokenUsage } from '@tanstack/ai';
 import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 
-const logger = getLogger(['openstory', 'workflow', 'visual-prompt-scene']);
+const logger = getLogger(['openstory', 'workflow', 'frame-prompt']);
 
-type VisualPromptSceneResult = { sceneId: string; visual: VisualPrompt };
+type FramePromptResult = { sceneId: string; visual: VisualPrompt };
 
 const PHASE = { number: 3, name: 'Writing image prompts…' } as const;
 const STEP_NAME = 'visual-prompts';
@@ -54,12 +54,12 @@ const LOG_NAME = `phase-${PHASE.number}-${STEP_NAME}`;
 const LOG_TAGS = [STEP_NAME, `phase-${PHASE.number}`, 'analysis'] as const;
 const LOG_TAGS_STREAM = [...LOG_TAGS, 'stream'] as const;
 
-export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<VisualPromptSceneWorkflowInput> {
+export class FramePromptWorkflow extends OpenStoryWorkflowEntrypoint<FramePromptWorkflowInput> {
   protected override async runImpl(
-    event: Readonly<WorkflowEvent<VisualPromptSceneWorkflowInput>>,
+    event: Readonly<WorkflowEvent<FramePromptWorkflowInput>>,
     step: WorkflowStep,
     scopedDb: ScopedDb
-  ): Promise<VisualPromptSceneResult> {
+  ): Promise<FramePromptResult> {
     const input = event.payload;
     const {
       scene,
@@ -72,6 +72,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
       styleConfig,
       analysisModelId,
       shotId,
+      frameId,
       sequenceId,
       userId,
       emitStreaming,
@@ -157,7 +158,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
         ];
 
         logger.info(
-          `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Starting${
+          `[FramePromptWorkflow:cf] [LLM:${LOG_NAME}] Starting${
             streamConfig ? ' streaming' : ''
           } call`,
           {
@@ -228,7 +229,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
               debug: false,
             });
             logger.info(
-              `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Call succeeded`
+              `[FramePromptWorkflow:cf] [LLM:${LOG_NAME}] Call succeeded`
             );
             return {
               resultJson: JSON.stringify(text),
@@ -302,7 +303,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
             const runError = extractRunError(streamEvent);
             if (runError) {
               logger.error(
-                `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Streaming call RUN_ERROR`,
+                `[FramePromptWorkflow:cf] [LLM:${LOG_NAME}] Streaming call RUN_ERROR`,
                 { runError: runError.event }
               );
               throw new Error(formatRunErrorMessage(runError));
@@ -310,7 +311,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
           }
           await flushDelta();
           logger.info(
-            `[VisualPromptSceneWorkflow:cf] [LLM:${LOG_NAME}] Streaming call succeeded`
+            `[FramePromptWorkflow:cf] [LLM:${LOG_NAME}] Streaming call succeeded`
           );
           return {
             resultJson: JSON.stringify(
@@ -358,17 +359,15 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
       const inputHash = await computeVisualPromptInputHash(narrowed);
 
       await step.do('save-visual-prompt-to-db', async () => {
-        // Visual prompt history lives on the shot's anchor frame now (#989) —
-        // resolved by shotId, never by id-reuse. The prompt is NOT written into
-        // `scene.metadata` any more (#713): `frame_prompt_versions.write`
+        // The anchor `frameId` is resolved by the parent and passed in (#991:
+        // workflows don't read the DB). The prompt is NOT written into
+        // `scene.metadata` any more (#713): `frame_prompt_versions.writeAiVersion`
         // mirrors its text onto `frame.imagePrompt` and repoints
         // `selectedImagePromptVersionId`, superseding any prior user-override
         // automatically (the override stays in history and can be restored).
-        const frame = await scopedDb.frames.getAnchorByShot(shotId);
-
-        if (frame) {
+        if (frameId) {
           await scopedDb.framePromptVersions.writeAiVersion({
-            frameId: frame.id,
+            frameId,
             text: result.visual.fullPrompt,
             components: result.visual.components,
             inputHash,
@@ -376,7 +375,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
           });
         } else {
           logger.warn(
-            `[VisualPromptSceneWorkflow] Shot ${shotId} has no anchor frame; visual prompt not persisted`
+            `[FramePromptWorkflow] Shot ${shotId} has no anchor frame; visual prompt not persisted`
           );
         }
 
@@ -406,12 +405,12 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
     event,
     error,
   }: {
-    event: Readonly<WorkflowEvent<VisualPromptSceneWorkflowInput>>;
+    event: Readonly<WorkflowEvent<FramePromptWorkflowInput>>;
     error: string;
     scopedDb: ScopedDb;
   }): Promise<void> {
     const payload = event.payload;
-    logger.error('[VisualPromptSceneWorkflow:cf] Failed', {
+    logger.error('[FramePromptWorkflow:cf] Failed', {
       workflowRunId: event.instanceId,
       error,
     });
@@ -425,7 +424,7 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
         });
       }
     } catch (emitErr) {
-      logger.warn('[VisualPromptSceneWorkflow:cf] failed to emit failure', {
+      logger.warn('[FramePromptWorkflow:cf] failed to emit failure', {
         err: emitErr,
       });
     }

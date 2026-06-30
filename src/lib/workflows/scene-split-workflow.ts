@@ -19,7 +19,7 @@
  *   - The final value returned from `scene-splitting-stream` is Zod-inferred
  *     and structurally rejected by CF's `Rpc.Serializable<T>` check, so we
  *     JSON-stringify around the step boundary (same pattern as
- *     `visual-prompt-scene-workflow.ts`). */
+ *     `frame-prompt-workflow.ts`). */
 
 import {
   callLLMStream,

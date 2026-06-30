@@ -451,7 +451,7 @@ export interface CharacterBibleWorkflowInput extends SequenceWorkflowContext {
  */
 type ShotMapping = Array<{ analysisSceneId: string; shotId: string }>;
 
-export interface VisualPromptWorkflowInput extends SequenceWorkflowContext {
+export interface FramePromptBatchWorkflowInput extends SequenceWorkflowContext {
   scenes: Scene[];
   aspectRatio: AspectRatio;
   characterBible: CharacterBibleEntry[];
@@ -471,12 +471,12 @@ export interface VisualPromptWorkflowInput extends SequenceWorkflowContext {
  * and concurrent runs may have repointed the mirror, so a DB read is racy
  * (#713/#991). Keyed by `sceneId`.
  */
-export interface VisualPromptWorkflowResult {
+export interface FramePromptBatchWorkflowResult {
   scenes: Scene[];
   visualPromptsBySceneId: Record<string, VisualPrompt>;
 }
 
-export interface VisualPromptSceneWorkflowInput extends SequenceWorkflowContext {
+export interface FramePromptWorkflowInput extends SequenceWorkflowContext {
   scene: Scene;
   sceneBefore?: Scene;
   sceneAfter?: Scene;
@@ -488,6 +488,12 @@ export interface VisualPromptSceneWorkflowInput extends SequenceWorkflowContext 
   analysisModelId: AnalysisModelId;
   shotId?: string;
   /**
+   * Anchor frame id for `shotId`, resolved by the parent and passed in so the
+   * child never reads the DB (#991). `null` when the shot has no anchor frame
+   * (the child logs + skips persistence, as before).
+   */
+  frameId?: string | null;
+  /**
    * Stream incremental `fullPrompt` deltas over the per-shot realtime
    * channel while the LLM generates. Set by the explicit "Regenerate Prompt"
    * button so the active viewer sees the prompt fill in live; left unset by
@@ -497,7 +503,7 @@ export interface VisualPromptSceneWorkflowInput extends SequenceWorkflowContext 
   emitStreaming?: boolean;
 }
 
-export interface MotionPromptWorkflowInput extends SequenceWorkflowContext {
+export interface MotionPromptBatchWorkflowInput extends SequenceWorkflowContext {
   scenes: Scene[];
   aspectRatio: AspectRatio;
   characterBible: CharacterBibleEntry[];
@@ -515,7 +521,7 @@ export interface MotionPromptWorkflowInput extends SequenceWorkflowContext {
   startingFrameImageUrls?: Record<string, string | null>;
 }
 
-export interface MotionPromptSceneWorkflowInput extends SequenceWorkflowContext {
+export interface MotionPromptWorkflowInput extends SequenceWorkflowContext {
   scene: Scene;
   sceneBefore?: Scene;
   sceneAfter?: Scene;
@@ -534,7 +540,7 @@ export interface MotionPromptSceneWorkflowInput extends SequenceWorkflowContext 
    * / absent → no still available, text-only motion path.
    */
   startingFrameImageUrl?: string | null;
-  /** See {@link VisualPromptSceneWorkflowInput.emitStreaming}. */
+  /** See {@link FramePromptWorkflowInput.emitStreaming}. */
   emitStreaming?: boolean;
 }
 /**
@@ -948,7 +954,7 @@ export interface MotionMusicPromptsWorkflowInput extends SequenceWorkflowContext
    * Rendered starting-shot image URL per scene (`sceneId` → primary
    * `thumbnailUrl`), captured by analyze-script after shot images render and
    * threaded down to the per-scene motion-prompt children (#929). See
-   * {@link MotionPromptWorkflowInput.startingFrameImageUrls}.
+   * {@link MotionPromptBatchWorkflowInput.startingFrameImageUrls}.
    */
   startingFrameImageUrls?: Record<string, string | null>;
   /**

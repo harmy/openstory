@@ -21,9 +21,9 @@ import { simpleHash } from '@/lib/utils/hash';
 import { triggerWorkflow } from '@/lib/workflow/client';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import type {
-  MotionPromptSceneWorkflowInput,
+  MotionPromptWorkflowInput,
   MusicPromptWorkflowInput,
-  VisualPromptSceneWorkflowInput,
+  FramePromptWorkflowInput,
 } from '@/lib/workflow/types';
 import { buildMusicSceneSummaries } from '@/lib/workflows/music-scene-summaries';
 import { createServerFn } from '@tanstack/react-start';
@@ -304,9 +304,7 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
     // path can land later when the user isn't viewing this shot, so we skip
     // the realtime publishes to avoid burning Redis ops for a stream nobody
     // is consuming.
-    const baseInput:
-      | VisualPromptSceneWorkflowInput
-      | MotionPromptSceneWorkflowInput = {
+    const baseInput: FramePromptWorkflowInput | MotionPromptWorkflowInput = {
       userId: user.id,
       teamId,
       sequenceId: sequence.id,
@@ -331,9 +329,7 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
     };
 
     const urlPath =
-      data.promptType === 'visual'
-        ? '/visual-prompt-scene'
-        : '/motion-prompt-scene';
+      data.promptType === 'visual' ? '/frame-prompt' : '/motion-prompt';
 
     // Force-regen needs a unique dedup ID per click so QStash doesn't collapse
     // repeat clicks into a single run — the user is explicitly asking for
