@@ -141,11 +141,19 @@ export const deleteTalentFn = createServerFn({ method: 'POST' })
   .middleware([authWithTeamMiddleware])
   .inputValidator(zodValidator(talentIdSchema))
   .handler(async ({ context, data }) => {
+    const talentRecord = await context.scopedDb.talent.getById(data.talentId);
+    if (!talentRecord) {
+      throw new Error('Talent not found');
+    }
+    if (talentRecord.isPublic || talentRecord.teamId !== context.teamId) {
+      throw new Error('You do not have permission to delete this talent');
+    }
+
     await requireTeamAdminAccess(context.user.id, context.teamId);
 
     const deleted = await context.scopedDb.talent.delete(data.talentId);
     if (!deleted) {
-      throw new Error('Talent not found or failed to delete');
+      throw new Error('Failed to delete talent');
     }
 
     return { success: true };
