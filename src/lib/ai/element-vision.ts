@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { createAdapter } from './create-adapter';
 import { llmCostFromUsage } from './llm-client';
 
-export const ELEMENT_VISION_MODEL = 'anthropic/claude-sonnet-4.6' as const;
+export const ELEMENT_VISION_MODEL = 'anthropic/claude-sonnet-5' as const;
 
 const responseSchema = z.object({
   description: z.string().min(1),

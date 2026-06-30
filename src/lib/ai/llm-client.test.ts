@@ -58,7 +58,7 @@ describe('llm-client', () => {
       );
 
       const generator = callLLMStream({
-        model: 'anthropic/claude-sonnet-4.6',
+        model: 'anthropic/claude-sonnet-5',
         messages: [{ role: 'user', content: 'test' }],
       });
 
@@ -85,7 +85,7 @@ describe('llm-client', () => {
       );
 
       const generator = callLLMStream({
-        model: 'anthropic/claude-sonnet-4.6',
+        model: 'anthropic/claude-sonnet-5',
         messages: [{ role: 'user', content: 'test' }],
       });
 
@@ -111,7 +111,7 @@ describe('llm-client', () => {
       );
 
       const generator = callLLMStream({
-        model: 'anthropic/claude-sonnet-4.6',
+        model: 'anthropic/claude-sonnet-5',
         messages: [{ role: 'user', content: 'test' }],
         userId: 'user-123',
         sessionId: 'seq-456',
@@ -151,7 +151,7 @@ describe('llm-client', () => {
       );
 
       const generator = callLLMStream({
-        model: 'anthropic/claude-sonnet-4.6',
+        model: 'anthropic/claude-sonnet-5',
         messages: [{ role: 'user', content: 'test' }],
       });
 
@@ -172,7 +172,7 @@ describe('llm-client', () => {
       );
 
       const generator = callLLMStream({
-        model: 'anthropic/claude-sonnet-4.6',
+        model: 'anthropic/claude-sonnet-5',
         messages: [{ role: 'user', content: 'test' }],
       });
 
@@ -188,18 +188,18 @@ describe('llm-client', () => {
             type: 'RUN_ERROR',
             message: 'Provider returned error',
             code: 'provider-error',
-            model: 'anthropic/claude-sonnet-4.6',
+            model: 'anthropic/claude-sonnet-5',
           };
         })()
       );
 
       const generator = callLLMStream({
-        model: 'anthropic/claude-sonnet-4.6',
+        model: 'anthropic/claude-sonnet-5',
         messages: [{ role: 'user', content: 'test' }],
       });
 
       return expect(drain(generator)).rejects.toThrow(
-        'LLM stream error [provider-error, model=anthropic/claude-sonnet-4.6]: Provider returned error'
+        'LLM stream error [provider-error, model=anthropic/claude-sonnet-5]: Provider returned error'
       );
     });
 
@@ -209,18 +209,18 @@ describe('llm-client', () => {
           yield {
             type: 'RUN_ERROR',
             message: 'Provider returned error',
-            model: 'anthropic/claude-sonnet-4.6',
+            model: 'anthropic/claude-sonnet-5',
           };
         })()
       );
 
       const generator = callLLMStream({
-        model: 'anthropic/claude-sonnet-4.6',
+        model: 'anthropic/claude-sonnet-5',
         messages: [{ role: 'user', content: 'test' }],
       });
 
       return expect(drain(generator)).rejects.toThrow(
-        'LLM stream error [model=anthropic/claude-sonnet-4.6]: Provider returned error'
+        'LLM stream error [model=anthropic/claude-sonnet-5]: Provider returned error'
       );
     });
 
@@ -235,7 +235,7 @@ describe('llm-client', () => {
       );
 
       const generator = callLLMStream({
-        model: 'anthropic/claude-sonnet-4.6',
+        model: 'anthropic/claude-sonnet-5',
         messages: [{ role: 'user', content: 'test' }],
       });
 
@@ -248,7 +248,7 @@ describe('llm-client', () => {
           yield {
             type: 'RUN_ERROR',
             message: 'Provider returned error',
-            model: 'anthropic/claude-sonnet-4.6',
+            model: 'anthropic/claude-sonnet-5',
             rawEvent: {
               code: 400,
               message: 'Provider returned error',
@@ -266,12 +266,12 @@ describe('llm-client', () => {
       );
 
       const generator = callLLMStream({
-        model: 'anthropic/claude-sonnet-4.6',
+        model: 'anthropic/claude-sonnet-5',
         messages: [{ role: 'user', content: 'test' }],
       });
 
       return expect(drain(generator)).rejects.toThrow(
-        'LLM stream error [model=anthropic/claude-sonnet-4.6]: Provider returned error — provider=Anthropic output_config.format.schema: Invalid schema'
+        'LLM stream error [model=anthropic/claude-sonnet-5]: Provider returned error — provider=Anthropic output_config.format.schema: Invalid schema'
       );
     });
 
@@ -386,7 +386,7 @@ describe('llm-client', () => {
 
         const chunks = [];
         for await (const chunk of callLLMStream({
-          model: 'anthropic/claude-sonnet-4.6',
+          model: 'anthropic/claude-sonnet-5',
           messages: [{ role: 'user', content: 'test' }],
           responseSchema: schema,
         })) {
@@ -421,7 +421,7 @@ describe('llm-client', () => {
         const answer: string[] = [];
         let finalAccumulated = '';
         for await (const chunk of callLLMStream({
-          model: 'anthropic/claude-sonnet-4.6',
+          model: 'anthropic/claude-sonnet-5',
           messages: [{ role: 'user', content: 'test' }],
           reasoning: { enabled: true, effort: 'medium' },
         })) {
@@ -442,7 +442,7 @@ describe('llm-client', () => {
 
         await drain(
           callLLMStream({
-            model: 'anthropic/claude-sonnet-4.6',
+            model: 'anthropic/claude-sonnet-5',
             messages: [{ role: 'user', content: 'test' }],
             reasoning: { enabled: true, effort: 'medium' },
           })
@@ -465,7 +465,7 @@ describe('llm-client', () => {
 
         await drain(
           callLLMStream({
-            model: 'anthropic/claude-sonnet-4.6',
+            model: 'anthropic/claude-sonnet-5',
             messages: [{ role: 'user', content: 'test' }],
           })
         );
@@ -486,7 +486,7 @@ describe('llm-client', () => {
 
         await drain(
           callLLMStream({
-            model: 'anthropic/claude-sonnet-4.6',
+            model: 'anthropic/claude-sonnet-5',
             messages: [{ role: 'user', content: 'test' }],
             webSearch: true,
           })
@@ -512,7 +512,7 @@ describe('llm-client', () => {
 
         await drain(
           callLLMStream({
-            model: 'anthropic/claude-sonnet-4.6',
+            model: 'anthropic/claude-sonnet-5',
             messages: [{ role: 'user', content: 'test' }],
           })
         );
@@ -541,7 +541,7 @@ describe('llm-client', () => {
       );
 
       const result = await callLLM({
-        model: 'anthropic/claude-sonnet-4.6',
+        model: 'anthropic/claude-sonnet-5',
         messages: [{ role: 'user', content: 'test' }],
       });
 
@@ -560,14 +560,14 @@ describe('llm-client', () => {
             message:
               'Insufficient credits. Add more using https://openrouter.ai/settings/credits',
             code: '402',
-            model: 'anthropic/claude-sonnet-4.6',
+            model: 'anthropic/claude-sonnet-5',
           };
         })()
       );
 
       return expect(
         callLLM({
-          model: 'anthropic/claude-sonnet-4.6',
+          model: 'anthropic/claude-sonnet-5',
           messages: [{ role: 'user', content: 'test' }],
         })
       ).rejects.toThrow(/Insufficient credits/);

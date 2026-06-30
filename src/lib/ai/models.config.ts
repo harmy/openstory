@@ -19,8 +19,8 @@ export const SCRIPT_ANALYSIS_MODELS = [
     description: 'Frontier xAI reasoning model with 1M context',
   },
   {
-    id: 'anthropic/claude-sonnet-4.6',
-    name: 'Claude Sonnet 4.6',
+    id: 'anthropic/claude-sonnet-5',
+    name: 'Claude Sonnet 5',
     provider: 'Anthropic',
     license: 'proprietary' as const,
     qualityRank: 2,
@@ -207,7 +207,7 @@ export function analysisModelSupportsVision(modelId: string): boolean {
  * (GLM's vision siblings can't do strict structured outputs — see #942/#944).
  */
 export const DEFAULT_VISION_MODEL: AnalysisModelId =
-  'anthropic/claude-sonnet-4.6';
+  'anthropic/claude-sonnet-5';
 
 /**
  * Resolve which model should actually run a call given whether it carries image
