@@ -63,6 +63,7 @@ export class MotionMusicPromptsWorkflow extends OpenStoryWorkflowEntrypoint<Moti
       styleConfig,
       shotMapping,
       startingFrameImageUrls,
+      visualSummaryBySceneId,
     } = input;
 
     // Snap durations against the primary video model. The structured motion
@@ -92,7 +93,10 @@ export class MotionMusicPromptsWorkflow extends OpenStoryWorkflowEntrypoint<Moti
     );
 
     // Build scene summaries for music design (uses snapped durations).
-    const sceneSummaries = buildMusicSceneSummaries(scenesWithSnappedDurations);
+    const sceneSummaries = buildMusicSceneSummaries(
+      scenesWithSnappedDurations,
+      visualSummaryBySceneId
+    );
 
     // Run motion prompts and music design in parallel via Pattern 3.
     const [motionPrompts, musicDesign] = await Promise.all([
@@ -163,17 +167,25 @@ export class MotionMusicPromptsWorkflow extends OpenStoryWorkflowEntrypoint<Moti
               (s) => s.sceneId === scene.sceneId
             );
 
+            // The motion prompt is persisted to `shot_prompt_versions` by the
+            // per-scene motion child (mirrored on `shot.motionPrompt`) — it is
+            // NOT merged back into `scene.prompts` (#713). Only music design
+            // rides on the scene metadata here.
             return {
               ...scene,
-              prompts: {
-                ...scene.prompts,
-                motion: motionPrompt.motionPrompt,
-              },
               musicDesign: musicSceneDesign?.musicDesign,
             };
           })
         )
     );
+
+    // Return the generated motion prompts in memory, keyed by sceneId, so the
+    // parent pipeline (analyze-script) threads them straight into the motion
+    // render batch rather than re-reading the racy `shot.motionPrompt` mirror /
+    // selected-version pointer from the DB (#713/#991). The per-scene child has
+    // already persisted them to `shot_prompt_versions`.
+    const motionPromptsBySceneId: Record<string, MotionPrompt> =
+      Object.fromEntries(motionPrompts.map((m) => [m.sceneId, m.motionPrompt]));
 
     // `aspectRatio`, `characterBible`, `locationBible`, `elementBible`,
     // `styleConfig`, and `shotMapping` are passed through to the stubbed
@@ -181,6 +193,7 @@ export class MotionMusicPromptsWorkflow extends OpenStoryWorkflowEntrypoint<Moti
     // off this orchestrator's destructure for now to keep tsgo happy.
     return {
       completeScenes,
+      motionPromptsBySceneId,
       musicPrompt: musicDesign.prompt,
       musicTags: reinforceInstrumentalTags(musicDesign.tags),
     };

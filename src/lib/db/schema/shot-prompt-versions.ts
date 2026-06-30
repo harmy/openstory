@@ -17,6 +17,7 @@
  */
 
 import type {
+  MotionPrompt,
   MotionPromptComponents,
   MotionPromptParameters,
   VisualPromptComponents,
@@ -79,6 +80,18 @@ export const shotPromptVersions = snakeCase.table(
     parameters: text({
       mode: 'json',
     }).$type<MotionPromptParameters>(),
+    // Motion-only: the scene's dialogue lines, captured so audio-capable video
+    // models can append them at render time (the model is chosen at render, not
+    // prompt-gen, so the structured data must persist on the version — #713).
+    // Null when no dialogue / for visual rows.
+    dialogue: text({
+      mode: 'json',
+    }).$type<NonNullable<MotionPrompt['dialogue']>>(),
+    // Motion-only: ambient sound + sound-effect direction, same rationale as
+    // `dialogue`. Null when no audio direction / for visual rows.
+    audio: text({
+      mode: 'json',
+    }).$type<NonNullable<MotionPrompt['audio']>>(),
 
     source: text().$type<PromptVariantSource>().notNull(),
 

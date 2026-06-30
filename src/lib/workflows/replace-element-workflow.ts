@@ -32,7 +32,6 @@ import {
 import { aspectRatioToImageSize } from '@/lib/constants/aspect-ratios';
 import type { ScopedDb } from '@/lib/db/scoped';
 import type { ElementVisionStatus, Shot } from '@/lib/db/schema';
-import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
 import { getGenerationChannel } from '@/lib/realtime';
 import { spawnAndAwaitChild } from '@/lib/workflow/await-child';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
@@ -498,6 +497,11 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
 
       const motionBinding = this.env.MOTION_WORKFLOW;
 
+      // Motion prompts were resolved by the caller and passed in
+      // (`input.motionPromptByShotId`) — the workflow does NOT read the DB to
+      // resolve them (#713/#991: racy + replay-unsafe). Keyed by shotId.
+      const motionPromptByShotId = input.motionPromptByShotId;
+
       const motionSpawnPromises = shotsNeedingVideoRegen.map(
         async (shot, index) => {
           const newThumbnailUrl = successByShotId.get(shot.id);
@@ -516,7 +520,7 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
             sequenceId,
             shotId: shot.id,
             imageUrl: newThumbnailUrl,
-            prompt: resolveMotionPrompt(shot, videoModel),
+            prompt: motionPromptByShotId[shot.id] ?? '',
             model: videoModel,
             aspectRatio,
             duration: shot.durationMs ? shot.durationMs / 1000 : undefined,

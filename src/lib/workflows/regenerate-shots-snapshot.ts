@@ -59,13 +59,11 @@ export async function buildRegenerateShotSnapshot(params: {
     aspectRatio,
   } = params;
 
-  // Effective prompt: user-override (frame.imagePrompt) wins over the
-  // AI-generated prompt stored in scene metadata. Both sites must read this
-  // same fallback chain so a `visualPromptSceneWorkflow` regen (which only
-  // updates metadata) produces a different hash than the prior thumbnail's
-  // stored hash. See #713.
-  const effectivePrompt =
-    imagePrompt || shot.metadata?.prompts?.visual?.fullPrompt;
+  // The visual prompt lives solely on `frame.imagePrompt` (#989/#713) — passed
+  // in as `imagePrompt`. The visual-prompt workflow now mirrors AI/regenerated
+  // prompts onto it (no more `metadata.prompts.visual` fallback), so this hash
+  // tracks the live prompt by construction.
+  const effectivePrompt = imagePrompt;
 
   // Reject empty prompts at the snapshot boundary so trigger-time data
   // errors fail loudly at the call site instead of being absorbed as

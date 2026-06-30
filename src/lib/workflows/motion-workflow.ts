@@ -15,17 +15,17 @@
  *   - Throws `NonRetryableError` from `cloudflare:workflows` in place of
  *     the old Upstash workflow `WorkflowNonRetryableError`. */
 
-import { extractFalErrorMessage } from '@/lib/ai/fal-error';
 import {
   CONTENT_REJECTION_EVENT,
   CONTENT_REJECTION_RETRY_EVENT,
   isContentRejectionError,
 } from '@/lib/ai/content-rejection';
+import { falCostFromUnits } from '@/lib/ai/fal-cost';
+import { extractFalErrorMessage } from '@/lib/ai/fal-error';
 import {
   computeMotionPromptInputHash,
   computeVideoManifestInputHash,
 } from '@/lib/ai/input-hash';
-import { falCostFromUnits } from '@/lib/ai/fal-cost';
 import { DEFAULT_VIDEO_MODEL, IMAGE_TO_VIDEO_MODELS } from '@/lib/ai/models';
 import { loadNarrowShotPromptContext } from '@/lib/ai/prompt-context';
 import { microsToUsd, type Microdollars } from '@/lib/billing/money';
@@ -37,8 +37,9 @@ import {
   pollMotionJob,
   submitMotionJob,
 } from '@/lib/motion/motion-generation';
-import { uploadVideoToStorage } from '@/lib/motion/video-storage';
 import { buildVideoManifest } from '@/lib/motion/render-segments';
+import { uploadVideoToStorage } from '@/lib/motion/video-storage';
+import { getLogger } from '@/lib/observability/logger';
 import { endSpanSuccess, startGenAISpan } from '@/lib/observability/tracer';
 import { getGenerationChannel } from '@/lib/realtime';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
@@ -50,9 +51,8 @@ import {
   persistMotionFailure,
 } from '@/lib/workflows/motion-workflow-persist';
 import { shouldRecordUserEdit } from '@/lib/workflows/user-edit-predicate';
-import { NonRetryableError } from 'cloudflare:workflows';
 import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
-import { getLogger } from '@/lib/observability/logger';
+import { NonRetryableError } from 'cloudflare:workflows';
 
 const logger = getLogger(['openstory', 'workflow', 'motion']);
 
@@ -270,10 +270,20 @@ export class MotionWorkflow extends OpenStoryWorkflowEntrypoint<MotionWorkflowIn
             );
           }
 
+          // Carry the dialogue/audio direction forward onto the user-edit
+          // version so audio-capable models still get enrichment after a
+          // raw-text edit (pre-#713 this came from `metadata.prompts.motion`,
+          // now gone). The direction is captured at trigger time
+          // (`input.priorMotion`) — NOT re-read here, which would be racy
+          // against concurrent append-only version writes and replay-unsafe
+          // (this very write repoints the selection pointer). `components` /
+          // `parameters` stay null on a free-text edit, as they did pre-#713.
           await scopedDb.shotPromptVersions.write({
             shotId: input.shotId,
             promptType: 'motion',
             text: input.prompt,
+            dialogue: input.priorMotion?.dialogue ?? null,
+            audio: input.priorMotion?.audio ?? null,
             source: 'user-edit',
             inputHash: userEditInputHash,
             analysisModel: userEditAnalysisModel,

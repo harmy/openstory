@@ -122,6 +122,7 @@ function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
     videoError: null,
     motionPrompt: 'slow pan',
     motionModel: null,
+    motionPromptData: null,
     selectedMotionPromptVersionId: null,
     renderSegmentId: null,
     audioUrl: null,
@@ -202,11 +203,16 @@ function makeContext(
   // Scenes own model selection (#909); when none are passed the list is empty →
   // shots inherit the sequence default, preserving the legacy single-model path.
   const listScenesBySequence = vi.fn(async () => scenes);
+  // Motion prompt is resolved from the selected version now (#713); the retry
+  // path reads it per shot. No selected version in these fixtures → resolution
+  // falls back to the shot description.
+  const getSelectedMotion = vi.fn(async () => null);
   const stub = {
     shots: { listBySequence, ensureAnchorFrames },
     frames: { listAnchorsBySequence },
     scenes: { listBySequence: listScenesBySequence },
     characters: { listWithSheets },
+    shotPromptVersions: { getSelectedMotion },
     sequence: vi.fn(() => ({ updateStatus, updateMusicFields })),
   };
   // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- minimal ScopedDb stub exposing only what executeSmartRetry touches

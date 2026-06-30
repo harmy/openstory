@@ -113,7 +113,7 @@ const SceneListComponent: React.FC<SceneListProps> = ({
   const motionPromptsReady = useMemo(() => {
     if (!notStartedShots.length) return true;
     return notStartedShots.every(
-      (f) => f.motionPrompt || f.metadata?.prompts?.motion?.fullPrompt
+      (f) => f.motionPrompt || f.motionPromptData?.fullPrompt
     );
   }, [notStartedShots]);
 

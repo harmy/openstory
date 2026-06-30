@@ -62,7 +62,7 @@ function sceneContextParts(
  * Derive the start-frame visual prompt for one shot.
  *
  * fullPrompt = scene context (authored once) + the shot's framing/start-state.
- * Internal building block of `deriveShotScenes` (covered through it).
+ * Internal building block of `deriveShots` (covered through it).
  */
 function deriveVisualPrompt(
   scene: SceneWithShots,
@@ -166,11 +166,17 @@ export function deriveMotionPrompt(
  * the shot-level columns (`shotNumber`, `durationMs`) that live on the `shots`
  * table rather than inside the JSON. `shotNumber` stays OUT of the `Scene`
  * metadata — it is a `shots` column (#907).
+ *
+ * The derived prompts ride alongside (not inside `metadata`): visual/motion
+ * prompts persist to `frame_prompt_versions` / `shot_prompt_versions` now, not
+ * `scene.prompts` (#713) — the caller writes them through those scoped helpers.
  */
 export type DerivedShot = {
   shotNumber: number;
   durationMs: number;
   metadata: Scene;
+  visualPrompt: VisualPrompt;
+  motionPrompt: MotionPrompt;
 };
 
 /**
@@ -182,7 +188,7 @@ export type DerivedShot = {
  * Returned shots are ordered by `shotNumber`. The caller persists each with
  * its `shotNumber` and a `sceneId` linking back to the `scenes` row.
  */
-export function deriveShotScenes(
+export function deriveShots(
   scene: SceneWithShots,
   styleConfig: StyleConfig
 ): DerivedShot[] {
@@ -199,12 +205,13 @@ export function deriveShotScenes(
         durationSeconds: shot.durationSeconds,
       },
       continuity: scene.continuity,
-      prompts: { visual, motion },
     };
     return {
       shotNumber: shot.shotNumber,
       durationMs: Math.round(shot.durationSeconds * 1000),
       metadata,
+      visualPrompt: visual,
+      motionPrompt: motion,
     };
   });
 }

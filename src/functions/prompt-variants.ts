@@ -204,6 +204,8 @@ export const restoreShotPromptVariantFn = createServerFn({ method: 'POST' })
       text: chosen.text,
       components: chosen.components,
       parameters: chosen.parameters,
+      dialogue: chosen.dialogue,
+      audio: chosen.audio,
       source: 'restored',
       inputHash: chosen.inputHash,
       analysisModel: chosen.analysisModel,

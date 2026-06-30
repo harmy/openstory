@@ -57,27 +57,13 @@ function makeShot(overrides: Partial<Shot> = {}): Shot {
   };
 }
 
-const VISUAL_COMPONENTS = {
-  sceneDescription: '',
-  subject: '',
-  environment: '',
-  lighting: '',
-  camera: '',
-  composition: '',
-  style: '',
-  technical: '',
-  atmosphere: '',
-};
-
 /**
  * A complete, fully-typed `Scene`. Built as a plain literal (the `: Scene`
  * return type makes tsgo enforce completeness at compile time) rather than via
  * `schema.parse()` — so the fixture never leans on `.catch()` defaults filling
  * missing keys, a behavior that isn't portable across zod versions.
  */
-function makeScene(
-  opts: { sceneId?: string; visualFullPrompt?: string } = {}
-): Scene {
+function makeScene(opts: { sceneId?: string } = {}): Scene {
   return {
     sceneId: opts.sceneId ?? 'scene-1',
     sceneNumber: 1,
@@ -88,13 +74,6 @@ function makeScene(
       location: '',
       timeOfDay: '',
       storyBeat: '',
-    },
-    prompts: {
-      visual: {
-        fullPrompt: opts.visualFullPrompt ?? '',
-        negativePrompt: '',
-        components: VISUAL_COMPONENTS,
-      },
     },
   };
 }
@@ -112,10 +91,7 @@ const baseOpts = {
 
 describe('buildShotImageWorkflowInput — prompt fallback chain (#547)', () => {
   it('prefers opts.prompt over every stored source', async () => {
-    const shot = makeShot({
-      description: 'DESC',
-      metadata: makeScene({ visualFullPrompt: 'AI' }),
-    });
+    const shot = makeShot({ description: 'DESC', metadata: makeScene() });
     const input = await buildShotImageWorkflowInput({
       ...baseOpts,
       shot,
@@ -134,19 +110,6 @@ describe('buildShotImageWorkflowInput — prompt fallback chain (#547)', () => {
       imagePrompt: 'STORED',
     });
     expect(input?.prompt).toBe('STORED');
-  });
-
-  it('falls back to metadata.prompts.visual.fullPrompt before description', async () => {
-    const shot = makeShot({
-      description: 'DESC',
-      metadata: makeScene({ visualFullPrompt: 'AI' }),
-    });
-    const input = await buildShotImageWorkflowInput({
-      ...baseOpts,
-      shot,
-      imagePrompt: null,
-    });
-    expect(input?.prompt).toBe('AI');
   });
 
   it('falls back to shot.description last', async () => {

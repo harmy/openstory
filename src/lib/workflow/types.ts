@@ -11,12 +11,29 @@ import type {
 } from '@/lib/ai/models';
 import type { AnalysisModelId } from '@/lib/ai/models.config';
 import type {
+  AssemblableMotionPrompt,
   CharacterBibleEntry,
   ElementBibleEntry,
   LocationBibleEntry,
+  MotionAudio,
+  MotionDialogue,
   MotionPrompt,
   Scene,
+  VisualPrompt,
 } from '@/lib/ai/scene-analysis.schema';
+
+/**
+ * Structured motion direction (dialogue + audio) carried forward onto a
+ * user-edit motion prompt version. Captured at trigger time from the version
+ * being edited and threaded through the workflow input, so the workflow does
+ * NOT re-read the DB to find it — that read would be racy (concurrent
+ * append-only version writes) and replay-unsafe (after the user-edit row is
+ * written, the selection pointer moves to it). #713/#991.
+ */
+type PriorMotionDirection = {
+  dialogue?: MotionDialogue | null;
+  audio?: MotionAudio | null;
+};
 import type { AspectRatio, ImageSize } from '@/lib/constants/aspect-ratios';
 import type {
   CharacterMinimal,
@@ -76,9 +93,8 @@ export interface ImageWorkflowInput extends SequenceWorkflowContext {
   /**
    * `true` when `prompt` came from a user edit (typed in the UI). `false` for
    * auto paths (storyboard generation, smart-retry, preview, scene split)
-   * where `prompt` may be reassembled from `shot.metadata.prompts.visual`
-   * and would not match the bare `shot.imagePrompt`. Drives whether the
-   * workflow appends a `user-edit` variant row.
+   * where `prompt` came from `frame.imagePrompt` and would not match a bare
+   * edit. Drives whether the workflow appends a `user-edit` variant row.
    */
   userEditedPrompt?: boolean;
   /**
@@ -108,7 +124,7 @@ export interface ShotVariantWorkflowInput extends SequenceWorkflowContext {
   shotId?: string;
   /** Sequence aspect ratio — drives shot grid layout */
   aspectRatio?: AspectRatio;
-  /** Scene description from shot.metadata.prompts.visual.fullPrompt */
+  /** Scene visual prompt, from the anchor `frame.imagePrompt` mirror (#713) */
   scenePrompt?: string;
   /** Character reference sheets for visual consistency */
   characterReferences?: ReferenceImageDescription[];
@@ -243,6 +259,14 @@ export interface MotionWorkflowInput extends SequenceWorkflowContext {
    * the workflow appends a `user-edit` variant row.
    */
   userEditedPrompt?: boolean;
+  /**
+   * Only meaningful when `userEditedPrompt`: the dialogue/audio direction of the
+   * version being edited, captured at trigger time so the recorded user-edit
+   * version carries it forward (audio-capable models still get enrichment after
+   * a raw-text edit). Threaded in instead of re-read in-workflow — see
+   * {@link PriorMotionDirection}.
+   */
+  priorMotion?: PriorMotionDirection;
   /**
    * Variant-only mode (#547). When true, the run NEVER touches the legacy
    * `shots.video*` / `motionModel` columns — it writes only this model's
@@ -437,6 +461,19 @@ export interface VisualPromptWorkflowInput extends SequenceWorkflowContext {
   analysisModelId: AnalysisModelId;
   /** Maps sceneId to shotId for DB persistence after visual prompt generation */
   shotMapping?: ShotMapping;
+}
+
+/**
+ * Visual prompt workflow result. The generated prompts are persisted to
+ * `frame_prompt_versions` by the per-scene child, but are ALSO returned in
+ * memory so the parent pipeline (analyze-script) threads them straight to the
+ * next phase rather than re-reading the DB mirror — versions are append-only
+ * and concurrent runs may have repointed the mirror, so a DB read is racy
+ * (#713/#991). Keyed by `sceneId`.
+ */
+export interface VisualPromptWorkflowResult {
+  scenes: Scene[];
+  visualPromptsBySceneId: Record<string, VisualPrompt>;
 }
 
 export interface VisualPromptSceneWorkflowInput extends SequenceWorkflowContext {
@@ -781,9 +818,11 @@ export interface BatchMotionMusicWorkflowInput extends SequenceWorkflowContext {
      * Structured motion prompt (#545). When present, `motion-batch` assembles
      * a model-specific prompt for each model in `videoModels` via
      * `assembleMotionPrompt`. Absent on manual single-model paths, which pass
-     * a pre-assembled `prompt` instead.
+     * a pre-assembled `prompt` instead. Carries only the assemblable fields
+     * (fullPrompt + dialogue/audio) — sourced from the shot's selected motion
+     * `shot_prompt_versions` row, not `metadata.prompts.motion` (#713).
      */
-    motionPrompt?: MotionPrompt;
+    motionPrompt?: AssemblableMotionPrompt;
     /**
      * Scene character tags (`continuity.characterTags`). Passed alongside
      * `motionPrompt` so per-model re-assembly can apply character-only
@@ -798,6 +837,8 @@ export interface BatchMotionMusicWorkflowInput extends SequenceWorkflowContext {
     generateAudio?: boolean;
     /** See `MotionWorkflowInput.userEditedPrompt`. */
     userEditedPrompt?: boolean;
+    /** See `MotionWorkflowInput.priorMotion`. */
+    priorMotion?: PriorMotionDirection;
   }>;
   /**
    * Video models to generate for every shot (#545). First is primary (its
@@ -910,10 +951,25 @@ export interface MotionMusicPromptsWorkflowInput extends SequenceWorkflowContext
    * {@link MotionPromptWorkflowInput.startingFrameImageUrls}.
    */
   startingFrameImageUrls?: Record<string, string | null>;
+  /**
+   * Visual prompt text per scene (`sceneId` → `frame.imagePrompt`), used as the
+   * music prompt's visual grounding. The structured visual prompt moved off
+   * `scene.prompts` to `frame_prompt_versions` (#713), so analyze-script (which
+   * loaded the mirror) threads it here rather than via `scene.prompts.visual`.
+   */
+  visualSummaryBySceneId?: Record<string, string>;
 }
 
 export interface MotionMusicPromptsWorkflowResult {
   completeScenes: Scene[];
+  /**
+   * Generated motion prompts keyed by `sceneId`, returned in memory so
+   * analyze-script threads them into the render batch without re-reading the
+   * `shot.motionPrompt` mirror / selected-version pointer (racy under concurrent
+   * append-only version writes — #713/#991). Persisted to `shot_prompt_versions`
+   * by the per-scene child.
+   */
+  motionPromptsBySceneId: Record<string, MotionPrompt>;
   musicPrompt: string;
   musicTags: string;
 }
@@ -960,6 +1016,14 @@ export interface ReplaceElementWorkflowInput extends SequenceWorkflowContext {
   newFilename: string;
   /** Shot IDs to edit using the new element */
   affectedShotIds: string[];
+  /**
+   * Per-shot motion prompt (sceneId/shotId → resolved + model-assembled string)
+   * for the video re-render, resolved by the CALLER before the workflow starts
+   * and passed in. Workflows must not read the DB (reads are racy under
+   * append-only versioning + non-deterministic on replay — #713/#991); the
+   * caller resolves from the selected `shot_prompt_versions` row up front.
+   */
+  motionPromptByShotId: Record<string, string>;
   /** Image model to use for the edit (defaults to nano_banana_2 for edit support) */
   imageModel?: TextToImageModel;
 }

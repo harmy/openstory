@@ -56,6 +56,7 @@ import {
 } from '@/lib/ai/models';
 import type { AspectRatio } from '@/lib/constants/aspect-ratios';
 import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
+import type { AssemblableMotionPrompt } from '@/lib/ai/scene-analysis.schema';
 import { useShotPromptStream } from '@/lib/realtime/use-shot-prompt-stream';
 import type { ShotWithImage } from '@/lib/shots/shot-with-image';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -507,8 +508,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
       ? DEFAULT_VIDEO_MODEL
       : aspectCompatibleMotion;
   const regenMotionModel = effectiveMotionModel;
-  const imagePrompt =
-    shot?.imagePrompt || shot?.metadata?.prompts?.visual?.fullPrompt;
+  const imagePrompt = shot?.imagePrompt ?? undefined;
 
   const variantIsCompleted =
     variantForSelectedModel?.status === 'completed' &&
@@ -798,19 +798,32 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     [shot, selectVariant]
   );
 
-  const motionPromptData = shot?.metadata?.prompts?.motion;
+  // The shot's selected motion prompt, projected from its version row (#713) —
+  // metadata.prompts.motion no longer exists.
+  const motionPromptData = shot?.motionPromptData ?? null;
+  const characterTags = shot?.metadata?.continuity?.characterTags;
 
   // Raw prompt for editing (just motion direction, no dialogue/audio)
   const rawMotionPrompt =
     shot?.motionPrompt || motionPromptData?.fullPrompt || '';
 
-  // Assembled preview: exactly what resolveMotionPrompt produces on the server
+  // Assembled preview: exactly what resolveMotionPrompt produces on the server.
+  // Overlay any unsaved edit onto the structured prompt so the dialogue/audio
+  // sections still appear for audio-capable models.
   const assembledPrompt = useMemo(() => {
-    const promptOverride = editedMotionPrompt || rawMotionPrompt;
+    const overrideText = editedMotionPrompt || rawMotionPrompt;
+    const mp: AssemblableMotionPrompt | null = motionPromptData
+      ? {
+          ...motionPromptData,
+          fullPrompt: overrideText || motionPromptData.fullPrompt,
+        }
+      : overrideText
+        ? { fullPrompt: overrideText, dialogue: null, audio: null }
+        : null;
     return resolveMotionPrompt(
       {
-        motionPrompt: promptOverride || null,
-        metadata: shot?.metadata ?? null,
+        motionPrompt: mp,
+        characterTags,
         description: shot?.description ?? null,
       },
       effectiveMotionModel
@@ -818,7 +831,8 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   }, [
     editedMotionPrompt,
     rawMotionPrompt,
-    shot?.metadata,
+    motionPromptData,
+    characterTags,
     shot?.description,
     effectiveMotionModel,
   ]);

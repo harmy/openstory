@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StyleConfig } from '@/lib/db/schema/libraries';
-import { deriveMotionPrompt, deriveShotScenes } from './shot-list.derive';
+import { deriveMotionPrompt, deriveShots } from './shot-list.derive';
 import type { SceneWithShots } from './shot-list.schema';
 
 const styleConfig: StyleConfig = {
@@ -77,18 +77,18 @@ function firstShot(scene: SceneWithShots) {
   return shot;
 }
 
-describe('deriveShotScenes — single source of truth', () => {
+describe('deriveShots — single source of truth', () => {
   it('produces one derived shot per shot, ordered by shotNumber', () => {
     const scene = makeScene();
-    const derived = deriveShotScenes(scene, styleConfig);
+    const derived = deriveShots(scene, styleConfig);
     expect(derived).toHaveLength(2);
     expect(derived.map((d) => d.shotNumber)).toEqual([1, 2]);
   });
 
   it('reuses scene context verbatim across every shot (no per-shot re-derivation)', () => {
-    const derived = deriveShotScenes(makeScene(), styleConfig);
+    const derived = deriveShots(makeScene(), styleConfig);
     for (const d of derived) {
-      const visual = d.metadata.prompts?.visual?.fullPrompt ?? '';
+      const visual = d.visualPrompt.fullPrompt;
       // Scene-level shared truth appears in EVERY shot's visual prompt.
       expect(visual).toContain('INT. HALLWAY - NIGHT');
       expect(visual).toContain('dim_hallway');
@@ -101,8 +101,8 @@ describe('deriveShotScenes — single source of truth', () => {
   });
 
   it('composes start-frame visual from shot framing + scene context', () => {
-    const [first] = deriveShotScenes(makeScene(), styleConfig);
-    const visual = first?.metadata.prompts?.visual;
+    const [first] = deriveShots(makeScene(), styleConfig);
+    const visual = first?.visualPrompt;
     expect(visual?.fullPrompt).toContain('wide');
     expect(visual?.fullPrompt).toContain('eye level');
     expect(visual?.fullPrompt).toContain('Sarah at the far end');
@@ -113,8 +113,8 @@ describe('deriveShotScenes — single source of truth', () => {
   });
 
   it('composes motion prompt from action + one camera move + sound cue', () => {
-    const [, second] = deriveShotScenes(makeScene(), styleConfig);
-    const motion = second?.metadata.prompts?.motion;
+    const [, second] = deriveShots(makeScene(), styleConfig);
+    const motion = second?.motionPrompt;
     expect(motion?.fullPrompt).toContain('she turns the handle and pushes');
     expect(motion?.fullPrompt).toContain('gradual push-in');
     expect(motion?.components.cameraMovement).toBe('push-in');
@@ -124,13 +124,13 @@ describe('deriveShotScenes — single source of truth', () => {
   });
 
   it('carries per-shot duration onto both the column and the metadata', () => {
-    const derived = deriveShotScenes(makeScene(), styleConfig);
+    const derived = deriveShots(makeScene(), styleConfig);
     expect(derived[0]?.durationMs).toBe(6000);
     expect(derived[0]?.metadata.metadata?.durationSeconds).toBe(6);
   });
 
   it('keeps shotNumber OUT of the persisted Scene metadata (it is a shots column)', () => {
-    const [first] = deriveShotScenes(makeScene(), styleConfig);
+    const [first] = deriveShots(makeScene(), styleConfig);
     expect(first?.metadata).not.toHaveProperty('shotNumber');
   });
 });
@@ -173,7 +173,7 @@ describe('deriveMotionPrompt — model-agnostic', () => {
   });
 });
 
-describe('deriveShotScenes — single-shot regression', () => {
+describe('deriveShots — single-shot regression', () => {
   it('returns exactly one derived shot for a short single-shot scene', () => {
     const scene = makeScene({
       metadata: {
@@ -199,10 +199,8 @@ describe('deriveShotScenes — single-shot regression', () => {
         },
       ],
     });
-    const derived = deriveShotScenes(scene, styleConfig);
+    const derived = deriveShots(scene, styleConfig);
     expect(derived).toHaveLength(1);
-    expect(derived[0]?.metadata.prompts?.motion?.parameters.motionAmount).toBe(
-      'low'
-    );
+    expect(derived[0]?.motionPrompt.parameters.motionAmount).toBe('low');
   });
 });

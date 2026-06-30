@@ -57,6 +57,7 @@ import type {
   TalentMatchingWorkflowInput,
   TalentMatchingWorkflowOutput,
   VisualPromptWorkflowInput,
+  VisualPromptWorkflowResult,
 } from '@/lib/workflow/types';
 import { findMissingElementEntries } from '@/lib/workflows/element-sheet-workflow';
 import {
@@ -381,7 +382,10 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
           // See await-character-bible — same grandchild budget + notify lag.
           timeout: '60 minutes',
         }),
-        spawnAndAwaitChild<VisualPromptWorkflowInput, Scene[]>(step, {
+        spawnAndAwaitChild<
+          VisualPromptWorkflowInput,
+          VisualPromptWorkflowResult
+        >(step, {
           binding: this.env.VISUAL_PROMPT_WORKFLOW,
           parentBindingName: PARENT_BINDING_NAME,
           parentInstanceId,
@@ -430,7 +434,16 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
 
     const charactersWithSheets = charSettled.value;
     const locationsWithSheets = locationSettled.value;
-    const scenesWithVisualPrompts = visualSettled.value;
+    // The visual-prompt workflow returns the generated prompts in memory
+    // (#713/#991): thread them straight to the next phase rather than re-reading
+    // `frame.imagePrompt` from the DB — versions are append-only and a
+    // concurrent run may have repointed the mirror, so a re-read would be racy.
+    const scenesWithVisualPrompts = visualSettled.value.scenes;
+    const visualPromptBySceneId: Record<string, string> = Object.fromEntries(
+      Object.entries(visualSettled.value.visualPromptsBySceneId).map(
+        ([sceneId, visual]) => [sceneId, visual.fullPrompt]
+      )
+    );
     const generatedElements = elementSheetSettled.value;
     const allElements = [...elementsMinimal, ...generatedElements];
 
@@ -458,7 +471,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
         });
         return {
           sceneId: scene.sceneId,
-          visualPrompt: scene.prompts?.visual?.fullPrompt ?? '',
+          visualPrompt: visualPromptBySceneId[scene.sceneId] ?? '',
           characterSheetHashes: refs.characterSheetHashes,
           locationSheetHashes: refs.locationSheetHashes,
           elementReferenceHashes: refs.elementReferenceHashes,
@@ -553,6 +566,7 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
           videoModel,
           videoModels,
           startingFrameImageUrls,
+          visualSummaryBySceneId: visualPromptBySceneId,
         },
         spawnStepName: 'spawn-motion-music-prompts',
         awaitStepName: 'await-motion-music-prompts',
@@ -584,7 +598,8 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
     }
 
     const imageUrls = shotImagesSettled.value.imageUrls;
-    const { completeScenes, musicPrompt, musicTags } = motionMusicSettled.value;
+    const { completeScenes, motionPromptsBySceneId, musicPrompt, musicTags } =
+      motionMusicSettled.value;
 
     // ----------------------------------------------------------------------
     // PHASE 5: motion (+ optional music + merge) batch — single child
@@ -608,7 +623,13 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
       }
 
       const batchShots = completeScenes.flatMap((scene, index) => {
-        const motionPromptData = scene.prompts?.motion;
+        const matchedShot = shotMapping.find(
+          (f) => f.analysisSceneId === scene.sceneId
+        );
+        // The structured motion prompt is threaded in from the motion-prompt
+        // phase's return (#713/#991) — NOT re-read from the DB, which would be
+        // racy against concurrent append-only version writes.
+        const motionPromptData = motionPromptsBySceneId[scene.sceneId];
         if (!motionPromptData?.fullPrompt) {
           throw new WorkflowValidationError(
             `Scene ${scene.sceneId} has no motion prompt`
@@ -626,10 +647,6 @@ export class AnalyzeScriptWorkflow extends OpenStoryWorkflowEntrypoint<AnalyzeSc
           );
           return [];
         }
-
-        const matchedShot = shotMapping.find(
-          (f) => f.analysisSceneId === scene.sceneId
-        );
 
         const characterTags = scene.continuity?.characterTags;
 

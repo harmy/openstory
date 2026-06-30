@@ -72,7 +72,7 @@ export function createFramePromptVersionsMethods(db: Database) {
       })
       .where(eq(frames.id, frameId));
 
-  return {
+  const methods = {
     /**
      * Append a prompt version and mirror it onto the frame (text, hash, and
      * the selected-pointer). Returns the inserted (or pre-existing matching)
@@ -152,6 +152,28 @@ export function createFramePromptVersionsMethods(db: Database) {
         .where(eq(frames.id, input.frameId));
 
       return version;
+    },
+
+    /**
+     * Append an AI-generated visual prompt version, deciding `ai-generated`
+     * (first version for the frame) vs `regenerated` (a re-run) from the
+     * frame's existing history — so callers (the generation workflow) don't
+     * compute `source` or chase `getLatest` themselves. Appends + mirrors via
+     * `write`. The dedupe/force-regen contract is `write`'s.
+     */
+    writeAiVersion: async (input: {
+      frameId: string;
+      text: string;
+      components?: VisualPromptComponents | null;
+      inputHash: string;
+      analysisModel: string;
+      createdBy?: string | null;
+    }): Promise<FramePromptVersion> => {
+      const previous = await methods.getLatest(input.frameId);
+      return methods.write({
+        ...input,
+        source: previous ? 'regenerated' : 'ai-generated',
+      });
     },
 
     /**
@@ -282,4 +304,5 @@ export function createFramePromptVersionsMethods(db: Database) {
       return row ?? null;
     },
   };
+  return methods;
 }

@@ -22,6 +22,7 @@ import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import type {
   VisualPromptSceneWorkflowInput,
   VisualPromptWorkflowInput,
+  VisualPromptWorkflowResult,
 } from '@/lib/workflow/types';
 import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
@@ -50,7 +51,7 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
     event: Readonly<WorkflowEvent<VisualPromptWorkflowInput>>,
     step: WorkflowStep,
     _scopedDb: ScopedDb
-  ): Promise<Scene[]> {
+  ): Promise<VisualPromptWorkflowResult> {
     const input = event.payload;
     const {
       scenes,
@@ -65,7 +66,7 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
     } = input;
 
     if (scenes.length === 0) {
-      return [];
+      return { scenes: [], visualPromptsBySceneId: {} };
     }
 
     const visualPromptSceneBinding = this.env.VISUAL_PROMPT_SCENE_WORKFLOW;
@@ -124,7 +125,7 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
     // QStash original's `merge-visual-prompts` step name keeps trace parity.
     const scenesWithVisualPrompts = await step.do(
       'merge-visual-prompts',
-      async (): Promise<Scene[]> => {
+      async (): Promise<VisualPromptWorkflowResult> => {
         const successResults: Array<{
           scene: Scene;
           childResult: VisualPromptSceneResult;
@@ -157,7 +158,13 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
           );
         }
 
-        return scenes.map((scene) => {
+        // The child persists each prompt to `frame_prompt_versions` (#713) — it
+        // is NOT merged back into `scene.prompts` (that field is gone). But we
+        // ALSO return the generated prompts in memory, keyed by sceneId, so the
+        // parent pipeline threads them to the next phase rather than re-reading
+        // the racy DB mirror.
+        const visualPromptsBySceneId: Record<string, VisualPrompt> = {};
+        for (const scene of scenes) {
           const enrichment = successResults.find(
             (s) => s.childResult.sceneId === scene.sceneId
           );
@@ -170,16 +177,9 @@ export class VisualPromptWorkflow extends OpenStoryWorkflowEntrypoint<VisualProm
               'WorkflowValidationError'
             );
           }
-          // `scene.continuity` already came from scene-split; the child only
-          // adds the visual prompt now.
-          return {
-            ...scene,
-            prompts: {
-              ...scene.prompts,
-              visual: enrichment.childResult.visual,
-            },
-          };
-        });
+          visualPromptsBySceneId[scene.sceneId] = enrichment.childResult.visual;
+        }
+        return { scenes, visualPromptsBySceneId };
       }
     );
 

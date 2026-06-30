@@ -96,7 +96,7 @@ export const MobileSceneDrawer: React.FC<MobileSceneDrawerProps> = ({
   const motionPromptsReady = useMemo(() => {
     if (!eligibleShots.length) return true;
     return eligibleShots.every(
-      (f) => f.motionPrompt || f.metadata?.prompts?.motion?.fullPrompt
+      (f) => f.motionPrompt || f.motionPromptData?.fullPrompt
     );
   }, [eligibleShots]);
 

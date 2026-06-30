@@ -76,6 +76,7 @@ const mockShotBase = {
   videoError: null,
   motionPrompt: null,
   motionModel: 'veo3',
+  motionPromptData: null,
   selectedMotionPromptVersionId: null,
   renderSegmentId: null,
   audioUrl: null,

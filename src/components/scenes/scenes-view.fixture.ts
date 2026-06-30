@@ -403,6 +403,7 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
     audioGeneratedAt: null,
     audioError: null,
     audioModel: null,
+    motionPromptData: null,
     metadata: {
       sceneId: 'scene1',
       sceneNumber: 1,
@@ -417,68 +418,6 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
         location: 'Abstract macro background',
         timeOfDay: '',
         storyBeat: 'Opening macro shot of serum drop falling',
-      },
-      prompts: {
-        visual: {
-          fullPrompt:
-            'Macro beauty photography extreme close-up of a single luminous serum droplet clinging to the tip of a glass dropper trembling almost imperceptibly against a seamless warm gradient wash from ivory to palest blush the droplet catching discreet edge light that ignites it from within like liquid amber with gentle backlight haloing the glass shaft in translucent gold the frame locked at eye level with the droplet in a poised moment of potential release soft sensual intimate atmosphere captured with probe lens.',
-          negativePrompt:
-            'text, logos, harsh shadows, floating elements, holograms, people, faces, motion blur, multiple drops, background details, cold lighting',
-          components: {
-            sceneDescription:
-              'Extreme macro still of serum droplet on glass dropper just before release in slow motion sequence start.',
-            subject:
-              'Luminous serum droplet clinging to glass dropper tip against gradient background.',
-            environment:
-              'Seamless abstract warm gradient wash from ivory to palest blush with no additional elements.',
-            lighting:
-              'Soft glowing key light combined with discreet edge light and gentle backlight creating translucent golden halo around droplet and shaft.',
-            camera:
-              'Locked probe-lens frame positioned at eye level with the droplet for intimate macro perspective.',
-            composition:
-              'Centered droplet with negative space in warm gradient background emphasizing texture and light interaction.',
-            style:
-              'Macro beauty photography with warm luminous color grading and high-end editorial texture focus.',
-            technical:
-              'Extreme macro detail sharp focus on droplet surface with subtle bloom in highlights 9:16 aspect ratio.',
-            atmosphere:
-              'Sensory intimate luxurious with quiet potential energy and tactile material presence.',
-          },
-        },
-        motion: {
-          fullPrompt:
-            'Locked eye-level probe lens macro frame holds steady on a luminous serum droplet clinging to a glass dropper tip against a seamless warm ivory-to-blush gradient. The droplet releases and descends in ultra-slow motion, stretching into a languid weightless ribbon that narrows and falls below frame over the full duration. Soft edge light and gentle backlight keep the serum glowing translucent gold throughout the descent.',
-          components: {
-            cameraMovement: 'static locked',
-            startPosition: 'eye-level probe lens macro centered on droplet',
-            endPosition:
-              'eye-level probe lens macro, droplet exiting bottom of frame',
-            durationSeconds: 5,
-            speed: 'slow',
-            smoothness: 'ultra-smooth',
-            subjectTracking: 'none',
-            equipment: 'probe lens',
-          },
-          parameters: {
-            durationSeconds: 5,
-            fps: 120,
-            motionAmount: 'low',
-            cameraControl: {
-              pan: 0,
-              tilt: 0,
-              zoom: 0,
-              movement: '',
-            },
-          },
-          dialogue: {
-            presence: false,
-            lines: [],
-          },
-          audio: {
-            ambientSound: 'single resonant low warm piano note sustaining',
-            soundEffects: [],
-          },
-        },
       },
       continuity: {
         characterTags: [],
@@ -548,6 +487,7 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
     audioGeneratedAt: null,
     audioError: null,
     audioModel: null,
+    motionPromptData: null,
     metadata: {
       sceneId: 'scene2',
       sceneNumber: 2,
@@ -562,69 +502,6 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
         location: 'Abstract macro background',
         timeOfDay: '',
         storyBeat: 'Macro of cream product texture',
-      },
-      prompts: {
-        visual: {
-          fullPrompt:
-            'Macro beauty photography in the style of high-end product films like Charlotte Tilbury and La Mer, a flawless bone-white porcelain surface filling the frame with a generous initial curl of dense velvety cream in warm magnolia beginning to coil slowly from below in a perfect sculptural spiral, captured at the very first moment of dispense with potential energy held in the forming ridges and peaks, abstract macro background as a simple gradient wash, intimate and luxurious atmosphere, soft glowing key light raking low across the surface to throw exquisite relief into every fold and peak of the cream texture, subtle edge light and warm backlight creating a luminous sheen on the product, slow macro push-in from directly above with a slight two-degree clockwise rotational implication, shallow depth of field emphasizing the tactile material details while softly blooming highlights, warm luminous color grading with soft pinks and peaches, 9:16 aspect ratio.',
-          negativePrompt:
-            'text, logos, people, skin, hands, faces, floating UI, holograms, harsh shadows, motion blur, overexposure, cool tones, cluttered background',
-          components: {
-            sceneDescription:
-              'Starting frame of cream being dispensed in a sculptural spiral onto a porcelain surface at the initial moment of contact.',
-            subject:
-              'Rich cream product coiling onto smooth porcelain in macro detail.',
-            environment:
-              'Abstract macro background with flawless bone-white porcelain surface and simple warm gradient wash.',
-            lighting:
-              'Soft glowing key light raking low to accentuate texture ridges, subtle edge light and backlight creating luminous sheen.',
-            camera:
-              'Direct overhead macro angle implying slow push-in and slight clockwise rotation, shallow depth of field.',
-            composition:
-              'Cream spiral centered and filling frame with focus on sculptural form and tactile peaks.',
-            style:
-              'Macro beauty photography, sensory and luxurious, warm luminous color grading like high-end editorial.',
-            technical:
-              '9:16 aspect ratio, high detail on material texture, softly bloomed highlights.',
-            atmosphere:
-              'Intimate, indulgent, potential energy held in the forming product swirl.',
-          },
-        },
-        motion: {
-          fullPrompt:
-            'Slow macro push-in descends straight down from directly above the porcelain surface while gently rotating two degrees clockwise. A generous curl of dense cream dispenses from below frame, coiling outward in a smooth, deliberate spiral that builds ridges and peaks. The forming swirl gradually fills the frame, transforming the surface texture into an abstract landscape of peaks and valleys. The low raking key light shifts subtly across the moving ridges, accentuating depth and sheen. A faint atmospheric hum underscores the intimate, tactile motion.',
-          components: {
-            cameraMovement: 'slow macro push-in with clockwise rotation',
-            startPosition:
-              'directly overhead macro framing on empty porcelain center',
-            endPosition:
-              'closer overhead macro filling frame with completed cream spiral',
-            durationSeconds: 6,
-            speed: 'slow',
-            smoothness: 'smooth',
-            subjectTracking: 'centered on dispensing cream spiral',
-            equipment: 'probe lens on dolly with rotational head',
-          },
-          parameters: {
-            durationSeconds: 6,
-            fps: 30,
-            motionAmount: 'medium',
-            cameraControl: {
-              pan: 0,
-              tilt: 0,
-              zoom: 0.3,
-              movement: 'dolly forward with 2-degree clockwise rotation',
-            },
-          },
-          dialogue: {
-            presence: false,
-            lines: [],
-          },
-          audio: {
-            ambientSound: 'faint atmospheric warmth hum',
-            soundEffects: [],
-          },
-        },
       },
       continuity: {
         characterTags: [],
@@ -693,6 +570,7 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
     audioGeneratedAt: null,
     audioError: null,
     audioModel: null,
+    motionPromptData: null,
     metadata: {
       sceneId: 'scene3',
       sceneNumber: 3,
@@ -707,70 +585,6 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
         location: 'Abstract macro background',
         timeOfDay: '',
         storyBeat: 'Application of cream onto skin',
-      },
-      prompts: {
-        visual: {
-          fullPrompt:
-            'Macro beauty photography in a close-up low-angle view almost parallel to the skin surface showing a fingertip at the exact moment of gentle contact pressing downward into a layer of dense cream, the product surface yielding and beginning to blanch pale under the pressure while the skin beneath starts to flush with a subtle living rose tone spreading outward, set against a simple abstract gradient background wash, soft glowing key light with discreet edge light skimming the thin emerging film of product so it gleams with satin texture, warm luminous color grading with softly bloomed highlights, slight clockwise rotational framing implied in the still capture, 9:16 vertical composition.',
-          negativePrompt:
-            'harsh shadows, floating elements, text, holograms, multiple fingers, motion blur, overexposed skin, clinical lighting, visible pores exaggerated, product dripping, background details',
-          components: {
-            sceneDescription:
-              'Starting frame of fingertip pressing gently into cream at first contact, product beginning to yield and spread while skin flushes, captured in a still that implies slow-motion continuation',
-            subject:
-              'Fingertip in macro close-up contacting cream on skin surface',
-            environment:
-              'Abstract macro background with simple gradient wash, no environmental details',
-            lighting:
-              'Soft glowing key light combined with discreet edge light raking across skin and product film to create satin gleam, warm luminous overall quality',
-            camera:
-              'Low-angle macro lens positioned almost parallel to skin surface, 9:16 vertical framing with subtle clockwise rotational implication',
-            composition:
-              'Extreme close-up centered on fingertip-cream contact point with shallow depth of field isolating texture and initial flush',
-            style:
-              'Macro beauty photography with realistic skin texture, luxurious material focus, warm luminous editorial color grading',
-            technical:
-              'High-resolution macro capture, soft bloom on highlights, no motion blur, 9:16 aspect ratio',
-            atmosphere:
-              'Sensory intimate luxurious mood, potential energy of product application beginning',
-          },
-        },
-        motion: {
-          fullPrompt:
-            'Low-angle macro lens positioned almost parallel to the skin surface executes an imperceptibly slow clockwise rotational drift. The fingertip presses gently downward, the cream yielding and spreading in a thin even veil while a subtle rose flush blooms outward from the contact point in extreme slow motion.',
-          components: {
-            cameraMovement: 'slow clockwise rotational drift',
-            startPosition:
-              'low-angle macro almost parallel to skin, centered on fingertip contact',
-            endPosition:
-              'low-angle macro with subtle clockwise rotation, same framing',
-            durationSeconds: 7,
-            speed: 'slow',
-            smoothness: 'ultra-smooth',
-            subjectTracking: 'static lock on contact point during rotation',
-            equipment: 'macro probe lens on gimbal',
-          },
-          parameters: {
-            durationSeconds: 7,
-            fps: 30,
-            motionAmount: 'low',
-            cameraControl: {
-              pan: 0,
-              tilt: 0,
-              zoom: 1,
-              movement: 'clockwise rotational drift',
-            },
-          },
-          dialogue: {
-            presence: false,
-            lines: [],
-          },
-          audio: {
-            ambientSound:
-              'soft ascending piano interval with warm atmospheric hum',
-            soundEffects: [],
-          },
-        },
       },
       continuity: {
         characterTags: [],
@@ -840,6 +654,7 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
     audioGeneratedAt: null,
     audioError: null,
     audioModel: null,
+    motionPromptData: null,
     metadata: {
       sceneId: 'scene4',
       sceneNumber: 4,
@@ -854,68 +669,6 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
         location: 'Abstract macro background',
         timeOfDay: '',
         storyBeat: 'Lipstick application on wrist',
-      },
-      prompts: {
-        visual: {
-          fullPrompt:
-            "Macro beauty photography capturing the starting moment of a deep burnished brown-rose lipstick bullet positioned just above the skin and beginning to glide across the inside of a luminous dewy wrist laying down an impossibly smooth saturated glossy color ribbon the fine hairs along the wrist catching a soft backlight like a delicate halo the skin rendered with realistic pore detail and subtle sheen set against a simple warm gradient abstract macro background soft glowing key light combined with discreet edge light and gentle rear illumination creating luminous depth and texture probe lens positioned low and slightly ahead of the bullet's path with shallow depth of field emphasizing the impending motion in an extreme close-up frame warm luminous color grading highlighting flushed dewy tones and softly bloomed highlights",
-          negativePrompt:
-            'text signs logos holograms floating interfaces harsh shadows blurry motion blur people faces full body visible jewelry clothing accessories',
-          components: {
-            sceneDescription:
-              'Lipstick bullet making initial contact and beginning to draw a color ribbon across inner wrist in macro view',
-            subject: 'Lipstick bullet and wrist skin with emerging color trail',
-            environment:
-              'Abstract macro background with simple warm gradient wash',
-            lighting:
-              'Soft glowing key light with discreet edge light and subtle backlight for halo effect on fine hairs',
-            camera:
-              'Probe lens low angle positioned slightly ahead of lipstick path extreme close-up with shallow depth of field',
-            composition:
-              'Centered on lipstick tip and beginning color ribbon with rack focus potential from tip to trail',
-            style:
-              'Macro beauty photography with realistic skin texture and material detail warm luminous editorial grading',
-            technical:
-              '9:16 aspect ratio high resolution sharp detail on product and skin no motion blur',
-            atmosphere:
-              'Sensory intimate luxurious with potential energy of slow deliberate application',
-          },
-        },
-        motion: {
-          fullPrompt:
-            'Probe-lens positioned low and slightly ahead of the path, the deep brown-rose lipstick bullet glides smoothly toward camera in extreme slow motion across luminous dewy wrist skin, laying down a saturated glossy color ribbon that blooms behind it. Rack focus shifts gradually from the moving bullet tip to the settling trail. Fine hairs along the wrist catch the rear illumination. The glistening pigment settles with soft sheen.',
-          components: {
-            cameraMovement: 'slow dolly forward',
-            startPosition:
-              'low probe-lens angle extreme close-up slightly ahead of lipstick',
-            endPosition: 'tighter framing centered on settling color ribbon',
-            durationSeconds: 6,
-            speed: 'slow',
-            smoothness: 'smooth',
-            subjectTracking: 'follows lipstick path with rack focus pull',
-            equipment: 'probe lens',
-          },
-          parameters: {
-            durationSeconds: 6,
-            fps: 30,
-            motionAmount: 'low',
-            cameraControl: {
-              pan: 0,
-              tilt: 0,
-              zoom: 0,
-              movement: 'forward',
-            },
-          },
-          dialogue: {
-            presence: false,
-            lines: [],
-          },
-          audio: {
-            ambientSound:
-              'soft ascending piano notes with rising breathy feminine vocal tone',
-            soundEffects: [],
-          },
-        },
       },
       continuity: {
         characterTags: [],
@@ -985,6 +738,7 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
     audioGeneratedAt: null,
     audioError: null,
     audioModel: null,
+    motionPromptData: null,
     metadata: {
       sceneId: 'scene5',
       sceneNumber: 5,
@@ -999,69 +753,6 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
         location: 'Abstract macro background',
         timeOfDay: '',
         storyBeat: "Reveal of the model's face",
-      },
-      prompts: {
-        visual: {
-          fullPrompt:
-            "Cinematic macro beauty photography in vertical 9:16 frame of a woman's face centered tightly from chin to crown, eyes gently closed with lashes resting softly against luminous dewy skin, lips parted only slightly in deep rose, complete stillness and poised potential as the eyes prepare to open, rendered with realistic pore detail against an abstract soft gradient background shifting from ivory to peach, soft glowing key light from above combined with a subtle warm gold edge and rim light caressing the cheekbones, intimate luxurious mood with warm bloomed highlights and flushed skin tones, high-end editorial color grading, probe lens compression emphasizing texture and dimension, barely perceptible push-in framing suggesting imminent slow reveal.",
-          negativePrompt:
-            'text, signage, holograms, floating UI, harsh shadows, motion blur, open eyes, makeup smudges, jewelry, clothing, background details, overexposed highlights',
-          components: {
-            sceneDescription:
-              "Tight vertical portrait of a woman's face beginning in complete stillness with eyes closed, capturing the instant before the slow reveal of direct gaze.",
-            subject:
-              "Woman's face centered and filling frame, eyes closed, lashes down, lips slightly parted",
-            environment:
-              'Abstract macro background with soft ivory-to-peach gradient wash, no environmental details',
-            lighting:
-              'Single soft glowing key from above, whisper of warm gold backlight and rim light tracing cheekbones, even flattering illumination with subtle bounce',
-            camera:
-              'Tight centered 9:16 vertical framing from chin to crown, probe lens for macro texture, slow push-in implied',
-            composition:
-              'Face dominates frame, symmetrical portrait orientation, negative space minimized to emphasize skin and subtle expression',
-            style:
-              'Macro beauty photography, sensory intimate luxurious treatment referencing high-end editorial films',
-            technical:
-              '9:16 aspect ratio, high resolution, realistic pore and skin detail, filmic color grading with bloomed highlights',
-            atmosphere:
-              'Sensory, intimate, luxurious, poised stillness with latent energy',
-          },
-        },
-        motion: {
-          fullPrompt:
-            "Slow barely perceptible push-in on a centered vertical portrait filling the 9:16 frame from chin to crown. The woman's face begins in complete stillness with eyes closed and lashes resting against luminous dewy skin, lips slightly parted. The eyes then open slowly and unhurriedly, the gaze turning direct, sovereign and steady toward camera. Subtle skin texture and warm gold rim light remain constant as framing tightens gently throughout the six-second shot.",
-          components: {
-            cameraMovement: 'slow push-in',
-            startPosition:
-              'tight centered vertical 9:16 framing from chin to crown, eyes closed',
-            endPosition:
-              'slightly tighter centered framing, eyes open with direct gaze',
-            durationSeconds: 6,
-            speed: 'slow',
-            smoothness: 'ultra-smooth',
-            subjectTracking: 'static centered lock on face',
-            equipment: 'probe lens, dolly',
-          },
-          parameters: {
-            durationSeconds: 6,
-            fps: 30,
-            motionAmount: 'low',
-            cameraControl: {
-              pan: 0,
-              tilt: 0,
-              zoom: 0.08,
-              movement: 'dolly forward',
-            },
-          },
-          dialogue: {
-            presence: false,
-            lines: [],
-          },
-          audio: {
-            ambientSound: 'single resonant piano chord resolving into silence',
-            soundEffects: [],
-          },
-        },
       },
       continuity: {
         characterTags: [],
@@ -1131,6 +822,7 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
     audioGeneratedAt: null,
     audioError: null,
     audioModel: null,
+    motionPromptData: null,
     metadata: {
       sceneId: 'scene6',
       sceneNumber: 6,
@@ -1145,65 +837,6 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
         location: 'Abstract macro background',
         timeOfDay: '',
         storyBeat: 'Hero product showcase',
-      },
-      prompts: {
-        visual: {
-          fullPrompt:
-            'Macro beauty photography of the hero product centered on a pure warm-white surface, the product sits still perfect and inevitable, soft glowing key light from upper left with a discreet golden edge light tracing its right silhouette, background gradient from ivory to the softest peach, highly detailed material textures with realistic depth, warm luminous color grading, highlights softly bloomed, locked frame composition with no movement, 9:16 vertical framing, intimate luxurious atmosphere',
-          negativePrompt:
-            'text, logos, floating elements, holograms, motion blur, harsh shadows, people, faces, hands, movement, low angle, wide shot',
-          components: {
-            sceneDescription:
-              'Hero product centered and motionless on a warm-white surface in an abstract macro setting with gradient background',
-            subject: 'Hero product centered on pure warm-white surface',
-            environment:
-              'Abstract macro background with gradient from ivory to softest peach on warm-white surface',
-            lighting:
-              'Soft glowing key from upper left with discreet golden edge light on the right',
-            camera:
-              'Locked frame, macro probe lens style, vertical 9:16 composition',
-            composition:
-              'Product perfectly centered, still and symmetrical, negative space around it',
-            style:
-              'Macro beauty photography, high-end editorial finish, realistic material textures',
-            technical:
-              'High resolution, sharp focus on product, soft bloom on highlights, 9:16 aspect',
-            atmosphere: 'Intimate, luxurious, sensory, serene and inevitable',
-          },
-        },
-        motion: {
-          fullPrompt:
-            'Static locked frame with the hero product perfectly centered and motionless on a pure warm-white surface. Soft glowing key light from upper left casts a discreet golden edge light along its right silhouette. Background gradient holds steady from ivory to the softest peach. No camera movement. Product remains still and inevitable throughout the shot.',
-          components: {
-            cameraMovement: 'static lock-off',
-            startPosition: 'locked centered macro framing on product',
-            endPosition: 'locked centered macro framing on product',
-            durationSeconds: 4,
-            speed: 'static',
-            smoothness: 'smooth',
-            subjectTracking: 'none',
-            equipment: 'locked tripod',
-          },
-          parameters: {
-            durationSeconds: 4,
-            fps: 30,
-            motionAmount: 'low',
-            cameraControl: {
-              pan: 0,
-              tilt: 0,
-              zoom: 0,
-              movement: 'none',
-            },
-          },
-          dialogue: {
-            presence: false,
-            lines: [],
-          },
-          audio: {
-            ambientSound: 'silence',
-            soundEffects: ['single clear piano note'],
-          },
-        },
       },
       continuity: {
         characterTags: [],
@@ -1273,6 +906,7 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
     audioGeneratedAt: null,
     audioError: null,
     audioModel: null,
+    motionPromptData: null,
     metadata: {
       sceneId: 'scene7',
       sceneNumber: 7,
@@ -1287,62 +921,6 @@ const fixtureShotRows: Omit<ShotWithImage, 'frame'>[] = [
         location: 'Abstract macro background',
         timeOfDay: '',
         storyBeat: 'Closing brand logo',
-      },
-      prompts: {
-        visual: {
-          fullPrompt:
-            'Macro beauty photography of a minimal abstract composition on a smooth warm ivory gradient background shifting to soft peach, crisp white brand logo centered and holding perfectly still, soft glowing key light from upper left with subtle bounce filling shadows, delicate edge highlights, luxurious luminous atmosphere, high-end beauty editorial quality, locked frame, vertical composition',
-          negativePrompt: '',
-          components: {
-            sceneDescription:
-              'End card holding on brand logo centered against abstract background',
-            subject: 'White brand logo centered',
-            environment:
-              'Abstract macro background with warm ivory to peach gradient',
-            lighting:
-              'Soft glowing key light from upper left with subtle bounce and delicate edge highlights',
-            camera: 'Locked frame, straight-on composition in vertical 9:16',
-            composition:
-              'Minimal centered placement with generous negative space',
-            style:
-              'Macro beauty photography, warm luminous editorial treatment',
-            technical: 'High resolution, clean focus, no motion blur',
-            atmosphere: 'Luxurious, sensory, intimate and final',
-          },
-        },
-        motion: {
-          fullPrompt:
-            'Camera locked in static straight-on framing on a centered white brand logo against a smooth warm ivory gradient. Logo remains perfectly still with no movement or animation. The frame holds clean and composed before a gentle fade begins at the close of the shot.',
-          components: {
-            cameraMovement: 'static lock-off',
-            startPosition: 'straight-on centered vertical framing on logo',
-            endPosition: 'same locked framing as fade initiates',
-            durationSeconds: 3,
-            speed: 'slow',
-            smoothness: 'ultra-smooth',
-            subjectTracking: 'none',
-            equipment: 'locked tripod',
-          },
-          parameters: {
-            durationSeconds: 3,
-            fps: 30,
-            motionAmount: 'low',
-            cameraControl: {
-              pan: 0,
-              tilt: 0,
-              zoom: 0,
-              movement: 'static',
-            },
-          },
-          dialogue: {
-            presence: false,
-            lines: [],
-          },
-          audio: {
-            ambientSound: '',
-            soundEffects: [],
-          },
-        },
       },
       continuity: {
         characterTags: [],

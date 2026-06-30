@@ -150,45 +150,30 @@ export class MotionPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Motio
       // so the stored hash equals the verify-time recompute by construction.
       const inputHash = await computeMotionPromptInputHash(narrowed);
 
-      const enrichedScene = {
-        ...scene,
-        prompts: {
-          ...scene.prompts,
-          motion: motionPrompt,
-        },
-      };
-
       await step.do('save-motion-prompt-to-db', async () => {
-        const previous = await scopedDb.shotPromptVersions.getLatest(
+        // The motion prompt is NOT written into `scene.metadata` any more
+        // (#713). `writeAiVersion` decides ai-generated vs regenerated from
+        // history, appends the version, mirrors its text onto
+        // `shot.motionPrompt`, and repoints `selectedMotionPromptVersionId` —
+        // superseding any prior user override automatically (the override stays
+        // in history and can be restored).
+        await scopedDb.shotPromptVersions.writeAiVersion({
           shotId,
-          'motion'
-        );
-        const source = previous ? 'regenerated' : 'ai-generated';
-
-        // Clear `shot.motionPrompt` user-override when regenerating; see
-        // the matching note in visual-prompt-scene-workflow.ts. The variant
-        // row below preserves the new prompt; the prior user override is
-        // restorable from the prompt-history sheet.
-        await scopedDb.shots.update(shotId, {
-          metadata: enrichedScene,
-          motionPrompt: null,
-        });
-
-        await scopedDb.shotPromptVersions.write({
-          shotId,
-          promptType: 'motion',
           text: motionPrompt.fullPrompt,
           components: motionPrompt.components,
           parameters: motionPrompt.parameters,
-          source,
+          dialogue: motionPrompt.dialogue ?? null,
+          audio: motionPrompt.audio ?? null,
           inputHash,
           analysisModel: analysisModelId,
         });
 
+        // The prompt lives on `shot.motionPrompt` (mirror) now, not metadata;
+        // carry the base scene so the client refreshes the shot on this event.
         await getGenerationChannel(sequenceId).emit('generation.shot:updated', {
           shotId,
           updateType: 'motion-prompt',
-          metadata: enrichedScene,
+          metadata: scene,
         });
 
         if (input.emitStreaming) {

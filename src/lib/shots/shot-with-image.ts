@@ -13,6 +13,7 @@
  * `kind:'framing'` `frame_variants` version rather than a shots column.
  */
 
+import type { AssemblableMotionPrompt } from '@/lib/ai/scene-analysis.schema';
 import type { Frame, Shot } from '@/lib/db/schema';
 
 export type ShotGridSheet = {
@@ -36,6 +37,13 @@ export type ShotWithImage = Shot & {
   variantImageStatus: Frame['imageStatus'];
   /** The anchor frame, verbatim — for version/variant-aware callers. */
   frame: Frame;
+  /**
+   * The shot's selected motion prompt (reconstructed from its
+   * `shot_prompt_versions` row) — the assemblable fields the client motion
+   * preview needs after `metadata.prompts.motion` was removed (#713). Null when
+   * the shot has no motion prompt version yet.
+   */
+  motionPromptData: AssemblableMotionPrompt | null;
 };
 
 /**
@@ -85,7 +93,8 @@ export function projectShotMissingFrame(shot: Shot): ShotWithImage {
 export function projectShotWithImage(
   shot: Shot,
   frame: Frame,
-  gridSheet?: ShotGridSheet | null
+  gridSheet?: ShotGridSheet | null,
+  motionPromptData?: AssemblableMotionPrompt | null
 ): ShotWithImage {
   return {
     ...shot,
@@ -103,5 +112,6 @@ export function projectShotWithImage(
     variantImageUrl: gridSheet?.url ?? null,
     variantImageStatus: gridSheet?.status ?? null,
     frame,
+    motionPromptData: motionPromptData ?? null,
   };
 }

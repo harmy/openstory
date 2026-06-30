@@ -22,7 +22,10 @@ import {
   projectShotWithImage,
   type ShotWithImage,
 } from '@/lib/shots/shot-with-image';
-import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
+import {
+  motionPromptFromVersion,
+  resolveMotionPrompt,
+} from '@/lib/motion/resolve-motion-prompt';
 import { VARIANT_TYPES, type VariantType } from '@/lib/db/schema/shot-variants';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import {
@@ -287,7 +290,6 @@ export const archiveSequenceFn = createServerFn({ method: 'POST' })
 export function buildSceneSummaries(shots: Shot[]): MusicSceneSummary[] {
   return shots.map((shot) => {
     const md = shot.metadata?.musicDesign;
-    const prompts = shot.metadata?.prompts;
     const legacyMusic = shot.metadata?.audioDesign?.music;
     const meta = shot.metadata?.metadata;
     const durationSeconds = shot.durationMs
@@ -298,14 +300,16 @@ export function buildSceneSummaries(shots: Shot[]): MusicSceneSummary[] {
       sceneId: shot.id,
       location: meta?.location || '',
       timeOfDay: meta?.timeOfDay || '',
-      visualSummary: prompts?.visual?.components.sceneDescription || '',
+      // Visual context for the music prompt: the scene description. The
+      // structured visual prompt components moved to `frame_prompt_versions`
+      // (#713), so the shot's own description is the summary source here.
+      visualSummary: shot.description || '',
       title: meta?.title || 'Untitled Scene',
       storyBeat: meta?.storyBeat || '',
       durationSeconds,
       musicStyle: md?.style || legacyMusic?.style || '',
       musicMood: md?.mood || legacyMusic?.mood || '',
       musicPresence: md?.presence || legacyMusic?.presence || 'none',
-      atmosphere: prompts?.visual?.components.atmosphere,
     };
   });
 }
@@ -553,6 +557,13 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
       // Pre-seeding a `pending` row the workflow can't reconcile (it dedupes on
       // the run id the pending row lacks) would orphan it and — being non-failed
       // — permanently block re-adding the model via `assertModelNotAlreadyAdded`.
+      // Structured motion prompt now lives on the shot's selected
+      // `shot_prompt_versions` row (#713), not `metadata.prompts.motion`. Batch
+      // it once; `motion-batch` re-assembles per model from `motionPrompt`.
+      const selectedMotionByShot =
+        await scopedDb.shotPromptVersions.getSelectedMotionByShots(
+          eligible.map((f) => f.id)
+        );
       const workflowInput: BatchMotionMusicWorkflowInput = {
         ...baseCtx,
         includeMusic: false,
@@ -560,18 +571,36 @@ export const addModelToSequenceFn = createServerFn({ method: 'POST' })
         // Adding a video model lands as an alternate only — never the primary
         // video. Promote later with "Set". (#547)
         variantOnly: true,
-        shots: eligible.map((f) => ({
-          shotId: f.id,
-          imageUrl: f.thumbnailUrl ?? '',
-          prompt: resolveMotionPrompt(f, model),
-          model,
-          motionPrompt: f.metadata?.prompts?.motion,
-          characterTags: f.metadata?.continuity?.characterTags,
-          duration: f.durationMs
-            ? f.durationMs / 1000
-            : (f.metadata?.metadata?.durationSeconds ?? 3),
-          aspectRatio: sequence.aspectRatio,
-        })),
+        shots: eligible.map((f) => {
+          const selectedMotion = selectedMotionByShot.get(f.id);
+          // Prefer the selected version's structured prompt; fall back to the
+          // `shot.motionPrompt` mirror for legacy shots with no version pointer
+          // (#713) so they still animate with their existing motion prompt.
+          const motionPrompt = selectedMotion
+            ? motionPromptFromVersion(selectedMotion)
+            : f.motionPrompt
+              ? { fullPrompt: f.motionPrompt, dialogue: null, audio: null }
+              : undefined;
+          return {
+            shotId: f.id,
+            imageUrl: f.thumbnailUrl ?? '',
+            prompt: resolveMotionPrompt(
+              {
+                motionPrompt: motionPrompt ?? null,
+                characterTags: f.metadata?.continuity?.characterTags,
+                description: f.description,
+              },
+              model
+            ),
+            model,
+            motionPrompt,
+            characterTags: f.metadata?.continuity?.characterTags,
+            duration: f.durationMs
+              ? f.durationMs / 1000
+              : (f.metadata?.metadata?.durationSeconds ?? 3),
+            aspectRatio: sequence.aspectRatio,
+          };
+        }),
       };
       try {
         const workflowRunId = await triggerWorkflow(

@@ -353,43 +353,24 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
         );
       }
 
-      // `scene.continuity` already carries the scene's membership (from
-      // scene-split), so we keep it as-is — no longer overwritten by an LLM
-      // continuity output.
-      const enrichedScene = {
-        ...scene,
-        prompts: {
-          ...scene.prompts,
-          visual: result.visual,
-        },
-      };
-
       // Hash the same scene-scoped `narrowed` context the LLM was given above,
       // so the stored hash equals the verify-time recompute by construction.
       const inputHash = await computeVisualPromptInputHash(narrowed);
 
       await step.do('save-visual-prompt-to-db', async () => {
         // Visual prompt history lives on the shot's anchor frame now (#989) —
-        // resolved by shotId, never by id-reuse.
+        // resolved by shotId, never by id-reuse. The prompt is NOT written into
+        // `scene.metadata` any more (#713): `frame_prompt_versions.write`
+        // mirrors its text onto `frame.imagePrompt` and repoints
+        // `selectedImagePromptVersionId`, superseding any prior user-override
+        // automatically (the override stays in history and can be restored).
         const frame = await scopedDb.frames.getAnchorByShot(shotId);
-        const previous = frame
-          ? await scopedDb.framePromptVersions.getLatest(frame.id)
-          : null;
-        const source = previous ? 'regenerated' : 'ai-generated';
-
-        // Scene metadata stays on the shot; the prompt itself goes to
-        // `frame_prompt_versions`. Writing the new AI version mirrors its text
-        // onto `frame.imagePrompt` and repoints `selectedImagePromptVersionId`,
-        // so it supersedes any prior user-override automatically (the override
-        // is retained in the prompt history and can be restored).
-        await scopedDb.shots.update(shotId, { metadata: enrichedScene });
 
         if (frame) {
-          await scopedDb.framePromptVersions.write({
+          await scopedDb.framePromptVersions.writeAiVersion({
             frameId: frame.id,
             text: result.visual.fullPrompt,
             components: result.visual.components,
-            source,
             inputHash,
             analysisModel: analysisModelId,
           });
@@ -399,10 +380,13 @@ export class VisualPromptSceneWorkflow extends OpenStoryWorkflowEntrypoint<Visua
           );
         }
 
+        // The generated prompt now lives on `frame.imagePrompt` (mirror), not
+        // in `metadata`; carry the base scene so the client refreshes the shot
+        // (and re-projects `imagePrompt`) on this event.
         await getGenerationChannel(sequenceId).emit('generation.shot:updated', {
           shotId,
           updateType: 'visual-prompt',
-          metadata: enrichedScene,
+          metadata: scene,
         });
 
         // Signal end-of-stream to the per-shot channel so the UI can swap

@@ -97,12 +97,10 @@ export async function buildShotImageWorkflowInput(opts: {
     elements,
   } = opts;
 
-  // Priority: provided > stored (frame) > AI-generated > description.
-  const prompt =
-    opts.prompt ||
-    opts.imagePrompt ||
-    shot.metadata?.prompts?.visual?.fullPrompt ||
-    shot.description;
+  // Priority: provided > stored frame mirror > description. The frame's
+  // `imagePrompt` is the single source of truth (#713/#989) — the old
+  // `metadata.prompts.visual` fallback is gone (that field was removed).
+  const prompt = opts.prompt || opts.imagePrompt || shot.description;
   if (!prompt) return null;
 
   const continuity = opts.continuity ?? shot.metadata?.continuity;

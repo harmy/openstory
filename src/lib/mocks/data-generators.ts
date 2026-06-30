@@ -20,7 +20,6 @@ const generateMockShot = (
     'Mountains',
     'Space Station',
   ];
-  const moods = ['Tense', 'Happy', 'Sad', 'Excited', 'Calm', 'Angry'];
 
   const shotBase: Omit<ShotWithImage, 'frame'> = {
     id: faker.string.ulid(),
@@ -64,6 +63,7 @@ const generateMockShot = (
       'flux_2_dev',
     ]),
     imagePrompt: null,
+    motionPromptData: null,
     videoStatus: faker.helpers.arrayElement([
       'pending',
       'generating',
@@ -129,47 +129,6 @@ const generateMockShot = (
         styleTag: '',
       },
       sourceImageUrl: '',
-      prompts: {
-        visual: {
-          fullPrompt: faker.lorem.paragraph(),
-          negativePrompt: '',
-          components: {
-            sceneDescription: faker.lorem.sentence(),
-            subject: faker.lorem.words(5),
-            environment: faker.helpers.arrayElement(settings),
-            lighting: faker.lorem.words(3),
-            camera: faker.lorem.words(2),
-            composition: faker.lorem.words(3),
-            style: faker.lorem.word(),
-            technical: faker.lorem.words(2),
-            atmosphere: faker.helpers.arrayElement(moods),
-          },
-        },
-        motion: {
-          fullPrompt: faker.lorem.paragraph(),
-          components: {
-            cameraMovement: faker.lorem.words(3),
-            startPosition: faker.lorem.words(2),
-            endPosition: faker.lorem.words(2),
-            durationSeconds: faker.number.int({ min: 2, max: 5 }),
-            speed: 'medium',
-            smoothness: 'smooth',
-            subjectTracking: faker.lorem.word(),
-            equipment: faker.lorem.word(),
-          },
-          parameters: {
-            durationSeconds: faker.number.int({ min: 2, max: 5 }),
-            fps: 24,
-            motionAmount: 'medium' as const,
-            cameraControl: {
-              pan: 0,
-              tilt: 0,
-              zoom: 0,
-              movement: 'steady',
-            },
-          },
-        },
-      },
     },
   };
   const frame: Frame = {

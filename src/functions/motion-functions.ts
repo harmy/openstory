@@ -27,7 +27,7 @@ import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import { dbSceneId } from '@/lib/db/schema';
 import type { BatchMotionMusicWorkflowInput } from '@/lib/workflow/types';
 
-import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
+import { resolveMotionPromptFromVersion } from '@/lib/motion/resolve-motion-prompt';
 import { projectShotWithImage } from '@/lib/shots/shot-with-image';
 import { rescanContinuityFromPrompt } from '@/lib/scenes/rescan-continuity-from-prompt';
 
@@ -63,7 +63,19 @@ export const generateShotMotionFn = createServerFn({ method: 'POST' })
       : resolveSceneVideoModel(scene, sequence);
 
     const userEditedPrompt = Boolean(data.prompt);
-    const prompt = data.prompt || resolveMotionPrompt(shot, model);
+    const selectedMotion =
+      await context.scopedDb.shotPromptVersions.getSelectedMotion(shot.id);
+    const prompt =
+      data.prompt ||
+      resolveMotionPromptFromVersion(
+        selectedMotion,
+        {
+          motionPromptMirror: shot.motionPrompt,
+          characterTags: shot.metadata?.continuity?.characterTags,
+          description: shot.description,
+        },
+        model
+      );
 
     // Auto-link any element/cast/location tags the user mentioned in their
     // edited motion prompt into shot.metadata.continuity, so downstream
@@ -117,6 +129,15 @@ export const generateShotMotionFn = createServerFn({ method: 'POST' })
           aspectRatio: sequence.aspectRatio,
           generateAudio: data.generateAudio,
           userEditedPrompt,
+          // Capture the edited version's dialogue/audio now so the workflow can
+          // carry it onto the recorded user-edit version without a racy /
+          // replay-unsafe in-workflow DB re-read (#713/#991).
+          priorMotion: userEditedPrompt
+            ? {
+                dialogue: selectedMotion?.dialogue ?? null,
+                audio: selectedMotion?.audio ?? null,
+              }
+            : undefined,
         },
       ],
     };
@@ -243,6 +264,13 @@ export const batchGenerateMotionFn = createServerFn({ method: 'POST' })
       };
     }
 
+    // Batch-load the selected motion prompt version for every eligible shot —
+    // the resolution source of truth (#713), replacing `metadata.prompts.motion`.
+    const selectedMotionByShot =
+      await context.scopedDb.shotPromptVersions.getSelectedMotionByShots(
+        eligibleShots.map((s) => s.id)
+      );
+
     const workflowInput: BatchMotionMusicWorkflowInput = {
       userId: user.id,
       teamId,
@@ -253,7 +281,15 @@ export const batchGenerateMotionFn = createServerFn({ method: 'POST' })
         return {
           shotId: shot.id,
           imageUrl: shot.thumbnailUrl ?? '',
-          prompt: resolveMotionPrompt(shot, shotModel),
+          prompt: resolveMotionPromptFromVersion(
+            selectedMotionByShot.get(shot.id),
+            {
+              motionPromptMirror: shot.motionPrompt,
+              characterTags: shot.metadata?.continuity?.characterTags,
+              description: shot.description,
+            },
+            shotModel
+          ),
           model: shotModel,
           duration:
             data.duration ??

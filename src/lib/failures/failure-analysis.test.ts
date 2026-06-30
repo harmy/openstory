@@ -58,6 +58,7 @@ function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
     videoError: null,
     motionPrompt: 'Camera pan left',
     motionModel: null,
+    motionPromptData: null,
     audioUrl: null,
     audioPath: null,
     audioStatus: 'pending',

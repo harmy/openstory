@@ -10,7 +10,13 @@ import type {
   NewSequenceElement,
   SequenceElement,
 } from '@/lib/db/schema';
-import { frames, shots, sequenceElements, sequences } from '@/lib/db/schema';
+import {
+  frames,
+  shots,
+  shotPromptVersions,
+  sequenceElements,
+  sequences,
+} from '@/lib/db/schema';
 import {
   buildShotRenameDeltas,
   replaceTokenInText,
@@ -291,14 +297,33 @@ export function createSequenceElementsMethods(db: Database) {
         newToken
       );
       // metadata/motionPrompt → shots; imagePrompt mirror → the anchor frame.
+      // The motion prompt is resolved from the *selected* `shot_prompt_versions`
+      // row now (#713), so a rename must rewrite that row's text too — updating
+      // only the `shot.motionPrompt` mirror would leave the render reading the
+      // un-renamed version. (Image resolution reads the `frame.imagePrompt`
+      // mirror directly, so the frame update below suffices there.)
+      const selectedMotionVersionByShot = new Map(
+        allShots.map((s) => [s.id, s.selectedMotionPromptVersionId])
+      );
       const shotStatements = deltas.flatMap((delta) => {
         const set: Record<string, unknown> = { updatedAt: now };
         if (delta.metadata !== undefined) set.metadata = delta.metadata;
         if (delta.motionPrompt !== undefined)
           set.motionPrompt = delta.motionPrompt;
+        const selectedMotionVersionId = selectedMotionVersionByShot.get(
+          delta.shotId
+        );
         return [
           ...(Object.keys(set).length > 1
             ? [db.update(shots).set(set).where(eq(shots.id, delta.shotId))]
+            : []),
+          ...(delta.motionPrompt !== undefined && selectedMotionVersionId
+            ? [
+                db
+                  .update(shotPromptVersions)
+                  .set({ text: delta.motionPrompt })
+                  .where(eq(shotPromptVersions.id, selectedMotionVersionId)),
+              ]
             : []),
           ...(delta.imagePrompt !== undefined
             ? [

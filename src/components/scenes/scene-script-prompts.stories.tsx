@@ -33,6 +33,7 @@ const mockShot = {
   videoError: null,
   motionPrompt: null,
   motionModel: 'veo3',
+  motionPromptData: null,
   selectedMotionPromptVersionId: null,
   renderSegmentId: null,
   audioUrl: null,
@@ -81,49 +82,6 @@ const mockShot = {
       style: '',
       mood: '',
       atmosphere: '',
-    },
-    prompts: {
-      visual: {
-        fullPrompt:
-          'Busy coffee shop interior, morning light streaming through windows, woman sitting at corner table with laptop, steam rising from latte cup, warm atmosphere, cinematic lighting, 4K sharp focus',
-        negativePrompt: 'blurry, low quality, distorted',
-        components: {
-          sceneDescription: 'Coffee shop',
-          subject: 'Woman at laptop',
-          environment: 'Interior cafe',
-          lighting: 'Natural morning light',
-          camera: 'Medium shot',
-          composition: 'Rule of thirds',
-          style: 'Cinematic',
-          technical: '4K, sharp focus',
-          atmosphere: 'Bustling yet intimate',
-        },
-      },
-      motion: {
-        fullPrompt:
-          'Slow push in, subtle camera movement forward, dolly shot from wide to medium, very smooth transition, locked subject tracking',
-        components: {
-          cameraMovement: 'Push in',
-          startPosition: 'Wide',
-          endPosition: 'Medium',
-          durationSeconds: 3,
-          speed: 'Slow',
-          smoothness: 'Very smooth',
-          subjectTracking: 'Locked',
-          equipment: 'Dolly',
-        },
-        parameters: {
-          durationSeconds: 3,
-          fps: 24,
-          motionAmount: 'medium' as const,
-          cameraControl: {
-            pan: 0,
-            tilt: 0,
-            zoom: 0.2,
-            movement: 'forward',
-          },
-        },
-      },
     },
     sourceImageUrl: '',
   },
@@ -244,49 +202,6 @@ export const LongPrompts: Story = {
       ...mockShot,
       metadata: {
         ...mockShot.metadata,
-        prompts: {
-          visual: {
-            fullPrompt:
-              'Busy coffee shop interior, morning light streaming through large windows casting long dramatic shadows across wooden floor, woman in casual business attire sitting at corner table with laptop, steam rising from latte cup on table, warm cozy atmosphere with bustling patrons in soft focus background, cinematic lighting with natural window light as key, shallow depth of field, 4K ultra sharp focus, professionally color graded, film grain texture',
-            negativePrompt: 'blurry, low quality, distorted',
-            components: {
-              sceneDescription: 'Coffee shop',
-              subject: 'Woman at laptop',
-              environment: 'Interior cafe',
-              lighting: 'Natural morning light',
-              camera: 'Medium shot',
-              composition: 'Rule of thirds',
-              style: 'Cinematic',
-              technical: '4K, sharp focus',
-              atmosphere: 'Bustling yet intimate',
-            },
-          },
-          motion: {
-            fullPrompt:
-              'Slow deliberate push in, subtle smooth camera movement forward using dolly equipment, starting from wide establishing shot transitioning to medium intimate shot, very smooth fluid transition at constant slow speed, locked subject tracking maintaining focus on protagonist, professional cinematography technique, 3 second duration, 24fps cinematic frame rate',
-            components: {
-              cameraMovement: 'Push in',
-              startPosition: 'Wide',
-              endPosition: 'Medium',
-              durationSeconds: 3,
-              speed: 'Slow',
-              smoothness: 'Very smooth',
-              subjectTracking: 'Locked',
-              equipment: 'Dolly',
-            },
-            parameters: {
-              durationSeconds: 3,
-              fps: 24,
-              motionAmount: 'medium' as const,
-              cameraControl: {
-                pan: 0,
-                tilt: 0,
-                zoom: 0.2,
-                movement: 'forward',
-              },
-            },
-          },
-        },
       },
     },
   },
