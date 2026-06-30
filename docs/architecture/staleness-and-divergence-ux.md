@@ -174,4 +174,4 @@ Backend implementation details that need to be in place before the divergence UI
 ## Open questions
 
 - **Toast frequency.** If a long workflow lands many divergent variants in quick succession (a recast that diverges across N frames), do we toast once with a count, or once per frame? Default: debounce to one toast per sequence per 5s with a count.
-- **Promote-while-generating.** What happens if the user clicks Promote on a variant while a fresh regenerate is already in flight? Default: confirm dialog warns and offers to cancel the in-flight workflow, then promotes. Implementation depends on QStash cancel-by-id.
+- **Promote-while-generating.** What happens if the user clicks Promote on a variant while a fresh regenerate is already in flight? Default: confirm dialog warns and offers to cancel the in-flight workflow, then promotes. Implementation depends on tracking the relevant Cloudflare Workflows instance ids and terminating the in-flight run safely before promotion.

@@ -1,12 +1,12 @@
 # Workflow snapshots and content-hash staleness
 
-This is the companion to [managing-complex-dependency-graphs-in-collaborative-ai-video-platforms.md](./managing-complex-dependency-graphs-in-collaborative-ai-video-platforms.md). The original doc proposed a general-purpose versioned-DAG architecture with branching, XState lifecycles, Inngest, Postgres MVCC, Redis pub/sub, and Linear-style transaction sync. A review against the codebase shows that most of that infrastructure is already solved differently on our stack (QStash + `@upstash/workflow`, `@upstash/realtime`, Cloudflare D1, Drizzle, the scoped-DB context from `#603`) — and most of what remains unsolved reduces to a critical path of three ideas. This doc is the stack-specific subset we intend to ship.
+This is the companion to [managing-complex-dependency-graphs-in-collaborative-ai-video-platforms.md](./managing-complex-dependency-graphs-in-collaborative-ai-video-platforms.md). The original doc proposed a general-purpose versioned-DAG architecture with branching, XState lifecycles, Inngest, Postgres MVCC, Redis pub/sub, and Linear-style transaction sync. A review against the codebase shows that most of that infrastructure is already solved differently on our stack (Cloudflare Workflows, Durable Object-backed SSE realtime, Cloudflare D1, Drizzle, and scoped DB access from workflow payload `teamId`/`userId`) — and most of what remains unsolved reduces to a critical path of three ideas. This doc is the stack-specific subset we intend to ship.
 
 It composes with [scoped-db-context-implementation.md](./scoped-db-context-implementation.md); every new data-access path described here flows through `ScopedDb`.
 
 ## The two failure modes we're closing
 
-**1. Lost-work mid-generation.** `regenerateFramesWorkflow` (`src/lib/workflows/regenerate-frames-workflow.ts`) currently calls `scopedDb.sequences.getById` inside `context.run`. If a user edits a character, location, or prompt while the workflow is running, the generation silently reads a mix of pre- and post-edit inputs. The result is written as the primary artifact either way, with no signal that what landed isn't what the user had in mind when they triggered the workflow.
+**1. Lost-work mid-generation.** `regenerateFramesWorkflow` (`src/lib/workflows/regenerate-frames-workflow.ts`) reads mutable sequence state during workflow execution. If a user edits a character, location, or prompt while the workflow is running, the generation can read a mix of pre- and post-edit inputs. The result is written as the primary artifact either way, with no signal that what landed isn't what the user had in mind when they triggered the workflow.
 
 **2. Silent staleness.** After a character recast or location swap, downstream frames, character sheets, location sheets, and talent sheets still display their prior outputs. Nothing in the schema records which inputs those outputs were derived from, so the UI can't distinguish "still current" from "stale but not yet regenerated" — and neither can a workflow about to apply a new result.
 
@@ -18,10 +18,10 @@ Before describing the design, it's worth stating what the original doc recommend
 
 | Original recommendation           | Why we skip it                                                                                                                                                                                                                          |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Inngest for orchestration         | QStash + `@upstash/workflow` is already wired, and `createScopedWorkflow` (`src/lib/workflow/scoped-workflow.ts`) enforces `teamId`/`userId` on every run. Swapping orchestrators would be pure churn.                                  |
+| Inngest for orchestration         | Cloudflare Workflows is already wired, and `OpenStoryWorkflowEntrypoint` (`src/lib/workflow/base-workflow.ts`) enforces `teamId`/`userId` on every run. Swapping orchestrators would be pure churn.                                     |
 | XState v5 lifecycle machines      | Status columns (`thumbnailStatus`, `variantImageStatus`, `videoStatus`, `audioStatus`, `sequences.status`) already model `pending → generating → completed → failed`. Adding XState on top would duplicate state, not replace it.       |
-| Custom Redis pub/sub + PG NOTIFY  | `src/lib/realtime/index.ts` already provides a typed `realtimeSchema` on top of `@upstash/realtime`. We extend this schema, we don't replace it.                                                                                        |
-| Postgres JSONB / SKIP LOCKED      | The app runs on Cloudflare D1 (SQLite). QStash is already the queue; we don't need a DB-level queue at all.                                                                                                                             |
+| Custom Redis pub/sub + PG NOTIFY  | `src/lib/realtime/index.ts` already provides a typed `realtimeSchema`; delivery runs through the in-repo SSE client and `RealtimeChannel` Durable Object. We extend this schema, we don't replace it.                                   |
+| Postgres JSONB / SKIP LOCKED      | The app runs on Cloudflare D1 (SQLite). Cloudflare Workflows is already the durable job engine; we don't need a DB-level queue at all.                                                                                                  |
 | Entity version chains / branching | `frame_variants` (`src/lib/db/schema/frame-variants.ts`) already holds alternate per-model outputs, which covers the realistic "keep old vs new" use case for frame artifacts. General-purpose branching adds complexity we don't need. |
 | Property-level LWW + rebasing     | We are not a concurrent editor. TanStack Query + server functions give us implicit last-writer-wins at the server boundary.                                                                                                             |
 | Dependency edge table (v1)        | Character/location → frame linkage is inferred at runtime via `characterTags` in `frame.metadata` (`matchCharactersToFrame`). Good enough until we have a reason to materialize it.                                                     |
@@ -84,43 +84,43 @@ The UI calls this (or a batch variant) when rendering. There is no cascading pro
 
 ## Pillar 2: Workflow input snapshots
 
-Workflows must not read mutable state inside `context.run` for anything that should be frozen. The "input snapshot" is just the fully-resolved input DTO, passed end-to-end through the QStash payload.
+Workflows must not read mutable state inside a `step.do()` for anything that should be frozen. The "input snapshot" is just the fully-resolved input DTO, passed end-to-end through the Cloudflare Workflows event payload.
 
 ### The pattern
 
-**At trigger time** (server function, before `qstash.publishJSON`):
+**At trigger time** (server handler/function, before `triggerWorkflow()` calls the workflow binding):
 
 1. Resolve every referenced sheet URL and read its `input_hash`.
 2. Assemble the full input DTO for the workflow — prompt, model, params, referenced sheet hashes.
 3. Compute `snapshotInputHash = computeInputHash(dto)`.
-4. Publish the DTO _and_ `snapshotInputHash` as the QStash payload.
+4. Pass the DTO _and_ `snapshotInputHash` to `triggerWorkflow()`, which resolves the Cloudflare Workflows binding and calls `binding.create({ id, params })`.
 
 **At workflow-start**: the workflow validates `snapshotInputHash` matches what it recomputes from the DTO (cheap tamper/format check), then proceeds using only the DTO.
 
-**At write time** (inside the final `context.run` that commits the artifact): recompute `currentInputHash` from the _live_ scoped-DB state, and branch on whether it still matches `snapshotInputHash`. (See Pillar 3.)
+**At write time** (inside the final `step.do()` that commits the artifact): recompute `currentInputHash` from the _live_ scoped-DB state, and branch on whether it still matches `snapshotInputHash`. (See Pillar 3.)
 
-### `createScopedWorkflow` extension
+### Shared workflow snapshot extension
 
-`src/lib/workflow/scoped-workflow.ts` gains an optional `snapshot` configuration:
+The shared Cloudflare Workflows base/helper layer gains an optional `snapshot` configuration:
 
 ```ts
-createScopedWorkflow<MyWorkflowInput & { snapshotInputHash: string }>(
-  async (context, scopedDb) => { ... },
-  {
-    snapshot: {
-      computeCurrent: (input, scopedDb) => computeFrameInputHash(input, scopedDb),
-    },
-  },
-);
+class MyWorkflow extends OpenStoryWorkflowEntrypoint<
+  MyWorkflowInput & { snapshotInputHash: string }
+> {
+  protected override async runImpl(event, step, scopedDb) {
+    // Snapshot-aware helpers validate event.payload.snapshotInputHash and
+    // expose computeCurrent(input, scopedDb) for write-time divergence checks.
+  }
+}
 ```
 
-When `snapshot` is configured, the wrapper adds a middleware that validates the payload carries `snapshotInputHash`, and exposes a `context.snapshot` helper with `{ snapshotInputHash, computeCurrent() }`. Workflows that have been migrated use it; workflows that haven't are unchanged.
+When `snapshot` is configured, the shared helper validates that the payload carries `snapshotInputHash`, and exposes `{ snapshotInputHash, computeCurrent() }` to workflow code. Workflows that have been migrated use it; workflows that haven't are unchanged.
 
 ### Per-workflow input surface
 
 For the workflows that do content generation, "input" is specifically:
 
-- **`regenerateFramesWorkflow`** (`RegenerateFramesWorkflowInput`) — already passes `frameIds`, `triggeringCharacterId`, `imageModel`. Needs to additionally inline the resolved character-sheet hashes and location-sheet hashes for each affected frame at trigger time. Remove the live `scopedDb.sequences.getById` read inside `context.run`.
+- **`regenerateFramesWorkflow`** (`RegenerateFramesWorkflowInput`) — already passes `frameIds`, `triggeringCharacterId`, `imageModel`. Needs to additionally inline the resolved character-sheet hashes and location-sheet hashes for each affected frame at trigger time. Remove the live `scopedDb.sequences.getById` read from the generation step.
 - **`characterSheetWorkflow`** (`CharacterSheetWorkflowInput`) — already inlines `characterMetadata`, `talentMetadata`, `referenceImageUrl`, `styleConfig`. Add: the `input_hash` of the referenced talent sheet (if any).
 - **`locationSheetWorkflow`** (`LocationSheetWorkflowInput`) — already inlines `locationMetadata`, `referenceImageUrl`, `libraryLocationDescription`, `styleConfig`. Add: the `reference_input_hash` of the referenced library location (if any).
 - **`libraryTalentSheetWorkflow`** (`LibraryTalentSheetWorkflowInput`) — already inlines `referenceImageUrls`, `talentDescription`. Talent media is append-only in practice, so the snapshot is the list of reference URLs themselves.
@@ -130,14 +130,14 @@ Most of the work is additive — these payloads already carry the data. We add t
 
 ### Snapshot size
 
-QStash has per-message size limits, but our payloads are dominated by prompts, sheet URLs, and metadata — not by the artifacts themselves, which are accessed by URL. We inline snapshots into the payload in v1. If that becomes a problem we add a `workflow_input_snapshots` table with content-addressable storage (as the original doc proposed), but this is not part of v1.
+Cloudflare Workflows has event payload size limits, but our payloads are dominated by prompts, sheet URLs, and metadata — not by the artifacts themselves, which are accessed by URL. We inline snapshots into the payload in v1. If that becomes a problem we add a `workflow_input_snapshots` table with content-addressable storage (as the original doc proposed), but this is not part of v1.
 
 ## Pillar 3: Divergence-on-completion
 
 Before writing a generation result, compare hashes:
 
 ```ts
-// illustrative — runs inside the final context.run of the workflow
+// illustrative — runs inside the final step.do() of the workflow
 const currentInputHash = await context.snapshot.computeCurrent(input, scopedDb);
 
 if (currentInputHash === context.snapshot.snapshotInputHash) {
@@ -191,7 +191,7 @@ This gives the UI a single event to listen for across all four entity types with
 ## How it composes with existing patterns
 
 - **Scoped DB** (`src/lib/db/scoped/*`) is the only entry point. Staleness reads go through scoped getters; hash computation helpers accept a `ScopedDb` and use it. No code path bypasses team scoping.
-- **`createScopedWorkflow`** gains the optional `snapshot` extension described above — existing workflows keep working unchanged until they opt in.
+- **Shared workflow helpers** gain the optional `snapshot` extension described above — existing workflows keep working unchanged until they opt in.
 - **Status columns** stay `pending | generating | completed | failed`. Staleness does not become a fifth value. The UI composes `status === 'completed' && isStale(entity)` when it needs "completed but stale".
 - **`frame_variants`** is the divergence sink for frame artifacts in addition to its existing role for per-model alternates. The unique key was split into two partial indexes (primary slot vs divergent alternates keyed by `input_hash`) so primaries and alternates of the same model coexist without overwriting each other. `input_hash` and `diverged_at` are columns on this table.
 
@@ -241,7 +241,7 @@ Everything else from the original doc that we're explicitly _not_ implementing y
 - **`frame_dependencies` edge table.** Keep inferring from `characterTags` / `matchCharactersToFrame` (`src/lib/workflows/regenerate-frames-workflow.ts`) until there's a concrete reason to materialize it — e.g., needing to walk dependents faster than a scan allows.
 - **`stale` as a status enum value.** The derived boolean is sufficient until it isn't.
 - **Topological regeneration queue.** Not needed until we have a materialized dependency graph to walk.
-- **Content-addressable snapshot table** (`workflow_input_snapshots`). Not needed until inlining snapshots into QStash payloads actually strains the payload-size budget.
+- **Content-addressable snapshot table** (`workflow_input_snapshots`). Not needed until inlining snapshots into Cloudflare Workflows payloads actually strains the payload-size budget.
 
 ## Decision summary
 
@@ -253,11 +253,11 @@ Answering every row of the original doc's decision table for our stack:
 | Staleness detection      | Content hash comparison                   | **Kept**: SHA-256 input-hash comparison, derived at read time.                                                                                                                    |
 | Invalidation propagation | Lazy dirty bits + demand verification     | **Adapted**: no dirty-bit table; staleness is a pure read of the current graph.                                                                                                   |
 | Collaborative sync       | Property-level LWW + transactions         | **Dropped**: not a concurrent editor. Server is authoritative.                                                                                                                    |
-| Workflow isolation       | Application-level snapshots               | **Kept**: snapshot inlined in QStash payload; `createScopedWorkflow` extension enforces it.                                                                                       |
+| Workflow isolation       | Application-level snapshots               | **Kept**: snapshot inlined in the Cloudflare Workflows payload; shared workflow helpers enforce it.                                                                               |
 | Lifecycle management     | XState machines                           | **Dropped**: existing status columns are sufficient.                                                                                                                              |
-| Workflow orchestration   | Inngest (or Temporal)                     | **Dropped**: QStash + `@upstash/workflow` already does this.                                                                                                                      |
-| Real-time events         | Redis pub/sub + PG NOTIFY                 | **Kept, different plumbing**: `@upstash/realtime` channels; one new event type.                                                                                                   |
-| Job distribution         | SKIP LOCKED queue                         | **Dropped**: QStash is the queue.                                                                                                                                                 |
+| Workflow orchestration   | Inngest (or Temporal)                     | **Dropped**: Cloudflare Workflows already does this.                                                                                                                              |
+| Real-time events         | Redis pub/sub + PG NOTIFY                 | **Kept, different plumbing**: typed SSE events delivered through `RealtimeChannel` Durable Objects; one new event type.                                                           |
+| Job distribution         | SKIP LOCKED queue                         | **Dropped**: Cloudflare Workflows is the durable job engine.                                                                                                                      |
 | Branching                | `parentVersion` + branch names            | **Dropped**. Variants tables (stages 2-4) cover the realistic "keep old vs new" use case.                                                                                         |
 | Divergence handling      | Three options: re-queue / alternate / ask | **Adapted**: per-frame artifacts save to `frame_variants` (stage 1); sheets, sequence-level video/music, and prompts get their own variants tables in stages 2-4. No user prompt. |
 
@@ -268,7 +268,7 @@ Recommended build order for stage 1, each step independently shippable:
 1. `src/lib/ai/input-hash.ts` with the per-artifact helpers and their unit tests. No schema changes yet.
 2. Add `input_hash` and `diverged_at` columns to `frame_variants`, plus `input_hash` to the sheet tables. Backfill is unnecessary — null means "unknown, treat as non-stale". Split the existing `(frameId, variantType, model)` unique index into `frame_variants_primary_key` (WHERE `diverged_at IS NULL`) and `frame_variants_divergent_key` on `(frameId, variantType, model, input_hash)` (WHERE `diverged_at IS NOT NULL`) so divergent alternates can coexist with the primary slot.
 3. Add the four `*_input_hash` columns to `frames`.
-4. Extend `createScopedWorkflow` with the optional `snapshot` config.
+4. Extend the shared Cloudflare Workflows base/helper layer with the optional `snapshot` config.
 5. Migrate **one** workflow end-to-end (`regenerateFramesWorkflow` is the highest-value target given it's the concrete bug described in the problem statement). Prove the pattern, including the divergence path into `frame_variants`.
 6. Extend `realtimeSchema.generation` with `stale:detected` and wire one UI surface to it.
 7. Migrate remaining workflows one at a time.
