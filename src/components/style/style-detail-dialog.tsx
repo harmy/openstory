@@ -21,7 +21,6 @@ import {
   stylePreviewImageUrls,
 } from '@/lib/style/style-assets';
 import { styleSlug } from '@/lib/style/style-slug';
-import { Route as NewSequenceRoute } from '@/routes/_app/sequences/new';
 import type { Style } from '@/types/database';
 import { Link } from '@tanstack/react-router';
 import { Wand2 } from 'lucide-react';
@@ -90,7 +89,7 @@ const SampleClip: FC<{
           className="absolute right-2 top-2 gap-1.5 opacity-90 backdrop-blur-sm transition-opacity hover:opacity-100"
         >
           <Link
-            to={NewSequenceRoute.to}
+            to="/sequences/new"
             search={{ style: slug }}
             hash="compose"
             aria-label={`Try the ${styleName} style`}
@@ -281,7 +280,7 @@ const StyleDetailContent: FC<{ style: Style }> = ({ style }) => {
             from the video's "Try", which also seeds the sample brief. */}
         <Button asChild>
           <Link
-            to={NewSequenceRoute.to}
+            to="/sequences/new"
             search={{ style: styleSlug(style.name), prefill: 'style' }}
             hash="compose"
             aria-label={`Use the ${style.name} style`}

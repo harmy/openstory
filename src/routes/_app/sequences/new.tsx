@@ -11,7 +11,6 @@ import { styleSlug } from '@/lib/style/style-slug';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useState } from 'react';
 import { z } from 'zod';
-import { Route as ScenesRoute } from '@/routes/_app/sequences/$id/scenes';
 
 const BILLING_PROMPT_KEY = 'openstory:billing-prompt-dismissed';
 const BILLING_PROMPT_EXPIRY_DAYS = 1;
@@ -115,7 +114,7 @@ function NewSequencePage() {
       if (firstId) {
         // Navigate to storyboard page after successful generation
         void navigate({
-          to: ScenesRoute.to,
+          to: '/sequences/$id/scenes',
           params: { id: firstId },
         });
       }
