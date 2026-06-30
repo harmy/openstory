@@ -246,6 +246,102 @@ export const restoreSequenceMusicPromptVariantFn = createServerFn({
     return { variantId: inserted.id };
   });
 
+// Persist a hand-edited prompt as a `user-edit` version WITHOUT triggering a
+// render. Until now the only persistence path for an edited prompt was clicking
+// Generate/Regenerate (the render fns), so a manual edit or a "Shorten" stayed a
+// local textarea draft and was silently lost on the next shot refetch. This is
+// the standalone Save: it appends a `user-edit` version + mirrors it onto the
+// frame/shot, matching what the image/motion workflows record for an edited
+// prompt (`shouldRecordUserEdit` + upstream-hash capture) minus the render.
+const shotSaveInput = z.object({
+  sequenceId: ulidSchema,
+  shotId: ulidSchema,
+  promptType: promptTypeSchema,
+  text: z.string().min(1),
+});
+
+export const saveShotPromptFn = createServerFn({ method: 'POST' })
+  .middleware([shotAccessMiddleware])
+  .inputValidator(zodValidator(shotSaveInput))
+  .handler(async ({ context, data }) => {
+    const { shot, frame, sequence, scopedDb, user } = context;
+    const text = data.text.trim();
+    if (!text) {
+      throw new Error('Cannot save an empty prompt');
+    }
+
+    // No-op guard: don't append a `user-edit` identical to the live prompt —
+    // mirrors `shouldRecordUserEdit` in the render workflows so a Save with no
+    // actual change doesn't spawn a duplicate history row.
+    const currentPrompt =
+      data.promptType === 'visual' ? frame.imagePrompt : shot.motionPrompt;
+    if (currentPrompt !== null && currentPrompt === text) {
+      return { versionId: null, unchanged: true } as const;
+    }
+
+    // Capture the current upstream hash so staleness keeps tracking: a manual
+    // edit aligns the prompt with the live context, and it should later light
+    // up 'stale' if that context changes. Best-effort — a null hash just
+    // disables staleness for this prompt, it never blocks the save (matches the
+    // render-workflow user-edit path).
+    let inputHash: string | null = null;
+    let analysisModel: string | null = null;
+    if (shot.metadata) {
+      try {
+        const ctx = await loadShotPromptContext({
+          scopedDb,
+          sequence,
+          scene: shot.metadata,
+          // No-op for visual; the motion hash folds in the rendered still.
+          startingFrameImageUrl: frame.imageUrl,
+        });
+        const narrowed = narrowShotPromptContext(ctx);
+        inputHash =
+          data.promptType === 'visual'
+            ? await computeVisualPromptInputHash(narrowed)
+            : await computeMotionPromptInputHash(narrowed);
+        analysisModel = ctx.analysisModel;
+      } catch (error) {
+        logger.warn(
+          `saveShotPrompt: uncomputable hash for shot ${shot.id}; recording with null hash`,
+          { err: error }
+        );
+      }
+    }
+
+    if (data.promptType === 'visual') {
+      const inserted = await scopedDb.framePromptVersions.write({
+        frameId: frame.id,
+        text,
+        source: 'user-edit',
+        inputHash,
+        analysisModel,
+        createdBy: user.id,
+      });
+      return { versionId: inserted.id, unchanged: false } as const;
+    }
+
+    // Carry the selected version's dialogue/audio direction forward onto the
+    // user-edit so audio-capable models keep their enrichment after a free-text
+    // edit (mirrors the motion-workflow user-edit path). `components` /
+    // `parameters` stay null on a hand edit.
+    const selected = await scopedDb.shotPromptVersions.getSelectedMotion(
+      shot.id
+    );
+    const inserted = await scopedDb.shotPromptVersions.write({
+      shotId: shot.id,
+      promptType: 'motion',
+      text,
+      dialogue: selected?.dialogue ?? null,
+      audio: selected?.audio ?? null,
+      source: 'user-edit',
+      inputHash,
+      analysisModel,
+      createdBy: user.id,
+    });
+    return { versionId: inserted.id, unchanged: false } as const;
+  });
+
 const shotRegenerateInput = z.object({
   sequenceId: ulidSchema,
   shotId: ulidSchema,
@@ -304,7 +400,13 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
     // path can land later when the user isn't viewing this shot, so we skip
     // the realtime publishes to avoid burning Redis ops for a stream nobody
     // is consuming.
-    const baseInput: FramePromptWorkflowInput | MotionPromptWorkflowInput = {
+    // Fields common to both prompt workflows. The two trigger calls below build
+    // their input in a NARROWED, per-type block (not a `A | B` union) so the
+    // compiler enforces each workflow's required fields — a union literal only
+    // has to satisfy ONE member, which is exactly how the missing-`frameId` bug
+    // slipped through (FramePromptWorkflowInput needs it, MotionPromptWorkflowInput
+    // doesn't, so the union accepted the omission).
+    const commonInput = {
       userId: user.id,
       teamId,
       sequenceId: sequence.id,
@@ -318,18 +420,7 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
       analysisModelId:
         getAnalysisModelById(ctx.analysisModel)?.id ?? DEFAULT_ANALYSIS_MODEL,
       emitStreaming: data.force === true,
-      // Snapshot the rendered still at trigger time (#929) — the motion
-      // workflow must NOT look it up mid-run, or a concurrent re-render could
-      // swap it. No-op for the visual path. The still lives on the anchor frame
-      // now (#989), loaded at the top of this handler, so this is the image as
-      // it exists right now.
-      ...(data.promptType === 'motion' && {
-        startingFrameImageUrl: frame.imageUrl,
-      }),
     };
-
-    const urlPath =
-      data.promptType === 'visual' ? '/frame-prompt' : '/motion-prompt';
 
     // Force-regen needs a unique dedup ID per click so QStash doesn't collapse
     // repeat clicks into a single run — the user is explicitly asking for
@@ -342,11 +433,30 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
           `${Date.now()}-${crypto.randomUUID()}`
         )
       : shotPromptDedupId(data.promptType, shot.id, liveHash);
-
-    const workflowRunId = await triggerWorkflow(urlPath, baseInput, {
+    const triggerOpts = {
       deduplicationId,
       label: buildWorkflowLabel(sequence.id),
-    });
+    };
+
+    const workflowRunId =
+      data.promptType === 'visual'
+        ? // `frameId` is REQUIRED on FramePromptWorkflowInput — the workflow
+          // never reads the DB (#991) and persists the visual prompt only when
+          // it's present, so resolving the anchor frame here (from the access
+          // middleware's `frame`) is mandatory, not optional.
+          await triggerWorkflow<FramePromptWorkflowInput>(
+            '/frame-prompt',
+            { ...commonInput, frameId: frame.id },
+            triggerOpts
+          )
+        : // Snapshot the rendered still at trigger time (#929) so the motion
+          // workflow never looks it up mid-run (a concurrent re-render could
+          // swap it). The still lives on the anchor frame now (#989).
+          await triggerWorkflow<MotionPromptWorkflowInput>(
+            '/motion-prompt',
+            { ...commonInput, startingFrameImageUrl: frame.imageUrl },
+            triggerOpts
+          );
 
     return { workflowRunId, alreadyUpToDate: false } as const;
   });

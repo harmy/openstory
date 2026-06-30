@@ -488,11 +488,14 @@ export interface FramePromptWorkflowInput extends SequenceWorkflowContext {
   analysisModelId: AnalysisModelId;
   shotId?: string;
   /**
-   * Anchor frame id for `shotId`, resolved by the parent and passed in so the
-   * child never reads the DB (#991). `null` when the shot has no anchor frame
-   * (the child logs + skips persistence, as before).
+   * Anchor frame id for `shotId`, resolved by the caller and passed in so the
+   * workflow never reads the DB (#991). The visual prompt is persisted ONLY when
+   * this is a real id, so it is REQUIRED (not optional): every trigger must
+   * consciously resolve it — pass `null` only when the shot genuinely has no
+   * anchor frame (the workflow logs + skips persistence). Leaving it off was a
+   * silent "prompt never saved" bug, so the compiler now demands it.
    */
-  frameId?: string | null;
+  frameId: string | null;
   /**
    * Stream incremental `fullPrompt` deltas over the per-shot realtime
    * channel while the LLM generates. Set by the explicit "Regenerate Prompt"

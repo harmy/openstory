@@ -1,4 +1,5 @@
 import { characterSheetVariantKeys } from '@/hooks/use-character-sheet-variants';
+import { promptVariantKeys } from '@/hooks/use-prompt-variants';
 import { shotKeys } from '@/hooks/use-shots';
 import { locationSheetVariantKeys } from '@/hooks/use-location-sheet-variants';
 import { sequenceCharacterKeys } from '@/hooks/use-sequence-characters';
@@ -112,14 +113,39 @@ export function updateQueryCacheFromEvent(
       break;
 
     case 'generation.shot:updated': {
-      // Update shot metadata with prompts
-      // The metadata is validated by the realtime schema before reaching here
+      // Patch the cached scene metadata (title, continuity, music/audio design)
+      // in place. The realtime schema validated it upstream.
       const metadata = data.metadata;
       if (isSceneMetadata(metadata)) {
         queryClient.setQueryData<ShotWithImage[]>(
           shotKeys.list(sequenceId),
           (old) => old?.map((f) => (f.id === shotId ? { ...f, metadata } : f))
         );
+      }
+      // Prompt regenerations no longer travel in `metadata` — the visual/motion
+      // prompt now lives in `frame_prompt_versions` / `shot_prompt_versions`
+      // and is mirrored onto `frame.imagePrompt` / `shot.motionPrompt`, then
+      // projected into `ShotWithImage` server-side (#713). The in-place
+      // `setQueryData(metadata)` above can't re-run that projection, so refetch
+      // the shots list to pick up the new mirrored prompt + `motionPromptData`,
+      // and invalidate the matching version-history query so an open prompt
+      // history sheet shows the freshly appended version (#991).
+      const updateType = getString(data, 'updateType');
+      if (updateType === 'visual-prompt' || updateType === 'motion-prompt') {
+        debouncedInvalidate(
+          queryClient,
+          shotKeys.list(sequenceId),
+          `shots:${sequenceId}`
+        );
+        if (shotId) {
+          const promptType =
+            updateType === 'visual-prompt' ? 'visual' : 'motion';
+          debouncedInvalidate(
+            queryClient,
+            promptVariantKeys.shot(promptType, shotId),
+            `prompt-variants:${promptType}:${shotId}`
+          );
+        }
       }
       break;
     }

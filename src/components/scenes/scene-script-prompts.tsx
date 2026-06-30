@@ -42,6 +42,7 @@ import {
   useShotStaleness,
 } from '@/hooks/use-shot-staleness';
 import { sequenceKeys } from '@/hooks/use-sequences';
+import { useSaveShotPrompt } from '@/hooks/use-prompt-variants';
 import type { FrameVariant, ShotVariant } from '@/lib/db/schema';
 import {
   DEFAULT_IMAGE_MODEL,
@@ -221,6 +222,20 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
   const prevImagePromptRef = useRef<string | undefined>(undefined);
   const prevMotionPromptRef = useRef<string | undefined>(undefined);
 
+  // "Dirty" = the textarea holds an unsaved manual edit. Guards the prop sync
+  // below so a background refetch (realtime event, window focus) can't clobber
+  // an in-progress edit, and drives the Save/Cancel row's visibility. Cleared
+  // on shot change, on Save/Cancel/Regenerate-prompt.
+  const dirtyImageRef = useRef(false);
+  const dirtyMotionRef = useRef(false);
+  // The user has focused the editor at least once for this shot. Only edits
+  // made AFTER focus count as manual — the MarkdownEditor (TipTap) can emit an
+  // `onValueChange` on mount when it re-serializes the initial content (e.g.
+  // mention tagification), which must NOT mark the prompt dirty or a Save button
+  // appears on a prompt the user never touched.
+  const imageFocusedRef = useRef(false);
+  const motionFocusedRef = useRef(false);
+
   const queryClient = useQueryClient();
   const generateVariants = useGenerateVariants();
   const selectVariant = useSelectVariant();
@@ -278,6 +293,11 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     // lands and staleness is re-queried. `isPending` flips on the same render,
     // which is what drives the button's `Regenerating…` label.
     onMutate: async (vars) => {
+      // An explicit prompt regeneration discards the current draft (the LLM
+      // streams a replacement), so drop the dirty guard for that axis — the
+      // completion swap below should win.
+      if (vars.promptType === 'visual') dirtyImageRef.current = false;
+      else dirtyMotionRef.current = false;
       if (!shot?.id) return { previous: undefined };
       const key = shotStalenessKey(shot.id);
       await queryClient.cancelQueries({ queryKey: key });
@@ -321,6 +341,52 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
       });
     },
   });
+
+  // Standalone Save: persist a hand-edited / shortened prompt as a `user-edit`
+  // version without rendering. Before this, an edit only persisted if you then
+  // clicked Generate; Shorten + manual edits were lost on the next refetch.
+  const saveVisualPrompt = useSaveShotPrompt({
+    sequenceId,
+    shotId: shot?.id ?? '',
+    promptType: 'visual',
+  });
+  const saveMotionPrompt = useSaveShotPrompt({
+    sequenceId,
+    shotId: shot?.id ?? '',
+    promptType: 'motion',
+  });
+
+  const handleSaveVisualPrompt = useCallback(
+    (text: string) => {
+      saveVisualPrompt.mutate(text, {
+        onSuccess: (r) => {
+          dirtyImageRef.current = false;
+          toast.success(r.unchanged ? 'No changes to save' : 'Prompt saved');
+        },
+        onError: (e) =>
+          toast.error('Save failed', {
+            description: e instanceof Error ? e.message : 'Unknown error',
+          }),
+      });
+    },
+    [saveVisualPrompt]
+  );
+
+  const handleSaveMotionPrompt = useCallback(
+    (text: string) => {
+      saveMotionPrompt.mutate(text, {
+        onSuccess: (r) => {
+          dirtyMotionRef.current = false;
+          toast.success(r.unchanged ? 'No changes to save' : 'Prompt saved');
+        },
+        onError: (e) =>
+          toast.error('Save failed', {
+            description: e instanceof Error ? e.message : 'Unknown error',
+          }),
+      });
+    },
+    [saveMotionPrompt]
+  );
 
   const isAwaitingVisualPrompt =
     shotPromptStream.visual.status === 'pending' ||
@@ -586,6 +652,9 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
       const result = await shortenPromptFn({ data: { prompt: currentPrompt } });
 
       setEditedImagePrompt(result.shortenedPrompt);
+      // Persist immediately — a shortened prompt is a real edit, not a throwaway
+      // draft. Without this it'd be lost on the next refetch.
+      handleSaveVisualPrompt(result.shortenedPrompt);
       const msg = `Prompt shortened by ${result.reductionPercent}% (${result.originalLength} → ${result.shortenedLength} chars)`;
       setShortenStatus({ loading: false, error: null, success: msg });
       // Clear success message after 5 seconds
@@ -599,7 +668,7 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
         error instanceof Error ? error.message : 'Failed to shorten prompt';
       setShortenStatus({ loading: false, error: errorMessage, success: null });
     }
-  }, [editedImagePrompt, imagePrompt]);
+  }, [editedImagePrompt, imagePrompt, handleSaveVisualPrompt]);
 
   const handleRegenerate = useCallback(async () => {
     if (!shot?.id || !shot.sequenceId) return;
@@ -857,17 +926,45 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     prevScriptShotIdRef.current = shot?.id;
     setEditedScript(undefined);
     setEditedDurationSeconds(undefined);
+    // A new shot starts with a clean slate — its own saved prompt loads below.
+    dirtyImageRef.current = false;
+    dirtyMotionRef.current = false;
+    imageFocusedRef.current = false;
+    motionFocusedRef.current = false;
   }
 
+  // Swap the draft to the persisted prompt when it changes server-side (a
+  // regenerate-prompt completion, a generate, a fresh shot) — UNLESS the user
+  // has an unsaved manual edit in flight, which a background refetch must not
+  // clobber.
   if (imagePrompt !== prevImagePromptRef.current) {
     prevImagePromptRef.current = imagePrompt;
-    setEditedImagePrompt(imagePrompt || '');
+    if (!dirtyImageRef.current) setEditedImagePrompt(imagePrompt || '');
   }
 
   if (rawMotionPrompt !== prevMotionPromptRef.current) {
     prevMotionPromptRef.current = rawMotionPrompt;
-    setEditedMotionPrompt(rawMotionPrompt);
+    if (!dirtyMotionRef.current) setEditedMotionPrompt(rawMotionPrompt);
   }
+
+  // Show Save only when the user has actually edited the prompt (focused +
+  // changed, via `dirty*Ref`) AND the edit differs from the saved value. The
+  // `dirty` gate is what keeps Save hidden on a prompt the user only viewed —
+  // the editor's on-mount re-serialization can change the draft text without
+  // any user action, so a pure value-diff would show Save spuriously. Reading
+  // the ref in render is safe here: every transition that flips it (a focused
+  // keystroke, Save, Cancel, regenerate, shot change) coincides with a state
+  // change that re-renders.
+  const visualPromptDirty =
+    !!shot &&
+    dirtyImageRef.current &&
+    editedImagePrompt.trim().length > 0 &&
+    editedImagePrompt.trim() !== (imagePrompt ?? '').trim();
+  const motionPromptDirty =
+    !!shot &&
+    dirtyMotionRef.current &&
+    editedMotionPrompt.trim().length > 0 &&
+    editedMotionPrompt.trim() !== rawMotionPrompt.trim();
 
   // Check if image is currently generating
   const isGenerating =
@@ -1019,7 +1116,15 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
                   ? shotPromptStream.visual.text
                   : editedImagePrompt || imagePrompt || ''
               }
-              onValueChange={(value) => setEditedImagePrompt(value)}
+              onValueChange={(value) => {
+                setEditedImagePrompt(value);
+                // Only a change made after the user focused the editor is a real
+                // edit; the editor's on-mount normalization emit is ignored.
+                if (imageFocusedRef.current) dirtyImageRef.current = true;
+              }}
+              onFocus={() => {
+                imageFocusedRef.current = true;
+              }}
               placeholder={
                 isStreamingVisualPrompt
                   ? 'Streaming prompt…'
@@ -1031,6 +1136,31 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
               disabled={isGenerating || isStreamingVisualPrompt}
               mentionItems={mentionItems}
             />
+            {visualPromptDirty && (
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setEditedImagePrompt(imagePrompt || '');
+                    dirtyImageRef.current = false;
+                  }}
+                  disabled={saveVisualPrompt.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => handleSaveVisualPrompt(editedImagePrompt)}
+                  disabled={saveVisualPrompt.isPending}
+                >
+                  {saveVisualPrompt.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  {saveVisualPrompt.isPending ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Model selector — model selection is scene-level (#909): picking a
@@ -1214,7 +1344,13 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
                   ? shotPromptStream.motion.text
                   : editedMotionPrompt || rawMotionPrompt
               }
-              onValueChange={(value) => setEditedMotionPrompt(value)}
+              onValueChange={(value) => {
+                setEditedMotionPrompt(value);
+                if (motionFocusedRef.current) dirtyMotionRef.current = true;
+              }}
+              onFocus={() => {
+                motionFocusedRef.current = true;
+              }}
               placeholder={
                 isStreamingMotionPrompt
                   ? 'Streaming prompt…'
@@ -1228,6 +1364,31 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
               }
               mentionItems={mentionItems}
             />
+            {motionPromptDirty && (
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setEditedMotionPrompt(rawMotionPrompt);
+                    dirtyMotionRef.current = false;
+                  }}
+                  disabled={saveMotionPrompt.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => handleSaveMotionPrompt(editedMotionPrompt)}
+                  disabled={saveMotionPrompt.isPending}
+                >
+                  {saveMotionPrompt.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  {saveMotionPrompt.isPending ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Model selector — scene-level (#909): the chosen motion model
