@@ -98,6 +98,14 @@ type ShotWithSequence = Shot & {
 
 type ShotOrderBy = 'orderIndex' | 'createdAt' | 'updatedAt';
 
+/**
+ * A persisted shot plus the id of its anchor frame (orderIndex 0), captured at
+ * write time. Threaded into prompt workflows so they never read the anchor back
+ * (#991: no DB reads in workflows). It is a superset of `Shot`, so callers that
+ * only need the shot fields are unaffected.
+ */
+export type ShotWithAnchorFrame = Shot & { anchorFrameId: string };
+
 // Image artifacts (thumbnail/variantImage) moved to `frames` in #989 — their
 // staleness is checked via `frameVariants.isStale` / `frames.isStale`. Only the
 // shot-owned video/audio artifacts remain here.
@@ -117,16 +125,26 @@ type ShotFilters = {
 };
 
 export function createShotsMethods(db: Database) {
-  // Idempotently materialize the anchor frame for each created/upserted shot.
-  // onConflictDoNothing keeps an existing frame (and its image) intact on replay.
+  // Idempotently materialize the anchor frame for each created/upserted shot and
+  // return each shot's anchor frame id keyed by shotId. A no-op `onConflictDoUpdate`
+  // (re-setting `orderIndex` to its own value) keeps an existing frame — and its
+  // image — intact on replay while still emitting the row via `RETURNING`, which a
+  // plain `onConflictDoNothing` omits for the conflicting (pre-existing) rows. This
+  // lets callers capture the anchor id at write time and thread it downstream
+  // instead of reading it back (#991: no DB reads in workflows).
   const ensureAnchorFrames = async (
     rows: ReadonlyArray<Pick<Shot, 'id' | 'sequenceId'>>
-  ): Promise<void> => {
-    if (rows.length === 0) return;
-    await db
+  ): Promise<Map<string, string>> => {
+    if (rows.length === 0) return new Map();
+    const anchors = await db
       .insert(frames)
       .values(rows.map(anchorFrameValues))
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: [frames.shotId, frames.orderIndex],
+        set: { orderIndex: sql.raw(`excluded."order_index"`) },
+      })
+      .returning({ id: frames.id, shotId: frames.shotId });
+    return new Map(anchors.map((a) => [a.shotId, a.id]));
   };
 
   return {
@@ -210,7 +228,7 @@ export function createShotsMethods(db: Database) {
 
       return shot;
     },
-    upsert: async (data: NewShot): Promise<Shot> => {
+    upsert: async (data: NewShot): Promise<ShotWithAnchorFrame> => {
       const [shot] = await db
         .insert(shots)
         .values(data)
@@ -234,8 +252,13 @@ export function createShotsMethods(db: Database) {
           `Failed to upsert shot for sequence ${data.sequenceId} at orderIndex ${data.orderIndex}`
         );
       }
-      await ensureAnchorFrames([shot]);
-      return shot;
+      const anchorFrameId = (await ensureAnchorFrames([shot])).get(shot.id);
+      if (!anchorFrameId) {
+        throw new Error(
+          `Failed to materialize anchor frame for shot ${shot.id}`
+        );
+      }
+      return { ...shot, anchorFrameId };
     },
     delete: async (shotId: string): Promise<boolean> => {
       const result = await db.delete(shots).where(eq(shots.id, shotId));
@@ -265,9 +288,11 @@ export function createShotsMethods(db: Database) {
       return results;
     },
 
-    bulkUpsert: async (shotInserts: NewShot[]): Promise<Shot[]> => {
+    bulkUpsert: async (
+      shotInserts: NewShot[]
+    ): Promise<ShotWithAnchorFrame[]> => {
       const BATCH_SIZE = 5;
-      const results: Shot[] = [];
+      const results: ShotWithAnchorFrame[] = [];
 
       for (let i = 0; i < shotInserts.length; i += BATCH_SIZE) {
         const batch = shotInserts.slice(i, i + BATCH_SIZE);
@@ -288,8 +313,16 @@ export function createShotsMethods(db: Database) {
             },
           })
           .returning();
-        await ensureAnchorFrames(batchResults);
-        results.push(...batchResults);
+        const anchors = await ensureAnchorFrames(batchResults);
+        for (const shot of batchResults) {
+          const anchorFrameId = anchors.get(shot.id);
+          if (!anchorFrameId) {
+            throw new Error(
+              `Failed to materialize anchor frame for shot ${shot.id}`
+            );
+          }
+          results.push({ ...shot, anchorFrameId });
+        }
       }
 
       return results;

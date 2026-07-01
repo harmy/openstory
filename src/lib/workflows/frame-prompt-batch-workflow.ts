@@ -1,19 +1,16 @@
 /**
- * Cloudflare Workflows port of `visualPromptWorkflow`.
+ * Batch visual-prompt generation — one `FramePromptWorkflow` child per scene.
  *
- * Mirrors the QStash version (`src/lib/workflows/frame-prompt-batch-workflow.ts`)
- * step for step — same step names, same control flow, same side effects. The
- * only differences are:
+ * Fans out to the child via Pattern 3 (`spawnAndAwaitChild`) so the parent stays
+ * thin and each scene's spawn/await pair gets its own retry budget (see
+ * await-child.ts). Spawns run in parallel via `Promise.all`; the awaits are
+ * wrapped in `Promise.allSettled` so a single timed-out child does not tank the
+ * whole run. Failure parity comes from `OpenStoryWorkflowEntrypoint`
+ * (see base-workflow.ts).
  *
- *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
- *     `createScopedWorkflow`. Failure parity comes from the base class
- *     (see `base-workflow.ts`).
- *   - Uses `step.do` instead of `context.run`.
- *   - The QStash original fanned out N scenes via `context.invoke`; this port
- *     fans out to the `FramePromptWorkflow` child via Pattern 3
- *     (`spawnAndAwaitChild`) so the parent stays thin and each scene's spawn /
- *     await pair gets its own retry budget. See await-child.ts.
- *   - Reads payload from `event.payload` instead of `context.requestPayload`. */
+ * The child never reads the DB: each scene's anchor frame id is resolved at
+ * shot-creation time in `scene-split-workflow` and threaded here via
+ * `shotMapping` (#991). */
 
 import type { Scene, VisualPrompt } from '@/lib/ai/scene-analysis.schema';
 import type { ScopedDb } from '@/lib/db/scoped';
@@ -30,20 +27,11 @@ import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'frame-prompt-batch']);
 
-// NOTE: `FRAME_PROMPT_BATCH_WORKFLOW` is not yet declared on `CloudflareEnv` —
-// the parent binding gets wired into `src/lib/workflow/types.ts` and
-// `wrangler.jsonc` as part of the follow-on infra PR. Until then, the
-// `parentBindingName` below is a string cast; the runtime lookup in
-// `notifyParent` / `notifyParentOfFailure` would only fire if this workflow
-// itself were spawned as a child (it's a top-level orchestrator today, so
-// `_parent` is always undefined and the cast is dormant).
-// TODO(#728-wire-up): drop the cast once types.ts knows about
-// FRAME_PROMPT_BATCH_WORKFLOW.
-// oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- binding name not yet declared on CloudflareEnv; see TODO above
-const PARENT_BINDING_NAME =
-  'FRAME_PROMPT_BATCH_WORKFLOW' as unknown as Parameters<
-    typeof spawnAndAwaitChild
-  >[1]['parentBindingName'];
+// This workflow's own env binding name, injected into each child's `_parent`
+// hint so the child can notify it back (`env[name].get(instanceId).sendEvent`).
+// A plain string literal, not a cast: the binding is declared on `CloudflareEnv`
+// (worker-configuration.d.ts), so it's assignable to `parentBindingName` as-is.
+const PARENT_BINDING_NAME = 'FRAME_PROMPT_BATCH_WORKFLOW';
 
 type FramePromptResult = { sceneId: string; visual: VisualPrompt };
 
@@ -51,7 +39,7 @@ export class FramePromptBatchWorkflow extends OpenStoryWorkflowEntrypoint<FrameP
   protected override async runImpl(
     event: Readonly<WorkflowEvent<FramePromptBatchWorkflowInput>>,
     step: WorkflowStep,
-    scopedDb: ScopedDb
+    _scopedDb: ScopedDb
   ): Promise<FramePromptBatchWorkflowResult> {
     const input = event.payload;
     const {
@@ -72,37 +60,21 @@ export class FramePromptBatchWorkflow extends OpenStoryWorkflowEntrypoint<FrameP
 
     const visualPromptSceneBinding = this.env.FRAME_PROMPT_WORKFLOW;
 
-    // Resolve each shot's anchor frame id ONCE, up front, and pass it to the
-    // per-scene children so they never read the DB (#991). The anchor frame's
-    // *identity* is immutable (only its selected image/version mutates), so
-    // this single batched read is not the racy category the no-DB-reads rule
-    // targets — it just spares each child a lookup. Keyed by shotId.
-    const frameIdByShotId = await step.do('resolve-anchor-frames', async () => {
-      const shotIds = (shotMapping ?? [])
-        .map((m) => m.shotId)
-        .filter((id): id is string => Boolean(id));
-      const anchors = await scopedDb.frames.getAnchorsByShots(shotIds);
-      const out: Record<string, string> = {};
-      for (const [shotId, frame] of anchors) out[shotId] = frame.id;
-      return out;
-    });
-
     // ============================================================
     // PHASE 3: Visual Prompt Generation — fan out one
     // FramePromptWorkflow child per scene. Spawns happen in parallel
     // via Promise.all; the awaits are wrapped in Promise.allSettled so a
-    // single timed-out child does not tank the entire parent run (matches
-    // the per-scene retry semantics the QStash version got from
-    // `context.invoke` + `retries: 3`).
+    // single timed-out child does not tank the entire parent run (each child
+    // carries its own retry budget via spawnAndAwaitChild).
     // ============================================================
     const spawnPromises = scenes.map(async (scene, sceneIndex) => {
       const sceneBefore = sceneIndex > 0 ? scenes[sceneIndex - 1] : undefined;
       const sceneAfter =
         sceneIndex < scenes.length - 1 ? scenes[sceneIndex + 1] : undefined;
 
-      const shotId = shotMapping?.find(
+      const mappingEntry = shotMapping?.find(
         (f) => f.analysisSceneId === scene.sceneId
-      )?.shotId;
+      );
 
       const childPayload: FramePromptWorkflowInput = {
         scene,
@@ -118,9 +90,10 @@ export class FramePromptBatchWorkflow extends OpenStoryWorkflowEntrypoint<FrameP
         userId: input.userId,
         sequenceId: input.sequenceId,
         // Shot id of the scene to save the visual prompt to, plus its anchor
-        // frame id resolved up front (#991: the child does not read the DB).
-        shotId,
-        frameId: shotId ? (frameIdByShotId[shotId] ?? null) : null,
+        // frame id — both resolved at shot-creation time in scene-split and
+        // threaded through `shotMapping` so the child never reads the DB (#991).
+        shotId: mappingEntry?.shotId,
+        frameId: mappingEntry?.frameId ?? null,
       };
 
       const childResult = await spawnAndAwaitChild<
@@ -142,8 +115,8 @@ export class FramePromptBatchWorkflow extends OpenStoryWorkflowEntrypoint<FrameP
 
     const settled = await Promise.allSettled(spawnPromises);
 
-    // Not sure this actually needs to be a workflow step, but mirroring the
-    // QStash original's `merge-visual-prompts` step name keeps trace parity.
+    // Aggregate child results into the batch result in a durable step so the
+    // merge is cached on replay alongside the per-scene spawns.
     const scenesWithVisualPrompts = await step.do(
       'merge-visual-prompts',
       async (): Promise<FramePromptBatchWorkflowResult> => {

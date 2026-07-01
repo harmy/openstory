@@ -1,17 +1,10 @@
 /**
- * Cloudflare Workflows port of `motionPromptSceneWorkflow`.
+ * Per-scene motion prompt generation.
  *
- * Mirrors the QStash version (`src/lib/workflows/motion-prompt-workflow.ts`)
- * step for step — same step names, same control flow, same side effects. The
- * only differences are:
- *
- *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
- *     `createScopedWorkflow`. Failure parity comes from the base class
- *     (see `base-workflow.ts`).
- *   - Uses `step.do` instead of `context.run`.
- *   - Reads payload from `event.payload` instead of `context.requestPayload`.
- *   - The streaming LLM call goes through `durableStreamingLLMCallCf`, driven
- *     by `step.do`. */
+ * Extends `OpenStoryWorkflowEntrypoint` (failure handling from the base class,
+ * see base-workflow.ts); the streaming LLM call runs through
+ * `durableStreamingLLMCallCf`, driven by `step.do`. Spawned per scene by
+ * `MotionPromptBatchWorkflow`. */
 
 import { computeMotionPromptInputHash } from '@/lib/ai/input-hash';
 import { narrowShotPromptContext } from '@/lib/ai/prompt-context';

@@ -81,7 +81,11 @@ const LOG_METADATA = { phase: PHASE.number, phaseName: PHASE.name };
 type StreamResult = {
   scenes: SceneSplittingResult['scenes'];
   projectMetadata: SceneSplittingResult['projectMetadata'];
-  shotMapping: Array<{ analysisSceneId: string; shotId: string }>;
+  shotMapping: Array<{
+    analysisSceneId: string;
+    shotId: string;
+    frameId: string | null;
+  }>;
   characterBible: SceneSplittingResult['characterBible'];
   locationBible: SceneSplittingResult['locationBible'];
   elementBible: SceneSplittingResult['elementBible'];
@@ -157,8 +161,11 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
         );
 
         const parser = createStreamingSceneParser();
-        const shotMapping: Array<{ analysisSceneId: string; shotId: string }> =
-          [];
+        const shotMapping: Array<{
+          analysisSceneId: string;
+          shotId: string;
+          frameId: string | null;
+        }> = [];
         let finalText = '';
         let chunkCount = 0;
         let prevScene: SceneSplittingScene | undefined = undefined;
@@ -296,6 +303,8 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
                 shotMapping.push({
                   analysisSceneId: ev.scene.sceneId,
                   shotId: shot.id,
+                  // Anchor frame id captured from the same write (no read-back).
+                  frameId: shot.anchorFrameId,
                 });
 
                 await getGenerationChannel(sequenceId).emit(
@@ -469,6 +478,9 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
           // oxlint-disable-next-line typescript-eslint/no-unnecessary-condition -- runtime guard: metadata is JSONB, can be null despite Drizzle types
           analysisSceneId: f.metadata?.sceneId || '',
           shotId: f.id,
+          // Anchor frame id captured from the same bulkUpsert write — the batch
+          // prompt workflow reads it from here instead of querying the DB (#991).
+          frameId: f.anchorFrameId,
         }));
 
         // Ensure title and workflow are set (status stays 'processing'

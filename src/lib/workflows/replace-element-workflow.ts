@@ -47,16 +47,11 @@ import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'workflow', 'replace-element']);
 
-// `REPLACE_ELEMENT_WORKFLOW` is declared on `CloudflareEnv` (see
-// `src/lib/workflow/types.ts`) and wired through `wrangler.jsonc` in the
-// follow-on infra PR. The runtime lookup in `notifyParent` /
-// `notifyParentOfFailure` only fires if this workflow itself is spawned as a
-// child (it's a top-level orchestrator today, so `_parent` is always
-// undefined and the constant is dormant).
-const PARENT_BINDING_NAME =
-  'REPLACE_ELEMENT_WORKFLOW' as const satisfies Parameters<
-    typeof spawnAndAwaitChild
-  >[1]['parentBindingName'];
+// This workflow's own env binding name, injected into each child's `_parent`
+// hint so the child can notify it back (`env[name].get(instanceId).sendEvent`).
+// A plain string literal, not a cast: the binding is declared on `CloudflareEnv`
+// (worker-configuration.d.ts), so it's assignable to `parentBindingName` as-is.
+const PARENT_BINDING_NAME = 'REPLACE_ELEMENT_WORKFLOW';
 
 type ImageChildResult = {
   imageUrl: string;
@@ -509,6 +504,19 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
             return { shotId: shot.id, success: false };
           }
 
+          // The caller resolves a motion prompt for every shot it asks to
+          // re-render. A missing key is an invariant violation (the resolved map
+          // fell out of sync with `shotsNeedingVideoRegen`), NOT a legitimate
+          // empty prompt — fail loud rather than silently re-render with no motion
+          // guidance. `''` is a valid resolved value and passes through.
+          const motionPrompt = motionPromptByShotId[shot.id];
+          if (motionPrompt === undefined) {
+            throw new NonRetryableError(
+              `No resolved motion prompt for shot ${shot.id} in replace-element re-render`,
+              'WorkflowValidationError'
+            );
+          }
+
           await scopedDb.shots.update(shot.id, {
             videoStatus: 'generating',
             videoError: null,
@@ -520,7 +528,7 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
             sequenceId,
             shotId: shot.id,
             imageUrl: newThumbnailUrl,
-            prompt: motionPromptByShotId[shot.id] ?? '',
+            prompt: motionPrompt,
             model: videoModel,
             aspectRatio,
             duration: shot.durationMs ? shot.durationMs / 1000 : undefined,

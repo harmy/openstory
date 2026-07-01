@@ -448,8 +448,18 @@ export interface CharacterBibleWorkflowInput extends SequenceWorkflowContext {
  * the analysis output) to the DB shot row created for it. `analysisSceneId` is
  * deliberately NOT the new `scenes.id` ULID (see DbSceneId in schema/scenes.ts)
  * — both are strings, so the distinct name guards against confusing them.
+ *
+ * `frameId` is the shot's anchor frame id, captured at shot-creation time in
+ * `scene-split-workflow` (the write already materializes the anchor) and threaded
+ * through here so downstream prompt workflows never read it back from the DB
+ * (#991: no DB reads in workflows). `null` only for the anonymous/no-persist
+ * path where no shots or frames exist.
  */
-type ShotMapping = Array<{ analysisSceneId: string; shotId: string }>;
+type ShotMapping = Array<{
+  analysisSceneId: string;
+  shotId: string;
+  frameId: string | null;
+}>;
 
 export interface FramePromptBatchWorkflowInput extends SequenceWorkflowContext {
   scenes: Scene[];

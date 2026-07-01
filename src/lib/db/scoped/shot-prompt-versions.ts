@@ -27,8 +27,11 @@ import type {
   ShotPromptVersion,
   ShotPromptVersionComponents,
 } from '@/lib/db/schema';
+import { getLogger } from '@/lib/observability/logger';
 import { and, desc, eq, inArray, isNotNull, lte } from 'drizzle-orm';
 import { buildEventInsert } from './sequence-events';
+
+const logger = getLogger(['openstory', 'db', 'shot-prompt-versions']);
 
 type WriteShotPromptVersionBase = {
   shotId: string;
@@ -84,40 +87,49 @@ export type WriteShotPromptVersionInput = WriteShotPromptVersionBase &
       }
   );
 
-const cachedColumnsForType = (promptType: ShotPromptType) => {
-  // Visual (image) prompt versions moved to `frame_prompt_versions` (#989) — the
-  // cached mirror lives on the anchor frame, not `shots`. Only the MOTION prompt
-  // still mirrors onto `shots`.
+// Visual (image) prompt versions moved to `frame_prompt_versions` (#989) — the
+// cached mirror lives on the anchor frame, not `shots`. Only the MOTION prompt
+// still mirrors onto `shots`, so every write through this module must be motion.
+const assertMotionPromptType = (promptType: ShotPromptType): void => {
   if (promptType === 'visual') {
     throw new Error(
       'Visual prompt versions moved to frame_prompt_versions (#989); use scopedDb.framePromptVersions'
     );
   }
-  return {
-    text: shots.motionPrompt,
-    hash: shots.motionPromptInputHash,
-    textKey: 'motionPrompt' as const,
-    hashKey: 'motionPromptInputHash' as const,
-  };
 };
 
 export function createShotPromptVersionsMethods(db: Database) {
   /**
-   * Point the shot at `version` and mirror its text/hash onto the shot. The
-   * `selectedMotionPromptVersionId` pointer is what the render manifest
-   * references (motion prompt version snapshot, #990) — keeping it in lockstep
-   * with the cached text/hash is load-bearing.
+   * Mirror a selected motion version onto its shot: cached text + hash +
+   * `selectedMotionPromptVersionId` pointer, all set in lockstep. The pointer is
+   * what the render manifest references (motion prompt version snapshot, #990),
+   * so keeping the triple together is load-bearing — this single helper is the
+   * only place the three columns are written, so they can't drift.
+   *
+   * `text`/`inputHash` are passed explicitly (not read off `version`) because the
+   * force-regen path in `write` mirrors the real upstream `inputHash` while the
+   * version row itself carries a null hash — see `write`.
    */
-  const mirrorOntoShot = (shotId: string, version: ShotPromptVersion) =>
+  const mirrorSelection = (
+    shotId: string,
+    selection: { text: string; inputHash: string | null; versionId: string }
+  ) =>
     db
       .update(shots)
       .set({
-        motionPrompt: version.text,
-        motionPromptInputHash: version.inputHash,
-        selectedMotionPromptVersionId: version.id,
+        motionPrompt: selection.text,
+        motionPromptInputHash: selection.inputHash,
+        selectedMotionPromptVersionId: selection.versionId,
         updatedAt: new Date(),
       })
       .where(eq(shots.id, shotId));
+
+  const mirrorOntoShot = (shotId: string, version: ShotPromptVersion) =>
+    mirrorSelection(shotId, {
+      text: version.text,
+      inputHash: version.inputHash,
+      versionId: version.id,
+    });
 
   const methods = {
     /**
@@ -145,7 +157,7 @@ export function createShotPromptVersionsMethods(db: Database) {
     write: async (
       input: WriteShotPromptVersionInput
     ): Promise<ShotPromptVersion> => {
-      const cached = cachedColumnsForType(input.promptType);
+      assertMotionPromptType(input.promptType);
 
       const nextHash = input.inputHash;
       const analysisModel = input.analysisModel;
@@ -222,18 +234,14 @@ export function createShotPromptVersionsMethods(db: Database) {
       // Mirror onto the shot AND repoint the selection at this version. The
       // `selectedMotionPromptVersionId` pointer was previously never set, so the
       // render manifest snapshotted a null motion-prompt reference (#990 bug);
-      // setting it here is load-bearing. Note the cached hash tracks `nextHash`
-      // (the real upstream context) even on the force-regen path where the
-      // version row itself carries a null hash — see the branch above.
-      await db
-        .update(shots)
-        .set({
-          [cached.textKey]: input.text,
-          [cached.hashKey]: nextHash,
-          selectedMotionPromptVersionId: version.id,
-          updatedAt: new Date(),
-        })
-        .where(eq(shots.id, input.shotId));
+      // setting it here is load-bearing. The cached hash tracks `nextHash` (the
+      // real upstream context) even on the force-regen path where the version row
+      // itself carries a null hash — see the branch above.
+      await mirrorSelection(input.shotId, {
+        text: input.text,
+        inputHash: nextHash,
+        versionId: version.id,
+      });
 
       return version;
     },
@@ -273,15 +281,27 @@ export function createShotPromptVersionsMethods(db: Database) {
     getSelectedMotion: async (
       shotId: string
     ): Promise<ShotPromptVersion | null> => {
+      // Left join (not inner) so we can tell "no pointer set" (legacy shot, falls
+      // back to the mirror) apart from "pointer set but the row is gone" — an
+      // orphaned pointer (broken FK / deleted version) that the mirror fallback
+      // would otherwise mask silently. Surface the latter so it's observable.
       const [row] = await db
-        .select({ version: shotPromptVersions })
+        .select({
+          pointer: shots.selectedMotionPromptVersionId,
+          version: shotPromptVersions,
+        })
         .from(shots)
-        .innerJoin(
+        .leftJoin(
           shotPromptVersions,
           eq(shots.selectedMotionPromptVersionId, shotPromptVersions.id)
         )
         .where(eq(shots.id, shotId))
         .limit(1);
+      if (row?.pointer && !row.version) {
+        logger.warn(
+          `Shot ${shotId} points at motion prompt version ${row.pointer} but no row exists (orphaned pointer); falling back to the cached mirror`
+        );
+      }
       return row?.version ?? null;
     },
 

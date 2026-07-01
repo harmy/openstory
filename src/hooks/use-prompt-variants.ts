@@ -115,7 +115,7 @@ export function useSaveShotPrompt(args: {
 }) {
   const queryClient = useQueryClient();
   return useMutation<
-    { versionId: string | null; unchanged: boolean },
+    { unchanged: true } | { unchanged: false; versionId: string },
     Error,
     string
   >({

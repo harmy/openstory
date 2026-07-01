@@ -1,28 +1,16 @@
 /**
- * Cloudflare Workflows port of `motionPromptWorkflow`.
+ * Batch motion-prompt generation — mid-tier orchestrator.
  *
- * Wave 3 mid-tier orchestrator: fans out one `motion-prompt` child per
- * scene and awaits all results. Mirrors the QStash version
- * (`src/lib/workflows/motion-prompt-batch-workflow.ts`) step for step — same control
- * flow, same side effects. The only differences are:
+ * Fans out one `motion-prompt` child per scene via `spawnAndAwaitChild`
+ * (Pattern 3 fan-out helpers in await-child.ts). Each child gets a deterministic
+ * instance id and a unique event-type qualifier so siblings cannot match each
+ * other's completion events. Extends `OpenStoryWorkflowEntrypoint`, so failure
+ * handling comes from the base class (see base-workflow.ts).
  *
- *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
- *     `createScopedWorkflow`. Failure parity comes from the base class
- *     (see `base-workflow.ts`).
- *   - Reads payload from `event.payload` instead of `context.requestPayload`
- *     and the workflow run id from `event.instanceId` instead of
- *     `context.workflowRunId`.
- *   - The Promise.all over `context.invoke('motion-prompt', ...)`
- *     becomes Promise.allSettled over `spawnAndAwaitChild` (Pattern 3 fan-out
- *     helpers in `await-child.ts`). Each child gets a deterministic
- *     instance ID and a unique event-type qualifier so siblings cannot match
- *     each other's completion events.
- *   - `failureFunction` → `onFailure`.
- *
- * Uses `Promise.allSettled` rather than `Promise.all` so that a single
- * child timeout (waitForEvent default: 30 minutes) does not kill the parent
- * — the parent still surfaces a terminal error, but only after every other
- * sibling has resolved one way or the other. */
+ * Uses `Promise.allSettled` rather than `Promise.all` so that a single child
+ * timeout (waitForEvent default: 30 minutes) does not kill the parent — the
+ * parent still surfaces a terminal error, but only after every other sibling has
+ * resolved one way or the other. */
 
 import type { MotionPrompt } from '@/lib/ai/scene-analysis.schema';
 import type { ScopedDb } from '@/lib/db/scoped';

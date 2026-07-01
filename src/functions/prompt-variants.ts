@@ -276,7 +276,7 @@ export const saveShotPromptFn = createServerFn({ method: 'POST' })
     const currentPrompt =
       data.promptType === 'visual' ? frame.imagePrompt : shot.motionPrompt;
     if (currentPrompt !== null && currentPrompt === text) {
-      return { versionId: null, unchanged: true } as const;
+      return { unchanged: true } as const;
     }
 
     // Capture the current upstream hash so staleness keeps tracking: a manual
@@ -318,7 +318,7 @@ export const saveShotPromptFn = createServerFn({ method: 'POST' })
         analysisModel,
         createdBy: user.id,
       });
-      return { versionId: inserted.id, unchanged: false } as const;
+      return { unchanged: false, versionId: inserted.id } as const;
     }
 
     // Carry the selected version's dialogue/audio direction forward onto the
@@ -339,7 +339,7 @@ export const saveShotPromptFn = createServerFn({ method: 'POST' })
       analysisModel,
       createdBy: user.id,
     });
-    return { versionId: inserted.id, unchanged: false } as const;
+    return { unchanged: false, versionId: inserted.id } as const;
   });
 
 const shotRegenerateInput = z.object({
@@ -422,9 +422,9 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
       emitStreaming: data.force === true,
     };
 
-    // Force-regen needs a unique dedup ID per click so QStash doesn't collapse
-    // repeat clicks into a single run — the user is explicitly asking for
-    // another LLM completion. The auto-staleness path keeps the stable
+    // Force-regen needs a unique dedup ID per click so the workflow trigger
+    // doesn't collapse repeat clicks into a single run — the user is explicitly
+    // asking for another LLM completion. The auto-staleness path keeps the stable
     // hash-based ID so genuine retries collapse to one run.
     const deduplicationId = data.force
       ? shotPromptForceDedupId(
@@ -504,8 +504,8 @@ export const regenerateMusicPromptFn = createServerFn({ method: 'POST' })
         analysisModelId,
       },
       {
-        // Dedup by the live input hash so a QStash retry of the same upstream
-        // context collapses to one workflow run instead of N.
+        // Dedup by the live input hash so a retry of the same upstream context
+        // collapses to one workflow run instead of N.
         deduplicationId: musicPromptDedupId(sequence.id, liveHash),
         label: buildWorkflowLabel(sequence.id),
       }

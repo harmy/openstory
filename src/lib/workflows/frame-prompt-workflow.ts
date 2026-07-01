@@ -1,20 +1,13 @@
 /**
- * Cloudflare Workflows port of `visualPromptSceneWorkflow`.
+ * Per-scene visual (image) prompt generation.
  *
- * Mirrors the QStash version (`src/lib/workflows/frame-prompt-workflow.ts`)
- * step for step — same step names, same control flow, same side effects. The
- * only differences are:
- *
- *   - Extends `OpenStoryWorkflowEntrypoint` instead of being built by
- *     `createScopedWorkflow`. Failure parity comes from the base class
- *     (see `base-workflow.ts`).
- *   - Uses `step.do` instead of `context.run`.
- *   - Reads payload from `event.payload` instead of `context.requestPayload`.
- *   - Inlines the LLM call logic from `durableStreamingLLMCall` because that
- *     helper is bound to QStash's `WorkflowContext`. The step names match
- *     the helper's exactly (`prepare-visual-prompts`, `visual-prompts` or
- *     `visual-prompts-stream`, `deduct-llm-credits-visual-prompts`) so a
- *     side-by-side comparison stays trivial. */
+ * Extends `OpenStoryWorkflowEntrypoint` (failure handling comes from the base
+ * class, see base-workflow.ts) and runs its durable work through `step.do`. The
+ * streaming LLM call is inlined here (steps `prepare-visual-prompts`,
+ * `visual-prompts` / `visual-prompts-stream`, `deduct-llm-credits-visual-prompts`).
+ * The generated prompt is persisted to `frame_prompt_versions` and mirrored onto
+ * the anchor frame — not into `scene.metadata` (#713). Spawned per scene by
+ * `FramePromptBatchWorkflow`. */
 
 import { createAdapter } from '@/lib/ai/create-adapter';
 import { computeVisualPromptInputHash } from '@/lib/ai/input-hash';
@@ -360,24 +353,30 @@ export class FramePromptWorkflow extends OpenStoryWorkflowEntrypoint<FramePrompt
 
       await step.do('save-visual-prompt-to-db', async () => {
         // The anchor `frameId` is resolved by the parent and passed in (#991:
-        // workflows don't read the DB). The prompt is NOT written into
-        // `scene.metadata` any more (#713): `frame_prompt_versions.writeAiVersion`
-        // mirrors its text onto `frame.imagePrompt` and repoints
-        // `selectedImagePromptVersionId`, superseding any prior user-override
-        // automatically (the override stays in history and can be restored).
-        if (frameId) {
-          await scopedDb.framePromptVersions.writeAiVersion({
-            frameId,
-            text: result.visual.fullPrompt,
-            components: result.visual.components,
-            inputHash,
-            analysisModel: analysisModelId,
-          });
-        } else {
-          logger.warn(
-            `[FramePromptWorkflow] Shot ${shotId} has no anchor frame; visual prompt not persisted`
+        // workflows don't read the DB). It is mandatory whenever we have a shot to
+        // save to — every shot owns an anchor frame (materialized at shot
+        // creation), so a null here inside the `sequenceId && shotId` guard is an
+        // invariant violation (broken shotMapping / missing anchor), NOT an
+        // expected skip. Fail loud rather than silently drop the prompt: a soft
+        // warn would leave `frame.imagePrompt` null, disable staleness, and show
+        // an empty history sheet while the run still reports success.
+        if (!frameId) {
+          throw new WorkflowValidationError(
+            `Shot ${shotId} has no anchor frame id in shotMapping; cannot persist visual prompt for scene ${scene.sceneId}`
           );
         }
+        // The prompt is NOT written into `scene.metadata` any more (#713):
+        // `frame_prompt_versions.writeAiVersion` mirrors its text onto
+        // `frame.imagePrompt` and repoints `selectedImagePromptVersionId`,
+        // superseding any prior user-override automatically (the override stays in
+        // history and can be restored).
+        await scopedDb.framePromptVersions.writeAiVersion({
+          frameId,
+          text: result.visual.fullPrompt,
+          components: result.visual.components,
+          inputHash,
+          analysisModel: analysisModelId,
+        });
 
         // The generated prompt now lives on `frame.imagePrompt` (mirror), not
         // in `metadata`; carry the base scene so the client refreshes the shot

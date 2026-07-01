@@ -17,7 +17,8 @@
  */
 
 import type {
-  MotionPrompt,
+  MotionAudio,
+  MotionDialogue,
   MotionPromptComponents,
   MotionPromptParameters,
   VisualPromptComponents,
@@ -86,12 +87,12 @@ export const shotPromptVersions = snakeCase.table(
     // Null when no dialogue / for visual rows.
     dialogue: text({
       mode: 'json',
-    }).$type<NonNullable<MotionPrompt['dialogue']>>(),
+    }).$type<MotionDialogue>(),
     // Motion-only: ambient sound + sound-effect direction, same rationale as
     // `dialogue`. Null when no audio direction / for visual rows.
     audio: text({
       mode: 'json',
-    }).$type<NonNullable<MotionPrompt['audio']>>(),
+    }).$type<MotionAudio>(),
 
     source: text().$type<PromptVariantSource>().notNull(),
 
