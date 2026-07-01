@@ -23,6 +23,7 @@ import { triggerWorkflow } from '@/lib/workflow/client';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
 import type { LibraryTalentSheetWorkflowInput } from '@/lib/workflow/types';
 import { computeLibraryTalentSheetHashFromDto } from '@/lib/workflows/sheet-snapshots';
+import { isTeamWritableTalent } from '@/lib/db/scoped/talent';
 import { createLibraryTalent } from '@/lib/talent/create-library-talent';
 import { createServerFn } from '@tanstack/react-start';
 import { zodValidator } from '@tanstack/zod-adapter';
@@ -353,6 +354,12 @@ export const generateTalentSheetFn = createServerFn({ method: 'POST' })
 
     if (!talentRecord) {
       throw new Error('Talent not found');
+    }
+
+    if (!isTeamWritableTalent(talentRecord, context.teamId)) {
+      throw new Error(
+        'Talent not found or you do not have permission to modify it'
+      );
     }
 
     const imageMedia =

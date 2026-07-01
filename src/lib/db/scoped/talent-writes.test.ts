@@ -11,6 +11,7 @@ import { generateId } from '@/lib/db/id';
 import {
   talent,
   talentMedia,
+  talentSheetVariants,
   talentSheets,
   teams,
   user,
@@ -18,6 +19,7 @@ import {
 import { relations } from '@/lib/db/schema/relations';
 import type { Database } from '@/lib/db/client';
 import { createTalentMethods, isTeamWritableTalent } from './talent';
+import { createTalentSheetVariantsMethods } from './talent-sheet-variants';
 
 let client: Client;
 let db: Database;
@@ -31,6 +33,7 @@ let publicSheetId = '';
 let publicMediaId = '';
 
 async function seedFixtures() {
+  await db.delete(talentSheetVariants);
   await db.delete(talentMedia);
   await db.delete(talentSheets);
   await db.delete(talent);
@@ -148,5 +151,51 @@ describe('scoped talent write ACL', () => {
       name: 'Renamed Template',
     });
     expect(result).toBeUndefined();
+  });
+});
+
+describe('scoped talent sheet variant write ACL', () => {
+  const teamAVariants = () => createTalentSheetVariantsMethods(db, teamA.id);
+
+  it('blocks insertDivergent on a public talent sheet', async () => {
+    await expect(
+      teamAVariants().insertDivergent({
+        talentSheetId: publicSheetId,
+        model: 'flux-pro',
+        url: 'https://example.com/divergent.png',
+        status: 'completed',
+        inputHash: 'hash-1',
+        divergedAt: new Date(),
+      })
+    ).rejects.toThrow(/permission to modify/);
+  });
+
+  it('blocks promoteAtomically on a public talent sheet', async () => {
+    const variants = teamAVariants();
+    const variant = await db
+      .insert(talentSheetVariants)
+      .values({
+        talentSheetId: publicSheetId,
+        model: 'flux-pro',
+        url: 'https://example.com/divergent.png',
+        status: 'completed',
+        inputHash: 'hash-promote',
+        divergedAt: new Date(),
+      })
+      .returning();
+    const row = variant[0];
+    if (!row) throw new Error('Failed to seed variant');
+
+    await expect(
+      variants.promoteAtomically(
+        publicSheetId,
+        {
+          imageUrl: row.url,
+          imagePath: row.storagePath,
+          inputHash: row.inputHash,
+        },
+        row.id
+      )
+    ).rejects.toThrow(/permission to modify/);
   });
 });

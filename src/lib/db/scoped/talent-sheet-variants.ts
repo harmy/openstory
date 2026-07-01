@@ -123,6 +123,8 @@ export function createTalentSheetVariantsMethods(db: Database, teamId: string) {
     insert: async (
       values: NewTalentSheetVariant
     ): Promise<TalentSheetVariant> => {
+      await assertTalentSheetWritableForTeam(db, values.talentSheetId, teamId);
+
       const [row] = await db
         .insert(talentSheetVariants)
         .values(values)
@@ -145,6 +147,8 @@ export function createTalentSheetVariantsMethods(db: Database, teamId: string) {
         divergedAt: Date;
       }
     ): Promise<TalentSheetVariant> => {
+      await assertTalentSheetWritableForTeam(db, values.talentSheetId, teamId);
+
       const findExisting = () =>
         db
           .select()
