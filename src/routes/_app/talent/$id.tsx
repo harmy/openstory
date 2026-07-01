@@ -63,19 +63,6 @@ function TalentDetailPage() {
   const deleteTalent = useDeleteTalent();
   const generateSheet = useGenerateTalentSheet();
   const setDefaultSheet = useSetDefaultSheet();
-  const {
-    isGenerating: isGeneratingSheet,
-    phase: generatingPhase,
-    error: sheetError,
-    startGenerating,
-    // Anonymous visitors view talent read-only; don't open a realtime channel.
-  } = useTalentSheetRealtime(isAuthenticated ? id : undefined);
-
-  const handleGenerateSheet = () => {
-    if (!talent) return;
-    startGenerating(); // Show generating state immediately
-    generateSheet.mutate({ talentId: talent.id });
-  };
 
   const canManageTalent = Boolean(
     isAuthenticated &&
@@ -84,6 +71,19 @@ function TalentDetailPage() {
     talent.teamId === profile.teamId &&
     !talent.isPublic
   );
+
+  const {
+    isGenerating: isGeneratingSheet,
+    phase: generatingPhase,
+    error: sheetError,
+    startGenerating,
+  } = useTalentSheetRealtime(canManageTalent ? id : undefined);
+
+  const handleGenerateSheet = () => {
+    if (!talent) return;
+    startGenerating(); // Show generating state immediately
+    generateSheet.mutate({ talentId: talent.id });
+  };
 
   const handleDelete = () => {
     if (!talent) return;
