@@ -149,18 +149,21 @@ testWithUser.describe('Full Sequence Pipeline', () => {
         }
       });
 
-      // 1. Open the new-sequence page and wait for hydration.
+      // 1. Open the new-sequence page.
       await page.goto('/sequences/new');
-      await expect(
-        page.getByRole('grid', { name: 'Style selection' })
-      ).toBeVisible({ timeout: 15_000 });
 
-      // 2. Select a style by clicking the first one (also confirms hydration).
-      await page
+      // 2. Select the first style tile. Target the tile by its accessible
+      // name (`Select <name> style`) and wait for it to exist — the grid
+      // container renders immediately (before styles load) and its only
+      // button is then the "View all" browse trigger, which would open the
+      // style dialog instead of selecting. Waiting for a real tile also
+      // confirms the styles query resolved and React has hydrated.
+      const firstStyle = page
         .getByRole('grid', { name: 'Style selection' })
-        .getByRole('button')
-        .first()
-        .click();
+        .getByRole('button', { name: /^Select .* style$/ })
+        .first();
+      await expect(firstStyle).toBeVisible({ timeout: 15_000 });
+      await firstStyle.click();
 
       // 3. Type a short script — a 30-second makeup ad.
       const script = `
