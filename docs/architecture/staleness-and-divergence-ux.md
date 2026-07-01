@@ -144,7 +144,7 @@ Stage 1 is the only row block we commit to in v1. The rest is sketched so that w
 Single proposal, deferred to stage 1.5 or stage 2:
 
 - A "Stale" filter pill at the top of the scene list (`scene-list.tsx`) that hides non-stale frames.
-- When the filter is active, a "Regenerate all stale" CTA appears next to the filter, triggering one `regenerateFramesWorkflow` for the union of stale frames.
+- When the filter is active, a "Regenerate all stale" CTA appears next to the filter, triggering one `regenerateShotsWorkflow` for the union of stale shots.
 
 Not in v1. Listed here so it has a documented home when we pick it up.
 
