@@ -145,42 +145,38 @@ Cloudflare Workflows has event payload size limits, but our payloads are dominat
 Before writing a generation result, compare hashes:
 
 ```ts
-// illustrative — runs inside a sheet workflow's final step.do()
+// illustrative — character-sheet-workflow reconcile step
 const snapshotInputHash = input.snapshotInputHash ?? null;
-const currentInputHash = await computeCharacterSheetHashCurrent(
-  input,
-  scopedDb
-);
-const decision = decideSheetDivergence(snapshotInputHash, currentInputHash);
+const currentHash = snapshotInputHash
+  ? await computeCharacterSheetHashCurrent(input, scopedDb)
+  : null;
+const decision = decideSheetDivergence(snapshotInputHash, currentHash);
 
-if (decision.kind === 'convergent') {
-  // Inputs unchanged — apply as the primary sheet (existing behaviour)
-  await scopedDb.characters.updateSheet(characterId, {
-    url,
-    inputHash: currentInputHash,
-  });
-} else {
-  // Diverged mid-generation — park in variants without disturbing live state
-  const { id: divergedVariantId } = await saveDivergentCharacterSheet({
+if (decision.kind === 'divergent') {
+  // Parks in character_sheet_variants and emits generation.stale:detected
+  await saveDivergentCharacterSheet({
     scopedDb,
     characterId,
     sequenceId,
     model,
     url,
+    storagePath,
+    workflowRunId,
     snapshotInputHash: decision.snapshotInputHash,
-    currentInputHash: decision.currentInputHash,
   });
-  await getGenerationChannel(sequenceId).emit('generation.stale:detected', {
-    entityType: 'character',
-    entityId: characterId,
-    artifact: 'sheet',
-    snapshotInputHash: decision.snapshotInputHash,
-    divergedVariantId,
-  });
+  return { kind: 'divergent' };
 }
+
+// Inputs unchanged — apply as the primary sheet (existing behaviour)
+await scopedDb.characters.updateSheet(
+  characterId,
+  url,
+  storagePath,
+  snapshotInputHash
+);
 ```
 
-Per-shot image artifacts follow the same hash comparison inside `image-workflow` / `regenerate-shots-workflow`, routing divergent thumbnails into `frame_variants` and emitting `generation.stale:detected` with `entityType: 'shot'`.
+Per-shot **image** artifacts use the same hash comparison inside `image-workflow`, but mid-flight drift no longer routes to divergent `frame_variants` rows or `generation.stale:detected` (#989): the workflow appends a new `frame_variants` version, stamps `inputHash`, and deliberately does not repoint `selectedImageVersionId`. `regenerate-shots-workflow` fans out to `image-workflow` children and does not perform its own divergence emit — `divergedShotIds` is always empty today.
 
 ### Where diverged results land
 
