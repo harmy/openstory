@@ -118,6 +118,23 @@ describe('shots anchor-frame materialization', () => {
     expect(new Set(anchorIds).size).toBe(2);
   });
 
+  it('ensureAnchorFrames returns an anchor id for every shot across chunk boundaries', async () => {
+    // #1019: the read path (getShotsFn) calls ensureAnchorFrames with a whole
+    // sequence's shots at once. A single INSERT of >~10 anchor rows overflowed
+    // D1's 100-bound-parameter ceiling, so it now chunks. Use more shots than
+    // the internal batch size to prove the per-chunk RETURNING maps are merged.
+    const methods = createShotsMethods(db);
+    const shots = await methods.createBulk(
+      Array.from({ length: 25 }, (_, i) => ({ sequenceId, orderIndex: i }))
+    );
+    const anchors = await methods.ensureAnchorFrames(shots);
+
+    expect(anchors.size).toBe(shots.length);
+    for (const shot of shots) {
+      expect(anchors.get(shot.id)).toBeTruthy();
+    }
+  });
+
   it('preserves an existing anchor frame and its image on replay', async () => {
     const methods = createShotsMethods(db);
     const shot = await methods.upsert({ sequenceId, orderIndex: 0 });

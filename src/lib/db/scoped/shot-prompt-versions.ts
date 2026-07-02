@@ -33,6 +33,10 @@ import { buildEventInsert } from './sequence-events';
 
 const logger = getLogger(['openstory', 'db', 'shot-prompt-versions']);
 
+// `getSelectedMotionByShots` binds one id param per shot; 90 keeps each query
+// under D1's 100-bound-parameter ceiling (matches SHOTS_BY_IDS_BATCH).
+const SELECTED_MOTION_BY_SHOTS_BATCH = 90;
+
 type WriteShotPromptVersionBase = {
   shotId: string;
   promptType: ShotPromptType;
@@ -315,15 +319,23 @@ export function createShotPromptVersionsMethods(db: Database) {
       shotIds: string[]
     ): Promise<Map<string, ShotPromptVersion>> => {
       if (shotIds.length === 0) return new Map();
-      const rows = await db
-        .select({ shotId: shots.id, version: shotPromptVersions })
-        .from(shots)
-        .innerJoin(
-          shotPromptVersions,
-          eq(shots.selectedMotionPromptVersionId, shotPromptVersions.id)
-        )
-        .where(inArray(shots.id, shotIds));
-      return new Map(rows.map((r) => [r.shotId, r.version]));
+      // Chunk the id list to stay under D1's 100-bound-parameter ceiling — this
+      // runs on the getShotsFn read path with every shot of a sequence, so a
+      // long sequence (#1019) would otherwise overflow the limit and throw.
+      const result = new Map<string, ShotPromptVersion>();
+      for (let i = 0; i < shotIds.length; i += SELECTED_MOTION_BY_SHOTS_BATCH) {
+        const batch = shotIds.slice(i, i + SELECTED_MOTION_BY_SHOTS_BATCH);
+        const rows = await db
+          .select({ shotId: shots.id, version: shotPromptVersions })
+          .from(shots)
+          .innerJoin(
+            shotPromptVersions,
+            eq(shots.selectedMotionPromptVersionId, shotPromptVersions.id)
+          )
+          .where(inArray(shots.id, batch));
+        for (const r of rows) result.set(r.shotId, r.version);
+      }
+      return result;
     },
 
     /**
