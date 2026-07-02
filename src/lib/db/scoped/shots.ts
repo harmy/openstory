@@ -114,6 +114,10 @@ const SHOT_ARTIFACT_HASH_COLUMNS = {
   audio: 'audioInputHash',
 } as const satisfies Record<string, keyof Shot>;
 
+// Anchor-frame inserts bind ~10 params per row; 9 rows/chunk keeps each INSERT
+// well under D1's 100-bound-parameter ceiling (see `ensureAnchorFrames`).
+const ANCHOR_FRAMES_BATCH = 9;
+
 export type ShotArtifact = keyof typeof SHOT_ARTIFACT_HASH_COLUMNS;
 
 type ShotFilters = {
@@ -132,19 +136,31 @@ export function createShotsMethods(db: Database) {
   // plain `onConflictDoNothing` omits for the conflicting (pre-existing) rows. This
   // lets callers capture the anchor id at write time and thread it downstream
   // instead of reading it back (#991: no DB reads in workflows).
+  //
+  // Chunked to stay under D1's 100-bound-parameter ceiling: each anchor row binds
+  // ~10 params (id, shotId, sequenceId, orderIndex, role, source, imageStatus,
+  // imageModel, createdAt, updatedAt — the schema defaults are inlined as binds),
+  // so a single INSERT of a whole sequence's shots overflowed the limit and threw
+  // (#1019: getShotsFn calls this with every shot on each read, so sequences with
+  // more than ~10 shots stopped listing their scenes entirely).
   const ensureAnchorFrames = async (
     rows: ReadonlyArray<Pick<Shot, 'id' | 'sequenceId'>>
   ): Promise<Map<string, string>> => {
     if (rows.length === 0) return new Map();
-    const anchors = await db
-      .insert(frames)
-      .values(rows.map(anchorFrameValues))
-      .onConflictDoUpdate({
-        target: [frames.shotId, frames.orderIndex],
-        set: { orderIndex: sql.raw(`excluded."order_index"`) },
-      })
-      .returning({ id: frames.id, shotId: frames.shotId });
-    return new Map(anchors.map((a) => [a.shotId, a.id]));
+    const result = new Map<string, string>();
+    for (let i = 0; i < rows.length; i += ANCHOR_FRAMES_BATCH) {
+      const batch = rows.slice(i, i + ANCHOR_FRAMES_BATCH);
+      const anchors = await db
+        .insert(frames)
+        .values(batch.map(anchorFrameValues))
+        .onConflictDoUpdate({
+          target: [frames.shotId, frames.orderIndex],
+          set: { orderIndex: sql.raw(`excluded."order_index"`) },
+        })
+        .returning({ id: frames.id, shotId: frames.shotId });
+      for (const a of anchors) result.set(a.shotId, a.id);
+    }
+    return result;
   };
 
   return {
