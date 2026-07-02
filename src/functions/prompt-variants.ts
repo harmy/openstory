@@ -20,6 +20,7 @@ import { ulidSchema } from '@/lib/schemas/id.schemas';
 import { simpleHash } from '@/lib/utils/hash';
 import { triggerWorkflow } from '@/lib/workflow/client';
 import { buildWorkflowLabel } from '@/lib/workflow/labels';
+import type { Scene } from '@/lib/ai/scene-analysis.schema';
 import type {
   MotionPromptWorkflowInput,
   MusicPromptWorkflowInput,
@@ -438,6 +439,22 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
       label: buildWorkflowLabel(sequence.id),
     };
 
+    // Neighbour scenes give the motion LLM the same continuity context the
+    // analysis batch pipeline passes via MotionPromptBatchWorkflow (#929).
+    let sceneBefore: Scene | undefined;
+    let sceneAfter: Scene | undefined;
+    if (data.promptType === 'motion') {
+      const shotsInSeq = await scopedDb.shots.listBySequence(sequence.id);
+      const idx = shotsInSeq.findIndex((s) => s.id === shot.id);
+      const prevShot = idx > 0 ? shotsInSeq[idx - 1] : undefined;
+      const nextShot =
+        idx >= 0 && idx < shotsInSeq.length - 1
+          ? shotsInSeq[idx + 1]
+          : undefined;
+      sceneBefore = prevShot?.metadata ?? undefined;
+      sceneAfter = nextShot?.metadata ?? undefined;
+    }
+
     const workflowRunId =
       data.promptType === 'visual'
         ? // `frameId` is REQUIRED on FramePromptWorkflowInput — the workflow
@@ -454,7 +471,12 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
           // swap it). The still lives on the anchor frame now (#989).
           await triggerWorkflow<MotionPromptWorkflowInput>(
             '/motion-prompt',
-            { ...commonInput, startingFrameImageUrl: frame.imageUrl },
+            {
+              ...commonInput,
+              startingFrameImageUrl: frame.imageUrl,
+              sceneBefore,
+              sceneAfter,
+            },
             triggerOpts
           );
 
