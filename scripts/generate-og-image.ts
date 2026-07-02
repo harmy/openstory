@@ -39,9 +39,18 @@ await page
 await page.evaluate(() => document.fonts.ready);
 await page.waitForTimeout(500);
 
-// Strip dev-only overlays (TanStack devtools trigger + panel) so the capture
-// matches the production build, which ships without them. Applied after the
-// client has mounted so hydration can't clobber the injected style.
+// Drop the nav so the hero centers in the card instead of sitting off to the
+// right behind it. The sidebar must be *removed*, not just display:none'd: the
+// OpenStory logo fills from an SVG gradient (id="twilight-dark") that the
+// sidebar's own logo also defines first in the DOM, and a display:none gradient
+// stops painting — so the hero logo only resolves its own def once the sidebar
+// node is gone. Also drop the breadcrumb header (chrome, no logo).
+await page.evaluate(() => {
+  document.querySelector('[data-slot="sidebar"]')?.remove();
+  document.querySelector('[data-slot="sidebar-inset"] > header')?.remove();
+});
+// Hide the dev-only TanStack devtools overlay (absent in prod builds). CSS wins
+// over the client re-mounting the trigger.
 await page.addStyleTag({
   content:
     '[data-testid="tanstack_devtools"], #tanstack_devtools { display: none !important; }',
