@@ -308,7 +308,7 @@ export function createScopedDb(teamId: string, userId: string) {
     sequenceEvents: createSequenceEventsMethods(db),
     characterSheetVariants: createCharacterSheetVariantsMethods(db),
     locationSheetVariants: createLocationSheetVariantsMethods(db),
-    talentSheetVariants: createTalentSheetVariantsMethods(db),
+    talentSheetVariants: createTalentSheetVariantsMethods(db, teamId),
     sequenceMusicPromptVersions: createSequenceMusicPromptVersionsMethods(db),
     sequenceVariants: createSequenceVariantsMethods(db),
     sequenceExports: createSequenceExportsMethods(db),
