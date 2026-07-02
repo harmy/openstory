@@ -72,10 +72,7 @@ export const AddModelMenuSection = ({
 
     if (variantType === 'image') {
       const count = shotList.filter(
-        (f) =>
-          f.imagePrompt ||
-          f.metadata?.prompts?.visual?.fullPrompt ||
-          f.description
+        (f) => f.imagePrompt || f.description
       ).length;
       return Object.keys(IMAGE_MODELS)
         .filter(isValidTextToImageModel)

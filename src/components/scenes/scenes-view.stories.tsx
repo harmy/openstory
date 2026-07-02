@@ -193,42 +193,6 @@ const mockShotBase = {
       timeOfDay: 'Dawn',
       storyBeat: 'Introduction',
     },
-    prompts: {
-      visual: {
-        fullPrompt: 'Sample visual prompt',
-        negativePrompt: '',
-        components: {
-          sceneDescription: 'Forest scene',
-          subject: 'Character',
-          environment: 'Forest',
-          lighting: 'Dawn light',
-          camera: 'Wide shot',
-          composition: 'Centered',
-          style: 'Cinematic',
-          technical: 'High detail',
-          atmosphere: 'Mysterious',
-        },
-      },
-      motion: {
-        fullPrompt: 'Sample motion prompt',
-        components: {
-          cameraMovement: 'Slow pan',
-          startPosition: 'Left',
-          endPosition: 'Right',
-          durationSeconds: 5,
-          speed: 'slow',
-          smoothness: 'smooth',
-          subjectTracking: 'follow',
-          equipment: 'slider',
-        },
-        parameters: {
-          durationSeconds: 5,
-          fps: 24,
-          motionAmount: 'medium',
-          cameraControl: { pan: 0, tilt: 0, zoom: 0.2, movement: 'forward' },
-        },
-      },
-    },
     continuity: {
       characterTags: ['hero'],
       environmentTag: 'forest',

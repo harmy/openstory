@@ -35,6 +35,7 @@ const baseShot: ShotWithImage = {
   videoError: null,
   motionPrompt: null,
   motionModel: null,
+  motionPromptData: null,
   selectedMotionPromptVersionId: null,
   renderSegmentId: null,
   audioUrl: null,

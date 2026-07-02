@@ -25,7 +25,7 @@ import { aspectRatioToImageSize } from '@/lib/constants/aspect-ratios';
 import type { ScopedDb } from '@/lib/db/scoped';
 import { dbSceneId, type Character, type Sequence } from '@/lib/db/schema';
 import { analyzeFailures } from '@/lib/failures/failure-analysis';
-import { resolveMotionPrompt } from '@/lib/motion/resolve-motion-prompt';
+import { resolveMotionPromptFromVersion } from '@/lib/motion/resolve-motion-prompt';
 import { projectShotWithImage } from '@/lib/shots/shot-with-image';
 import { buildCharacterReferenceImages } from '@/lib/prompts/character-prompt';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
@@ -224,10 +224,7 @@ export async function executeSmartRetry(context: SmartRetryContext) {
     // reported as retried (and must not clear the failed flag on their own).
     let triggeredImages = 0;
     for (const shot of failedImageShots) {
-      const prompt =
-        shot.imagePrompt ||
-        shot.metadata?.prompts?.visual?.fullPrompt ||
-        shot.description;
+      const prompt = shot.imagePrompt || shot.description;
 
       if (!prompt) continue;
 
@@ -265,13 +262,23 @@ export async function executeSmartRetry(context: SmartRetryContext) {
       if (!shot.thumbnailUrl) continue;
 
       const shotVideoModel = videoModelFor(shot);
+      const selectedMotion =
+        await context.scopedDb.shotPromptVersions.getSelectedMotion(shot.id);
       const workflowInput: MotionWorkflowInput = {
         userId: user.id,
         teamId,
         shotId: shot.id,
         sequenceId: sequence.id,
         imageUrl: shot.thumbnailUrl,
-        prompt: resolveMotionPrompt(shot, shotVideoModel),
+        prompt: resolveMotionPromptFromVersion(
+          selectedMotion,
+          {
+            motionPromptMirror: shot.motionPrompt,
+            characterTags: shot.metadata?.continuity?.characterTags,
+            description: shot.description,
+          },
+          shotVideoModel
+        ),
         model: shotVideoModel,
         aspectRatio: sequence.aspectRatio,
         duration: shot.durationMs ? shot.durationMs / 1000 : undefined,

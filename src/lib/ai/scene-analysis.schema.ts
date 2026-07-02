@@ -312,15 +312,6 @@ export const motionPromptSchema = z.object({
   }),
 });
 
-const promptsSchema = z.object({
-  visual: visualPromptSchema
-    .optional()
-    .meta({ description: 'Image generation prompt data' }),
-  motion: motionPromptSchema
-    .optional()
-    .meta({ description: 'Motion/video generation prompt data' }),
-});
-
 // ============================================================================
 // Music Design Schema (replaces audioDesign for new shots)
 // ============================================================================
@@ -496,9 +487,10 @@ export const sceneSchema = z.object({
   metadata: sceneMetadataSchema
     .optional()
     .meta({ description: 'Scene metadata and context' }),
-  prompts: promptsSchema.optional().meta({
-    description: 'Visual and motion generation prompts',
-  }),
+  // `prompts` removed (#713): visual prompts live in `frame_prompt_versions`
+  // (mirrored on `frame.imagePrompt`) and motion prompts in
+  // `shot_prompt_versions` (mirrored on `shot.motionPrompt` + dialogue/audio
+  // columns). The Scene metadata no longer carries generated prompts.
   musicDesign: musicDesignSchema
     .optional()
     .meta({ description: 'Music classification for this scene (new shots)' }),
@@ -555,6 +547,19 @@ export type VisualPromptComponents = z.infer<
   typeof visualPromptComponentsSchema
 >;
 export type MotionPrompt = z.infer<typeof motionPromptSchema>;
+export type MotionDialogue = NonNullable<MotionPrompt['dialogue']>;
+export type MotionAudio = NonNullable<MotionPrompt['audio']>;
+/**
+ * The fields model-specific assembly (`assembleMotionPrompt`) actually consumes:
+ * the narrative base plus the dialogue/audio direction appended for audio-capable
+ * video models. This is what a `shot_prompt_versions` motion row reconstructs to
+ * at resolution time (#713) — `components`/`parameters` are stored for history
+ * but are not part of the rendered prompt.
+ */
+export type AssemblableMotionPrompt = Pick<
+  MotionPrompt,
+  'fullPrompt' | 'dialogue' | 'audio'
+>;
 export type MotionPromptComponents = z.infer<
   typeof motionPromptComponentsSchema
 >;

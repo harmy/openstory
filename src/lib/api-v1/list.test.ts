@@ -102,6 +102,7 @@ function makeShot(overrides: Partial<ShotWithImage> = {}): ShotWithImage {
     videoError: null,
     motionPrompt: null,
     motionModel: null,
+    motionPromptData: null,
     audioUrl: null,
     audioPath: null,
     audioStatus: 'pending',

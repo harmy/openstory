@@ -10,6 +10,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { promptVariantKeys } from '@/hooks/use-prompt-variants';
 import { shotKeys } from '@/hooks/use-shots';
 import type { Frame, Shot } from '@/lib/db/schema';
 import {
@@ -263,6 +264,62 @@ describe('updateQueryCacheFromEvent — variant-only guard (#547)', () => {
       expect(shot?.videoStatus).toBe('failed');
       expect(shot?.videoError).toBe(
         'Motion generation rejected by content filter'
+      );
+    });
+  });
+
+  // After #713 the regenerated prompt no longer rides in `metadata` — it's
+  // mirrored onto the frame/shot and projected server-side. The handler must
+  // refetch the shots list (re-runs that projection) and the version-history
+  // query, instead of relying on the now-inert in-place metadata patch (#991).
+  describe('generation.shot:updated (prompt regeneration #991)', () => {
+    it('visual-prompt refetches the shots list and the visual history query', () => {
+      const invalidate = vi.spyOn(qc, 'invalidateQueries');
+
+      updateQueryCacheFromEvent(qc, SEQ, 'generation.shot:updated', {
+        shotId: 'shot-1',
+        updateType: 'visual-prompt',
+        metadata: { sceneId: 'sc-1', sceneNumber: 1 },
+      });
+
+      vi.advanceTimersByTime(200);
+      const keys = invalidate.mock.calls.map((c) => c[0]?.queryKey);
+      expect(keys).toContainEqual(shotKeys.list(SEQ));
+      expect(keys).toContainEqual(promptVariantKeys.shot('visual', 'shot-1'));
+    });
+
+    it('motion-prompt refetches the shots list and the motion history query', () => {
+      const invalidate = vi.spyOn(qc, 'invalidateQueries');
+
+      updateQueryCacheFromEvent(qc, SEQ, 'generation.shot:updated', {
+        shotId: 'shot-1',
+        updateType: 'motion-prompt',
+        metadata: { sceneId: 'sc-1', sceneNumber: 1 },
+      });
+
+      vi.advanceTimersByTime(200);
+      const keys = invalidate.mock.calls.map((c) => c[0]?.queryKey);
+      expect(keys).toContainEqual(shotKeys.list(SEQ));
+      expect(keys).toContainEqual(promptVariantKeys.shot('motion', 'shot-1'));
+    });
+
+    it('a non-prompt updateType patches metadata in place without refetching the list', () => {
+      const invalidate = vi.spyOn(qc, 'invalidateQueries');
+
+      updateQueryCacheFromEvent(qc, SEQ, 'generation.shot:updated', {
+        shotId: 'shot-1',
+        updateType: 'music-design',
+        metadata: { sceneId: 'sc-1', sceneNumber: 2 },
+      });
+
+      // Music/audio design still travels in metadata — patched in place, no
+      // refetch.
+      expect(getCachedShot(qc)?.metadata?.sceneNumber).toBe(2);
+      vi.advanceTimersByTime(200);
+      const keys = invalidate.mock.calls.map((c) => c[0]?.queryKey);
+      expect(keys).not.toContainEqual(shotKeys.list(SEQ));
+      expect(keys).not.toContainEqual(
+        promptVariantKeys.shot('visual', 'shot-1')
       );
     });
   });

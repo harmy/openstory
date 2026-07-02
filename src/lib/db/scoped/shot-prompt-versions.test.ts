@@ -192,6 +192,11 @@ describe('shot_prompt_variants helper', () => {
     if (!refreshed) throw new Error('test setup: refresh failed');
     expect(refreshed.motionPrompt).toBe('AI prompt v2');
     expect(refreshed.motionPromptInputHash).toBe('context-hash-abc');
+    // The selection pointer must move to the written version — the render
+    // manifest snapshots this, and leaving it null reintroduced the #990
+    // null-reference bug. A regression dropping the pointer-set is otherwise
+    // invisible (motionPrompt/hash still update), so assert it explicitly.
+    expect(refreshed.selectedMotionPromptVersionId).toBe(variant.id);
   });
 
   it('preserves prior AI text in the variant chain after a user edit (recoverable history)', async () => {
@@ -364,6 +369,9 @@ describe('shot_prompt_variants helper', () => {
     // Cached hash still reflects the live upstream so staleness detection
     // doesn't fire spuriously after a force regeneration.
     expect(refreshed.motionPromptInputHash).toBe('context-hash-1');
+    // Selection points at the freshly-forced row (not the deduped original),
+    // even though that row carries a null input_hash.
+    expect(refreshed.selectedMotionPromptVersionId).toBe(forced.id);
   });
 
   it('idempotent retry of the same text at the same hash still de-dupes (does not fall through to the null-hash branch)', async () => {
@@ -608,6 +616,87 @@ describe('shot_prompt_variants helper', () => {
     const latestHashed = await methods.getLatestWithInputHash(shotId, 'motion');
     expect(latestHashed?.id).toBe(ai.id);
     expect(latestHashed?.inputHash).toBe('ai-hash-1');
+  });
+
+  it('getSelectedMotion returns the version the shot points at', async () => {
+    const methods = createShotPromptVersionsMethods(db);
+    const written = await methods.write({
+      shotId,
+      promptType: 'motion',
+      text: 'Selected motion prompt',
+      source: 'ai-generated',
+      inputHash: 'sel-hash-1',
+      analysisModel: 'anthropic/claude-haiku-4.5',
+    });
+
+    const selected = await methods.getSelectedMotion(shotId);
+    expect(selected?.id).toBe(written.id);
+    expect(selected?.text).toBe('Selected motion prompt');
+  });
+
+  it('getSelectedMotion returns null (does not throw) when the pointer is orphaned', async () => {
+    const methods = createShotPromptVersionsMethods(db);
+    // Pointer set to a version id that has no row (deleted/broken FK).
+    await db
+      .update(shots)
+      .set({ selectedMotionPromptVersionId: generateId() })
+      .where(eq(shots.id, shotId));
+
+    expect(await methods.getSelectedMotion(shotId)).toBeNull();
+  });
+
+  it('select repoints the shot at an existing version and mirrors it', async () => {
+    const methods = createShotPromptVersionsMethods(db);
+    const v1 = await methods.write({
+      shotId,
+      promptType: 'motion',
+      text: 'Motion v1',
+      source: 'ai-generated',
+      inputHash: 'hash-1',
+      analysisModel: 'anthropic/claude-haiku-4.5',
+    });
+    await methods.write({
+      shotId,
+      promptType: 'motion',
+      text: 'Motion v2',
+      source: 'regenerated',
+      inputHash: 'hash-2',
+      analysisModel: 'anthropic/claude-haiku-4.5',
+    });
+
+    // The shot currently points at v2; restore v1.
+    const restored = await methods.select(shotId, v1.id, { actorId: null });
+    expect(restored.id).toBe(v1.id);
+
+    const [refreshed] = await db
+      .select()
+      .from(shots)
+      .where(eq(shots.id, shotId));
+    if (!refreshed) throw new Error('test setup: refresh failed');
+    expect(refreshed.selectedMotionPromptVersionId).toBe(v1.id);
+    expect(refreshed.motionPrompt).toBe('Motion v1');
+    expect(refreshed.motionPromptInputHash).toBe('hash-1');
+  });
+
+  it('select refuses a version id that belongs to another shot', async () => {
+    const methods = createShotPromptVersionsMethods(db);
+    const [otherShot] = await db
+      .insert(shots)
+      .values({ sequenceId, orderIndex: 1 })
+      .returning();
+    if (!otherShot) throw new Error('test setup: other shot insert failed');
+    const foreign = await methods.write({
+      shotId: otherShot.id,
+      promptType: 'motion',
+      text: 'Foreign motion prompt',
+      source: 'ai-generated',
+      inputHash: 'foreign-hash',
+      analysisModel: 'anthropic/claude-haiku-4.5',
+    });
+
+    await expect(
+      methods.select(shotId, foreign.id, { actorId: null })
+    ).rejects.toThrow(/not found/);
   });
 });
 

@@ -1,6 +1,8 @@
 import { mediaUrlSchema } from '@/lib/schemas/media-url.schemas';
 import { getSignedUploadUrl } from '#storage';
 import { describeElementImage } from '@/lib/ai/element-vision';
+import { DEFAULT_VIDEO_MODEL, safeImageToVideoModel } from '@/lib/ai/models';
+import { resolveMotionPromptFromVersion } from '@/lib/motion/resolve-motion-prompt';
 import { generateId } from '@/lib/db/id';
 import { getGenerationChannel } from '@/lib/realtime';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
@@ -370,6 +372,33 @@ export const replaceSequenceElementFn = createServerFn({ method: 'POST' })
         data.elementId
       );
 
+    // Resolve the per-shot motion prompts HERE, before the workflow starts —
+    // workflows must not read the DB (a versioned, append-only store is racy to
+    // read mid-flight and non-deterministic on replay). The video model matches
+    // what the workflow uses (sequence-level). #713/#991.
+    const affectedShots =
+      await context.scopedDb.shots.getByIds(affectedShotIds);
+    const videoModel = safeImageToVideoModel(
+      context.sequence.videoModel,
+      DEFAULT_VIDEO_MODEL
+    );
+    const selectedMotionByShot =
+      await context.scopedDb.shotPromptVersions.getSelectedMotionByShots(
+        affectedShotIds
+      );
+    const motionPromptByShotId: Record<string, string> = {};
+    for (const shot of affectedShots) {
+      motionPromptByShotId[shot.id] = resolveMotionPromptFromVersion(
+        selectedMotionByShot.get(shot.id),
+        {
+          motionPromptMirror: shot.motionPrompt,
+          characterTags: shot.metadata?.continuity?.characterTags,
+          description: shot.description,
+        },
+        videoModel
+      );
+    }
+
     const workflowInput: ReplaceElementWorkflowInput = {
       userId: context.user.id,
       teamId: context.teamId,
@@ -380,6 +409,7 @@ export const replaceSequenceElementFn = createServerFn({ method: 'POST' })
       newImageUrl: data.publicUrl,
       newFilename: data.filename,
       affectedShotIds,
+      motionPromptByShotId,
     };
 
     // If the trigger throws, the row is stranded in `analyzing` — restore

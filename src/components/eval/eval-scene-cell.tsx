@@ -13,23 +13,17 @@ import type { ViewMode } from './eval-view';
  * Prioritizes user-updated prompt over AI-generated prompt
  */
 export function getVisualPrompt(shot: ShotWithImage): string | null {
-  if (shot.imagePrompt) {
-    return shot.imagePrompt;
-  }
-  const scene = shot.metadata;
-  return scene?.prompts?.visual?.fullPrompt || null;
+  // The visual prompt is the anchor frame's `imagePrompt` mirror (#989/#713).
+  return shot.imagePrompt || null;
 }
 
 /**
- * Get motion prompt from shot - client-safe utility
- * Prioritizes user-updated prompt over AI-generated prompt
+ * Get motion prompt from shot - client-safe utility.
+ * `shot.motionPrompt` mirrors the selected motion version; fall back to the
+ * projected structured prompt's `fullPrompt` (#713).
  */
 export function getMotionPrompt(shot: ShotWithImage): string | null {
-  if (shot.motionPrompt) {
-    return shot.motionPrompt;
-  }
-  const scene = shot.metadata;
-  return scene?.prompts?.motion?.fullPrompt || null;
+  return shot.motionPrompt || shot.motionPromptData?.fullPrompt || null;
 }
 
 /**

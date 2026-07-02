@@ -11,16 +11,13 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  listShotPromptVariantsFn,
-  listSequenceMusicPromptVariantsFn,
-  restoreShotPromptVariantFn,
-  restoreSequenceMusicPromptVariantFn,
-} from '@/functions/prompt-variants';
-import { shotKeys } from '@/hooks/use-shots';
-import { sequenceKeys } from '@/hooks/use-sequences';
+  useRestoreMusicPromptVariant,
+  useRestoreShotPromptVariant,
+  useSequenceMusicPromptVariants,
+  useShotPromptVariants,
+} from '@/hooks/use-prompt-variants';
 import type { PromptVariantSource } from '@/lib/db/schema';
 import { cn } from '@/lib/utils';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -94,40 +91,33 @@ export const PromptHistorySheet: React.FC<PromptHistorySheetProps> = (
 ) => {
   const { open, onOpenChange, mode, currentText, sequenceId } = props;
   const shotId = props.mode === 'music' ? null : props.shotId;
-  const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const queryKey =
-    mode === 'music'
-      ? (['prompt-variants', 'music', sequenceId] as const)
-      : (['prompt-variants', mode, shotId] as const);
+  const isMusic = mode === 'music';
+  // For the shot hooks when in music mode the value is unused (query disabled);
+  // 'visual' is just a type-safe placeholder.
+  const shotPromptType = isMusic ? 'visual' : mode;
 
-  const {
-    data: rows,
-    isLoading,
-    error,
-    refetch,
-  } = useQuery<Row[]>({
-    queryKey,
-    queryFn: async () => {
-      if (mode === 'music') {
-        const variants = await listSequenceMusicPromptVariantsFn({
-          data: { sequenceId },
-        });
-        return variants.map((v) => ({
-          id: v.id,
-          source: v.source,
-          text: v.prompt,
-          createdAt: v.createdAt,
-          createdByName: v.createdByName,
-          inputHash: v.inputHash,
-        }));
-      }
-      if (!shotId) return [];
-      const variants = await listShotPromptVariantsFn({
-        data: { sequenceId, shotId: shotId, promptType: mode },
-      });
-      return variants.map((v) => ({
+  const shotQuery = useShotPromptVariants(
+    { sequenceId, shotId: shotId ?? '', promptType: shotPromptType },
+    { enabled: open && !isMusic && !!shotId }
+  );
+  const musicQuery = useSequenceMusicPromptVariants(sequenceId, {
+    enabled: open && isMusic,
+  });
+
+  const active = isMusic ? musicQuery : shotQuery;
+  const { isLoading, error, refetch } = active;
+  const rows: Row[] | undefined = isMusic
+    ? musicQuery.data?.map((v) => ({
+        id: v.id,
+        source: v.source,
+        text: v.prompt,
+        createdAt: v.createdAt,
+        createdByName: v.createdByName,
+        inputHash: v.inputHash,
+      }))
+    : shotQuery.data?.map((v) => ({
         id: v.id,
         source: v.source,
         text: v.text,
@@ -135,45 +125,23 @@ export const PromptHistorySheet: React.FC<PromptHistorySheetProps> = (
         createdByName: v.createdByName,
         inputHash: v.inputHash,
       }));
-    },
-    enabled: open,
-    staleTime: 5_000,
-  });
 
-  const restoreMutation = useMutation({
-    mutationFn: async (variantId: string) => {
-      if (mode === 'music') {
-        return await restoreSequenceMusicPromptVariantFn({
-          data: { sequenceId, variantId },
-        });
-      }
-      if (!shotId) throw new Error('shotId required');
-      return await restoreShotPromptVariantFn({
-        data: { sequenceId, shotId: shotId, variantId },
-      });
-    },
-    onSuccess: async () => {
-      toast.success('Prompt restored');
-      await queryClient.invalidateQueries({ queryKey });
-      if (mode === 'music') {
-        await queryClient.invalidateQueries({
-          queryKey: sequenceKeys.detail(sequenceId),
-        });
-      } else if (shotId) {
-        await queryClient.invalidateQueries({
-          queryKey: shotKeys.detail(shotId),
-        });
-        await queryClient.invalidateQueries({
-          queryKey: shotKeys.list(sequenceId),
-        });
-      }
-    },
-    onError: (error) => {
-      toast.error('Restore failed', {
-        description: error instanceof Error ? error.message : 'Unknown error',
-      });
-    },
+  const restoreShot = useRestoreShotPromptVariant({
+    sequenceId,
+    shotId: shotId ?? '',
+    promptType: shotPromptType,
   });
+  const restoreMusic = useRestoreMusicPromptVariant(sequenceId);
+  const restoreMutation = isMusic ? restoreMusic : restoreShot;
+
+  const onRestore = (variantId: string) =>
+    restoreMutation.mutate(variantId, {
+      onSuccess: () => toast.success('Prompt restored'),
+      onError: (err) =>
+        toast.error('Restore failed', {
+          description: err instanceof Error ? err.message : 'Unknown error',
+        }),
+    });
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -285,7 +253,7 @@ export const PromptHistorySheet: React.FC<PromptHistorySheetProps> = (
                               type="button"
                               size="sm"
                               disabled={restoreMutation.isPending}
-                              onClick={() => restoreMutation.mutate(row.id)}
+                              onClick={() => onRestore(row.id)}
                             >
                               {restoreMutation.isPending && (
                                 <Loader2 className="mr-2 h-3 w-3 animate-spin" />

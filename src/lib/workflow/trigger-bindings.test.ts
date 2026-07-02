@@ -155,7 +155,7 @@ describe('triggerCfWorkflow', () => {
       await expect(
         triggerCfWorkflow({
           binding,
-          triggerPath: '/visual-prompt-scene',
+          triggerPath: '/frame-prompt',
           body,
           env,
           deduplicationId: 'prompt-visual-f1-h4sh',

@@ -106,6 +106,7 @@ export class MotionBatchWorkflow extends OpenStoryWorkflowEntrypoint<BatchMotion
         aspectRatio: shot.aspectRatio,
         generateAudio: shot.generateAudio,
         userEditedPrompt: shot.userEditedPrompt,
+        priorMotion: shot.priorMotion,
         // Add-model (#547) batches generate alternates only — the child must
         // not write the legacy `shots.video*` columns.
         variantOnly: input.variantOnly,

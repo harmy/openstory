@@ -134,12 +134,10 @@ export const generateShotImageFn = createServerFn({ method: 'POST' })
   .handler(async ({ context, data }) => {
     const { shot, frame, sequence, user } = context;
 
-    // Priority: provided > stored (anchor frame, #989) > AI-generated > description
-    const prompt =
-      data.prompt ||
-      frame.imagePrompt ||
-      shot.metadata?.prompts?.visual?.fullPrompt ||
-      shot.description;
+    // Priority: provided > stored anchor-frame mirror (#989/#713) > description.
+    // The visual prompt lives solely on `frame.imagePrompt` now (the old
+    // `metadata.prompts.visual` fallback is gone).
+    const prompt = data.prompt || frame.imagePrompt || shot.description;
 
     if (!prompt) {
       throw new Error('Shot has no prompt or description to regenerate from');
@@ -327,7 +325,7 @@ export const generateShotVariantsFn = createServerFn({ method: 'POST' })
       sequenceId: sequence.id,
       shotId: shot.id,
       thumbnailUrl: frame.imageUrl,
-      scenePrompt: shot.metadata?.prompts?.visual?.fullPrompt,
+      scenePrompt: frame.imagePrompt ?? undefined,
       model: data.model,
       aspectRatio: sequence.aspectRatio,
       imageSize: data.imageSize || gridConfig.imageSize,

@@ -15,7 +15,11 @@
  * § prompt versioning.
  */
 
-import type { MotionPromptParameters } from '@/lib/ai/scene-analysis.schema';
+import type {
+  MotionAudio,
+  MotionDialogue,
+  MotionPromptParameters,
+} from '@/lib/ai/scene-analysis.schema';
 import type { Database } from '@/lib/db/client';
 import { shotPromptVersions, shots, user } from '@/lib/db/schema';
 import type {
@@ -23,7 +27,11 @@ import type {
   ShotPromptVersion,
   ShotPromptVersionComponents,
 } from '@/lib/db/schema';
-import { and, desc, eq, isNotNull, lte } from 'drizzle-orm';
+import { getLogger } from '@/lib/observability/logger';
+import { and, desc, eq, inArray, isNotNull, lte } from 'drizzle-orm';
+import { buildEventInsert } from './sequence-events';
+
+const logger = getLogger(['openstory', 'db', 'shot-prompt-versions']);
 
 type WriteShotPromptVersionBase = {
   shotId: string;
@@ -31,6 +39,13 @@ type WriteShotPromptVersionBase = {
   text: string;
   components?: ShotPromptVersionComponents | null;
   parameters?: MotionPromptParameters | null;
+  /**
+   * Motion-only: the scene dialogue/audio direction the prompt was authored
+   * with. Persisted on the version so audio-capable video models can append
+   * them at render time without re-reading `metadata.prompts.motion` (#713).
+   */
+  dialogue?: MotionDialogue | null;
+  audio?: MotionAudio | null;
   createdBy?: string | null;
 };
 
@@ -72,25 +87,51 @@ export type WriteShotPromptVersionInput = WriteShotPromptVersionBase &
       }
   );
 
-const cachedColumnsForType = (promptType: ShotPromptType) => {
-  // Visual (image) prompt versions moved to `frame_prompt_versions` (#989) — the
-  // cached mirror lives on the anchor frame, not `shots`. Only the MOTION prompt
-  // still mirrors onto `shots`.
+// Visual (image) prompt versions moved to `frame_prompt_versions` (#989) — the
+// cached mirror lives on the anchor frame, not `shots`. Only the MOTION prompt
+// still mirrors onto `shots`, so every write through this module must be motion.
+const assertMotionPromptType = (promptType: ShotPromptType): void => {
   if (promptType === 'visual') {
     throw new Error(
       'Visual prompt versions moved to frame_prompt_versions (#989); use scopedDb.framePromptVersions'
     );
   }
-  return {
-    text: shots.motionPrompt,
-    hash: shots.motionPromptInputHash,
-    textKey: 'motionPrompt' as const,
-    hashKey: 'motionPromptInputHash' as const,
-  };
 };
 
 export function createShotPromptVersionsMethods(db: Database) {
-  return {
+  /**
+   * Mirror a selected motion version onto its shot: cached text + hash +
+   * `selectedMotionPromptVersionId` pointer, all set in lockstep. The pointer is
+   * what the render manifest references (motion prompt version snapshot, #990),
+   * so keeping the triple together is load-bearing — this single helper is the
+   * only place the three columns are written, so they can't drift.
+   *
+   * `text`/`inputHash` are passed explicitly (not read off `version`) because the
+   * force-regen path in `write` mirrors the real upstream `inputHash` while the
+   * version row itself carries a null hash — see `write`.
+   */
+  const mirrorSelection = (
+    shotId: string,
+    selection: { text: string; inputHash: string | null; versionId: string }
+  ) =>
+    db
+      .update(shots)
+      .set({
+        motionPrompt: selection.text,
+        motionPromptInputHash: selection.inputHash,
+        selectedMotionPromptVersionId: selection.versionId,
+        updatedAt: new Date(),
+      })
+      .where(eq(shots.id, shotId));
+
+  const mirrorOntoShot = (shotId: string, version: ShotPromptVersion) =>
+    mirrorSelection(shotId, {
+      text: version.text,
+      inputHash: version.inputHash,
+      versionId: version.id,
+    });
+
+  const methods = {
     /**
      * Append a new prompt version row and update the cached pointer on
      * `shots`. Returns the inserted (or pre-existing matching) row.
@@ -116,7 +157,7 @@ export function createShotPromptVersionsMethods(db: Database) {
     write: async (
       input: WriteShotPromptVersionInput
     ): Promise<ShotPromptVersion> => {
-      const cached = cachedColumnsForType(input.promptType);
+      assertMotionPromptType(input.promptType);
 
       const nextHash = input.inputHash;
       const analysisModel = input.analysisModel;
@@ -131,6 +172,8 @@ export function createShotPromptVersionsMethods(db: Database) {
           text: input.text,
           components: input.components,
           parameters: input.parameters,
+          dialogue: input.dialogue,
+          audio: input.audio,
           source: input.source,
           inputHash: nextHash,
           analysisModel,
@@ -170,6 +213,8 @@ export function createShotPromptVersionsMethods(db: Database) {
               text: input.text,
               components: input.components,
               parameters: input.parameters,
+              dialogue: input.dialogue,
+              audio: input.audio,
               source: input.source,
               inputHash: null,
               analysisModel,
@@ -186,15 +231,150 @@ export function createShotPromptVersionsMethods(db: Database) {
         throw new Error('Failed to insert shot prompt version');
       }
 
-      await db
-        .update(shots)
-        .set({
-          [cached.textKey]: input.text,
-          [cached.hashKey]: nextHash,
-          updatedAt: new Date(),
-        })
-        .where(eq(shots.id, input.shotId));
+      // Mirror onto the shot AND repoint the selection at this version. The
+      // `selectedMotionPromptVersionId` pointer was previously never set, so the
+      // render manifest snapshotted a null motion-prompt reference (#990 bug);
+      // setting it here is load-bearing. The cached hash tracks `nextHash` (the
+      // real upstream context) even on the force-regen path where the version row
+      // itself carries a null hash — see the branch above.
+      await mirrorSelection(input.shotId, {
+        text: input.text,
+        inputHash: nextHash,
+        versionId: version.id,
+      });
 
+      return version;
+    },
+
+    /**
+     * Append an AI-generated MOTION prompt version, deciding `ai-generated`
+     * (first motion version for the shot) vs `regenerated` (a re-run) from the
+     * shot's existing motion history — so the generation workflow doesn't
+     * compute `source` or chase `getLatest` itself. Appends + mirrors via
+     * `write`. The dedupe/force-regen contract is `write`'s.
+     */
+    writeAiVersion: async (input: {
+      shotId: string;
+      text: string;
+      components?: ShotPromptVersionComponents | null;
+      parameters?: MotionPromptParameters | null;
+      dialogue?: MotionDialogue | null;
+      audio?: MotionAudio | null;
+      inputHash: string;
+      analysisModel: string;
+      createdBy?: string | null;
+    }): Promise<ShotPromptVersion> => {
+      const previous = await methods.getLatest(input.shotId, 'motion');
+      return methods.write({
+        ...input,
+        promptType: 'motion',
+        source: previous ? 'regenerated' : 'ai-generated',
+      });
+    },
+
+    /**
+     * The motion prompt version the shot currently points at via
+     * `shots.selectedMotionPromptVersionId`, or null. This is the resolution
+     * source of truth (#713): the render path reconstructs the `MotionPrompt`
+     * from this row rather than reading `metadata.prompts.motion`.
+     */
+    getSelectedMotion: async (
+      shotId: string
+    ): Promise<ShotPromptVersion | null> => {
+      // Left join (not inner) so we can tell "no pointer set" (legacy shot, falls
+      // back to the mirror) apart from "pointer set but the row is gone" — an
+      // orphaned pointer (broken FK / deleted version) that the mirror fallback
+      // would otherwise mask silently. Surface the latter so it's observable.
+      const [row] = await db
+        .select({
+          pointer: shots.selectedMotionPromptVersionId,
+          version: shotPromptVersions,
+        })
+        .from(shots)
+        .leftJoin(
+          shotPromptVersions,
+          eq(shots.selectedMotionPromptVersionId, shotPromptVersions.id)
+        )
+        .where(eq(shots.id, shotId))
+        .limit(1);
+      if (row?.pointer && !row.version) {
+        logger.warn(
+          `Shot ${shotId} points at motion prompt version ${row.pointer} but no row exists (orphaned pointer); falling back to the cached mirror`
+        );
+      }
+      return row?.version ?? null;
+    },
+
+    /**
+     * Selected motion prompt version for each shot, keyed by shotId. Powers the
+     * read-side projection that feeds the client motion preview (the structured
+     * dialogue/audio data the assembled preview needs). Shots with no selected
+     * motion version are absent from the map.
+     */
+    getSelectedMotionByShots: async (
+      shotIds: string[]
+    ): Promise<Map<string, ShotPromptVersion>> => {
+      if (shotIds.length === 0) return new Map();
+      const rows = await db
+        .select({ shotId: shots.id, version: shotPromptVersions })
+        .from(shots)
+        .innerJoin(
+          shotPromptVersions,
+          eq(shots.selectedMotionPromptVersionId, shotPromptVersions.id)
+        )
+        .where(inArray(shots.id, shotIds));
+      return new Map(rows.map((r) => [r.shotId, r.version]));
+    },
+
+    /**
+     * Repoint the shot at an existing motion prompt version (a restore / undo)
+     * and mirror it onto the shot, committing the change and a
+     * `prompt.selected` event in one batch. Returns the selected version.
+     * Mirrors `framePromptVersions.select`.
+     */
+    select: async (
+      shotId: string,
+      versionId: string,
+      opts: { actorId: string | null }
+    ): Promise<ShotPromptVersion> => {
+      const [version] = await db
+        .select()
+        .from(shotPromptVersions)
+        .where(
+          and(
+            eq(shotPromptVersions.id, versionId),
+            eq(shotPromptVersions.shotId, shotId),
+            eq(shotPromptVersions.promptType, 'motion')
+          )
+        );
+      if (!version) {
+        throw new Error(
+          `Motion ShotPromptVersion ${versionId} not found for shot ${shotId}`
+        );
+      }
+      const [shot] = await db
+        .select({
+          sequenceId: shots.sequenceId,
+          prev: shots.selectedMotionPromptVersionId,
+        })
+        .from(shots)
+        .where(eq(shots.id, shotId));
+      if (!shot) {
+        throw new Error(`Shot ${shotId} not found`);
+      }
+
+      await db.batch([
+        mirrorOntoShot(shotId, version),
+        buildEventInsert(db, {
+          sequenceId: shot.sequenceId,
+          actorId: opts.actorId,
+          kind: 'prompt.selected',
+          targetType: 'shot',
+          targetId: shotId,
+          summary: 'Restored motion prompt',
+          data: { versionId, prevVersionId: shot.prev ?? null },
+        }),
+      ]);
       return version;
     },
 
@@ -327,4 +507,5 @@ export function createShotPromptVersionsMethods(db: Database) {
       return row ?? null;
     },
   };
+  return methods;
 }

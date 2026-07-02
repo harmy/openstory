@@ -17,6 +17,7 @@ import {
 } from '@/lib/shots/shot-with-image';
 import { getGenerationChannel } from '@/lib/realtime';
 import { getVideoDownloadUrl } from '@/lib/motion/video-storage';
+import { motionPromptFromVersion } from '@/lib/motion/resolve-motion-prompt';
 import { projectVideoVariants } from '@/lib/motion/video-variant-projection';
 import {
   bulkShotSchema,
@@ -52,13 +53,20 @@ export const getShotsFn = createServerFn({ method: 'GET' })
     // Guarantee every shot has its anchor frame, then project the image surface
     // (#989) back under the legacy thumbnail*/image* names so the UI is unchanged.
     await scopedDb.shots.ensureAnchorFrames(shotRows);
-    const [anchorRows, gridSheets] = await Promise.all([
+    const [anchorRows, gridSheets, motionByShot] = await Promise.all([
       scopedDb.frames.listAnchorsBySequence(sequence.id),
       scopedDb.frameVariants.listLatestGridSheetsBySequence(sequence.id),
+      scopedDb.shotPromptVersions.getSelectedMotionByShots(
+        shotRows.map((s) => s.id)
+      ),
     ]);
     const anchorsByShot = new Map(anchorRows.map((f) => [f.shotId, f]));
     return shotRows.map((shot) => {
       const frame = anchorsByShot.get(shot.id);
+      const selectedMotion = motionByShot.get(shot.id);
+      const motionPromptData = selectedMotion
+        ? motionPromptFromVersion(selectedMotion)
+        : null;
       // `ensureAnchorFrames` above guarantees an anchor for every shot, so this
       // is normally unreachable. If it ever isn't, preserve the shot with a null
       // image surface (matching the sibling read paths in sequences/admin)
@@ -74,7 +82,7 @@ export const getShotsFn = createServerFn({ method: 'GET' })
       const gridSheet: ShotGridSheet | null = sheet
         ? { url: sheet.url, status: sheet.status }
         : null;
-      return projectShotWithImage(shot, frame, gridSheet);
+      return projectShotWithImage(shot, frame, gridSheet, motionPromptData);
     });
   });
 
@@ -108,13 +116,15 @@ export const getShotsForSequencesFn = createServerFn({ method: 'GET' })
 export const getShotFn = createServerFn({ method: 'GET' })
   .middleware([shotAccessMiddleware])
   .handler(async ({ context }) => {
-    const sheet = await context.scopedDb.frameVariants.getLatestGridSheet(
-      context.frame.id
-    );
+    const [sheet, selectedMotion] = await Promise.all([
+      context.scopedDb.frameVariants.getLatestGridSheet(context.frame.id),
+      context.scopedDb.shotPromptVersions.getSelectedMotion(context.shot.id),
+    ]);
     return projectShotWithImage(
       context.shot,
       context.frame,
-      sheet ? { url: sheet.url, status: sheet.status } : null
+      sheet ? { url: sheet.url, status: sheet.status } : null,
+      selectedMotion ? motionPromptFromVersion(selectedMotion) : null
     );
   });
 
@@ -610,13 +620,11 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
     const { shot, frame, sequence, scopedDb } = context;
 
     let thumbnail: 'stale' | 'fresh' | 'untracked' = 'untracked';
-    // Effective prompt: same fallback chain as `buildRegenerateShotSnapshot`
-    // and `generateShotImageFn`. `frame.imagePrompt` alone misses AI-generated
-    // shots (where it stays null) and shots whose visual prompt was regenerated
-    // (which only updates metadata). The image prompt lives on the anchor frame
-    // since #989. See #713.
-    const effectivePrompt =
-      frame.imagePrompt || shot.metadata?.prompts?.visual?.fullPrompt;
+    // The visual prompt lives solely on the anchor frame's `imagePrompt` mirror
+    // now (#989/#713): the visual-prompt workflow writes a `frame_prompt_versions`
+    // row that mirrors onto `frame.imagePrompt`, so AI-generated and regenerated
+    // shots both populate it — the old `metadata.prompts.visual` fallback is gone.
+    const effectivePrompt = frame.imagePrompt;
     if (effectivePrompt) {
       // Distinguish "stored hash absent" from "stored hash matches". A null
       // stored hash means the image predates hash tracking (or was generated

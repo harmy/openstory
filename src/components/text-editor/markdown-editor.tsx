@@ -71,6 +71,13 @@ const HardBreakAsNewline = HardBreak.extend({
 type MarkdownEditorProps = {
   value: string;
   onValueChange: (markdown: string) => void;
+  /**
+   * Fired when the user focuses the editor. Lets callers distinguish a genuine
+   * user edit from the editor's own on-mount normalization emit (TipTap can
+   * re-serialize the initial content — e.g. mention tagification — and fire
+   * `onValueChange` before the user has touched anything).
+   */
+  onFocus?: () => void;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
@@ -107,6 +114,7 @@ const placeholderClasses =
 export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   value,
   onValueChange,
+  onFocus,
   placeholder,
   disabled = false,
   className,
@@ -124,6 +132,10 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   // handler reads the freshest callback without needing to recreate the editor.
   const onKeyDownRef = useRef(onKeyDown);
   onKeyDownRef.current = onKeyDown;
+
+  // Same ref pattern as onKeyDown — useEditor captures callbacks at init.
+  const onFocusRef = useRef(onFocus);
+  onFocusRef.current = onFocus;
 
   // handlePaste is captured at editor init (before `editor` is assigned), so it
   // reads the live instance through this ref to insert markdown at the caret.
@@ -246,6 +258,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     onUpdate: ({ editor: e }) => {
       onValueChange(e.storage.markdown.getMarkdown());
     },
+    onFocus: () => onFocusRef.current?.(),
   });
   editorRef.current = editor;
 

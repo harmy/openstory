@@ -72,43 +72,10 @@ function renameTokenInScene(
     }
   }
 
-  // prompts.visual.fullPrompt / prompts.motion.fullPrompt
-  if (scene.prompts) {
-    let promptsChanged = false;
-    const nextPrompts = { ...scene.prompts };
-    if (scene.prompts.visual?.fullPrompt) {
-      const rewritten = replaceTokenInText(
-        scene.prompts.visual.fullPrompt,
-        oldToken,
-        newToken
-      );
-      if (rewritten !== scene.prompts.visual.fullPrompt) {
-        nextPrompts.visual = {
-          ...scene.prompts.visual,
-          fullPrompt: rewritten,
-        };
-        promptsChanged = true;
-      }
-    }
-    if (scene.prompts.motion?.fullPrompt) {
-      const rewritten = replaceTokenInText(
-        scene.prompts.motion.fullPrompt,
-        oldToken,
-        newToken
-      );
-      if (rewritten !== scene.prompts.motion.fullPrompt) {
-        nextPrompts.motion = {
-          ...scene.prompts.motion,
-          fullPrompt: rewritten,
-        };
-        promptsChanged = true;
-      }
-    }
-    if (promptsChanged) {
-      next.prompts = nextPrompts;
-      changed = true;
-    }
-  }
+  // The generated visual/motion prompts no longer live on `scene.prompts`
+  // (#713) — they're in `frame_prompt_versions` / `shot_prompt_versions`,
+  // mirrored on `frame.imagePrompt` / `shot.motionPrompt`. Those mirrors (and
+  // the selected motion version) are rewritten by the applier, not here.
 
   return changed ? next : null;
 }
