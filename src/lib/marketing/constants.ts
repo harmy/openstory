@@ -21,7 +21,11 @@ export const SITE_CONFIG = {
   url: APP_URL,
   contactEmail: CONTACT_EMAIL,
   privacyEmail: PRIVACY_EMAIL,
-  ogImage: `https://${VITE_R2_PUBLIC_ASSETS_DOMAIN}/images/marketing/og.jpg`,
+  // The OG card is the app's own front page, captured to public/og.jpg by
+  // scripts/generate-og-image.ts. Served same-origin so it deploys atomically
+  // with the app (and each preview shows its own) instead of drifting from a
+  // hand-uploaded R2 file.
+  ogImage: `${APP_URL}/og.jpg`,
   ctaText: 'Get Started',
   ctaHref: '/sequences/new',
   githubHref: 'https://github.com/openstory-so/openstory',
