@@ -16,6 +16,7 @@
  */
 
 import {
+  isAudioResponse,
   LLMock,
   loadFixtureFile,
   type ChatCompletionRequest,
@@ -82,10 +83,15 @@ const AIMOCK_SYSTEM_FINGERPRINT = 'fp_aimock';
 
 function stampOne(fixture: Fixture): void {
   const response = fixture.response;
+  // Response factories (aimock 1.35+) build their response per-request; our
+  // recorded fixtures are always static objects, so skip the function form.
+  if (typeof response === 'function') return;
   // Only completion responses (TextResponse / ToolCallResponse /
   // ContentWithToolCallsResponse) extend ResponseOverrides where
   // systemFingerprint lives. Narrow via `in` so other variants
-  // (ImageResponse, ErrorResponse, …) are skipped.
+  // (ImageResponse, ErrorResponse, …) are skipped. AudioResponse (added in
+  // aimock 1.35) also carries `content` but no systemFingerprint — exclude it.
+  if (isAudioResponse(response)) return;
   if (!('content' in response) && !('toolCalls' in response)) return;
   if (response.systemFingerprint === undefined) {
     response.systemFingerprint = AIMOCK_SYSTEM_FINGERPRINT;
@@ -257,10 +263,9 @@ export async function startAimockServer(): Promise<string> {
         // Reasoning models (e.g. Grok 4.3 + structured output under concurrent
         // load) routinely leave 30s+ gaps between SSE chunks while thinking,
         // which trips aimock's default 30s body-idle timer and truncates the
-        // recorded stream. Option ships on the linked aimock fork
-        // (CopilotKit/aimock#197); requires @copilotkit/aimock linked locally
-        // until the option is in a published release.
-        // bodyTimeoutMs: 120_000,
+        // recorded stream — recordings for the slowest calls are silently
+        // dropped (CopilotKit/aimock#197, shipped in >=1.35.0).
+        bodyTimeoutMs: 120_000,
       },
     }),
   });
