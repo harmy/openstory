@@ -48,6 +48,9 @@ await page.waitForTimeout(500);
 await page.evaluate(() => {
   document.querySelector('[data-slot="sidebar"]')?.remove();
   document.querySelector('[data-slot="sidebar-inset"] > header')?.remove();
+  // Drop the "See what you can create" sample showcase below the composer so
+  // it doesn't peek into the bottom of the card.
+  document.querySelector('#compose ~ section')?.remove();
 });
 // Hide the dev-only TanStack devtools overlay (absent in prod builds). CSS wins
 // over the client re-mounting the trigger.
