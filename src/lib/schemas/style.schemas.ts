@@ -16,7 +16,8 @@ const sampleVideosSchema = z.array(StyleSampleVideoSchema).nullish();
 
 // Columns the client must never set. usageCount is server-managed (popularity
 // ranking), id/teamId/createdBy/createdAt/updatedAt are injected by the scoped
-// layer, and isTemplate/version/sortOrder are admin/migration-only.
+// layer, and public/template flags, version, and sortOrder are
+// admin/migration-only.
 const SERVER_MANAGED_COLUMNS = {
   id: true,
   teamId: true,
@@ -25,6 +26,7 @@ const SERVER_MANAGED_COLUMNS = {
   updatedAt: true,
   usageCount: true,
   version: true,
+  isPublic: true,
   isTemplate: true,
   sortOrder: true,
 } as const;
