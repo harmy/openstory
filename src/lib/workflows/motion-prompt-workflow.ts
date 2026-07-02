@@ -16,6 +16,7 @@ import type { ScopedDb } from '@/lib/db/scoped';
 import { getShotPromptChannel, getGenerationChannel } from '@/lib/realtime';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import type { MotionPromptWorkflowInput } from '@/lib/workflow/types';
+import { hydrateMotionPromptFromScene } from '@/lib/motion/hydrate-motion-prompt';
 import { durableStreamingLLMCallCf } from '@/lib/workflows/llm-call-helper';
 import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
 import { getLogger } from '@/lib/observability/logger';
@@ -101,7 +102,7 @@ export class MotionPromptWorkflow extends OpenStoryWorkflowEntrypoint<MotionProm
       `[MotionPromptWorkflow:cf] Generating motion prompt for scene ${scene.sceneId}`
     );
 
-    const motionPrompt: MotionPrompt = await durableStreamingLLMCallCf(
+    const llmMotionPrompt: MotionPrompt = await durableStreamingLLMCallCf(
       step,
       {
         name: 'motion-prompts',
@@ -131,6 +132,10 @@ export class MotionPromptWorkflow extends OpenStoryWorkflowEntrypoint<MotionProm
             : undefined,
       }
     );
+
+    // Mirror the analysis pipeline: dialogue lines come from the scene script
+    // when the LLM omits them (common on explicit regenerate runs).
+    const motionPrompt = hydrateMotionPromptFromScene(scene, llmMotionPrompt);
 
     if (sequenceId && shotId) {
       if (!motionPrompt.fullPrompt) {
