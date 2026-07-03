@@ -92,6 +92,9 @@ export const scenes = snakeCase.table(
     continuity: text({ mode: 'json' }).$type<SceneContinuity>(),
     musicDesign: text({ mode: 'json' }).$type<SceneMusicDesign>(),
     originalScript: text({ mode: 'json' }).$type<SceneOriginalScript>(),
+    // Pointer to the selected row in `scene_script_versions` (#1030). The
+    // column is a plain text id (no FK) to avoid a circular schema dependency.
+    selectedScriptVersionId: text(),
     // Model selection lives at scene level (one look, one motion character).
     // NULL = inherit from the sequence default (#909 wires the UI later).
     imageModel: text({ length: 100 }),

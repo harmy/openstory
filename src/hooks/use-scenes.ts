@@ -1,4 +1,5 @@
 import {
+  getComposedScriptFn,
   getScenesFn,
   updateSceneModelFn,
   type SceneModelInput,
@@ -8,10 +9,25 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { shotKeys } from './use-shots';
 
-const sceneKeys = {
+export const sceneKeys = {
   all: ['scenes'] as const,
   list: (sequenceId: string) => [...sceneKeys.all, 'list', sequenceId] as const,
+  composedScript: (sequenceId: string) =>
+    [...sceneKeys.all, 'composed-script', sequenceId] as const,
 };
+
+/** Composed sequence script from selected scene versions (#1030). */
+export function useComposedScript(sequenceId?: string) {
+  return useQuery({
+    queryKey: sceneKeys.composedScript(sequenceId ?? ''),
+    queryFn: async () => {
+      if (!sequenceId) throw new Error('sequenceId is required');
+      return getComposedScriptFn({ data: { sequenceId } });
+    },
+    enabled: !!sequenceId,
+    staleTime: 30_000,
+  });
+}
 
 /** Ordered scenes for a sequence — the editor groups shots under these (#909). */
 export function useScenesBySequence(sequenceId?: string) {

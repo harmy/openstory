@@ -265,7 +265,7 @@ export const saveShotPromptFn = createServerFn({ method: 'POST' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(shotSaveInput))
   .handler(async ({ context, data }) => {
-    const { shot, frame, sequence, scopedDb, user } = context;
+    const { shot, frame, sequence, scopedDb, user, scene } = context;
     const text = data.text.trim();
     if (!text) {
       throw new Error('Cannot save an empty prompt');
@@ -287,12 +287,12 @@ export const saveShotPromptFn = createServerFn({ method: 'POST' })
     // render-workflow user-edit path).
     let inputHash: string | null = null;
     let analysisModel: string | null = null;
-    if (shot.metadata) {
+    if (scene) {
       try {
         const ctx = await loadShotPromptContext({
           scopedDb,
           sequence,
-          scene: shot.metadata,
+          scene,
           // No-op for visual; the motion hash folds in the rendered still.
           startingFrameImageUrl: frame.imageUrl,
         });
@@ -357,16 +357,16 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(shotRegenerateInput))
   .handler(async ({ context, data }) => {
-    const { shot, frame, sequence, scopedDb, user, teamId } = context;
+    const { shot, frame, sequence, scopedDb, user, teamId, scene } = context;
 
-    if (!shot.metadata) {
+    if (!scene) {
       throw new Error('Shot has no scene metadata to regenerate from');
     }
 
     const ctx = await loadShotPromptContext({
       scopedDb,
       sequence,
-      scene: shot.metadata,
+      scene,
       // Motion prompts are conditioned on the rendered still (#929); feeding
       // its URL here keeps this regen-bail check in lockstep with the
       // generation-time stamp and the staleness verify. No-op for visual. The
@@ -412,7 +412,7 @@ export const regenerateShotPromptFn = createServerFn({ method: 'POST' })
       teamId,
       sequenceId: sequence.id,
       shotId: shot.id,
-      scene: shot.metadata,
+      scene,
       aspectRatio: sequence.aspectRatio,
       characterBible: ctx.characterBible,
       locationBible: ctx.locationBible,

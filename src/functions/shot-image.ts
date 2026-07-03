@@ -132,7 +132,14 @@ export const generateShotImageFn = createServerFn({ method: 'POST' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(generateImageInputSchema))
   .handler(async ({ context, data }) => {
-    const { shot, frame, sequence, user } = context;
+    const {
+      shot,
+      frame,
+      sequence,
+      user,
+      scene: resolvedScene,
+      script,
+    } = context;
 
     // Priority: provided > stored anchor-frame mirror (#989/#713) > description.
     // The visual prompt lives solely on `frame.imagePrompt` now (the old
@@ -195,7 +202,7 @@ export const generateShotImageFn = createServerFn({ method: 'POST' })
     const matchedElements = matchElementsToScene(
       allElements,
       continuity?.elementTags ?? [],
-      shot.metadata?.originalScript.extract ?? ''
+      script?.extract ?? resolvedScene?.originalScript.extract ?? ''
     );
     const elementReferences = buildElementReferenceImages(matchedElements);
 

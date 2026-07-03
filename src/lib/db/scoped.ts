@@ -18,6 +18,7 @@ import { createFramePromptVersionsMethods } from '@/lib/db/scoped/frame-prompt-v
 import { createFrameVariantsMethods } from '@/lib/db/scoped/frame-variants';
 import { createFramesMethods } from '@/lib/db/scoped/frames';
 import { createScenesMethods } from '@/lib/db/scoped/scenes';
+import { createSceneScriptVersionsMethods } from '@/lib/db/scoped/scene-script-versions';
 import { createSequenceEventsMethods } from '@/lib/db/scoped/sequence-events';
 import { createShotPromptVersionsMethods } from '@/lib/db/scoped/shot-prompt-versions';
 import { createRenderSegmentsMethods } from '@/lib/db/scoped/render-segments';
@@ -292,6 +293,7 @@ export function createScopedDb(teamId: string, userId: string) {
     library: createLibraryMethods(db, teamId),
 
     scenes: createScenesMethods(db),
+    sceneScriptVersions: createSceneScriptVersionsMethods(db),
     shots: createShotsMethods(db),
     shotVariants: createShotVariantsMethods(db),
     // SSF redesign (#990) — render segments (scene render units) + flat video
