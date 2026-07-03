@@ -14,7 +14,12 @@ import type {
   TalentWithSheets,
 } from '@/lib/db/schema';
 import { talent, talentMedia, talentSheets } from '@/lib/db/schema';
+import {
+  SERVER_MANAGED_TALENT_COLUMNS,
+  type ServerManagedTalentColumn,
+} from '@/lib/schemas/talent.schemas';
 import { and, asc, desc, eq, or, sql } from 'drizzle-orm';
+import { stripServerManagedColumns } from './server-managed';
 
 const TALENT_WRITE_DENIED =
   'Talent not found or you do not have permission to modify it';
@@ -323,12 +328,21 @@ export function createTalentMethods(
   return {
     ...read,
 
+    // Server-managed columns (isPublic, isTemplate, …) are excluded from the
+    // parameter type AND scrubbed at runtime: the type alone doesn't stop a
+    // non-literal object from carrying extra keys, and drizzle writes any key
+    // that matches a table column. Admin paths (the system template seeder)
+    // insert via raw drizzle instead.
     create: async (
-      data: Omit<NewTalent, 'teamId' | 'createdBy'>
+      data: Omit<NewTalent, ServerManagedTalentColumn>
     ): Promise<Talent> => {
       const [created] = await db
         .insert(talent)
-        .values({ ...data, teamId, createdBy: userId })
+        .values({
+          ...stripServerManagedColumns(data, SERVER_MANAGED_TALENT_COLUMNS),
+          teamId,
+          createdBy: userId,
+        })
         .returning();
       if (!created) throw new Error('Failed to create talent');
       return created;
@@ -336,7 +350,7 @@ export function createTalentMethods(
 
     update: async (
       talentId: string,
-      data: Partial<Omit<Talent, 'id' | 'teamId' | 'createdAt' | 'createdBy'>>
+      data: Partial<Omit<Talent, ServerManagedTalentColumn>>
     ): Promise<Talent | undefined> => {
       if (!(await getWritableTalent(db, talentId, teamId))) {
         return undefined;
@@ -344,7 +358,10 @@ export function createTalentMethods(
 
       const [updated] = await db
         .update(talent)
-        .set({ ...data, updatedAt: new Date() })
+        .set({
+          ...stripServerManagedColumns(data, SERVER_MANAGED_TALENT_COLUMNS),
+          updatedAt: new Date(),
+        })
         .where(and(eq(talent.id, talentId), eq(talent.teamId, teamId)))
         .returning();
       return updated;

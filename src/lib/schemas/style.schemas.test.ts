@@ -11,40 +11,42 @@ const baseConfig = {
   colorGrading: 'neutral',
 };
 
+// Every SERVER_MANAGED_COLUMNS entry, injected as a malicious payload — the
+// tests pin the full omit list, so dropping any entry fails here.
+const serverManagedPayload = {
+  id: 'attacker-chosen-id',
+  isPublic: true,
+  isTemplate: true,
+  teamId: 'other-team',
+  createdBy: 'other-user',
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
+  usageCount: 99,
+  version: 99,
+  sortOrder: 1,
+};
+
 describe('style schemas', () => {
-  it('strips client-provided public/template flags when creating a style', () => {
+  it('strips client-provided server-managed columns when creating a style', () => {
     const parsed = createStyleSchema.parse({
       name: 'Team Style',
       config: baseConfig,
-      isPublic: true,
-      isTemplate: true,
-      teamId: 'other-team',
-      createdBy: 'other-user',
-      usageCount: 99,
-      sortOrder: 1,
+      ...serverManagedPayload,
     });
 
     expect(parsed).toMatchObject({
       name: 'Team Style',
       config: baseConfig,
     });
-    expect(parsed).not.toHaveProperty('isPublic');
-    expect(parsed).not.toHaveProperty('isTemplate');
-    expect(parsed).not.toHaveProperty('teamId');
-    expect(parsed).not.toHaveProperty('createdBy');
-    expect(parsed).not.toHaveProperty('usageCount');
-    expect(parsed).not.toHaveProperty('sortOrder');
+    for (const column of Object.keys(serverManagedPayload)) {
+      expect(parsed).not.toHaveProperty(column);
+    }
   });
 
-  it('strips client-provided public/template flags when updating a style', () => {
+  it('strips client-provided server-managed columns when updating a style', () => {
     const parsed = updateStyleSchema.parse({
       name: 'Updated Style',
-      isPublic: true,
-      isTemplate: true,
-      teamId: 'other-team',
-      createdBy: 'other-user',
-      usageCount: 99,
-      sortOrder: 1,
+      ...serverManagedPayload,
     });
 
     expect(parsed).toEqual({ name: 'Updated Style' });
