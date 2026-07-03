@@ -68,6 +68,10 @@ const compareOnly = args.includes('--compare');
 const imageUrlIdx = args.indexOf('--image-url');
 const testImageUrl = imageUrlIdx >= 0 ? args[imageUrlIdx + 1] : undefined;
 
+// Intentionally direct clients that bypass FAL_PROXY_URL (see
+// configureFalProxyFromEnv in src/lib/ai/fal-config.ts): this script exists
+// to verify real fal costs against real usage data, so routing it through
+// the e2e aimock proxy would be pointless.
 const falLow = createFalClient({ credentials: FAL_KEY_LOW });
 const falHigh = createFalClient({ credentials: FAL_KEY_HIGH });
 
