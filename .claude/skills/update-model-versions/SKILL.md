@@ -111,6 +111,17 @@ Per class, edit and follow through:
   override path documented in that script and flag it in the PR.
 - **Packages:** bump the `@tanstack/ai*` range in `package.json`, then
   `bun install`. Skip major bumps (breaking) — open an issue for those instead.
+  **Catalog-lag prune (`@tanstack/ai-openrouter` bumps):** registry ids that
+  the adapter's generated model catalog doesn't know yet are bridged in
+  `CATALOG_LAG_MODELS` (`src/lib/ai/create-adapter.ts`). When a bump ships one
+  of those ids upstream, `bun typecheck` fails in
+  `src/lib/ai/catalog-lag.test.ts` naming the id — delete its entry from
+  `CATALOG_LAG_MODELS` in the same PR and note the prune in the PR body.
+  Conversely, when a text-model bump adopts an id the installed catalog lacks
+  (typecheck fails at the `createAdapter` call sites), add a `createModel`
+  entry for it to `CATALOG_LAG_MODELS` — correct `input` modalities, plus
+  `features: ['reasoning', 'structured_outputs']` when the model supports
+  them.
 
 ## 4. Quality gates (must pass before opening the PR)
 

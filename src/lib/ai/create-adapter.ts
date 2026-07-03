@@ -8,6 +8,7 @@
 import { getEnv } from '#env';
 import type { TextModel } from '@/lib/ai/models';
 import { HTTPClient } from '@openrouter/sdk/lib/http';
+import { createModel, extendAdapter } from '@tanstack/ai';
 import { createOpenRouterText, openRouterText } from '@tanstack/ai-openrouter';
 
 import { getLogger } from '@/lib/observability/logger';
@@ -62,7 +63,38 @@ export function getPlatformLlmKey():
 
 let loggedRetryMode = false;
 
-type AdapterModel = Parameters<typeof openRouterText>[0];
+/**
+ * Registry model ids the adapter's generated catalog doesn't know yet — the
+ * catalog is a codegen snapshot of OpenRouter's live list and lags new
+ * releases. `extendAdapter` widens the factories' typed model union so a
+ * registry id that is in NEITHER list is a compile error instead of an
+ * unsafe cast. `catalog-lag.test.ts` fails once a package bump ships an id
+ * below, telling the bumper (usually the model-freshness routine, #792) to
+ * prune it here.
+ */
+export const CATALOG_LAG_MODELS = [
+  createModel('anthropic/claude-fable-5', {
+    input: ['text', 'image'],
+    features: ['reasoning', 'structured_outputs'],
+  }),
+  createModel('anthropic/claude-sonnet-5', {
+    input: ['text', 'image'],
+    features: ['reasoning', 'structured_outputs'],
+  }),
+  createModel('z-ai/glm-5.2', {
+    input: ['text'],
+    features: ['reasoning', 'structured_outputs'],
+  }),
+] as const;
+
+const openRouterTextExtended = extendAdapter(
+  openRouterText,
+  CATALOG_LAG_MODELS
+);
+const createOpenRouterTextExtended = extendAdapter(
+  createOpenRouterText,
+  CATALOG_LAG_MODELS
+);
 
 // Callers must say which API a key belongs to (`via`) — a bare string can't:
 // a fal key mistaken for an OpenRouter key gets Bearer auth against
@@ -72,9 +104,6 @@ export function createAdapter(model: TextModel, keyInfo?: LlmKeyInfo) {
   const resolved = keyInfo ?? getPlatformLlmKey();
   const key = resolved?.key;
   const via = resolved?.via ?? 'openrouter';
-  // Adapter type list lags behind OpenRouter's catalog — cast at the boundary
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Model is dynamic from config but always a valid OpenRouter model ID
-  const adapterModel = model as AdapterModel;
 
   // During E2E recording, aimock proxies our OpenRouter calls upstream and
   // *buffers* the entire SSE response before relaying — see
@@ -112,6 +141,6 @@ export function createAdapter(model: TextModel, keyInfo?: LlmKeyInfo) {
   };
 
   return key
-    ? createOpenRouterText(adapterModel, key, config)
-    : openRouterText(adapterModel, config);
+    ? createOpenRouterTextExtended(model, key, config)
+    : openRouterTextExtended(model, config);
 }

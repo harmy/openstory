@@ -13,8 +13,9 @@ import { chat, type TokenUsage } from '@tanstack/ai';
 import { z } from 'zod';
 import { createAdapter } from './create-adapter';
 import { llmCostFromUsage } from './llm-client';
+import { DEFAULT_VISION_MODEL } from './models.config';
 
-export const ELEMENT_VISION_MODEL = 'anthropic/claude-sonnet-5' as const;
+export const ELEMENT_VISION_MODEL = DEFAULT_VISION_MODEL;
 
 const responseSchema = z.object({
   description: z.string().min(1),

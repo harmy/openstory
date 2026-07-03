@@ -32,8 +32,9 @@ vi.doMock('./create-adapter', () => ({
 // Dynamic import so vi.doMock above is in effect when llm-client (and its
 // `./create-adapter` import) resolves. Static imports are hoisted above
 // vi.doMock and would bypass the mocks.
-const { callLLM, callLLMStream, llmCostFromUsage } =
+const { callLLM, callLLMStream, llmCostFromUsage, RECOMMENDED_MODELS } =
   await import('./llm-client');
+const { DEFAULT_VISION_MODEL } = await import('./models.config');
 
 const usage = (cost?: number): TokenUsage => ({
   promptTokens: 0,
@@ -402,6 +403,94 @@ describe('llm-client', () => {
         const terminal = chunks.at(-1);
         if (!terminal || !terminal.done) throw new Error('expected terminal');
         expect(terminal.parsed).toEqual({ greeting: 'hi' });
+      });
+    });
+
+    describe('structured-output model lockstep', () => {
+      // DEFAULT_VISION_MODEL and every RECOMMENDED_MODELS entry get used with
+      // responseSchema calls, which throw for models outside the
+      // STRUCTURED_OUTPUT_MODELS set. Three literals in two files must move
+      // together on a model bump; this catches a bump that misses one.
+      const lockstepModels = [
+        ...new Set([
+          DEFAULT_VISION_MODEL,
+          ...Object.values(RECOMMENDED_MODELS),
+        ]),
+      ];
+
+      it.each(lockstepModels)('%s supports structured outputs', (model) => {
+        mockChat.mockReturnValue(
+          (async function* () {
+            yield {
+              type: 'CUSTOM',
+              name: 'structured-output.complete',
+              value: { object: { ok: true } },
+            };
+          })()
+        );
+
+        const generator = callLLMStream({
+          model,
+          messages: [{ role: 'user', content: 'test' }],
+          responseSchema: z.object({ ok: z.boolean() }),
+        });
+
+        return expect(drain(generator)).resolves.toBeUndefined();
+      });
+    });
+
+    describe('provider routing', () => {
+      const textStream = () =>
+        (async function* () {
+          yield { type: 'TEXT_MESSAGE_CONTENT', delta: 'hi' };
+        })();
+
+      it('keeps Anthropic models off Azure by default', async () => {
+        // Azure-hosted Claude rejects our analysis schemas ("compiled grammar
+        // is too large"); Anthropic's own endpoint accepts them.
+        mockChat.mockReturnValue(textStream());
+
+        await drain(
+          callLLMStream({
+            model: 'anthropic/claude-fable-5',
+            messages: [{ role: 'user', content: 'test' }],
+          })
+        );
+
+        expect(mockChat.mock.calls[0]?.[0]?.modelOptions.provider).toEqual({
+          ignore: ['azure'],
+        });
+      });
+
+      it('leaves non-Anthropic models unrestricted', async () => {
+        mockChat.mockReturnValue(textStream());
+
+        await drain(
+          callLLMStream({
+            model: 'x-ai/grok-4.3',
+            messages: [{ role: 'user', content: 'test' }],
+          })
+        );
+
+        expect(
+          mockChat.mock.calls[0]?.[0]?.modelOptions.provider
+        ).toBeUndefined();
+      });
+
+      it('caller-supplied provider preferences win', async () => {
+        mockChat.mockReturnValue(textStream());
+
+        await drain(
+          callLLMStream({
+            model: 'anthropic/claude-sonnet-5',
+            messages: [{ role: 'user', content: 'test' }],
+            provider: { only: ['anthropic'] },
+          })
+        );
+
+        expect(mockChat.mock.calls[0]?.[0]?.modelOptions.provider).toEqual({
+          only: ['anthropic'],
+        });
       });
     });
 
