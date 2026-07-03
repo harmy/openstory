@@ -1,6 +1,6 @@
 import {
-  styles,
   StyleConfigSchema,
+  styles,
   StyleSampleVideoSchema,
 } from '@/lib/db/schema';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-orm/zod';
