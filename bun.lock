@@ -39,7 +39,7 @@
         "@tanstack/ai": "^0.39.1",
         "@tanstack/ai-event-client": "^0.6.8",
         "@tanstack/ai-fal": "^0.9.9",
-        "@tanstack/ai-openrouter": "^0.15.6",
+        "@tanstack/ai-openrouter": "^0.15.7",
         "@tanstack/react-query": "^5.100.10",
         "@tanstack/react-router": "^1.169.2",
         "@tanstack/react-router-ssr-query": "^1.166.12",
@@ -1192,7 +1192,7 @@
 
     "@tanstack/ai-fal": ["@tanstack/ai-fal@0.9.9", "", { "dependencies": { "@fal-ai/client": "^1.10.1", "@tanstack/ai-utils": "0.3.1" }, "peerDependencies": { "@tanstack/ai": "0.39.1" } }, "sha512-67lW70CfSFTQ42nx3nyhUIWusdDwXQXWk6p4QUZZAO/sAmhZoCBWf+UyKBm7TSTrUedcmiO90km3utW1KPidRA=="],
 
-    "@tanstack/ai-openrouter": ["@tanstack/ai-openrouter@0.15.6", "", { "dependencies": { "@openrouter/sdk": "0.13.20", "@tanstack/ai-utils": "0.3.1" }, "peerDependencies": { "@tanstack/ai": "^0.39.0" } }, "sha512-ReZYeYmwXYdbeN1UMC3CjYI8KDnBPBaIBFsAsWAMPL6r9tsf2b6fmSBB0f2NrbHL5iVa3qZHlS33kLnjd505uA=="],
+    "@tanstack/ai-openrouter": ["@tanstack/ai-openrouter@0.15.7", "", { "dependencies": { "@openrouter/sdk": "0.13.20", "@tanstack/ai-utils": "0.3.1" }, "peerDependencies": { "@tanstack/ai": "^0.39.1" } }, "sha512-E62DybiihVIQIBIXNclc4i9qmOCNIqKrWcDaE0PIXS6cIA3pXJcBBl07y39jCuEBGQGBTfc7Nnl2Td8zFXIoMg=="],
 
     "@tanstack/ai-utils": ["@tanstack/ai-utils@0.3.1", "", {}, "sha512-fgbjd5DohL3k5rTWr/KInauLVYMiHVm0cnmTsNrzL3cr4wWhEld5vmFSrjiwUWACAuONjZa+uBXuS+ZSO8fwDQ=="],
 
