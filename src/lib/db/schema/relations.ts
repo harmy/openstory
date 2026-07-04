@@ -71,6 +71,14 @@ export const relations = defineRelations(schema, (r) => ({
     }),
     shots: r.many.shots(),
     renderSegments: r.many.renderSegments(),
+    scriptVersions: r.many.sceneScriptVersions(),
+  },
+
+  sceneScriptVersions: {
+    scene: r.one.scenes({
+      from: r.sceneScriptVersions.sceneId,
+      to: r.scenes.id,
+    }),
   },
 
   // ---- Render Segments (SSF #990 — scene render units) ----

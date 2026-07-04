@@ -601,6 +601,8 @@ export class SceneSplitWorkflow extends OpenStoryWorkflowEntrypoint<SceneSplitWo
             { sequenceId, missingShotIds }
           );
         }
+
+        await scopedDb.sceneScriptVersions.seedSplitFromSceneRows(sceneRows);
       });
     }
 

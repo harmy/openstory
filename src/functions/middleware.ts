@@ -23,10 +23,13 @@ import {
   resolveUserTeam,
   type ScopedDb,
 } from '@/lib/db/scoped';
+import type { Scene } from '@/lib/ai/scene-analysis.schema';
+import { resolveSceneForShotFromDb } from '@/lib/scenes/scene-script';
 import { NotFoundError } from '@/lib/errors';
 import { getLogger, toErrorPayload } from '@/lib/observability/logger';
 import { withTraceContextAsync } from '@/lib/observability/tracer';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
+import type { Frame } from '@/lib/db/schema';
 import type { Shot, Sequence } from '@/types/database';
 import { createMiddleware } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
@@ -78,7 +81,12 @@ type PartialSequence = {
 
 export type ShotContext = TeamContext & {
   shot: Omit<Shot, 'sequence'>;
+  frame: Frame;
   sequence: PartialSequence;
+  /** Scene metadata with the selected script version overlaid (#1030). */
+  scene: Scene | null;
+  /** Selected scene script content, when available. */
+  script: Scene['originalScript'] | null;
 };
 
 // ============================================================================
@@ -548,11 +556,15 @@ export const shotAccessMiddleware = createMiddleware({ type: 'function' })
       aspectRatio: rawSequence.aspectRatio satisfies AspectRatio,
     };
 
+    const { scene, script } = await resolveSceneForShotFromDb(shot, scopedDb);
+
     return next({
       context: {
         shot,
         frame,
         sequence,
+        scene,
+        script,
         teamId,
         scopedDb,
       },

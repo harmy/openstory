@@ -1,12 +1,14 @@
+import { ThinkingBar } from '@/components/ai/thinking-bar';
 import { useAuthGate } from '@/components/auth/auth-gate-provider';
 import { BillingGateDialog } from '@/components/billing/billing-gate-dialog';
-import { buildMentionItems } from '@/components/scenes/prompt-mention/mention-items';
+import { PremiumCard } from '@/components/cards/premium-card';
 import {
   ElementSelector,
   type ElementSelectorHandle,
 } from '@/components/element/element-selector';
 import { GenerateSequenceIcon } from '@/components/icons/generate-sequence-icon';
 import { LocationSuggestionSelector } from '@/components/location-library/location-suggestion-selector';
+import { buildMentionItems } from '@/components/scenes/prompt-mention/mention-items';
 import { GenerationSettings } from '@/components/settings/generation-settings';
 import { StyleSelector } from '@/components/style/style-selector';
 import { TalentSuggestionSelector } from '@/components/talent/talent-suggestion-selector';
@@ -22,8 +24,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { CardContent, CardFooter, CardHeader } from '@/components/ui/card';
-import { ThinkingBar } from '@/components/ai/thinking-bar';
-import { PremiumCard } from '@/components/cards/premium-card';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import {
   Popover,
@@ -32,12 +32,12 @@ import {
 } from '@/components/ui/popover';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { enhanceScriptStreamFn } from '@/functions/ai';
-import { toEnhanceInputs } from '@/lib/ai/enhance-inputs';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { useBillingGate } from '@/hooks/use-billing-gate';
 import { useGenerationSettings } from '@/hooks/use-generation-settings';
-import { useSequenceDraft } from '@/hooks/use-sequence-draft';
+import { useComposedScript } from '@/hooks/use-scenes';
 import { useSequenceCharacters } from '@/hooks/use-sequence-characters';
+import { useSequenceDraft } from '@/hooks/use-sequence-draft';
 import {
   useSequenceElements,
   type DraftElementUpload,
@@ -45,6 +45,7 @@ import {
 import { useSequenceLocations } from '@/hooks/use-sequence-locations';
 import { useCreateSequence } from '@/hooks/use-sequences';
 import { useStyles } from '@/hooks/use-styles';
+import { toEnhanceInputs } from '@/lib/ai/enhance-inputs';
 import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_MUSIC_MODEL,
@@ -64,6 +65,7 @@ import {
   isValidAnalysisModelId,
   type AnalysisModelId,
 } from '@/lib/ai/models.config';
+import { SCRIPT_SHORT_THRESHOLD } from '@/lib/ai/should-enhance';
 import {
   aspectRatioSchema,
   type AspectRatio,
@@ -80,7 +82,6 @@ import { usePostHog } from '@posthog/react';
 import { ImagePlus, Loader2, Sparkles, Square, Undo2 } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState, type FC } from 'react';
 import { ScriptEditor } from './script-editor';
-import { SCRIPT_SHORT_THRESHOLD } from '@/lib/ai/should-enhance';
 
 const DURATION_PRESETS = [
   { value: '15', label: '15s', seconds: 15 },
@@ -117,13 +118,23 @@ export const ScriptView: FC<{
   initialScript,
   initialStyleId,
 }) => {
-  // Local content state - undefined until user makes an edit. A `initial*` seed
-  // (sample-style prefill) wins over the stored sequence for the first value.
+  const isEditing = !!sequence?.id;
+  const { data: composedScriptData } = useComposedScript(sequence?.id);
+  const composedScript = composedScriptData?.script;
+  // Analyzed sequences derive the document from scene versions (#1030).
+  const isDerivedScript = isEditing && !!composedScript;
+  const baseScript = composedScript ?? sequence?.script;
+
+  // Local script override — undefined means "show the canonical baseScript".
+  // For existing sequences that is the composed scene-script document once the
+  // query resolves (#1030); until then baseScript falls back to sequence.script.
+  // New-sequence creation leaves this undefined and the draft-sync effect fills
+  // it from localStorage. initialScript (sample-style prefill) wins outright.
   const [contentState, setContentState] = useState<{
     script: string | null | undefined;
     styleId: string | null;
   }>({
-    script: initialScript ?? sequence?.script,
+    script: initialScript ?? (isEditing ? undefined : sequence?.script),
     styleId: initialStyleId ?? sequence?.styleId ?? null,
   });
   const { script, styleId } = contentState;
@@ -147,9 +158,6 @@ export const ScriptView: FC<{
     saveDraft,
     clearDraft,
   } = useSequenceDraft();
-
-  // Determine if we're editing an existing sequence
-  const isEditing = !!sequence?.id;
 
   // Initialize with sequence values (if editing) or localStorage defaults (if creating)
   const sequenceAnalysisModels: AnalysisModelId[] = useMemo(() => {
@@ -558,13 +566,13 @@ export const ScriptView: FC<{
       auto_generate_motion: autoGenerateMotion,
       auto_generate_music: autoGenerateMusic,
       analysis_model_count: analysisModels.length,
-      script_length: (script ?? sequence?.script ?? '').length,
+      script_length: (script ?? baseScript ?? '').length,
     });
     createSequenceMutation.mutate(
       {
         title: undefined,
         teamId,
-        script: script ?? sequence?.script ?? '',
+        script: script ?? baseScript ?? '',
         styleId: styleId || sequence?.styleId || undefined,
         aspectRatio,
         analysisModels,
@@ -624,7 +632,7 @@ export const ScriptView: FC<{
       return;
     }
 
-    const scriptText = script ?? sequence?.script ?? '';
+    const scriptText = script ?? baseScript ?? '';
     if (!canUndoEnhance && scriptText.length < SCRIPT_SHORT_THRESHOLD) {
       setEnhance('showEnhanceNudge', true);
       return;
@@ -722,7 +730,7 @@ export const ScriptView: FC<{
   }, [isEnhancing]);
 
   const isFormValid =
-    (script || sequence?.script) &&
+    (script || baseScript) &&
     (styleId || sequence?.styleId) &&
     analysisModels.length > 0;
 
@@ -730,7 +738,7 @@ export const ScriptView: FC<{
   const isDisabled =
     !isFormValid || isSubmitting || isEnhancing || isElementBusy;
 
-  const scriptValue = script ?? sequence?.script ?? '';
+  const scriptValue = script ?? baseScript ?? '';
   const { ref: textareaRef } = useAutoScroll<HTMLDivElement>({
     enabled: isEnhancing,
     content: scriptValue,
@@ -844,7 +852,7 @@ export const ScriptView: FC<{
               }}
               maxLength={50000}
               placeholder="A one-liner or website URL is all you need — click Enhance Script to do the rest. Or paste a full screenplay and generate directly."
-              disabled={loading}
+              disabled={loading || isDerivedScript}
               showCharacterCount={false}
               mentionItems={mentionItems}
             />

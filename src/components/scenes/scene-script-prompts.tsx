@@ -23,7 +23,7 @@ import { useSequenceCharacters } from '@/hooks/use-sequence-characters';
 import { useSequenceElements } from '@/hooks/use-sequence-elements';
 import { useSequenceLocations } from '@/hooks/use-sequence-locations';
 import { shortenPromptFn } from '@/functions/ai';
-import { updateShotFn } from '@/functions/shots';
+import { updateSceneScriptFn } from '@/functions/scenes';
 import { generateShotImageFn } from '@/functions/shot-image';
 import { generateShotMotionFn } from '@/functions/motion-functions';
 import { regenerateShotPromptFn } from '@/functions/prompt-variants';
@@ -42,6 +42,7 @@ import {
   useShotStaleness,
 } from '@/hooks/use-shot-staleness';
 import { sequenceKeys } from '@/hooks/use-sequences';
+import { sceneKeys } from '@/hooks/use-scenes';
 import { useSaveShotPrompt } from '@/hooks/use-prompt-variants';
 import type { FrameVariant, ShotVariant } from '@/lib/db/schema';
 import {
@@ -450,53 +451,28 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
     });
   }, [shotPromptStream.motion.status, shotId, sequenceId, queryClient]);
 
-  // Persist a scene-script and/or duration edit. Sends the patched scene via
-  // `metadata`; `updateShotFn` (server) clears stale dialogue (when extract
-  // changes) and mirrors the new extract into `sequences.script`. Existing
-  // prompt-input-hash staleness lights up the Image/Motion banners
-  // automatically once the new scene metadata lands.
+  // Persist a scene-script and/or duration edit via `scene_script_versions`
+  // (#1030). Repointing the selected version flips prompt-input-hash staleness
+  // on the scene's shots without forking the sequence.
   const saveScriptMutation = useMutation({
     mutationFn: async (input: {
       nextExtract: string;
       nextDurationSeconds: number | undefined;
     }) => {
-      if (!shot?.id || !shot.metadata) {
-        throw new Error('shot metadata required');
+      if (!shot?.id) {
+        throw new Error('shot required');
       }
       const { nextExtract, nextDurationSeconds } = input;
-      const updated = await updateShotFn({
+      return await updateSceneScriptFn({
         data: {
           sequenceId,
           shotId: shot.id,
+          extract: nextExtract,
           ...(nextDurationSeconds !== undefined
-            ? { durationMs: Math.round(nextDurationSeconds * 1000) }
+            ? { durationSeconds: nextDurationSeconds }
             : {}),
-          metadata: {
-            ...shot.metadata,
-            originalScript: {
-              ...shot.metadata.originalScript,
-              extract: nextExtract,
-            },
-            ...(nextDurationSeconds !== undefined
-              ? {
-                  metadata: {
-                    ...(shot.metadata.metadata ?? {
-                      title: '',
-                      location: '',
-                      timeOfDay: '',
-                      storyBeat: '',
-                    }),
-                    durationSeconds: nextDurationSeconds,
-                  },
-                }
-              : {}),
-          },
         },
       });
-      if (!updated) {
-        throw new Error('Shot update returned no data');
-      }
-      return updated;
     },
     onSuccess: async (updated) => {
       setEditedScript(undefined);
@@ -511,6 +487,9 @@ export const SceneScriptPrompts: React.FC<SceneScriptPromptsProps> = ({
         }),
         queryClient.invalidateQueries({
           queryKey: sequenceKeys.detail(sequenceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: sceneKeys.composedScript(sequenceId),
         }),
       ]);
       toast.success('Scene saved');

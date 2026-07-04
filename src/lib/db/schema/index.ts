@@ -13,6 +13,7 @@ import { teamInvitations, teamMembers, teams } from './teams';
 import { sequences } from './sequences';
 
 import { dbSceneId, scenes } from './scenes';
+import { sceneScriptVersions } from './scene-script-versions';
 
 import { shots } from './shots';
 
@@ -95,6 +96,14 @@ export type { NewSequence, Sequence } from './sequences';
 export { dbSceneId, scenes };
 
 export type { DbSceneId, NewScene, SceneRow } from './scenes';
+
+// Scene script versions (per-scene script history; #1030)
+export { sceneScriptVersions };
+
+export type {
+  SceneScriptVersion,
+  SceneScriptSource,
+} from './scene-script-versions';
 
 // Shots
 export { shots };
@@ -329,6 +338,7 @@ export const schema = {
   // Sequences
   sequences,
   scenes,
+  sceneScriptVersions,
   shots,
   shotVariants,
   // SSF redesign (#990) — render segments + flat video render versions

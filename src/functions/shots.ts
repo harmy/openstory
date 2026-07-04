@@ -25,6 +25,11 @@ import {
   updateShotSchema,
 } from '@/lib/schemas/shot.schemas';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
+import {
+  enrichShotWithSceneScript,
+  loadSelectedScriptsBySequence,
+  projectShotForClient,
+} from '@/lib/scenes/scene-script';
 import { rescanContinuityFromPrompt } from '@/lib/scenes/rescan-continuity-from-prompt';
 import { buildRegenerateShotSnapshot } from '@/lib/workflows/regenerate-shots-snapshot';
 import { createServerFn } from '@tanstack/react-start';
@@ -53,15 +58,18 @@ export const getShotsFn = createServerFn({ method: 'GET' })
     // Guarantee every shot has its anchor frame, then project the image surface
     // (#989) back under the legacy thumbnail*/image* names so the UI is unchanged.
     await scopedDb.shots.ensureAnchorFrames(shotRows);
-    const [anchorRows, gridSheets, motionByShot] = await Promise.all([
-      scopedDb.frames.listAnchorsBySequence(sequence.id),
-      scopedDb.frameVariants.listLatestGridSheetsBySequence(sequence.id),
-      scopedDb.shotPromptVersions.getSelectedMotionByShots(
-        shotRows.map((s) => s.id)
-      ),
-    ]);
+    const [anchorRows, gridSheets, motionByShot, scriptBySceneId] =
+      await Promise.all([
+        scopedDb.frames.listAnchorsBySequence(sequence.id),
+        scopedDb.frameVariants.listLatestGridSheetsBySequence(sequence.id),
+        scopedDb.shotPromptVersions.getSelectedMotionByShots(
+          shotRows.map((s) => s.id)
+        ),
+        loadSelectedScriptsBySequence(scopedDb, sequence.id),
+      ]);
     const anchorsByShot = new Map(anchorRows.map((f) => [f.shotId, f]));
-    return shotRows.map((shot) => {
+    return shotRows.map((rawShot) => {
+      const shot = enrichShotWithSceneScript(rawShot, scriptBySceneId);
       const frame = anchorsByShot.get(shot.id);
       const selectedMotion = motionByShot.get(shot.id);
       const motionPromptData = selectedMotion
@@ -120,8 +128,9 @@ export const getShotFn = createServerFn({ method: 'GET' })
       context.scopedDb.frameVariants.getLatestGridSheet(context.frame.id),
       context.scopedDb.shotPromptVersions.getSelectedMotion(context.shot.id),
     ]);
+    const shot = projectShotForClient(context.shot, context.script);
     return projectShotWithImage(
-      context.shot,
+      shot,
       context.frame,
       sheet ? { url: sheet.url, status: sheet.status } : null,
       selectedMotion ? motionPromptFromVersion(selectedMotion) : null
@@ -383,123 +392,12 @@ export const updateShotFn = createServerFn({ method: 'POST' })
   .handler(async ({ data, context }) => {
     const { sequenceId, shotId, ...updateData } = data;
 
-    // Scene-script edits (#684): when `originalScript.extract` changes,
-    // clear the parsed dialogue (now stale wrt the new text) and mirror the
-    // change into the parent `sequences.script` so script view stays in sync.
-    // Prompt-input-hash staleness handles the Image/Motion banners on its
-    // own — `originalScript.extract` is part of the hashed scene context, so
-    // the next `getShotStalenessFn` call will report `'stale'` without us
-    // touching the stored prompt hashes here.
-    const oldExtract = context.shot.metadata?.originalScript.extract ?? '';
-    const incomingExtract = updateData.metadata?.originalScript.extract;
-    const scriptChanged =
-      typeof incomingExtract === 'string' && incomingExtract !== oldExtract;
-    if (scriptChanged && updateData.metadata) {
-      updateData.metadata = {
-        ...updateData.metadata,
-        originalScript: {
-          extract: incomingExtract,
-          dialogue: [],
-        },
-      };
-
-      // Bootstrap missing prompt-input hashes. Shots that were generated
-      // before hash tracking landed have `imagePrompt` / `motionPrompt` set
-      // but null hashes and no `shot_prompt_variants` rows — so the
-      // `getLatestWithInputHash` fallback in `getShotStalenessFn` can't
-      // find a reference either, and staleness stays `'untracked'` forever.
-      // Compute the hash from the PRE-edit scene and stamp it on the shot
-      // now: the post-edit live hash will then differ → banner flips
-      // `'stale'`. One-shot per shot; subsequent edits hit the normal hash
-      // chain.
-      let preEditSequenceForSplice: Awaited<
-        ReturnType<typeof context.scopedDb.sequences.getById>
-      > | null = null;
-      if (context.shot.metadata) {
-        // (Visual-prompt-hash bootstrap removed in #989 — the image prompt and
-        // its hash live on the anchor frame / `frame_prompt_versions` now, and
-        // `getShotStalenessFn` already falls back to
-        // `framePromptVersions.getLatestWithInputHash`.)
-        if (context.shot.motionPrompt && !context.shot.motionPromptInputHash) {
-          try {
-            preEditSequenceForSplice ??=
-              await context.scopedDb.sequences.getById(sequenceId);
-            if (preEditSequenceForSplice) {
-              const ctx = await loadNarrowShotPromptContext({
-                scopedDb: context.scopedDb,
-                sequence: {
-                  id: preEditSequenceForSplice.id,
-                  styleId: preEditSequenceForSplice.styleId,
-                  aspectRatio: preEditSequenceForSplice.aspectRatio,
-                  analysisModel: preEditSequenceForSplice.analysisModel,
-                },
-                scene: context.shot.metadata,
-                startingFrameImageUrl: context.frame.imageUrl,
-              });
-              updateData.motionPromptInputHash =
-                await computeMotionPromptInputHash(ctx);
-            }
-          } catch (err) {
-            logger.warn(
-              `Could not bootstrap motion hash for shot ${shotId}; staleness will remain untracked for this prompt`,
-              { err }
-            );
-          }
-        }
-      }
-
-      // Splice the new extract into the parent script. The naive
-      // `script.replace(oldExtract, …)` would corrupt the wrong scene
-      // whenever an extract appears more than once (recurring slug lines,
-      // "CUT TO BLACK.", duplicated cues). Instead, walk every shot in
-      // orderIndex order and locate each one's extract sequentially in
-      // `seq.script`; the target shot's match is the one we splice.
-      // Best-effort: if the walk falls out of sync (e.g. the parent was
-      // edited separately), leave the parent untouched — the shot still
-      // saves, the scene tab still reflects the new extract, and we avoid
-      // injecting into the wrong position. Read-then-write on
-      // `sequences.script` is racy under concurrent scene edits; accept
-      // that as the worst-case loss of one parent-script update.
-      // Reuse the sequence fetched above if the bootstrap path already
-      // loaded it.
-      const seq =
-        preEditSequenceForSplice ??
-        (await context.scopedDb.sequences.getById(sequenceId));
-      if (seq?.script && oldExtract) {
-        const siblings =
-          await context.scopedDb.shots.listBySequence(sequenceId);
-        let cursor = 0;
-        let targetStart = -1;
-        let targetLength = 0;
-        let walkDiverged = false;
-        for (const sibling of siblings) {
-          const siblingExtract = sibling.metadata?.originalScript.extract;
-          if (!siblingExtract) continue;
-          const pos = seq.script.indexOf(siblingExtract, cursor);
-          if (pos === -1) {
-            walkDiverged = true;
-            break;
-          }
-          if (sibling.id === shotId) {
-            targetStart = pos;
-            targetLength = siblingExtract.length;
-          }
-          cursor = pos + siblingExtract.length;
-        }
-        if (!walkDiverged && targetStart !== -1) {
-          await context.scopedDb.sequences.update({
-            id: sequenceId,
-            script:
-              seq.script.slice(0, targetStart) +
-              incomingExtract +
-              seq.script.slice(targetStart + targetLength),
-          });
-        } else {
-          logger.warn(
-            `Parent script walk could not locate shot ${shotId} for sequence ${sequenceId}; skipping parent script sync`
-          );
-        }
-      }
+    // Scene-script edits route through `updateSceneScriptFn` (#1030). Reject
+    // legacy metadata.originalScript writes so the shot copy stays write-only.
+    if (updateData.metadata?.originalScript?.extract !== undefined) {
+      throw new Error(
+        'Scene script edits must use updateSceneScriptFn (#1030)'
+      );
     }
 
     // When a user edits a prompt, auto-link any element/cast/location tags
@@ -617,7 +515,8 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
   .middleware([shotAccessMiddleware])
   .inputValidator(zodValidator(shotIdInputSchema))
   .handler(async ({ context }) => {
-    const { shot, frame, sequence, scopedDb } = context;
+    const { shot, frame, sequence, scopedDb, scene } = context;
+    const shotForHash = scene ? { ...shot, metadata: scene } : shot;
 
     let thumbnail: 'stale' | 'fresh' | 'untracked' = 'untracked';
     // The visual prompt lives solely on the anchor frame's `imagePrompt` mirror
@@ -644,7 +543,7 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
           ]);
 
           const snapshot = await buildRegenerateShotSnapshot({
-            shot,
+            shot: shotForHash,
             imagePrompt: frame.imagePrompt,
             characters,
             locations,
@@ -680,7 +579,7 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
     // fall back to the most recent variant with a non-null `inputHash` for
     // shots whose cached column was nulled by a pre-fix user-edit. Without
     // the fallback, those shots are stuck at `'untracked'` permanently.
-    if (shot.metadata) {
+    if (scene) {
       // Visual prompt history moved to `frame_prompt_versions` (#989); the
       // cached hash mirror lives on the anchor frame.
       let referenceHash = frame.visualPromptInputHash;
@@ -695,7 +594,7 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
           const ctx = await loadNarrowShotPromptContext({
             scopedDb,
             sequence,
-            scene: shot.metadata,
+            scene,
             analysisModelOverride: latest?.analysisModel ?? null,
           });
           const liveHash = await computeVisualPromptInputHash(ctx);
@@ -710,7 +609,7 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
       }
     }
 
-    if (shot.metadata) {
+    if (scene) {
       let referenceHash = shot.motionPromptInputHash;
       if (!referenceHash) {
         const fallback =
@@ -729,7 +628,7 @@ export const getShotStalenessFn = createServerFn({ method: 'GET' })
           const ctx = await loadNarrowShotPromptContext({
             scopedDb,
             sequence,
-            scene: shot.metadata,
+            scene,
             analysisModelOverride: latest?.analysisModel ?? null,
             startingFrameImageUrl: frame.imageUrl,
           });
