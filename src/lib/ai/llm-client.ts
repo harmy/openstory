@@ -11,7 +11,12 @@ import {
   type Microdollars,
 } from '@/lib/billing/money';
 import type { ChatMessage } from '@/lib/prompts';
-import { chat, type DebugOption, type TokenUsage } from '@tanstack/ai';
+import {
+  chat,
+  convertSchemaToJsonSchema,
+  type DebugOption,
+  type TokenUsage,
+} from '@tanstack/ai';
 import type { ProviderPreferences } from '@tanstack/ai-openrouter';
 import { webSearchTool } from '@tanstack/ai-openrouter/tools';
 import { z } from 'zod';
@@ -257,6 +262,76 @@ function validateStructuredOutputSupport(model: string): void {
         `Supported models: ${[...STRUCTURED_OUTPUT_MODELS].join(', ')}`
     );
   }
+}
+
+/**
+ * Anthropic compiles strict structured output into a grammar with a hard,
+ * model-dependent size budget — measured live 2026-07-03 (per-property bisect
+ * pinned to `provider: only anthropic`): Fable 5 and Sonnet 5 reject the
+ * scene-split schema at ~3.7KB even with descriptions stripped (~8.2KB with
+ * them, which every Claude model rejects), Opus 4.8 tolerates ~3.7KB, and
+ * Bedrock/Azure-hosted Claude are no roomier. Every other provider compiles
+ * the same schemas fine. Schemas that fit the budget keep native strict
+ * output (guaranteed-valid JSON); larger ones fall back to `json_object` +
+ * the schema pinned in the prompt. The silent-drop leniency that got the old
+ * fallback removed (#799) is closed by parsing the final text against the
+ * full Zod schema and throwing on mismatch.
+ */
+const ANTHROPIC_GRAMMAR_BUDGET_BYTES = 3_000;
+
+function needsJsonObjectFallback(model: string, schema: z.ZodType): boolean {
+  if (!model.startsWith('anthropic/')) return false;
+  const converted = convertSchemaToJsonSchema(schema, {
+    forStructuredOutput: true,
+  });
+  return JSON.stringify(converted).length > ANTHROPIC_GRAMMAR_BUDGET_BYTES;
+}
+
+/**
+ * How a structured-output call should go on the wire for `model`:
+ * native strict `outputSchema` when the provider's grammar can compile it,
+ * or `json_object` + `instruction` pinned in the system prompt when it can't
+ * (Anthropic large schemas — see {@link ANTHROPIC_GRAMMAR_BUDGET_BYTES}).
+ * Callers on the fallback path MUST validate the final text against the Zod
+ * schema and throw on mismatch.
+ */
+export type StructuredOutputPlan =
+  | { mode: 'native' }
+  | { mode: 'json-object'; instruction: string };
+
+export function planStructuredOutput(
+  model: string,
+  schema: z.ZodType
+): StructuredOutputPlan {
+  if (needsJsonObjectFallback(model, schema)) {
+    return { mode: 'json-object', instruction: jsonSchemaInstruction(schema) };
+  }
+  return { mode: 'native' };
+}
+
+/**
+ * System-prompt instruction that pins a `json_object` response to `schema` —
+ * used for the Anthropic large-schema fallback, where we can't ship a strict
+ * JSON-Schema grammar.
+ */
+function jsonSchemaInstruction(schema: z.ZodType): string {
+  const jsonSchema = convertSchemaToJsonSchema(schema, {
+    forStructuredOutput: true,
+  });
+  return (
+    'You must respond with ONLY a single JSON object that conforms to this ' +
+    'JSON Schema. No markdown, no code fences, no commentary:\n' +
+    JSON.stringify(jsonSchema)
+  );
+}
+
+/** Parse a `json_object` response, tolerating an accidental ```json fence. */
+export function parseJsonObjectResponse(text: string): unknown {
+  const unfenced = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '');
+  return JSON.parse(unfenced);
 }
 
 function buildChatMetadata(params: LLMRequestParams) {
@@ -553,7 +628,34 @@ export async function* callLLMStream<T>(
   }
 
   const responseSchema = params.responseSchema;
-  if (responseSchema) {
+  const plan = responseSchema
+    ? planStructuredOutput(params.model, responseSchema)
+    : undefined;
+  if (responseSchema && plan?.mode === 'json-object') {
+    validateStructuredOutputSupport(params.model);
+    // Anthropic large-schema path: json_object + schema-in-prompt (the strict
+    // grammar won't compile — see ANTHROPIC_GRAMMAR_BUDGET_BYTES). The final
+    // text is validated against the full Zod schema below, loudly.
+    for await (const event of chat({
+      ...baseOptions,
+      systemPrompts: [...baseOptions.systemPrompts, plan.instruction],
+      modelOptions: {
+        ...baseOptions.modelOptions,
+        responseFormat: { type: 'json_object' as const },
+      },
+    })) {
+      if (
+        event.type === 'TEXT_MESSAGE_CONTENT' &&
+        typeof event.delta === 'string'
+      ) {
+        accumulated += event.delta;
+        yield { delta: event.delta, accumulated, done: false };
+        continue;
+      }
+      throwIfRunError(event);
+    }
+    parsed = responseSchema.parse(parseJsonObjectResponse(accumulated));
+  } else if (responseSchema) {
     validateStructuredOutputSupport(params.model);
     for await (const event of chat({
       ...baseOptions,
