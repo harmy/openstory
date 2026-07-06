@@ -90,7 +90,7 @@ export function SiteFooter() {
               Privacy
             </Link>
             <a
-              href="https://x.com/openstory_so"
+              href={SITE_CONFIG.xHref}
               target="_blank"
               rel="noopener noreferrer"
               className="text-background/40 transition-colors hover:text-background"

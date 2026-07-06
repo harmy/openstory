@@ -1,4 +1,5 @@
 import { GitHubIcon } from '@/components/icons/github-icon';
+import { XIcon } from '@/components/icons/x-icon';
 import {
   OpenStoryIcon,
   OpenStoryLogo,
@@ -113,6 +114,26 @@ export function AppSidebar() {
               <a href={SITE_CONFIG.githubHref} target="_blank" rel="noreferrer">
                 <GitHubIcon className="size-4" />
                 <span>GitHub</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Follow OpenStory on X">
+              <a href={SITE_CONFIG.xHref} target="_blank" rel="noreferrer">
+                <XIcon className="size-4" />
+                <span>Follow OpenStory on X</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Follow Tom on X">
+              <a
+                href={SITE_CONFIG.founderXHref}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <XIcon className="size-4" />
+                <span>Follow Tom on X</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>

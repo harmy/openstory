@@ -29,6 +29,8 @@ export const SITE_CONFIG = {
   ctaText: 'Get Started',
   ctaHref: '/sequences/new',
   githubHref: 'https://github.com/openstory-so/openstory',
+  xHref: 'https://x.com/openstory_so',
+  founderXHref: 'https://x.com/tombeckenham',
 };
 
 export const TOP_TIER_FEATURES = [
