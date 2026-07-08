@@ -1,5 +1,4 @@
 import { GalleryIcon } from '@/components/icons/gallery-icon';
-import { RecommendedStyles } from '@/components/style/recommended-styles';
 import { StyleGrid } from '@/components/style/style-grid';
 import { StyleSelectorButton } from '@/components/style/style-selector-button';
 import { Button } from '@/components/ui/button';
@@ -30,8 +29,12 @@ import {
   groupStylesByCategory,
   styleCategoryLabel,
 } from '@/lib/style/style-assets';
-import { filterStyles } from '@/lib/utils/style-filters';
 import type { StyleRecommendation } from '@/hooks/use-styles';
+import {
+  prioritizeRecommendedStyles,
+  RECOMMENDED_STYLE_SLOT_COUNT,
+} from '@/lib/style/prioritize-recommended-styles';
+import { filterStyles } from '@/lib/utils/style-filters';
 import type { Style } from '@/types/database';
 import { Search, X } from 'lucide-react';
 import type { ChangeEvent, FC, ReactNode } from 'react';
@@ -44,7 +47,6 @@ type StyleSelectionDialogProps = {
   selectedStyleId: string | null;
   onStyleSelect: (styleId: string) => void;
   recommendations?: StyleRecommendation[];
-  recommendationsLoading?: boolean;
 };
 
 type StyleSelectionDialogContentProps = {
@@ -53,7 +55,6 @@ type StyleSelectionDialogContentProps = {
   onStyleSelect: (styleId: string) => void;
   onClose: () => void;
   recommendations?: StyleRecommendation[];
-  recommendationsLoading?: boolean;
 };
 
 /**
@@ -65,7 +66,6 @@ const StyleSelectionDialogContent: FC<StyleSelectionDialogContentProps> = ({
   onStyleSelect,
   onClose,
   recommendations,
-  recommendationsLoading = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -80,13 +80,17 @@ const StyleSelectionDialogContent: FC<StyleSelectionDialogContentProps> = ({
     [styles, isLoading]
   );
 
-  const filteredStyles = useMemo(
-    () =>
-      [...filterStyles(styles ?? [], selectedCategory, searchQuery)].sort(
-        (a, b) => a.name.localeCompare(b.name)
-      ),
-    [styles, selectedCategory, searchQuery]
-  );
+  const filteredStyles = useMemo(() => {
+    const filtered = [
+      ...filterStyles(styles ?? [], selectedCategory, searchQuery),
+    ].sort((a, b) => a.name.localeCompare(b.name));
+    return prioritizeRecommendedStyles(
+      filtered,
+      recommendations,
+      RECOMMENDED_STYLE_SLOT_COUNT,
+      selectedStyleId
+    );
+  }, [styles, selectedCategory, searchQuery, recommendations, selectedStyleId]);
 
   const handleOk = useCallback(() => {
     onClose();
@@ -117,17 +121,6 @@ const StyleSelectionDialogContent: FC<StyleSelectionDialogContentProps> = ({
             Choose the visual style of your sequence
           </DialogDescription>
         </DialogHeader>
-
-        {/* Pinned "Recommended for your script" row — hidden when there's no
-            script-driven shortlist yet. */}
-        <RecommendedStyles
-          recommendations={recommendations}
-          styles={styles ?? []}
-          selectedStyleId={selectedStyleId}
-          onStyleSelect={handleStyleSelect}
-          isLoading={recommendationsLoading}
-          className="pt-2"
-        />
 
         <div className="flex flex-col gap-4 py-4">
           {/* Search */}
@@ -217,7 +210,6 @@ export const StyleSelectionDialog: FC<StyleSelectionDialogProps> = ({
   selectedStyleId,
   onStyleSelect,
   recommendations,
-  recommendationsLoading,
 }) => {
   const handleClose = useCallback(() => {
     onOpenChange(false);
@@ -231,7 +223,6 @@ export const StyleSelectionDialog: FC<StyleSelectionDialogProps> = ({
         onStyleSelect={onStyleSelect}
         onClose={handleClose}
         recommendations={recommendations}
-        recommendationsLoading={recommendationsLoading}
       />
     </Dialog>
   );

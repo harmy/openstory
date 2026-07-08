@@ -10,7 +10,6 @@ import { GenerateSequenceIcon } from '@/components/icons/generate-sequence-icon'
 import { LocationSuggestionSelector } from '@/components/location-library/location-suggestion-selector';
 import { buildMentionItems } from '@/components/scenes/prompt-mention/mention-items';
 import { GenerationSettings } from '@/components/settings/generation-settings';
-import { RecommendedStyles } from '@/components/style/recommended-styles';
 import { StyleSelector } from '@/components/style/style-selector';
 import { TalentSuggestionSelector } from '@/components/talent/talent-suggestion-selector';
 import {
@@ -1029,47 +1028,33 @@ export const ScriptView: FC<{
           )}
 
           <div className="shrink-0 flex flex-col gap-3">
-            {/* Recommend trigger, or the inline shortlist once it's running. */}
-            {recommendScript !== null &&
-            (isRecommending || (recommendations?.length ?? 0) > 0) ? (
-              <RecommendedStyles
-                recommendations={recommendations}
-                styles={styles}
-                selectedStyleId={styleId || sequence?.styleId || null}
-                onStyleSelect={handleStyleSelect}
-                isLoading={isRecommending}
-              />
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 self-start"
-                  disabled={
-                    loading ||
-                    (script ?? sequence?.script ?? '').trim().length < 3
-                  }
-                  onClick={triggerRecommend}
-                >
-                  <Sparkles className="size-3.5 text-primary" />
-                  Recommend styles
-                </Button>
-                {/* Tell the user when a billed run came back empty/errored,
-                    rather than silently resetting to the button. */}
-                {(recommendEmpty || recommendFailed) && (
-                  <p className="text-xs text-muted-foreground">
-                    {recommendFailed
-                      ? "Couldn't suggest styles — try again or pick one below."
-                      : 'No standout matches — try again or pick a style below.'}
-                  </p>
-                )}
+            <div className="flex flex-col gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5 self-start"
+                disabled={
+                  loading ||
+                  (script ?? sequence?.script ?? '').trim().length < 3
+                }
+                onClick={triggerRecommend}
+              >
+                <Sparkles className="size-3.5 text-primary" />
+                Recommend styles
+              </Button>
+              {(recommendEmpty || recommendFailed) && (
                 <p className="text-xs text-muted-foreground">
-                  Enhance also suggests styles for your script (billed like
-                  Enhance).
+                  {recommendFailed
+                    ? "Couldn't suggest styles — try again or pick one below."
+                    : 'No standout matches — try again or pick a style below.'}
                 </p>
-              </div>
-            )}
+              )}
+              <p className="text-xs text-muted-foreground">
+                Enhance also suggests styles for your script (billed like
+                Enhance).
+              </p>
+            </div>
 
             {/* Auto resolved-pick pill — mirrors the recommended-model pill. */}
             {autoSelected && selectedStyle && (

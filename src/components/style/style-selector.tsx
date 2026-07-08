@@ -4,9 +4,14 @@ import { cn } from '@/lib/utils';
 import { AppImage } from '@/components/ui/app-image';
 import { MoreHorizontal, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { StyleRecommendation } from '@/hooks/use-styles';
+import {
+  buildRecommendationReasoningMap,
+  prioritizeRecommendedStyles,
+  RECOMMENDED_STYLE_SLOT_COUNT,
+} from '@/lib/style/prioritize-recommended-styles';
 import { getStyleGradient } from './style-gradient';
 import { StyleSelectionDialog } from './style-selection-dialog';
-import type { StyleRecommendation } from '@/hooks/use-styles';
 
 const StyleTileBackground: React.FC<{ style: Style }> = ({ style }) => {
   const [imgError, setImgError] = useState(false);
@@ -106,46 +111,65 @@ export function StyleSelector({
     return () => observer.disconnect();
   }, []);
 
-  // Reorder styles to place selected style at the beginning if it exists
-  const reorderedStyles = useMemo(() => {
-    if (!selectedStyleId) return styles;
-
-    const selectedIndex = styles.findIndex((s) => s.id === selectedStyleId);
-    if (selectedIndex === -1) return styles;
-
-    // If selected style is already in the visible positions, don't reorder
-    if (selectedIndex < visibleCount - reservedSlots) return styles;
-
-    // Move selected style to the front
-    const selectedStyle = styles[selectedIndex];
-    if (!selectedStyle) return styles;
-    return [selectedStyle, ...styles.filter((s) => s.id !== selectedStyleId)];
-  }, [styles, selectedStyleId, visibleCount, reservedSlots]);
-
-  // Always reserve a slot for "More" (and Auto, when shown).
-  const visibleStyles = reorderedStyles.slice(
-    0,
-    Math.max(0, visibleCount - reservedSlots)
+  const reasoningByStyleId = useMemo(
+    () => buildRecommendationReasoningMap(recommendations),
+    [recommendations]
   );
-  const hiddenCount = reorderedStyles.length - visibleStyles.length;
-  const moreIndex = autoOffset + visibleStyles.length;
+
+  const displayStyles = useMemo(
+    () =>
+      prioritizeRecommendedStyles(
+        styles,
+        recommendations,
+        RECOMMENDED_STYLE_SLOT_COUNT,
+        selectedStyleId
+      ),
+    [styles, recommendations, selectedStyleId]
+  );
+
+  const maxStyleSlots = Math.max(0, visibleCount - reservedSlots);
+  const showRecommendationSkeletons =
+    recommendationsLoading && (recommendations?.length ?? 0) === 0;
+  const recommendationSkeletonCount = showRecommendationSkeletons
+    ? Math.min(RECOMMENDED_STYLE_SLOT_COUNT, maxStyleSlots)
+    : 0;
+
+  // While recommendations load, skeletons occupy the first slots; fill the rest
+  // with the normal catalogue order (selected style bumped when needed).
+  const fillerStyles = useMemo(
+    () => prioritizeRecommendedStyles(styles, undefined, 0, selectedStyleId),
+    [styles, selectedStyleId]
+  );
+
+  const visibleStyles = showRecommendationSkeletons
+    ? fillerStyles.slice(0, maxStyleSlots - recommendationSkeletonCount)
+    : displayStyles.slice(0, maxStyleSlots);
+  const hiddenCount = Math.max(0, styles.length - visibleStyles.length);
+  const styleTileCount = recommendationSkeletonCount + visibleStyles.length;
+  const moreIndex = autoOffset + styleTileCount;
   const totalItems = moreIndex + 1;
 
   // Reset focusable index when styles change or selected style changes
   useEffect(() => {
-    if (visibleStyles.length === 0) return;
+    if (visibleStyles.length === 0 && recommendationSkeletonCount === 0) return;
 
-    // If a style is selected, make it focusable (offset by the Auto cell)
     const selectedIndex = visibleStyles.findIndex(
       (s) => s.id === selectedStyleId
     );
     if (selectedIndex !== -1) {
-      setFocusableIndex(autoOffset + selectedIndex);
+      setFocusableIndex(
+        autoOffset + recommendationSkeletonCount + selectedIndex
+      );
     } else {
-      // Otherwise the first navigable cell is focusable (skips a disabled Auto).
       setFocusableIndex(minNavIndex);
     }
-  }, [selectedStyleId, visibleStyles, autoOffset, minNavIndex]);
+  }, [
+    selectedStyleId,
+    visibleStyles,
+    autoOffset,
+    minNavIndex,
+    recommendationSkeletonCount,
+  ]);
 
   // Handle arrow key navigation (single row, so left/right only)
   const handleKeyDown = useCallback(
@@ -233,12 +257,23 @@ export function StyleSelector({
           </button>
         )}
 
-        {loading
-          ? Array.from({ length: visibleCount }).map((_, i) => (
-              <Skeleton key={i} className="aspect-square rounded-lg" />
-            ))
-          : visibleStyles.map((style, index) => {
-              const cellIndex = autoOffset + index;
+        {loading ? (
+          Array.from({ length: visibleCount }).map((_, i) => (
+            <Skeleton key={i} className="aspect-square rounded-lg" />
+          ))
+        ) : (
+          <>
+            {showRecommendationSkeletons &&
+              Array.from({ length: recommendationSkeletonCount }, (_, i) => (
+                <Skeleton
+                  key={`rec-skeleton-${i}`}
+                  className="aspect-square rounded-lg"
+                />
+              ))}
+            {visibleStyles.map((style, index) => {
+              const cellIndex =
+                autoOffset + recommendationSkeletonCount + index;
+              const reasoning = reasoningByStyleId.get(style.id);
               return (
                 <button
                   key={style.id}
@@ -258,24 +293,24 @@ export function StyleSelector({
                       : 'border-transparent hover:border-primary/50'
                   )}
                   aria-label={`Select ${style.name} style`}
+                  title={reasoning}
                 >
-                  {/* Background Image / Gradient Fallback */}
                   <StyleTileBackground style={style} />
 
-                  {/* Name Overlay on Image */}
                   <div className="absolute inset-x-0 bottom-0 p-2 bg-linear-to-t from-black/80 via-black/60 to-transparent">
                     <p className="text-xs font-medium text-white text-center line-clamp-2">
                       {style.name}
                     </p>
                   </div>
 
-                  {/* Selection Indicator */}
                   {selectedStyleId === style.id && (
                     <div className="absolute inset-0 bg-primary/10 pointer-events-none" />
                   )}
                 </button>
               );
             })}
+          </>
+        )}
 
         {/* More Options Tile - Always show as last item in grid */}
         {!loading && (
@@ -300,7 +335,7 @@ export function StyleSelector({
             <span className="text-xs text-muted-foreground font-medium text-center">
               {hiddenCount > 0
                 ? `+${hiddenCount} More`
-                : `View All (${reorderedStyles.length})`}
+                : `View All (${styles.length})`}
             </span>
           </button>
         )}
@@ -314,7 +349,6 @@ export function StyleSelector({
         selectedStyleId={selectedStyleId}
         onStyleSelect={handleStyleSelect}
         recommendations={recommendations}
-        recommendationsLoading={recommendationsLoading}
       />
     </>
   );
