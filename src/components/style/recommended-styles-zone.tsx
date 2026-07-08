@@ -1,160 +1,104 @@
-import { Skeleton } from '@/components/ui/skeleton';
-import type { StyleRecommendation } from '@/hooks/use-styles';
-import {
-  buildRecommendationReasoningMap,
-  RECOMMENDED_STYLE_SLOT_COUNT,
-  resolveRecommendedStyles,
-} from '@/lib/style/prioritize-recommended-styles';
-import type { Style } from '@/lib/db/schema/libraries';
+import type { RefObject } from 'react';
+import { useEffect, useState, type FC } from 'react';
 import { cn } from '@/lib/utils';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FC,
-  type ReactNode,
-} from 'react';
-import { StyleInlineTile } from './style-inline-tile';
 
-type RecommendStylesShellProps = {
+const FRAME_PAD = 8;
+const TILE_BLEED = 4;
+
+type RecommendStylesClusterFrameProps = {
+  containerRef: RefObject<HTMLElement | null>;
   active: boolean;
-  children: ReactNode;
   className?: string;
 };
 
-/** Bordered cluster around the recommend trigger and its shortlist tiles. */
-export const RecommendStylesShell: FC<RecommendStylesShellProps> = ({
-  active,
-  children,
-  className,
-}) => {
-  if (!active) return <>{children}</>;
-
-  return (
-    <div
-      className={cn(
-        'rounded-xl border border-primary/20',
-        'bg-gradient-to-br from-primary/[0.06] via-primary/[0.02] to-transparent',
-        'p-2.5 shadow-sm flex flex-col gap-3',
-        className
-      )}
-    >
-      {children}
-    </div>
-  );
-};
-
-type RecommendedStylesRowProps = {
-  styles: Style[];
-  recommendations?: StyleRecommendation[];
-  recommendationsLoading?: boolean;
-  selectedStyleId: string | null;
-  onStyleSelect: (styleId: string) => void;
-  loading?: boolean;
-  disabled?: boolean;
-};
-
-export const RecommendedStylesRow: FC<RecommendedStylesRowProps> = ({
-  styles,
-  recommendations,
-  recommendationsLoading = false,
-  selectedStyleId,
-  onStyleSelect,
-  loading = false,
-  disabled = false,
-}) => {
-  const rowRef = useRef<HTMLDivElement>(null);
-  const [focusableIndex, setFocusableIndex] = useState(0);
-
-  const recommendedStyles = useMemo(
-    () => resolveRecommendedStyles(styles, recommendations),
-    [styles, recommendations]
-  );
-
-  const reasoningByStyleId = useMemo(
-    () => buildRecommendationReasoningMap(recommendations),
-    [recommendations]
-  );
-
-  const showSkeleton = recommendationsLoading && recommendedStyles.length === 0;
-  const tileCount = showSkeleton
-    ? RECOMMENDED_STYLE_SLOT_COUNT
-    : recommendedStyles.length;
+/**
+ * Draws a border around the recommend trigger and inline `[data-recommended-tile]`
+ * cells without changing grid layout.
+ */
+export const RecommendStylesClusterFrame: FC<
+  RecommendStylesClusterFrameProps
+> = ({ containerRef, active, className }) => {
+  const [bounds, setBounds] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   useEffect(() => {
-    const selectedIndex = recommendedStyles.findIndex(
-      (s) => s.id === selectedStyleId
-    );
-    setFocusableIndex(selectedIndex !== -1 ? selectedIndex : 0);
-  }, [selectedStyleId, recommendedStyles]);
+    if (!active) {
+      setBounds(null);
+      return;
+    }
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent, currentIndex: number) => {
-      if (tileCount === 0) return;
-      let nextIndex = currentIndex;
+    const container = containerRef.current;
+    if (!container) return;
 
-      switch (event.key) {
-        case 'ArrowRight':
-        case 'ArrowDown':
-          event.preventDefault();
-          nextIndex = Math.min(currentIndex + 1, tileCount - 1);
-          break;
-        case 'ArrowLeft':
-        case 'ArrowUp':
-          event.preventDefault();
-          nextIndex = Math.max(currentIndex - 1, 0);
-          break;
-        case 'Home':
-          event.preventDefault();
-          nextIndex = 0;
-          break;
-        case 'End':
-          event.preventDefault();
-          nextIndex = tileCount - 1;
-          break;
-        default:
-          return;
+    const measure = () => {
+      const elements = container.querySelectorAll(
+        '[data-recommend-trigger], [data-recommended-tile]'
+      );
+      if (elements.length === 0) {
+        setBounds(null);
+        return;
       }
 
-      if (nextIndex !== currentIndex) {
-        setFocusableIndex(nextIndex);
-        const buttons = rowRef.current?.querySelectorAll('button');
-        const nextButton = buttons?.[nextIndex];
-        if (nextButton instanceof HTMLElement) nextButton.focus();
-      }
-    },
-    [tileCount]
-  );
+      const containerRect = container.getBoundingClientRect();
+      let minTop = Infinity;
+      let minLeft = Infinity;
+      let maxRight = -Infinity;
+      let maxBottom = -Infinity;
 
-  if (!showSkeleton && recommendedStyles.length === 0) return null;
+      for (const element of elements) {
+        const rect = element.getBoundingClientRect();
+        minTop = Math.min(minTop, rect.top);
+        minLeft = Math.min(minLeft, rect.left);
+        maxRight = Math.max(maxRight, rect.right);
+        maxBottom = Math.max(maxBottom, rect.bottom);
+      }
+
+      setBounds({
+        top: minTop - containerRect.top - FRAME_PAD,
+        left: minLeft - containerRect.left - FRAME_PAD - TILE_BLEED,
+        width: maxRight - minLeft + (FRAME_PAD + TILE_BLEED) * 2,
+        height: maxBottom - minTop + FRAME_PAD * 2,
+      });
+    };
+
+    measure();
+
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(container);
+
+    const mutationObserver = new MutationObserver(measure);
+    mutationObserver.observe(container, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+    });
+
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+    };
+  }, [active, containerRef]);
+
+  if (!bounds) return null;
 
   return (
     <div
-      ref={rowRef}
-      className="grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3"
-      aria-label="Recommended styles"
-    >
-      {loading || showSkeleton
-        ? Array.from({ length: RECOMMENDED_STYLE_SLOT_COUNT }, (_, i) => (
-            <Skeleton
-              key={`rec-skeleton-${i}`}
-              className="aspect-square rounded-lg"
-            />
-          ))
-        : recommendedStyles.map((style, index) => (
-            <StyleInlineTile
-              key={style.id}
-              style={style}
-              selected={selectedStyleId === style.id}
-              disabled={disabled}
-              reasoning={reasoningByStyleId.get(style.id)}
-              tabIndex={index === focusableIndex ? 0 : -1}
-              onSelect={onStyleSelect}
-              onKeyDown={(e) => handleKeyDown(e, index)}
-            />
-          ))}
-    </div>
+      aria-hidden
+      className={cn(
+        'pointer-events-none absolute z-0 rounded-xl border border-primary/20',
+        'bg-gradient-to-br from-primary/[0.06] via-primary/[0.02] to-transparent shadow-sm',
+        className
+      )}
+      style={{
+        top: bounds.top,
+        left: bounds.left,
+        width: bounds.width,
+        height: bounds.height,
+      }}
+    />
   );
 };

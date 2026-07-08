@@ -10,10 +10,7 @@ import { GenerateSequenceIcon } from '@/components/icons/generate-sequence-icon'
 import { LocationSuggestionSelector } from '@/components/location-library/location-suggestion-selector';
 import { buildMentionItems } from '@/components/scenes/prompt-mention/mention-items';
 import { GenerationSettings } from '@/components/settings/generation-settings';
-import {
-  RecommendStylesShell,
-  RecommendedStylesRow,
-} from '@/components/style/recommended-styles-zone';
+import { RecommendStylesClusterFrame } from '@/components/style/recommended-styles-zone';
 import { StyleSelector } from '@/components/style/style-selector';
 import { TalentSuggestionSelector } from '@/components/talent/talent-suggestion-selector';
 import {
@@ -703,6 +700,7 @@ export const ScriptView: FC<{
 
   const previousScriptRef = useRef<string>('');
   const enhanceAbortRef = useRef<AbortController | null>(null);
+  const recommendClusterRef = useRef<HTMLDivElement>(null);
 
   const handleEnhance = async () => {
     // Enhancing runs an AI model on the server — gate it behind login too.
@@ -929,151 +927,142 @@ export const ScriptView: FC<{
           )}
 
           <div className="shrink-0 flex flex-col gap-3 overflow-visible">
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <RecommendStylesShell active={showRecommendShell}>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5 self-start"
-                      disabled={
-                        loading ||
-                        currentScriptText.length < 3 ||
-                        isRecommending
-                      }
-                      onClick={triggerRecommend}
-                    >
-                      {isRecommending ? (
-                        <Loader2 className="size-3.5 animate-spin text-primary" />
-                      ) : (
-                        <Sparkles className="size-3.5 text-primary" />
-                      )}
-                      {recommendButtonLabel}
-                    </Button>
-                    {showRecommendShell && (
-                      <RecommendedStylesRow
-                        styles={styles}
-                        recommendations={activeRecommendations}
-                        recommendationsLoading={
-                          isRecommending && !recommendationsStale
-                        }
-                        selectedStyleId={styleId || sequence?.styleId || null}
-                        onStyleSelect={setStyleId}
-                        loading={isLoadingStyles}
-                        disabled={loading}
-                      />
-                    )}
-                  </RecommendStylesShell>
-                </div>
-                <div className="flex items-center gap-1 shrink-0 pt-0.5">
-                  {canUndoEnhance && !isEnhancing && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-muted-foreground"
-                      onClick={handleUndoEnhance}
-                    >
-                      <Undo2 className="size-3.5" />
-                      Undo
-                    </Button>
-                  )}
-                  {isEnhancing ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-muted-foreground"
-                      onClick={handleStopEnhance}
-                    >
-                      <span className="relative size-5">
-                        <Loader2 className="absolute inset-0 size-5 animate-spin" />
-                        <Square className="absolute inset-[5px] size-[10px] fill-current" />
-                      </span>
-                      Stop
-                    </Button>
+            <div className="flex items-start justify-between gap-3">
+              <div
+                ref={recommendClusterRef}
+                className="relative min-w-0 flex-1 flex flex-col gap-3 overflow-visible"
+              >
+                {showRecommendShell && (
+                  <RecommendStylesClusterFrame
+                    containerRef={recommendClusterRef}
+                    active={showRecommendShell}
+                  />
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-recommend-trigger
+                  className="relative z-10 gap-1.5 self-start"
+                  disabled={
+                    loading || currentScriptText.length < 3 || isRecommending
+                  }
+                  onClick={triggerRecommend}
+                >
+                  {isRecommending ? (
+                    <Loader2 className="size-3.5 animate-spin text-primary" />
                   ) : (
-                    <Popover
-                      open={enhancePopoverOpen}
-                      onOpenChange={setEnhancePopoverOpen}
-                    >
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
+                    <Sparkles className="size-3.5 text-primary" />
+                  )}
+                  {recommendButtonLabel}
+                </Button>
+                <StyleSelector
+                  styles={styles}
+                  selectedStyleId={styleId || sequence?.styleId || null}
+                  onStyleSelect={setStyleId}
+                  loading={isLoadingStyles}
+                  recommendations={activeRecommendations}
+                  recommendationsLoading={
+                    isRecommending && !recommendationsStale
+                  }
+                />
+                {(recommendEmpty || recommendFailed) && (
+                  <p className="text-xs text-muted-foreground">
+                    {recommendFailed
+                      ? "Couldn't suggest styles — try again or pick one below."
+                      : 'No standout matches — try again or pick a style below.'}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                {canUndoEnhance && !isEnhancing && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-muted-foreground"
+                    onClick={handleUndoEnhance}
+                  >
+                    <Undo2 className="size-3.5" />
+                    Undo
+                  </Button>
+                )}
+                {isEnhancing ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-muted-foreground"
+                    onClick={handleStopEnhance}
+                  >
+                    <span className="relative size-5">
+                      <Loader2 className="absolute inset-0 size-5 animate-spin" />
+                      <Square className="absolute inset-[5px] size-[10px] fill-current" />
+                    </span>
+                    Stop
+                  </Button>
+                ) : (
+                  <Popover
+                    open={enhancePopoverOpen}
+                    onOpenChange={setEnhancePopoverOpen}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        disabled={
+                          !scriptValue ||
+                          scriptValue.length < 10 ||
+                          isSubmitting
+                        }
+                      >
+                        <Sparkles className="size-3.5 text-primary" />
+                        Enhance Script
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" side="top" className="w-auto">
+                      <div className="flex flex-col gap-3">
+                        <p className="text-sm font-medium">
+                          Target video duration
+                        </p>
+                        <ToggleGroup
+                          type="single"
+                          value={String(targetDuration)}
+                          onValueChange={(v) => {
+                            if (v) setTargetDuration(Number(v));
+                          }}
                           variant="outline"
                           size="sm"
-                          className="gap-1.5"
-                          disabled={
-                            !scriptValue ||
-                            scriptValue.length < 10 ||
-                            isSubmitting
-                          }
                         >
-                          <Sparkles className="size-3.5 text-primary" />
-                          Enhance Script
+                          {DURATION_PRESETS.map((preset) => (
+                            <ToggleGroupItem
+                              key={preset.value}
+                              value={preset.value}
+                            >
+                              {preset.label}
+                            </ToggleGroupItem>
+                          ))}
+                        </ToggleGroup>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => {
+                            setEnhancePopoverOpen(false);
+                            void handleEnhance();
+                          }}
+                        >
+                          <Sparkles className="size-3.5" />
+                          Enhance
                         </Button>
-                      </PopoverTrigger>
-                      <PopoverContent align="end" side="top" className="w-auto">
-                        <div className="flex flex-col gap-3">
-                          <p className="text-sm font-medium">
-                            Target video duration
-                          </p>
-                          <ToggleGroup
-                            type="single"
-                            value={String(targetDuration)}
-                            onValueChange={(v) => {
-                              if (v) setTargetDuration(Number(v));
-                            }}
-                            variant="outline"
-                            size="sm"
-                          >
-                            {DURATION_PRESETS.map((preset) => (
-                              <ToggleGroupItem
-                                key={preset.value}
-                                value={preset.value}
-                              >
-                                {preset.label}
-                              </ToggleGroupItem>
-                            ))}
-                          </ToggleGroup>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="gap-1.5"
-                            onClick={() => {
-                              setEnhancePopoverOpen(false);
-                              void handleEnhance();
-                            }}
-                          >
-                            <Sparkles className="size-3.5" />
-                            Enhance
-                          </Button>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  )}
-                </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
               </div>
-              {(recommendEmpty || recommendFailed) && (
-                <p className="text-xs text-muted-foreground">
-                  {recommendFailed
-                    ? "Couldn't suggest styles — try again or pick one below."
-                    : 'No standout matches — try again or pick a style below.'}
-                </p>
-              )}
             </div>
-
-            <StyleSelector
-              styles={styles}
-              selectedStyleId={styleId || sequence?.styleId || null}
-              onStyleSelect={setStyleId}
-              loading={isLoadingStyles}
-              recommendations={activeRecommendations}
-              recommendationsLoading={isRecommending && !recommendationsStale}
-              recommendationsInShell={showRecommendShell}
-            />
           </div>
         </CardContent>
 

@@ -21,8 +21,6 @@ type StyleSelectorProps = {
   disabled?: boolean;
   recommendations?: StyleRecommendation[];
   recommendationsLoading?: boolean;
-  /** Recommended tiles render in the shell above — only dedupe the catalogue here. */
-  recommendationsInShell?: boolean;
 };
 
 export function StyleSelector({
@@ -33,7 +31,6 @@ export function StyleSelector({
   disabled = false,
   recommendations,
   recommendationsLoading = false,
-  recommendationsInShell = false,
 }: StyleSelectorProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -65,12 +62,8 @@ export function StyleSelector({
     return () => observer.disconnect();
   }, []);
 
-  const hasRecommendations =
+  const showRecommendations =
     recommendationsLoading || (recommendations?.length ?? 0) > 0;
-  const showRecommendations = hasRecommendations && !recommendationsInShell;
-  const dedupeRecommendations = hasRecommendations
-    ? recommendations
-    : undefined;
 
   const recommendedStyles = useMemo(
     () =>
@@ -100,10 +93,10 @@ export function StyleSelector({
     () =>
       catalogueWithoutRecommendations(
         styles,
-        dedupeRecommendations,
+        showRecommendations ? recommendations : undefined,
         selectedStyleId
       ),
-    [styles, dedupeRecommendations, selectedStyleId]
+    [styles, recommendations, selectedStyleId, showRecommendations]
   );
 
   const maxCatalogueSlots = Math.max(
@@ -115,28 +108,12 @@ export function StyleSelector({
   const moreIndex = recommendationSlotCount + visibleCatalogueStyles.length;
   const totalItems = moreIndex + 1;
 
-  const shellRecommendedStyles = useMemo(
-    () =>
-      recommendationsInShell
-        ? resolveRecommendedStyles(styles, recommendations)
-        : [],
-    [styles, recommendations, recommendationsInShell]
-  );
-
   const shownStyleIds = useMemo(() => {
     const ids = new Set<string>();
-    const recs = recommendationsInShell
-      ? shellRecommendedStyles
-      : recommendedStyles;
-    for (const style of recs) ids.add(style.id);
+    for (const style of recommendedStyles) ids.add(style.id);
     for (const style of visibleCatalogueStyles) ids.add(style.id);
     return ids;
-  }, [
-    recommendedStyles,
-    shellRecommendedStyles,
-    visibleCatalogueStyles,
-    recommendationsInShell,
-  ]);
+  }, [recommendedStyles, visibleCatalogueStyles]);
 
   const hiddenCount = Math.max(0, styles.length - shownStyleIds.size);
 
@@ -214,7 +191,7 @@ export function StyleSelector({
     <>
       <div
         ref={gridRef}
-        className="grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 overflow-hidden p-2"
+        className="relative z-10 grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 overflow-visible p-2"
         role="grid"
         aria-label="Style selection"
       >
@@ -228,6 +205,7 @@ export function StyleSelector({
               ? Array.from({ length: RECOMMENDED_STYLE_SLOT_COUNT }, (_, i) => (
                   <Skeleton
                     key={`rec-skeleton-${i}`}
+                    data-recommended-tile
                     className="aspect-square rounded-lg"
                   />
                 ))
@@ -237,6 +215,7 @@ export function StyleSelector({
                     style={style}
                     selected={selectedStyleId === style.id}
                     disabled={disabled}
+                    recommended
                     reasoning={reasoningByStyleId.get(style.id)}
                     tabIndex={index === focusableIndex ? 0 : -1}
                     onSelect={onStyleSelect}
