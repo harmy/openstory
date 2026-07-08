@@ -3,8 +3,10 @@ import { useEffect, useState, type FC } from 'react';
 import { cn } from '@/lib/utils';
 import { Sparkles } from 'lucide-react';
 
-const FRAME_PAD = 6;
-const LABEL_HEIGHT = 22;
+const FRAME_PAD = 8;
+const LABEL_HEIGHT = 24;
+/** Selected tiles scale to 105% — pad the frame so the border is not clipped. */
+const TILE_BLEED = 4;
 
 type RecommendedStylesFrameProps = {
   containerRef: RefObject<HTMLElement | null>;
@@ -60,8 +62,8 @@ export const RecommendedStylesFrame: FC<RecommendedStylesFrameProps> = ({
 
       setBounds({
         top: minTop - containerRect.top - FRAME_PAD - LABEL_HEIGHT,
-        left: minLeft - containerRect.left - FRAME_PAD,
-        width: maxRight - minLeft + FRAME_PAD * 2,
+        left: minLeft - containerRect.left - FRAME_PAD - TILE_BLEED,
+        width: maxRight - minLeft + (FRAME_PAD + TILE_BLEED) * 2,
         height: maxBottom - minTop + FRAME_PAD * 2 + LABEL_HEIGHT,
       });
     };

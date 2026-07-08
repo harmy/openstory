@@ -906,7 +906,7 @@ export const ScriptView: FC<{
             <p className="text-sm text-destructive">{enhanceError}</p>
           )}
 
-          <div className="shrink-0 flex flex-col gap-3">
+          <div className="shrink-0 flex flex-col gap-3 overflow-visible">
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-3">
                 <Button
@@ -958,16 +958,16 @@ export const ScriptView: FC<{
                       <PopoverTrigger asChild>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="gap-1.5 text-muted-foreground"
+                          className="gap-1.5"
                           disabled={
                             !scriptValue ||
                             scriptValue.length < 10 ||
                             isSubmitting
                           }
                         >
-                          <Sparkles className="size-3.5" />
+                          <Sparkles className="size-3.5 text-primary" />
                           Enhance Script
                         </Button>
                       </PopoverTrigger>

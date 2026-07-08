@@ -301,7 +301,10 @@ export const StyleGrid: FC<StyleGridProps> = ({
   return (
     <div
       ref={gridRef}
-      className="relative grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 p-4 overflow-auto"
+      className={cn(
+        'relative grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 overflow-auto',
+        showRecommendationZone && allStyles ? 'px-4 pb-4 pt-8' : 'p-4'
+      )}
       data-testid="style-grid"
       role="grid"
       aria-label="Style selection grid"

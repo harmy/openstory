@@ -192,7 +192,10 @@ export function StyleSelector({
     <>
       <div
         ref={gridRef}
-        className="relative grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 overflow-hidden p-2"
+        className={cn(
+          'relative grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 overflow-visible',
+          showRecommendationZone ? 'px-2 pb-2 pt-8' : 'p-2'
+        )}
         role="grid"
         aria-label="Style selection"
       >
