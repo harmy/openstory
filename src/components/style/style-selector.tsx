@@ -21,6 +21,8 @@ type StyleSelectorProps = {
   disabled?: boolean;
   recommendations?: StyleRecommendation[];
   recommendationsLoading?: boolean;
+  /** Recommended tiles render in the shell above — only dedupe the catalogue here. */
+  recommendationsInShell?: boolean;
 };
 
 export function StyleSelector({
@@ -31,6 +33,7 @@ export function StyleSelector({
   disabled = false,
   recommendations,
   recommendationsLoading = false,
+  recommendationsInShell = false,
 }: StyleSelectorProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -62,8 +65,12 @@ export function StyleSelector({
     return () => observer.disconnect();
   }, []);
 
-  const showRecommendations =
+  const hasRecommendations =
     recommendationsLoading || (recommendations?.length ?? 0) > 0;
+  const showRecommendations = hasRecommendations && !recommendationsInShell;
+  const dedupeRecommendations = hasRecommendations
+    ? recommendations
+    : undefined;
 
   const recommendedStyles = useMemo(
     () =>
@@ -93,10 +100,10 @@ export function StyleSelector({
     () =>
       catalogueWithoutRecommendations(
         styles,
-        showRecommendations ? recommendations : undefined,
+        dedupeRecommendations,
         selectedStyleId
       ),
-    [styles, recommendations, selectedStyleId, showRecommendations]
+    [styles, dedupeRecommendations, selectedStyleId]
   );
 
   const maxCatalogueSlots = Math.max(
@@ -108,12 +115,28 @@ export function StyleSelector({
   const moreIndex = recommendationSlotCount + visibleCatalogueStyles.length;
   const totalItems = moreIndex + 1;
 
+  const shellRecommendedStyles = useMemo(
+    () =>
+      recommendationsInShell
+        ? resolveRecommendedStyles(styles, recommendations)
+        : [],
+    [styles, recommendations, recommendationsInShell]
+  );
+
   const shownStyleIds = useMemo(() => {
     const ids = new Set<string>();
-    for (const style of recommendedStyles) ids.add(style.id);
+    const recs = recommendationsInShell
+      ? shellRecommendedStyles
+      : recommendedStyles;
+    for (const style of recs) ids.add(style.id);
     for (const style of visibleCatalogueStyles) ids.add(style.id);
     return ids;
-  }, [recommendedStyles, visibleCatalogueStyles]);
+  }, [
+    recommendedStyles,
+    shellRecommendedStyles,
+    visibleCatalogueStyles,
+    recommendationsInShell,
+  ]);
 
   const hiddenCount = Math.max(0, styles.length - shownStyleIds.size);
 

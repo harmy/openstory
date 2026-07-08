@@ -10,7 +10,10 @@ import { GenerateSequenceIcon } from '@/components/icons/generate-sequence-icon'
 import { LocationSuggestionSelector } from '@/components/location-library/location-suggestion-selector';
 import { buildMentionItems } from '@/components/scenes/prompt-mention/mention-items';
 import { GenerationSettings } from '@/components/settings/generation-settings';
-import { RecommendStylesButtonShell } from '@/components/style/recommended-styles-zone';
+import {
+  RecommendStylesShell,
+  RecommendedStylesRow,
+} from '@/components/style/recommended-styles-zone';
 import { StyleSelector } from '@/components/style/style-selector';
 import { TalentSuggestionSelector } from '@/components/talent/talent-suggestion-selector';
 import {
@@ -578,6 +581,8 @@ export const ScriptView: FC<{
       ? recommendations
       : undefined;
   const isRecommended = !!activeRecommendations && !isRecommending;
+  const showRecommendShell =
+    (isRecommending && !recommendationsStale) || isRecommended;
   const recommendButtonLabel = isRecommending
     ? 'Recommend styles'
     : isRecommended
@@ -925,27 +930,44 @@ export const ScriptView: FC<{
 
           <div className="shrink-0 flex flex-col gap-3 overflow-visible">
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-3">
-                <RecommendStylesButtonShell recommended={isRecommended}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    disabled={
-                      loading || currentScriptText.length < 3 || isRecommending
-                    }
-                    onClick={triggerRecommend}
-                  >
-                    {isRecommending ? (
-                      <Loader2 className="size-3.5 animate-spin text-primary" />
-                    ) : (
-                      <Sparkles className="size-3.5 text-primary" />
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <RecommendStylesShell active={showRecommendShell}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 self-start"
+                      disabled={
+                        loading ||
+                        currentScriptText.length < 3 ||
+                        isRecommending
+                      }
+                      onClick={triggerRecommend}
+                    >
+                      {isRecommending ? (
+                        <Loader2 className="size-3.5 animate-spin text-primary" />
+                      ) : (
+                        <Sparkles className="size-3.5 text-primary" />
+                      )}
+                      {recommendButtonLabel}
+                    </Button>
+                    {showRecommendShell && (
+                      <RecommendedStylesRow
+                        styles={styles}
+                        recommendations={activeRecommendations}
+                        recommendationsLoading={
+                          isRecommending && !recommendationsStale
+                        }
+                        selectedStyleId={styleId || sequence?.styleId || null}
+                        onStyleSelect={setStyleId}
+                        loading={isLoadingStyles}
+                        disabled={loading}
+                      />
                     )}
-                    {recommendButtonLabel}
-                  </Button>
-                </RecommendStylesButtonShell>
-                <div className="flex items-center gap-1 shrink-0">
+                  </RecommendStylesShell>
+                </div>
+                <div className="flex items-center gap-1 shrink-0 pt-0.5">
                   {canUndoEnhance && !isEnhancing && (
                     <Button
                       type="button"
@@ -1050,6 +1072,7 @@ export const ScriptView: FC<{
               loading={isLoadingStyles}
               recommendations={activeRecommendations}
               recommendationsLoading={isRecommending && !recommendationsStale}
+              recommendationsInShell={showRecommendShell}
             />
           </div>
         </CardContent>
