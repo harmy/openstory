@@ -560,7 +560,6 @@ export const ScriptView: FC<{
   // doesn't re-spend a call on every keystroke. Repeats are free (cached by
   // script hash in useRecommendedStyles).
   const [recommendScript, setRecommendScript] = useState<string | null>(null);
-  const [autoSelected, setAutoSelected] = useState(false);
   const {
     data: recommendData,
     isFetching: isRecommending,
@@ -570,7 +569,6 @@ export const ScriptView: FC<{
     enabled: recommendScript !== null,
   });
   const recommendations = recommendData?.recommendations;
-  const topRecommendationId = recommendations?.[0]?.styleId;
   // The shortlist ran but turned up nothing usable (or errored). Distinguish
   // this from "never asked" so we can tell the user instead of silently
   // reverting to the trigger button (which invites a re-click + re-charge).
@@ -593,39 +591,6 @@ export const ScriptView: FC<{
     }
     setRecommendScript(text);
   };
-
-  // Manual style picks (grid, dialog, or recommended row) exit Auto mode.
-  const handleStyleSelect = (id: string) => {
-    setAutoSelected(false);
-    setStyleId(id);
-  };
-
-  // "Auto" = take the current top recommendation as a concrete, visible pick.
-  const handleSelectAuto = () => {
-    if (!topRecommendationId) return;
-    setAutoSelected(true);
-    setStyleId(topRecommendationId);
-  };
-
-  // Keep the visible Auto pick current when the shortlist refreshes (e.g. after
-  // a re-recommend on an edited script). Re-entry is impossible because neither
-  // dependency derives from the `styleId` written here (they come from the query
-  // data); the `s.styleId === … ? s : …` check is a redundant-render guard
-  // (returns the same state reference when nothing changed), not loop
-  // protection. We write the resolved id (rather than deriving it at render) so
-  // the concrete pick persists into the saved draft and survives a reload.
-  useEffect(() => {
-    if (!autoSelected) return;
-    if (!topRecommendationId) {
-      setAutoSelected(false);
-      return;
-    }
-    setContentState((s) =>
-      s.styleId === topRecommendationId
-        ? s
-        : { ...s, styleId: topRecommendationId }
-    );
-  }, [autoSelected, topRecommendationId]);
 
   const handleCancel = onCancel;
 
@@ -768,7 +733,7 @@ export const ScriptView: FC<{
       }
       setEnhance('canUndoEnhance', true);
       // Pre-warm the style shortlist off the freshly enhanced script so the
-      // picker (and any Auto pick) is ready the moment the user looks for it.
+      // picker is ready the moment the user looks for it.
       // Billing is already gated above (handleEnhance returns early when
       // needsBillingSetup), so reaching here means the recommend call can bill.
       if (!abortController.signal.aborted && accumulated.trim().length >= 3) {
@@ -1056,36 +1021,11 @@ export const ScriptView: FC<{
               </p>
             </div>
 
-            {/* Auto resolved-pick pill — mirrors the recommended-model pill. */}
-            {autoSelected && selectedStyle && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Sparkles className="size-3.5 text-primary" />
-                <span>
-                  Auto →{' '}
-                  <span className="font-medium text-foreground">
-                    {selectedStyle.name}
-                  </span>
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto px-1.5 py-0.5 text-xs"
-                  onClick={() => setAutoSelected(false)}
-                >
-                  Reset
-                </Button>
-              </div>
-            )}
-
             <StyleSelector
               styles={styles}
               selectedStyleId={styleId || sequence?.styleId || null}
-              onStyleSelect={handleStyleSelect}
+              onStyleSelect={setStyleId}
               loading={isLoadingStyles}
-              onSelectAuto={handleSelectAuto}
-              autoEnabled={!!topRecommendationId}
-              autoActive={autoSelected}
               recommendations={recommendations}
               recommendationsLoading={isRecommending}
             />

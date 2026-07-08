@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { Style } from '@/lib/db/schema/libraries';
 import { cn } from '@/lib/utils';
 import { AppImage } from '@/components/ui/app-image';
-import { MoreHorizontal, Sparkles } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StyleRecommendation } from '@/hooks/use-styles';
 import {
@@ -41,19 +41,9 @@ type StyleSelectorProps = {
   onStyleSelect: (styleId: string) => void;
   loading?: boolean;
   disabled?: boolean;
-  /**
-   * Choose the "Auto" style (defer the pick to the top recommendation). When
-   * omitted, no Auto tile is shown. The tile is disabled until recommendations
-   * are ready (`autoEnabled`).
-   */
-  onSelectAuto?: () => void;
-  /** Auto tile becomes clickable once a script-driven shortlist exists. */
-  autoEnabled?: boolean;
-  /** Auto mode is currently active — render the Auto tile as selected. */
-  autoActive?: boolean;
-  /** Ranked picks, threaded into the dialog's "Recommended" row. */
+  /** Ranked picks replace the first slots in the inline grid and dialog. */
   recommendations?: StyleRecommendation[];
-  /** Recommendation ranking is in flight (drives the dialog row skeleton). */
+  /** Recommendation ranking is in flight (skeletons in the first slots). */
   recommendationsLoading?: boolean;
 };
 
@@ -63,9 +53,6 @@ export function StyleSelector({
   onStyleSelect,
   loading = false,
   disabled = false,
-  onSelectAuto,
-  autoEnabled = false,
-  autoActive = false,
   recommendations,
   recommendationsLoading = false,
 }: StyleSelectorProps) {
@@ -74,31 +61,20 @@ export function StyleSelector({
   const [focusableIndex, setFocusableIndex] = useState(0);
   const [visibleCount, setVisibleCount] = useState(10);
 
-  const showAutoTile = !!onSelectAuto;
-  // Auto occupies the first cell (when shown) and "More" the last, so reserve
-  // those slots out of the visible style tiles.
-  const reservedSlots = (showAutoTile ? 1 : 0) + 1;
-  const autoOffset = showAutoTile ? 1 : 0;
-  // A disabled Auto tile must never hold the roving-tabindex anchor or be an
-  // arrow-nav target — a disabled <button> can't take focus, which would leave
-  // the whole grid keyboard-unreachable. When Auto is shown but not yet usable,
-  // the first navigable cell is the first real style tile.
-  const autoDisabled = showAutoTile && !autoEnabled;
-  const minNavIndex = autoDisabled ? autoOffset : 0;
+  // Always reserve the last slot for "View all".
+  const reservedSlots = 1;
 
-  // Calculate columns from container width using ResizeObserver
   useEffect(() => {
     const container = gridRef.current;
     if (!container) return;
 
     const calculateColumns = (width: number) => {
-      const tileSize = 65; // min tile width in px
-      const gap = 12; // gap-3 = 12px
+      const tileSize = 65;
+      const gap = 12;
       const columns = Math.floor((width + gap) / (tileSize + gap));
-      setVisibleCount(Math.max(3, columns)); // min 3 columns
+      setVisibleCount(Math.max(3, columns));
     };
 
-    // Initial calculation
     calculateColumns(container.clientWidth);
 
     const observer = new ResizeObserver((entries) => {
@@ -134,8 +110,6 @@ export function StyleSelector({
     ? Math.min(RECOMMENDED_STYLE_SLOT_COUNT, maxStyleSlots)
     : 0;
 
-  // While recommendations load, skeletons occupy the first slots; fill the rest
-  // with the normal catalogue order (selected style bumped when needed).
   const fillerStyles = useMemo(
     () => prioritizeRecommendedStyles(styles, undefined, 0, selectedStyleId),
     [styles, selectedStyleId]
@@ -146,10 +120,9 @@ export function StyleSelector({
     : displayStyles.slice(0, maxStyleSlots);
   const hiddenCount = Math.max(0, styles.length - visibleStyles.length);
   const styleTileCount = recommendationSkeletonCount + visibleStyles.length;
-  const moreIndex = autoOffset + styleTileCount;
+  const moreIndex = styleTileCount;
   const totalItems = moreIndex + 1;
 
-  // Reset focusable index when styles change or selected style changes
   useEffect(() => {
     if (visibleStyles.length === 0 && recommendationSkeletonCount === 0) return;
 
@@ -157,21 +130,12 @@ export function StyleSelector({
       (s) => s.id === selectedStyleId
     );
     if (selectedIndex !== -1) {
-      setFocusableIndex(
-        autoOffset + recommendationSkeletonCount + selectedIndex
-      );
+      setFocusableIndex(recommendationSkeletonCount + selectedIndex);
     } else {
-      setFocusableIndex(minNavIndex);
+      setFocusableIndex(0);
     }
-  }, [
-    selectedStyleId,
-    visibleStyles,
-    autoOffset,
-    minNavIndex,
-    recommendationSkeletonCount,
-  ]);
+  }, [selectedStyleId, visibleStyles, recommendationSkeletonCount]);
 
-  // Handle arrow key navigation (single row, so left/right only)
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent, currentIndex: number) => {
       let nextIndex = currentIndex;
@@ -185,11 +149,11 @@ export function StyleSelector({
         case 'ArrowLeft':
         case 'ArrowUp':
           event.preventDefault();
-          nextIndex = Math.max(currentIndex - 1, minNavIndex);
+          nextIndex = Math.max(currentIndex - 1, 0);
           break;
         case 'Home':
           event.preventDefault();
-          nextIndex = minNavIndex;
+          nextIndex = 0;
           break;
         case 'End':
           event.preventDefault();
@@ -208,7 +172,7 @@ export function StyleSelector({
         }
       }
     },
-    [totalItems, minNavIndex]
+    [totalItems]
   );
 
   const handleStyleSelect = (styleId: string) => {
@@ -224,39 +188,6 @@ export function StyleSelector({
         role="grid"
         aria-label="Style selection"
       >
-        {/* Auto tile — defers the pick to the top recommendation */}
-        {onSelectAuto && !loading && (
-          <button
-            type="button"
-            onClick={onSelectAuto}
-            onKeyDown={(e) => handleKeyDown(e, 0)}
-            tabIndex={focusableIndex === 0 ? 0 : -1}
-            disabled={disabled || !autoEnabled}
-            className={cn(
-              'group relative aspect-square rounded-lg overflow-hidden',
-              'border-2 transition-all duration-200',
-              'flex flex-col items-center justify-center gap-1',
-              'bg-gradient-to-br from-primary/15 via-primary/5 to-transparent',
-              'hover:scale-105 hover:shadow-lg',
-              'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
-              'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100',
-              autoActive
-                ? 'border-primary shadow-md scale-105'
-                : 'border-transparent hover:border-primary/50'
-            )}
-            aria-label="Auto-pick a style for your script"
-            aria-pressed={autoActive}
-            title={
-              autoEnabled
-                ? 'Auto-pick the best style for your script'
-                : 'Add a script to auto-pick a style'
-            }
-          >
-            <Sparkles className="size-5 text-primary" />
-            <span className="text-xs font-medium text-center">Auto</span>
-          </button>
-        )}
-
         {loading ? (
           Array.from({ length: visibleCount }).map((_, i) => (
             <Skeleton key={i} className="aspect-square rounded-lg" />
@@ -271,8 +202,7 @@ export function StyleSelector({
                 />
               ))}
             {visibleStyles.map((style, index) => {
-              const cellIndex =
-                autoOffset + recommendationSkeletonCount + index;
+              const cellIndex = recommendationSkeletonCount + index;
               const reasoning = reasoningByStyleId.get(style.id);
               return (
                 <button
@@ -312,7 +242,6 @@ export function StyleSelector({
           </>
         )}
 
-        {/* More Options Tile - Always show as last item in grid */}
         {!loading && (
           <button
             type="button"
@@ -341,7 +270,6 @@ export function StyleSelector({
         )}
       </div>
 
-      {/* Full Style Selection Dialog */}
       <StyleSelectionDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
