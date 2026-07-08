@@ -1,5 +1,7 @@
 import { GalleryIcon } from '@/components/icons/gallery-icon';
+import { RecommendedStylesZone } from '@/components/style/recommended-styles-zone';
 import { StyleGrid } from '@/components/style/style-grid';
+import { StyleInlineTile } from '@/components/style/style-inline-tile';
 import { StyleSelectorButton } from '@/components/style/style-selector-button';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,10 +32,7 @@ import {
   styleCategoryLabel,
 } from '@/lib/style/style-assets';
 import type { StyleRecommendation } from '@/hooks/use-styles';
-import {
-  prioritizeRecommendedStyles,
-  RECOMMENDED_STYLE_SLOT_COUNT,
-} from '@/lib/style/prioritize-recommended-styles';
+import { catalogueWithoutRecommendations } from '@/lib/style/prioritize-recommended-styles';
 import { filterStyles } from '@/lib/utils/style-filters';
 import type { Style } from '@/types/database';
 import { Search, X } from 'lucide-react';
@@ -47,6 +46,7 @@ type StyleSelectionDialogProps = {
   selectedStyleId: string | null;
   onStyleSelect: (styleId: string) => void;
   recommendations?: StyleRecommendation[];
+  recommendationsLoading?: boolean;
 };
 
 type StyleSelectionDialogContentProps = {
@@ -55,6 +55,7 @@ type StyleSelectionDialogContentProps = {
   onStyleSelect: (styleId: string) => void;
   onClose: () => void;
   recommendations?: StyleRecommendation[];
+  recommendationsLoading?: boolean;
 };
 
 /**
@@ -66,6 +67,7 @@ const StyleSelectionDialogContent: FC<StyleSelectionDialogContentProps> = ({
   onStyleSelect,
   onClose,
   recommendations,
+  recommendationsLoading = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -84,13 +86,15 @@ const StyleSelectionDialogContent: FC<StyleSelectionDialogContentProps> = ({
     const filtered = [
       ...filterStyles(styles ?? [], selectedCategory, searchQuery),
     ].sort((a, b) => a.name.localeCompare(b.name));
-    return prioritizeRecommendedStyles(
+    return catalogueWithoutRecommendations(
       filtered,
       recommendations,
-      RECOMMENDED_STYLE_SLOT_COUNT,
       selectedStyleId
     );
   }, [styles, selectedCategory, searchQuery, recommendations, selectedStyleId]);
+
+  const showRecommendationZone =
+    recommendationsLoading || (recommendations?.length ?? 0) > 0;
 
   const handleOk = useCallback(() => {
     onClose();
@@ -164,6 +168,26 @@ const StyleSelectionDialogContent: FC<StyleSelectionDialogContentProps> = ({
 
         {/* Styles Grid */}
         <div className="min-h-0 flex-1 overflow-y-auto ">
+          {showRecommendationZone && !isLoading && (
+            <RecommendedStylesZone
+              recommendations={recommendations}
+              styles={styles ?? []}
+              selectedStyleId={selectedStyleId}
+              isLoading={recommendationsLoading}
+              className="mx-4 mt-2"
+              renderTile={(props) => (
+                <StyleInlineTile
+                  key={props.style.id}
+                  style={props.style}
+                  selected={props.selected}
+                  reasoning={props.reasoning}
+                  tabIndex={props.tabIndex}
+                  onSelect={onStyleSelect}
+                  onKeyDown={props.onKeyDown}
+                />
+              )}
+            />
+          )}
           {filteredStyles.length === 0 && !isLoading ? (
             <Empty data-testid="empty-state">
               <EmptyHeader>
@@ -210,6 +234,7 @@ export const StyleSelectionDialog: FC<StyleSelectionDialogProps> = ({
   selectedStyleId,
   onStyleSelect,
   recommendations,
+  recommendationsLoading,
 }) => {
   const handleClose = useCallback(() => {
     onOpenChange(false);
@@ -223,6 +248,7 @@ export const StyleSelectionDialog: FC<StyleSelectionDialogProps> = ({
         onStyleSelect={onStyleSelect}
         onClose={handleClose}
         recommendations={recommendations}
+        recommendationsLoading={recommendationsLoading}
       />
     </Dialog>
   );

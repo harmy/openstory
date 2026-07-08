@@ -1,6 +1,8 @@
 import {
+  catalogueWithoutRecommendations,
   prioritizeRecommendedStyles,
   RECOMMENDED_STYLE_SLOT_COUNT,
+  resolveRecommendedStyles,
 } from '@/lib/style/prioritize-recommended-styles';
 import type { StyleRecommendation } from '@/hooks/use-styles';
 import type { Style } from '@/types/database';
@@ -73,5 +75,33 @@ describe('prioritizeRecommendedStyles', () => {
     expect(
       prioritizeRecommendedStyles(styles, undefined, 5, 'd').map((s) => s.id)
     ).toEqual(['d', 'a', 'b', 'c']);
+  });
+});
+
+describe('resolveRecommendedStyles', () => {
+  const styles = [makeStyle('a'), makeStyle('b'), makeStyle('c')];
+
+  it('returns ranked styles in order', () => {
+    expect(
+      resolveRecommendedStyles(styles, [
+        { styleId: 'c', score: 1, reasoning: '' },
+        { styleId: 'a', score: 2, reasoning: '' },
+      ]).map((s) => s.id)
+    ).toEqual(['c', 'a']);
+  });
+});
+
+describe('catalogueWithoutRecommendations', () => {
+  const styles = [
+    makeStyle('a'),
+    makeStyle('b'),
+    makeStyle('c'),
+    makeStyle('d'),
+  ];
+
+  it('omits recommended ids from the catalogue tail', () => {
+    expect(
+      catalogueWithoutRecommendations(styles, recs).map((s) => s.id)
+    ).toEqual(['b', 'd']);
   });
 });

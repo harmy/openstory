@@ -14,6 +14,45 @@ export function buildRecommendationReasoningMap(
   return map;
 }
 
+/** Join LLM picks back to full `Style` rows, preserving rank order. */
+export function resolveRecommendedStyles(
+  styles: Style[],
+  recommendations: StyleRecommendation[] | undefined,
+  limit = RECOMMENDED_STYLE_SLOT_COUNT
+): Style[] {
+  if (!recommendations?.length) return [];
+  const byId = new Map(styles.map((s) => [s.id, s]));
+  return recommendations
+    .slice(0, limit)
+    .map((r) => byId.get(r.styleId))
+    .filter((s): s is Style => s !== undefined);
+}
+
+function bumpSelectedStyle(
+  styles: Style[],
+  selectedStyleId?: string | null
+): Style[] {
+  if (!selectedStyleId) return styles;
+  const selectedIndex = styles.findIndex((s) => s.id === selectedStyleId);
+  if (selectedIndex <= 0) return styles;
+  const selected = styles[selectedIndex];
+  if (!selected) return styles;
+  return [selected, ...styles.filter((s) => s.id !== selectedStyleId)];
+}
+
+/** Catalogue order with recommendations removed (selected style bumped when needed). */
+export function catalogueWithoutRecommendations(
+  styles: Style[],
+  recommendations: StyleRecommendation[] | undefined,
+  selectedStyleId?: string | null
+): Style[] {
+  const recommendedIds = new Set(
+    resolveRecommendedStyles(styles, recommendations).map((s) => s.id)
+  );
+  const rest = styles.filter((s) => !recommendedIds.has(s.id));
+  return bumpSelectedStyle(rest, selectedStyleId);
+}
+
 /**
  * Put the ranked recommendation shortlist first (up to `limit`), then the
  * remaining styles. When a manual selection falls outside the shortlist, bump
@@ -25,32 +64,16 @@ export function prioritizeRecommendedStyles(
   limit = RECOMMENDED_STYLE_SLOT_COUNT,
   selectedStyleId?: string | null
 ): Style[] {
-  if (!recommendations?.length) {
-    if (!selectedStyleId) return styles;
-    const selectedIndex = styles.findIndex((s) => s.id === selectedStyleId);
-    if (selectedIndex <= 0) return styles;
-    const selected = styles[selectedIndex];
-    if (!selected) return styles;
-    return [selected, ...styles.filter((s) => s.id !== selectedStyleId)];
+  const recommended = resolveRecommendedStyles(styles, recommendations, limit);
+  if (!recommended.length) {
+    return bumpSelectedStyle(styles, selectedStyleId);
   }
-
-  const byId = new Map(styles.map((s) => [s.id, s]));
-  const recommended = recommendations
-    .slice(0, limit)
-    .map((r) => byId.get(r.styleId))
-    .filter((s): s is Style => s !== undefined);
-  const recommendedIds = new Set(recommended.map((s) => s.id));
-  let rest = styles.filter((s) => !recommendedIds.has(s.id));
-
-  if (selectedStyleId && !recommendedIds.has(selectedStyleId)) {
-    const idx = rest.findIndex((s) => s.id === selectedStyleId);
-    if (idx > 0) {
-      const selected = rest[idx];
-      if (selected) {
-        rest = [selected, ...rest.filter((s) => s.id !== selectedStyleId)];
-      }
-    }
-  }
-
-  return [...recommended, ...rest];
+  return [
+    ...recommended,
+    ...catalogueWithoutRecommendations(
+      styles,
+      recommendations,
+      selectedStyleId
+    ),
+  ];
 }
