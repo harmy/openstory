@@ -11,6 +11,19 @@ describe('apiCreateSequenceSchema', () => {
     expect(parsed.music).toBe(false);
   });
 
+  it('rejects music without motion', () => {
+    const result = apiCreateSequenceSchema.safeParse({
+      script: 'A valid length script here.',
+      motion: false,
+      music: true,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('requires motion');
+    }
+  });
+
   it('rejects an invalid enhance mode', () => {
     expect(
       apiCreateSequenceSchema.safeParse({

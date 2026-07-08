@@ -69,6 +69,9 @@ const locationRefSchema = z
       'Existing location by id or name (string), or an inline create object.',
   });
 
+const MUSIC_REQUIRES_MOTION_ERROR =
+  'Music generation currently requires motion. Turn on motion or disable music.';
+
 export const apiCreateSequenceSchema = z
   .object({
     script: z
@@ -183,6 +186,15 @@ export const apiCreateSequenceSchema = z
       description:
         'Reserved for phase 2: URL to receive a signed completion webhook. Stored intent only — delivery is not implemented yet.',
     }),
+  })
+  .superRefine((data, ctx) => {
+    if (data.music && !data.motion) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['music'],
+        message: MUSIC_REQUIRES_MOTION_ERROR,
+      });
+    }
   })
   .meta({
     id: 'CreateSequenceRequest',
