@@ -10,7 +10,7 @@ import {
 import type { Style } from '@/types/database';
 import type { FC, KeyboardEvent, ReactNode } from 'react';
 import { useCallback, useRef, useEffect, useMemo, useState } from 'react';
-import { RecommendedStylesFrame } from './recommended-styles-zone';
+
 import { StyleHoverPreview } from './style-hover-preview';
 
 type StyleGridProps = {
@@ -287,7 +287,7 @@ export const StyleGrid: FC<StyleGridProps> = ({
         setFocusableIndex(nextIndex);
 
         const focusable = gridRef.current?.querySelectorAll<HTMLElement>(
-          'button[data-recommended-tile], [data-testid^="style-card-"]'
+          '[data-style-grid-tile] button, [data-testid^="style-card-"]'
         );
         const nextEl = focusable?.[nextIndex];
         if (nextEl instanceof HTMLElement) {
@@ -301,10 +301,7 @@ export const StyleGrid: FC<StyleGridProps> = ({
   return (
     <div
       ref={gridRef}
-      className={cn(
-        'relative grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 overflow-auto',
-        showRecommendationZone && allStyles ? 'px-4 pb-4 pt-8' : 'p-4'
-      )}
+      className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 p-4 overflow-auto"
       data-testid="style-grid"
       role="grid"
       aria-label="Style selection grid"
@@ -315,12 +312,6 @@ export const StyleGrid: FC<StyleGridProps> = ({
         ))
       ) : (
         <>
-          {showRecommendationZone && allStyles && renderRecommendedTile && (
-            <RecommendedStylesFrame
-              containerRef={gridRef}
-              active={showRecommendationZone}
-            />
-          )}
           {showRecommendationZone &&
             allStyles &&
             renderRecommendedTile &&
@@ -328,19 +319,21 @@ export const StyleGrid: FC<StyleGridProps> = ({
               ? Array.from({ length: RECOMMENDED_STYLE_SLOT_COUNT }, (_, i) => (
                   <Skeleton
                     key={`rec-skeleton-${i}`}
-                    data-recommended-tile
-                    className="relative z-10 aspect-square rounded-lg"
+                    data-style-grid-tile
+                    className="aspect-square rounded-lg"
                   />
                 ))
-              : recommendedStyles.map((style, index) =>
-                  renderRecommendedTile({
-                    style,
-                    selected: selectedStyleId === style.id,
-                    reasoning: reasoningByStyleId.get(style.id),
-                    tabIndex: index === focusableIndex ? 0 : -1,
-                    onKeyDown: (event) => handleKeyDown(event, style.id),
-                  })
-                ))}
+              : recommendedStyles.map((style, index) => (
+                  <div key={style.id} data-style-grid-tile>
+                    {renderRecommendedTile({
+                      style,
+                      selected: selectedStyleId === style.id,
+                      reasoning: reasoningByStyleId.get(style.id),
+                      tabIndex: index === focusableIndex ? 0 : -1,
+                      onKeyDown: (event) => handleKeyDown(event, style.id),
+                    })}
+                  </div>
+                )))}
           {catalogueStyles.map((style, index) => {
             const unifiedIndex = recommendedTileCount + index;
             return (

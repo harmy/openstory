@@ -9,7 +9,6 @@ import {
   RECOMMENDED_STYLE_SLOT_COUNT,
   resolveRecommendedStyles,
 } from '@/lib/style/prioritize-recommended-styles';
-import { RecommendedStylesFrame } from '@/components/style/recommended-styles-zone';
 import { StyleInlineTile } from '@/components/style/style-inline-tile';
 import { StyleSelectionDialog } from './style-selection-dialog';
 import type { Style } from '@/lib/db/schema/libraries';
@@ -63,15 +62,15 @@ export function StyleSelector({
     return () => observer.disconnect();
   }, []);
 
-  const showRecommendationZone =
+  const showRecommendations =
     recommendationsLoading || (recommendations?.length ?? 0) > 0;
 
   const recommendedStyles = useMemo(
     () =>
-      showRecommendationZone
+      showRecommendations
         ? resolveRecommendedStyles(styles, recommendations)
         : [],
-    [styles, recommendations, showRecommendationZone]
+    [styles, recommendations, showRecommendations]
   );
 
   const reasoningByStyleId = useMemo(
@@ -80,11 +79,11 @@ export function StyleSelector({
   );
 
   const showRecommendationSkeleton =
-    showRecommendationZone &&
+    showRecommendations &&
     recommendationsLoading &&
     recommendedStyles.length === 0;
 
-  const recommendationSlotCount = showRecommendationZone
+  const recommendationSlotCount = showRecommendations
     ? showRecommendationSkeleton
       ? RECOMMENDED_STYLE_SLOT_COUNT
       : recommendedStyles.length
@@ -94,10 +93,10 @@ export function StyleSelector({
     () =>
       catalogueWithoutRecommendations(
         styles,
-        showRecommendationZone ? recommendations : undefined,
+        showRecommendations ? recommendations : undefined,
         selectedStyleId
       ),
-    [styles, recommendations, selectedStyleId, showRecommendationZone]
+    [styles, recommendations, selectedStyleId, showRecommendations]
   );
 
   const maxCatalogueSlots = Math.max(
@@ -192,10 +191,7 @@ export function StyleSelector({
     <>
       <div
         ref={gridRef}
-        className={cn(
-          'relative grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 overflow-visible',
-          showRecommendationZone ? 'px-2 pb-2 pt-8' : 'p-2'
-        )}
+        className="grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 overflow-hidden p-2"
         role="grid"
         aria-label="Style selection"
       >
@@ -205,19 +201,11 @@ export function StyleSelector({
           ))
         ) : (
           <>
-            {showRecommendationZone && (
-              <RecommendedStylesFrame
-                containerRef={gridRef}
-                active={showRecommendationZone}
-              />
-            )}
-
             {showRecommendationSkeleton
               ? Array.from({ length: RECOMMENDED_STYLE_SLOT_COUNT }, (_, i) => (
                   <Skeleton
                     key={`rec-skeleton-${i}`}
-                    data-recommended-tile
-                    className="relative z-10 aspect-square rounded-lg"
+                    className="aspect-square rounded-lg"
                   />
                 ))
               : recommendedStyles.map((style, index) => (
@@ -226,7 +214,6 @@ export function StyleSelector({
                     style={style}
                     selected={selectedStyleId === style.id}
                     disabled={disabled}
-                    recommended
                     reasoning={reasoningByStyleId.get(style.id)}
                     tabIndex={index === focusableIndex ? 0 : -1}
                     onSelect={onStyleSelect}

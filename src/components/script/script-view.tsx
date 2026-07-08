@@ -10,6 +10,7 @@ import { GenerateSequenceIcon } from '@/components/icons/generate-sequence-icon'
 import { LocationSuggestionSelector } from '@/components/location-library/location-suggestion-selector';
 import { buildMentionItems } from '@/components/scenes/prompt-mention/mention-items';
 import { GenerationSettings } from '@/components/settings/generation-settings';
+import { RecommendStylesButtonShell } from '@/components/style/recommended-styles-zone';
 import { StyleSelector } from '@/components/style/style-selector';
 import { TalentSuggestionSelector } from '@/components/talent/talent-suggestion-selector';
 import {
@@ -569,12 +570,28 @@ export const ScriptView: FC<{
     enabled: recommendScript !== null,
   });
   const recommendations = recommendData?.recommendations;
+  const currentScriptText = (script ?? sequence?.script ?? '').trim();
+  const recommendationsStale =
+    recommendScript !== null && currentScriptText !== recommendScript;
+  const activeRecommendations =
+    !recommendationsStale && recommendations?.length
+      ? recommendations
+      : undefined;
+  const isRecommended = !!activeRecommendations && !isRecommending;
+  const recommendButtonLabel = isRecommending
+    ? 'Recommend styles'
+    : isRecommended
+      ? 'Recommended'
+      : 'Recommend styles';
   // The shortlist ran but turned up nothing usable (or errored). Distinguish
   // this from "never asked" so we can tell the user instead of silently
   // reverting to the trigger button (which invites a re-click + re-charge).
-  const recommendRan = recommendScript !== null && !isRecommending;
+  const recommendRanForCurrentScript =
+    recommendScript !== null && !recommendationsStale && !isRecommending;
   const recommendEmpty =
-    recommendRan && !recommendFailed && recommendations?.length === 0;
+    recommendRanForCurrentScript &&
+    !recommendFailed &&
+    recommendations?.length === 0;
 
   const triggerRecommend = () => {
     if (!requireAuth()) return;
@@ -909,20 +926,25 @@ export const ScriptView: FC<{
           <div className="shrink-0 flex flex-col gap-3 overflow-visible">
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  disabled={
-                    loading ||
-                    (script ?? sequence?.script ?? '').trim().length < 3
-                  }
-                  onClick={triggerRecommend}
-                >
-                  <Sparkles className="size-3.5 text-primary" />
-                  Recommend styles
-                </Button>
+                <RecommendStylesButtonShell recommended={isRecommended}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={
+                      loading || currentScriptText.length < 3 || isRecommending
+                    }
+                    onClick={triggerRecommend}
+                  >
+                    {isRecommending ? (
+                      <Loader2 className="size-3.5 animate-spin text-primary" />
+                    ) : (
+                      <Sparkles className="size-3.5 text-primary" />
+                    )}
+                    {recommendButtonLabel}
+                  </Button>
+                </RecommendStylesButtonShell>
                 <div className="flex items-center gap-1 shrink-0">
                   {canUndoEnhance && !isEnhancing && (
                     <Button
@@ -1026,8 +1048,8 @@ export const ScriptView: FC<{
               selectedStyleId={styleId || sequence?.styleId || null}
               onStyleSelect={setStyleId}
               loading={isLoadingStyles}
-              recommendations={recommendations}
-              recommendationsLoading={isRecommending}
+              recommendations={activeRecommendations}
+              recommendationsLoading={isRecommending && !recommendationsStale}
             />
           </div>
         </CardContent>

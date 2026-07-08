@@ -31,7 +31,6 @@ type StyleInlineTileProps = {
   selected: boolean;
   disabled?: boolean;
   reasoning?: string;
-  recommended?: boolean;
   tabIndex: number;
   onSelect: (styleId: string) => void;
   onKeyDown: (event: React.KeyboardEvent) => void;
@@ -42,7 +41,6 @@ export function StyleInlineTile({
   selected,
   disabled = false,
   reasoning,
-  recommended = false,
   tabIndex,
   onSelect,
   onKeyDown,
@@ -50,13 +48,12 @@ export function StyleInlineTile({
   return (
     <button
       type="button"
-      data-recommended-tile={recommended ? true : undefined}
       onClick={() => onSelect(style.id)}
       onKeyDown={onKeyDown}
       tabIndex={tabIndex}
       disabled={disabled}
       className={cn(
-        'group relative z-10 aspect-square rounded-lg overflow-hidden',
+        'group relative aspect-square rounded-lg overflow-hidden',
         'border-2 transition-all duration-200',
         'hover:scale-105 hover:shadow-lg',
         'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
