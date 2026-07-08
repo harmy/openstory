@@ -1,0 +1,18 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "userMessage": "STYLE CATALOG (choose by index):",
+        "model": "anthropic/claude-sonnet-4.6",
+        "turnIndex": 0,
+        "hasToolResult": false
+      },
+      "response": {
+        "content": "{\n  \"recommendations\": [\n    { \"index\": 0, \"score\": 92, \"reasoning\": \"Fresh, social-first product energy suits this coral launch script.\" },\n    { \"index\": 1, \"score\": 85, \"reasoning\": \"Bright lifestyle look complements the beach and studio scenes.\" },\n    { \"index\": 2, \"score\": 78, \"reasoning\": \"Cinematic polish for hero product moments.\" },\n    { \"index\": 3, \"score\": 72, \"reasoning\": \"Editorial color pop for social-first framing.\" },\n    { \"index\": 4, \"score\": 68, \"reasoning\": \"Clean commercial tone for DTC campaign cues.\" }\n  ]\n}"
+      },
+      "metadata": {
+        "systemHash": "style-recommend-v1"
+      }
+    }
+  ]
+}
