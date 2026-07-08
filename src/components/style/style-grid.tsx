@@ -1,9 +1,15 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import type { StyleRecommendation } from '@/hooks/use-styles';
+import {
+  RECOMMENDED_STYLE_SLOT_COUNT,
+  resolveRecommendedStyles,
+} from '@/lib/style/prioritize-recommended-styles';
 import type { Style } from '@/types/database';
-import type { FC, KeyboardEvent } from 'react';
-import { useCallback, useRef, useEffect, useState } from 'react';
+import type { FC, KeyboardEvent, ReactNode } from 'react';
+import { useCallback, useRef, useEffect, useMemo, useState } from 'react';
+import { RecommendedStylesZone } from './recommended-styles-zone';
 import { StyleHoverPreview } from './style-hover-preview';
 
 type StyleGridProps = {
@@ -12,6 +18,16 @@ type StyleGridProps = {
   onStyleSelect: (styleId: string) => void;
   onStyleSelectAndClose?: (styleId: string) => void;
   isLoading?: boolean;
+  allStyles?: Style[];
+  recommendations?: StyleRecommendation[];
+  recommendationsLoading?: boolean;
+  renderRecommendedTile?: (props: {
+    style: Style;
+    selected: boolean;
+    reasoning?: string;
+    tabIndex: number;
+    onKeyDown: (event: KeyboardEvent) => void;
+  }) => ReactNode;
 };
 
 type StyleCardProps = {
@@ -112,24 +128,60 @@ export const StyleGrid: FC<StyleGridProps> = ({
   onStyleSelect,
   onStyleSelectAndClose,
   isLoading = false,
+  allStyles,
+  recommendations,
+  recommendationsLoading = false,
+  renderRecommendedTile,
 }) => {
-  // Track which item should be focusable (for roving tabindex)
   const gridRef = useRef<HTMLDivElement>(null);
   const [focusableIndex, setFocusableIndex] = useState(0);
 
-  // Reset focusable index when styles change or selected style changes
-  useEffect(() => {
-    if (styles.length === 0) return;
+  const showRecommendationZone =
+    recommendationsLoading || (recommendations?.length ?? 0) > 0;
 
-    // If a style is selected, make it focusable
-    const selectedIndex = styles.findIndex((s) => s.id === selectedStyleId);
-    if (selectedIndex !== -1) {
-      setFocusableIndex(selectedIndex);
-    } else {
-      // Otherwise, first item is focusable
+  const recommendedStyles = useMemo(
+    () =>
+      showRecommendationZone && allStyles
+        ? resolveRecommendedStyles(allStyles, recommendations)
+        : [],
+    [allStyles, recommendations, showRecommendationZone]
+  );
+
+  const recommendedTileCount =
+    showRecommendationZone &&
+    recommendationsLoading &&
+    recommendedStyles.length === 0
+      ? RECOMMENDED_STYLE_SLOT_COUNT
+      : recommendedStyles.length;
+
+  const catalogueStyles = styles;
+
+  useEffect(() => {
+    const recIndex = recommendedStyles.findIndex(
+      (s) => s.id === selectedStyleId
+    );
+    if (recIndex !== -1) {
+      setFocusableIndex(recIndex);
+      return;
+    }
+
+    const catalogueIndex = catalogueStyles.findIndex(
+      (s) => s.id === selectedStyleId
+    );
+    if (catalogueIndex !== -1) {
+      setFocusableIndex(recommendedTileCount + catalogueIndex);
+      return;
+    }
+
+    if (catalogueStyles.length > 0 || recommendedTileCount > 0) {
       setFocusableIndex(0);
     }
-  }, [selectedStyleId, styles]);
+  }, [
+    selectedStyleId,
+    catalogueStyles,
+    recommendedStyles,
+    recommendedTileCount,
+  ]);
 
   // Calculate actual grid columns from the rendered layout
   const getColumnsCount = useCallback(() => {
@@ -171,15 +223,25 @@ export const StyleGrid: FC<StyleGridProps> = ({
     return 1;
   }, []);
 
-  // Handle arrow key navigation
   const handleKeyDown = useCallback(
     (event: KeyboardEvent, currentStyleId: string) => {
-      const currentIndex = styles.findIndex((s) => s.id === currentStyleId);
+      const recIndex = recommendedStyles.findIndex(
+        (s) => s.id === currentStyleId
+      );
+      const catalogueIndex = catalogueStyles.findIndex(
+        (s) => s.id === currentStyleId
+      );
+      const currentIndex =
+        recIndex !== -1
+          ? recIndex
+          : catalogueIndex !== -1
+            ? recommendedTileCount + catalogueIndex
+            : -1;
       if (currentIndex === -1) return;
 
       let nextIndex = currentIndex;
       const cols = getColumnsCount();
-      const totalItems = styles.length;
+      const totalItems = recommendedTileCount + catalogueStyles.length;
 
       switch (event.key) {
         case 'ArrowRight':
@@ -214,16 +276,16 @@ export const StyleGrid: FC<StyleGridProps> = ({
       if (nextIndex !== currentIndex) {
         setFocusableIndex(nextIndex);
 
-        // Focus the next card
-        const nextCard = gridRef.current?.querySelector(
-          `[data-testid="style-card-${styles[nextIndex]?.id}"]`
+        const focusable = gridRef.current?.querySelectorAll<HTMLElement>(
+          '[data-recommended-zone] button, [data-testid^="style-card-"]'
         );
-        if (nextCard instanceof HTMLElement) {
-          nextCard.focus();
+        const nextEl = focusable?.[nextIndex];
+        if (nextEl instanceof HTMLElement) {
+          nextEl.focus();
         }
       }
     },
-    [styles, getColumnsCount]
+    [catalogueStyles, recommendedStyles, recommendedTileCount, getColumnsCount]
   );
 
   return (
@@ -234,21 +296,48 @@ export const StyleGrid: FC<StyleGridProps> = ({
       role="grid"
       aria-label="Style selection grid"
     >
-      {isLoading
-        ? Array.from({ length: 10 }, (_, index) => (
-            <StyleCardSkeleton key={`skeleton-${index}`} />
-          ))
-        : styles.map((style, index) => (
-            <StyleCard
-              key={style.id}
-              style={style}
-              selected={selectedStyleId === style.id}
-              onSelect={onStyleSelect}
-              onSelectAndClose={onStyleSelectAndClose}
-              tabIndex={index === focusableIndex ? 0 : -1}
-              onKeyDown={handleKeyDown}
+      {isLoading ? (
+        Array.from({ length: 10 }, (_, index) => (
+          <StyleCardSkeleton key={`skeleton-${index}`} />
+        ))
+      ) : (
+        <>
+          {showRecommendationZone && allStyles && renderRecommendedTile && (
+            <RecommendedStylesZone
+              recommendations={recommendations}
+              styles={allStyles}
+              selectedStyleId={selectedStyleId}
+              isLoading={recommendationsLoading}
+              columnSpan={RECOMMENDED_STYLE_SLOT_COUNT}
+              className="col-span-full sm:col-span-3 lg:col-span-4 xl:col-span-5"
+              renderTile={(props) => {
+                const index = recommendedStyles.findIndex(
+                  (s) => s.id === props.style.id
+                );
+                return renderRecommendedTile({
+                  ...props,
+                  tabIndex: index === focusableIndex ? 0 : -1,
+                  onKeyDown: (event) => handleKeyDown(event, props.style.id),
+                });
+              }}
             />
-          ))}
+          )}
+          {catalogueStyles.map((style, index) => {
+            const unifiedIndex = recommendedTileCount + index;
+            return (
+              <StyleCard
+                key={style.id}
+                style={style}
+                selected={selectedStyleId === style.id}
+                onSelect={onStyleSelect}
+                onSelectAndClose={onStyleSelectAndClose}
+                tabIndex={unifiedIndex === focusableIndex ? 0 : -1}
+                onKeyDown={handleKeyDown}
+              />
+            );
+          })}
+        </>
+      )}
     </div>
   );
 };

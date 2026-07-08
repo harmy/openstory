@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StyleRecommendation } from '@/hooks/use-styles';
 import {
   catalogueWithoutRecommendations,
+  RECOMMENDED_STYLE_SLOT_COUNT,
   resolveRecommendedStyles,
 } from '@/lib/style/prioritize-recommended-styles';
 import { RecommendedStylesZone } from '@/components/style/recommended-styles-zone';
@@ -64,38 +65,78 @@ export function StyleSelector({
   const showRecommendationZone =
     recommendationsLoading || (recommendations?.length ?? 0) > 0;
 
-  const catalogueStyles = useMemo(
+  const recommendedStyles = useMemo(
     () =>
       showRecommendationZone
-        ? catalogueWithoutRecommendations(
-            styles,
-            recommendations,
-            selectedStyleId
-          )
-        : catalogueWithoutRecommendations(styles, undefined, selectedStyleId),
+        ? resolveRecommendedStyles(styles, recommendations)
+        : [],
+    [styles, recommendations, showRecommendationZone]
+  );
+
+  const recommendationSlotCount = showRecommendationZone
+    ? RECOMMENDED_STYLE_SLOT_COUNT
+    : 0;
+
+  const catalogueStyles = useMemo(
+    () =>
+      catalogueWithoutRecommendations(
+        styles,
+        showRecommendationZone ? recommendations : undefined,
+        selectedStyleId
+      ),
     [styles, recommendations, selectedStyleId, showRecommendationZone]
   );
 
-  const maxCatalogueSlots = Math.max(0, visibleCount - reservedSlots);
-  const visibleCatalogueStyles = catalogueStyles.slice(0, maxCatalogueSlots);
-  const recommendedVisibleCount = showRecommendationZone
-    ? resolveRecommendedStyles(styles, recommendations).length
-    : 0;
-  const hiddenCount = Math.max(
+  const maxCatalogueSlots = Math.max(
     0,
-    styles.length - visibleCatalogueStyles.length - recommendedVisibleCount
+    visibleCount - reservedSlots - recommendationSlotCount
   );
-  const moreIndex = visibleCatalogueStyles.length;
+  const visibleCatalogueStyles = catalogueStyles.slice(0, maxCatalogueSlots);
+
+  const recommendedTileCount =
+    showRecommendationZone &&
+    recommendationsLoading &&
+    recommendedStyles.length === 0
+      ? RECOMMENDED_STYLE_SLOT_COUNT
+      : recommendedStyles.length;
+
+  const moreIndex = recommendedTileCount + visibleCatalogueStyles.length;
   const totalItems = moreIndex + 1;
 
-  useEffect(() => {
-    if (visibleCatalogueStyles.length === 0) return;
+  const shownStyleIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const style of recommendedStyles) ids.add(style.id);
+    for (const style of visibleCatalogueStyles) ids.add(style.id);
+    return ids;
+  }, [recommendedStyles, visibleCatalogueStyles]);
 
-    const selectedIndex = visibleCatalogueStyles.findIndex(
+  const hiddenCount = Math.max(0, styles.length - shownStyleIds.size);
+
+  useEffect(() => {
+    const recIndex = recommendedStyles.findIndex(
       (s) => s.id === selectedStyleId
     );
-    setFocusableIndex(selectedIndex !== -1 ? selectedIndex : 0);
-  }, [selectedStyleId, visibleCatalogueStyles]);
+    if (recIndex !== -1) {
+      setFocusableIndex(recIndex);
+      return;
+    }
+
+    const catalogueIndex = visibleCatalogueStyles.findIndex(
+      (s) => s.id === selectedStyleId
+    );
+    if (catalogueIndex !== -1) {
+      setFocusableIndex(recommendedTileCount + catalogueIndex);
+      return;
+    }
+
+    if (totalItems > 0) setFocusableIndex(0);
+  }, [
+    selectedStyleId,
+    recommendedStyles,
+    visibleCatalogueStyles,
+    recommendedTileCount,
+    totalItems,
+  ]);
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent, currentIndex: number) => {
@@ -143,79 +184,86 @@ export function StyleSelector({
 
   return (
     <>
-      <div className="flex flex-col gap-2.5">
-        {showRecommendationZone && !loading && (
-          <RecommendedStylesZone
-            recommendations={recommendations}
-            styles={styles}
-            selectedStyleId={selectedStyleId}
-            isLoading={recommendationsLoading}
-            renderTile={(props) => (
-              <StyleInlineTile
-                key={props.style.id}
-                style={props.style}
-                selected={props.selected}
-                disabled={disabled}
-                reasoning={props.reasoning}
-                tabIndex={props.tabIndex}
-                onSelect={onStyleSelect}
-                onKeyDown={props.onKeyDown}
+      <div
+        ref={gridRef}
+        className="grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 overflow-hidden p-2"
+        role="grid"
+        aria-label="Style selection"
+      >
+        {loading ? (
+          Array.from({ length: visibleCount }).map((_, i) => (
+            <Skeleton key={i} className="aspect-square rounded-lg" />
+          ))
+        ) : (
+          <>
+            {showRecommendationZone && (
+              <RecommendedStylesZone
+                recommendations={recommendations}
+                styles={styles}
+                selectedStyleId={selectedStyleId}
+                isLoading={recommendationsLoading}
+                columnSpan={recommendationSlotCount}
+                renderTile={(props) => {
+                  const index = recommendedStyles.findIndex(
+                    (s) => s.id === props.style.id
+                  );
+                  return (
+                    <StyleInlineTile
+                      key={props.style.id}
+                      style={props.style}
+                      selected={props.selected}
+                      disabled={disabled}
+                      reasoning={props.reasoning}
+                      tabIndex={index === focusableIndex ? 0 : -1}
+                      onSelect={onStyleSelect}
+                      onKeyDown={(e) => handleKeyDown(e, index)}
+                    />
+                  );
+                }}
               />
             )}
-          />
-        )}
 
-        <div
-          ref={gridRef}
-          className="grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 overflow-hidden p-2"
-          role="grid"
-          aria-label="Style selection"
-        >
-          {loading ? (
-            Array.from({ length: visibleCount }).map((_, i) => (
-              <Skeleton key={i} className="aspect-square rounded-lg" />
-            ))
-          ) : (
-            <>
-              {visibleCatalogueStyles.map((style, index) => (
+            {visibleCatalogueStyles.map((style, index) => {
+              const unifiedIndex = recommendedTileCount + index;
+              return (
                 <StyleInlineTile
                   key={style.id}
                   style={style}
                   selected={selectedStyleId === style.id}
                   disabled={disabled}
-                  tabIndex={index === focusableIndex ? 0 : -1}
+                  tabIndex={unifiedIndex === focusableIndex ? 0 : -1}
                   onSelect={onStyleSelect}
-                  onKeyDown={(e) => handleKeyDown(e, index)}
+                  onKeyDown={(e) => handleKeyDown(e, unifiedIndex)}
                 />
-              ))}
+              );
+            })}
 
-              <button
-                type="button"
-                onClick={() => setDialogOpen(true)}
-                onKeyDown={(e) => handleKeyDown(e, moreIndex)}
-                tabIndex={moreIndex === focusableIndex ? 0 : -1}
-                disabled={disabled}
-                className={cn(
-                  'aspect-square rounded-lg overflow-hidden',
-                  'border-2 border-dashed border-muted-foreground/30',
-                  'flex flex-col items-center justify-center gap-2',
-                  'hover:border-primary hover:bg-muted/50',
-                  'transition-all duration-200',
-                  'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
-                  'disabled:opacity-50 disabled:cursor-not-allowed'
-                )}
-                aria-label={`View all ${styles.length} styles`}
-              >
-                <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground font-medium text-center">
-                  {hiddenCount > 0
-                    ? `+${hiddenCount} More`
-                    : `View All (${styles.length})`}
-                </span>
-              </button>
-            </>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={() => setDialogOpen(true)}
+              onKeyDown={(e) => handleKeyDown(e, moreIndex)}
+              tabIndex={moreIndex === focusableIndex ? 0 : -1}
+              disabled={disabled}
+              className={cn(
+                'aspect-square rounded-lg overflow-hidden',
+                'border-2 border-dashed border-muted-foreground/30',
+                'flex flex-col items-center justify-center gap-2',
+                'hover:border-primary hover:bg-muted/50',
+                'transition-all duration-200',
+                'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
+              )}
+              aria-label={`View all ${styles.length} styles`}
+            >
+              <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground font-medium text-center">
+                {hiddenCount > 0
+                  ? `+${hiddenCount} More`
+                  : `View All (${styles.length})`}
+              </span>
+            </button>
+          </>
+        )}
       </div>
 
       <StyleSelectionDialog

@@ -23,12 +23,16 @@ type RecommendedStylesZoneProps = {
     tabIndex: number;
     onKeyDown: (event: KeyboardEvent) => void;
   }) => ReactNode;
+  /** Skeleton placeholders while recommendations load (keyboard nav owned by parent). */
+  renderSkeleton?: (index: number) => ReactNode;
   className?: string;
+  /** Column span when embedded in the parent style grid (default: 5 slots). */
+  columnSpan?: number;
 };
 
 /**
- * Bordered shortlist cluster — visually separates script-driven picks from the
- * main catalogue without changing tile size.
+ * Bordered shortlist cluster — occupies the first N grid slots inline so the
+ * catalogue continues after it without duplicate styles.
  */
 export const RecommendedStylesZone: FC<RecommendedStylesZoneProps> = ({
   recommendations,
@@ -36,7 +40,9 @@ export const RecommendedStylesZone: FC<RecommendedStylesZoneProps> = ({
   selectedStyleId,
   isLoading = false,
   renderTile,
+  renderSkeleton,
   className,
+  columnSpan = RECOMMENDED_STYLE_SLOT_COUNT,
 }) => {
   const resolved = useMemo(
     () => resolveRecommendedStyles(styles, recommendations),
@@ -50,51 +56,19 @@ export const RecommendedStylesZone: FC<RecommendedStylesZoneProps> = ({
   const showSkeleton = isLoading && resolved.length === 0;
   if (!showSkeleton && resolved.length === 0) return null;
 
-  const focusableIndex = Math.max(
-    0,
-    resolved.findIndex((s) => s.id === selectedStyleId)
-  );
-
-  const handleKeyDown = (event: KeyboardEvent, index: number) => {
-    const total = showSkeleton ? RECOMMENDED_STYLE_SLOT_COUNT : resolved.length;
-    let next = index;
-    switch (event.key) {
-      case 'ArrowRight':
-      case 'ArrowDown':
-        event.preventDefault();
-        next = Math.min(index + 1, total - 1);
-        break;
-      case 'ArrowLeft':
-      case 'ArrowUp':
-        event.preventDefault();
-        next = Math.max(index - 1, 0);
-        break;
-      case 'Home':
-        event.preventDefault();
-        next = 0;
-        break;
-      case 'End':
-        event.preventDefault();
-        next = total - 1;
-        break;
-      default:
-        return;
-    }
-    if (next !== index) {
-      const section = event.currentTarget.closest('[data-recommended-zone]');
-      const buttons = section?.querySelectorAll('button');
-      const nextButton = buttons?.[next];
-      if (nextButton instanceof HTMLElement) nextButton.focus();
-    }
-  };
+  const columnSpanClass =
+    columnSpan === RECOMMENDED_STYLE_SLOT_COUNT
+      ? 'col-span-5'
+      : 'col-span-full';
 
   return (
     <section
       data-recommended-zone
       aria-label="Recommended styles for your script"
       className={cn(
+        columnSpanClass,
         'rounded-xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] via-primary/[0.02] to-transparent',
-        'px-2.5 pt-2 pb-2.5 shadow-sm',
+        'px-2.5 pt-2 pb-2.5 shadow-sm min-w-0',
         className
       )}
     >
@@ -104,21 +78,25 @@ export const RecommendedStylesZone: FC<RecommendedStylesZoneProps> = ({
           For your script
         </span>
       </div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3">
+      <div className="grid grid-cols-5 gap-3">
         {showSkeleton
-          ? Array.from({ length: RECOMMENDED_STYLE_SLOT_COUNT }, (_, i) => (
-              <Skeleton
-                key={`rec-skeleton-${i}`}
-                className="aspect-square rounded-lg"
-              />
-            ))
-          : resolved.map((style, index) =>
+          ? Array.from({ length: RECOMMENDED_STYLE_SLOT_COUNT }, (_, i) =>
+              renderSkeleton ? (
+                renderSkeleton(i)
+              ) : (
+                <Skeleton
+                  key={`rec-skeleton-${i}`}
+                  className="aspect-square rounded-lg"
+                />
+              )
+            )
+          : resolved.map((style) =>
               renderTile({
                 style,
                 selected: selectedStyleId === style.id,
                 reasoning: reasoningByStyleId.get(style.id),
-                tabIndex: index === focusableIndex ? 0 : -1,
-                onKeyDown: (event) => handleKeyDown(event, index),
+                tabIndex: -1,
+                onKeyDown: () => {},
               })
             )}
       </div>
