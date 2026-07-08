@@ -1015,10 +1015,6 @@ export const ScriptView: FC<{
                     : 'No standout matches — try again or pick a style below.'}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground">
-                Enhance also suggests styles for your script (billed like
-                Enhance).
-              </p>
             </div>
 
             <StyleSelector
