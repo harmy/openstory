@@ -901,92 +901,6 @@ export const ScriptView: FC<{
               showCharacterCount={false}
               mentionItems={mentionItems}
             />
-            <div className="absolute bottom-2 right-2 flex items-center gap-1">
-              {canUndoEnhance && !isEnhancing && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1.5 text-muted-foreground"
-                  onClick={handleUndoEnhance}
-                >
-                  <Undo2 className="size-3.5" />
-                  Undo
-                </Button>
-              )}
-              {isEnhancing ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1.5 text-muted-foreground"
-                  onClick={handleStopEnhance}
-                >
-                  <span className="relative size-5">
-                    <Loader2 className="absolute inset-0 size-5 animate-spin" />
-                    <Square className="absolute inset-[5px] size-[10px] fill-current" />
-                  </span>
-                  Stop
-                </Button>
-              ) : (
-                <Popover
-                  open={enhancePopoverOpen}
-                  onOpenChange={setEnhancePopoverOpen}
-                >
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-muted-foreground"
-                      disabled={
-                        !scriptValue || scriptValue.length < 10 || isSubmitting
-                      }
-                    >
-                      <Sparkles className="size-3.5" />
-                      Enhance Script
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" side="top" className="w-auto">
-                    <div className="flex flex-col gap-3">
-                      <p className="text-sm font-medium">
-                        Target video duration
-                      </p>
-                      <ToggleGroup
-                        type="single"
-                        value={String(targetDuration)}
-                        onValueChange={(v) => {
-                          if (v) setTargetDuration(Number(v));
-                        }}
-                        variant="outline"
-                        size="sm"
-                      >
-                        {DURATION_PRESETS.map((preset) => (
-                          <ToggleGroupItem
-                            key={preset.value}
-                            value={preset.value}
-                          >
-                            {preset.label}
-                          </ToggleGroupItem>
-                        ))}
-                      </ToggleGroup>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={() => {
-                          setEnhancePopoverOpen(false);
-                          void handleEnhance();
-                        }}
-                      >
-                        <Sparkles className="size-3.5" />
-                        Enhance
-                      </Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              )}
-            </div>
           </div>
           {enhanceError && (
             <p className="text-sm text-destructive">{enhanceError}</p>
@@ -994,20 +908,110 @@ export const ScriptView: FC<{
 
           <div className="shrink-0 flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5 self-start"
-                disabled={
-                  loading ||
-                  (script ?? sequence?.script ?? '').trim().length < 3
-                }
-                onClick={triggerRecommend}
-              >
-                <Sparkles className="size-3.5 text-primary" />
-                Recommend styles
-              </Button>
+              <div className="flex items-center justify-between gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  disabled={
+                    loading ||
+                    (script ?? sequence?.script ?? '').trim().length < 3
+                  }
+                  onClick={triggerRecommend}
+                >
+                  <Sparkles className="size-3.5 text-primary" />
+                  Recommend styles
+                </Button>
+                <div className="flex items-center gap-1 shrink-0">
+                  {canUndoEnhance && !isEnhancing && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 text-muted-foreground"
+                      onClick={handleUndoEnhance}
+                    >
+                      <Undo2 className="size-3.5" />
+                      Undo
+                    </Button>
+                  )}
+                  {isEnhancing ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 text-muted-foreground"
+                      onClick={handleStopEnhance}
+                    >
+                      <span className="relative size-5">
+                        <Loader2 className="absolute inset-0 size-5 animate-spin" />
+                        <Square className="absolute inset-[5px] size-[10px] fill-current" />
+                      </span>
+                      Stop
+                    </Button>
+                  ) : (
+                    <Popover
+                      open={enhancePopoverOpen}
+                      onOpenChange={setEnhancePopoverOpen}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1.5 text-muted-foreground"
+                          disabled={
+                            !scriptValue ||
+                            scriptValue.length < 10 ||
+                            isSubmitting
+                          }
+                        >
+                          <Sparkles className="size-3.5" />
+                          Enhance Script
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" side="top" className="w-auto">
+                        <div className="flex flex-col gap-3">
+                          <p className="text-sm font-medium">
+                            Target video duration
+                          </p>
+                          <ToggleGroup
+                            type="single"
+                            value={String(targetDuration)}
+                            onValueChange={(v) => {
+                              if (v) setTargetDuration(Number(v));
+                            }}
+                            variant="outline"
+                            size="sm"
+                          >
+                            {DURATION_PRESETS.map((preset) => (
+                              <ToggleGroupItem
+                                key={preset.value}
+                                value={preset.value}
+                              >
+                                {preset.label}
+                              </ToggleGroupItem>
+                            ))}
+                          </ToggleGroup>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={() => {
+                              setEnhancePopoverOpen(false);
+                              void handleEnhance();
+                            }}
+                          >
+                            <Sparkles className="size-3.5" />
+                            Enhance
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
+              </div>
               {(recommendEmpty || recommendFailed) && (
                 <p className="text-xs text-muted-foreground">
                   {recommendFailed
