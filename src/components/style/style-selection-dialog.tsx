@@ -198,6 +198,7 @@ const StyleSelectionDialogContent: FC<StyleSelectionDialogContentProps> = ({
                   key={props.style.id}
                   style={props.style}
                   selected={props.selected}
+                  recommended
                   reasoning={props.reasoning}
                   tabIndex={props.tabIndex}
                   onSelect={onStyleSelect}

@@ -4,11 +4,12 @@ import { MoreHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StyleRecommendation } from '@/hooks/use-styles';
 import {
+  buildRecommendationReasoningMap,
   catalogueWithoutRecommendations,
   RECOMMENDED_STYLE_SLOT_COUNT,
   resolveRecommendedStyles,
 } from '@/lib/style/prioritize-recommended-styles';
-import { RecommendedStylesZone } from '@/components/style/recommended-styles-zone';
+import { RecommendedStylesFrame } from '@/components/style/recommended-styles-zone';
 import { StyleInlineTile } from '@/components/style/style-inline-tile';
 import { StyleSelectionDialog } from './style-selection-dialog';
 import type { Style } from '@/lib/db/schema/libraries';
@@ -73,8 +74,20 @@ export function StyleSelector({
     [styles, recommendations, showRecommendationZone]
   );
 
+  const reasoningByStyleId = useMemo(
+    () => buildRecommendationReasoningMap(recommendations),
+    [recommendations]
+  );
+
+  const showRecommendationSkeleton =
+    showRecommendationZone &&
+    recommendationsLoading &&
+    recommendedStyles.length === 0;
+
   const recommendationSlotCount = showRecommendationZone
-    ? RECOMMENDED_STYLE_SLOT_COUNT
+    ? showRecommendationSkeleton
+      ? RECOMMENDED_STYLE_SLOT_COUNT
+      : recommendedStyles.length
     : 0;
 
   const catalogueStyles = useMemo(
@@ -93,14 +106,7 @@ export function StyleSelector({
   );
   const visibleCatalogueStyles = catalogueStyles.slice(0, maxCatalogueSlots);
 
-  const recommendedTileCount =
-    showRecommendationZone &&
-    recommendationsLoading &&
-    recommendedStyles.length === 0
-      ? RECOMMENDED_STYLE_SLOT_COUNT
-      : recommendedStyles.length;
-
-  const moreIndex = recommendedTileCount + visibleCatalogueStyles.length;
+  const moreIndex = recommendationSlotCount + visibleCatalogueStyles.length;
   const totalItems = moreIndex + 1;
 
   const shownStyleIds = useMemo(() => {
@@ -125,7 +131,7 @@ export function StyleSelector({
       (s) => s.id === selectedStyleId
     );
     if (catalogueIndex !== -1) {
-      setFocusableIndex(recommendedTileCount + catalogueIndex);
+      setFocusableIndex(recommendationSlotCount + catalogueIndex);
       return;
     }
 
@@ -134,7 +140,7 @@ export function StyleSelector({
     selectedStyleId,
     recommendedStyles,
     visibleCatalogueStyles,
-    recommendedTileCount,
+    recommendationSlotCount,
     totalItems,
   ]);
 
@@ -186,7 +192,7 @@ export function StyleSelector({
     <>
       <div
         ref={gridRef}
-        className="grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 overflow-hidden p-2"
+        className="relative grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 overflow-hidden p-2"
         role="grid"
         aria-label="Style selection"
       >
@@ -197,34 +203,36 @@ export function StyleSelector({
         ) : (
           <>
             {showRecommendationZone && (
-              <RecommendedStylesZone
-                recommendations={recommendations}
-                styles={styles}
-                selectedStyleId={selectedStyleId}
-                isLoading={recommendationsLoading}
-                columnSpan={recommendationSlotCount}
-                renderTile={(props) => {
-                  const index = recommendedStyles.findIndex(
-                    (s) => s.id === props.style.id
-                  );
-                  return (
-                    <StyleInlineTile
-                      key={props.style.id}
-                      style={props.style}
-                      selected={props.selected}
-                      disabled={disabled}
-                      reasoning={props.reasoning}
-                      tabIndex={index === focusableIndex ? 0 : -1}
-                      onSelect={onStyleSelect}
-                      onKeyDown={(e) => handleKeyDown(e, index)}
-                    />
-                  );
-                }}
+              <RecommendedStylesFrame
+                containerRef={gridRef}
+                active={showRecommendationZone}
               />
             )}
 
+            {showRecommendationSkeleton
+              ? Array.from({ length: RECOMMENDED_STYLE_SLOT_COUNT }, (_, i) => (
+                  <Skeleton
+                    key={`rec-skeleton-${i}`}
+                    data-recommended-tile
+                    className="relative z-10 aspect-square rounded-lg"
+                  />
+                ))
+              : recommendedStyles.map((style, index) => (
+                  <StyleInlineTile
+                    key={style.id}
+                    style={style}
+                    selected={selectedStyleId === style.id}
+                    disabled={disabled}
+                    recommended
+                    reasoning={reasoningByStyleId.get(style.id)}
+                    tabIndex={index === focusableIndex ? 0 : -1}
+                    onSelect={onStyleSelect}
+                    onKeyDown={(e) => handleKeyDown(e, index)}
+                  />
+                ))}
+
             {visibleCatalogueStyles.map((style, index) => {
-              const unifiedIndex = recommendedTileCount + index;
+              const unifiedIndex = recommendationSlotCount + index;
               return (
                 <StyleInlineTile
                   key={style.id}

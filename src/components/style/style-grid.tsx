@@ -3,13 +3,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { StyleRecommendation } from '@/hooks/use-styles';
 import {
+  buildRecommendationReasoningMap,
   RECOMMENDED_STYLE_SLOT_COUNT,
   resolveRecommendedStyles,
 } from '@/lib/style/prioritize-recommended-styles';
 import type { Style } from '@/types/database';
 import type { FC, KeyboardEvent, ReactNode } from 'react';
 import { useCallback, useRef, useEffect, useMemo, useState } from 'react';
-import { RecommendedStylesZone } from './recommended-styles-zone';
+import { RecommendedStylesFrame } from './recommended-styles-zone';
 import { StyleHoverPreview } from './style-hover-preview';
 
 type StyleGridProps = {
@@ -147,12 +148,21 @@ export const StyleGrid: FC<StyleGridProps> = ({
     [allStyles, recommendations, showRecommendationZone]
   );
 
-  const recommendedTileCount =
+  const showRecommendationSkeleton =
     showRecommendationZone &&
     recommendationsLoading &&
-    recommendedStyles.length === 0
+    recommendedStyles.length === 0;
+
+  const recommendedTileCount = showRecommendationZone
+    ? showRecommendationSkeleton
       ? RECOMMENDED_STYLE_SLOT_COUNT
-      : recommendedStyles.length;
+      : recommendedStyles.length
+    : 0;
+
+  const reasoningByStyleId = useMemo(
+    () => buildRecommendationReasoningMap(recommendations),
+    [recommendations]
+  );
 
   const catalogueStyles = styles;
 
@@ -277,7 +287,7 @@ export const StyleGrid: FC<StyleGridProps> = ({
         setFocusableIndex(nextIndex);
 
         const focusable = gridRef.current?.querySelectorAll<HTMLElement>(
-          '[data-recommended-zone] button, [data-testid^="style-card-"]'
+          'button[data-recommended-tile], [data-testid^="style-card-"]'
         );
         const nextEl = focusable?.[nextIndex];
         if (nextEl instanceof HTMLElement) {
@@ -291,7 +301,7 @@ export const StyleGrid: FC<StyleGridProps> = ({
   return (
     <div
       ref={gridRef}
-      className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 p-4 overflow-auto"
+      className="relative grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 p-4 overflow-auto"
       data-testid="style-grid"
       role="grid"
       aria-label="Style selection grid"
@@ -303,25 +313,31 @@ export const StyleGrid: FC<StyleGridProps> = ({
       ) : (
         <>
           {showRecommendationZone && allStyles && renderRecommendedTile && (
-            <RecommendedStylesZone
-              recommendations={recommendations}
-              styles={allStyles}
-              selectedStyleId={selectedStyleId}
-              isLoading={recommendationsLoading}
-              columnSpan={RECOMMENDED_STYLE_SLOT_COUNT}
-              className="col-span-full sm:col-span-3 lg:col-span-4 xl:col-span-5"
-              renderTile={(props) => {
-                const index = recommendedStyles.findIndex(
-                  (s) => s.id === props.style.id
-                );
-                return renderRecommendedTile({
-                  ...props,
-                  tabIndex: index === focusableIndex ? 0 : -1,
-                  onKeyDown: (event) => handleKeyDown(event, props.style.id),
-                });
-              }}
+            <RecommendedStylesFrame
+              containerRef={gridRef}
+              active={showRecommendationZone}
             />
           )}
+          {showRecommendationZone &&
+            allStyles &&
+            renderRecommendedTile &&
+            (showRecommendationSkeleton
+              ? Array.from({ length: RECOMMENDED_STYLE_SLOT_COUNT }, (_, i) => (
+                  <Skeleton
+                    key={`rec-skeleton-${i}`}
+                    data-recommended-tile
+                    className="relative z-10 aspect-square rounded-lg"
+                  />
+                ))
+              : recommendedStyles.map((style, index) =>
+                  renderRecommendedTile({
+                    style,
+                    selected: selectedStyleId === style.id,
+                    reasoning: reasoningByStyleId.get(style.id),
+                    tabIndex: index === focusableIndex ? 0 : -1,
+                    onKeyDown: (event) => handleKeyDown(event, style.id),
+                  })
+                ))}
           {catalogueStyles.map((style, index) => {
             const unifiedIndex = recommendedTileCount + index;
             return (
