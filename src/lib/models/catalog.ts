@@ -1,0 +1,363 @@
+/**
+ * modelschemas.com catalog client (#458)
+ *
+ * Typed client for the live modelschemas service: the full fal.ai model
+ * catalog plus per-endpoint input/output JSON Schemas. Server-side only
+ * (called from src/functions/model-catalog.ts) — never fetch from the
+ * browser, both to keep the optional API key private and to share the
+ * module-level response cache across requests.
+ *
+ * Observed API notes (verified against the live service):
+ *   - `GET /v1/models?provider=fal&activity=…&q=…` returns the FULL result
+ *     set (`limit`/`cursor` params are ignored upstream), so pagination
+ *     happens in this module: the cursor is a numeric offset into the list.
+ *   - `q` matches both `rawId` (the fal endpoint id) and `displayName`,
+ *     case-insensitively.
+ *   - fal models always have `pricing`/`modalities`/`contextWindow` null and
+ *     carry no thumbnail or tag data; `capabilities.category` (e.g.
+ *     "text-to-image") is the only classification field.
+ *   - Bulk schema maps (`/v1/schemas/fal/{activity}`) return empty for fal —
+ *     schemas MUST be fetched per endpoint.
+ *   - Errors are `{ error: { code, message } }` (e.g. `unknown_schema`).
+ *   - Anonymous rate limit is 60 req/h/IP; `MODELSCHEMAS_API_KEY` (optional
+ *     env, `Authorization: Bearer`) lifts it to 5k/h. The TTL cache below
+ *     keeps browsing well under the anonymous limit.
+ */
+import { getEnv } from '#env';
+
+const MODELSCHEMAS_BASE_URL = 'https://modelschemas.com';
+
+/**
+ * Activities surfaced in the Models catalog. modelschemas also lists a
+ * handful of fal `chat` models and a few with no activity at all; both are
+ * excluded — they can't be run through the media-generation engine and have
+ * no schema path without an activity.
+ */
+export const CATALOG_ACTIVITIES = ['image', 'video', 'audio'] as const;
+export type CatalogActivity = (typeof CATALOG_ACTIVITIES)[number];
+
+/** @public #458 contract — consumed by the asset-run server fns (phase 2). */
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+/**
+ * The JSON Schema subset fal endpoint schemas actually use (draft 2020-12
+ * keywords plus fal's `x-fal-order-properties` UI ordering extension).
+ * Schemas arrive self-contained: `$ref`s point into the sibling `$defs`.
+ *
+ * @public #458 contract — consumed by SchemaForm + asset validation (phase 2).
+ */
+export type JsonSchema = {
+  $ref?: string;
+  $defs?: Record<string, JsonSchema>;
+  type?: string | string[];
+  title?: string;
+  description?: string;
+  default?: JsonValue;
+  examples?: JsonValue[];
+  enum?: JsonValue[];
+  const?: JsonValue;
+  format?: string;
+  properties?: Record<string, JsonSchema>;
+  required?: string[];
+  additionalProperties?: boolean | JsonSchema;
+  items?: JsonSchema;
+  oneOf?: JsonSchema[];
+  anyOf?: JsonSchema[];
+  allOf?: JsonSchema[];
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  minItems?: number;
+  maxItems?: number;
+  multipleOf?: number;
+  'x-fal-order-properties'?: string[];
+};
+
+/** @public #458 contract — consumed by the catalog UI + detail page. */
+export type CatalogModel = {
+  /** fal endpoint id, e.g. `fal-ai/flux-1/dev` (the API's `rawId`). */
+  endpointId: string;
+  displayName: string;
+  activity: CatalogActivity;
+  /** Not provided by modelschemas today; reserved for a future source. */
+  thumbnailUrl?: string;
+  /** Not provided by modelschemas today; reserved for a future source. */
+  tags?: string[];
+  /** `capabilities.category`, e.g. "text-to-image", "image-to-video". */
+  category?: string;
+};
+
+export type CatalogModelList = {
+  models: CatalogModel[];
+  /** Opaque cursor for the next page; absent on the last page. */
+  nextCursor?: string;
+};
+
+export type ModelDetail = {
+  model: CatalogModel;
+  inputSchema: JsonSchema;
+  /** Output schemas are missing for some endpoints. */
+  outputSchema: JsonSchema | null;
+};
+
+/** @public #458 contract — callers branch on `status`/`code` (phase 2). */
+export class CatalogApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'CatalogApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Raw API response shapes (fields observed on the live service; only the
+// fields this module consumes are typed).
+// ---------------------------------------------------------------------------
+
+type ApiModel = {
+  id: string;
+  provider: string;
+  rawId: string;
+  activity: string | null;
+  displayName: string;
+  capabilities: { category?: string } | null;
+  deprecatedAt: number | null;
+};
+
+type ModelsApiResponse = {
+  count: number;
+  models: ApiModel[];
+};
+
+type SchemaApiResponse = {
+  provider: string;
+  activity: string;
+  endpointId: string;
+  kind: 'input' | 'output';
+  schema: JsonSchema;
+};
+
+type ErrorApiResponse = {
+  error?: { code?: string; message?: string };
+};
+
+// ---------------------------------------------------------------------------
+// Fetch + cache
+// ---------------------------------------------------------------------------
+
+/**
+ * Module-level TTL cache keyed by request path. Pagination slices the same
+ * upstream list response repeatedly ("load more" = new offset, same fetch),
+ * and schemas change rarely, so caching keeps a browsing session to a couple
+ * of upstream calls — important under the anonymous 60/h rate limit.
+ */
+const CACHE_MAX_ENTRIES = 100;
+const LIST_CACHE_TTL_MS = 5 * 60 * 1000;
+const SCHEMA_CACHE_TTL_MS = 30 * 60 * 1000;
+const responseCache = new Map<string, { expiresAt: number; body: string }>();
+
+function getCached(path: string): string | undefined {
+  const entry = responseCache.get(path);
+  if (!entry) return undefined;
+  if (entry.expiresAt <= Date.now()) {
+    responseCache.delete(path);
+    return undefined;
+  }
+  return entry.body;
+}
+
+function setCached(path: string, body: string, ttlMs: number): void {
+  if (responseCache.size >= CACHE_MAX_ENTRIES) {
+    // Drop the oldest entry (Map preserves insertion order).
+    const oldest = responseCache.keys().next();
+    if (!oldest.done) responseCache.delete(oldest.value);
+  }
+  responseCache.set(path, { expiresAt: Date.now() + ttlMs, body });
+}
+
+async function toCatalogApiError(response: Response): Promise<CatalogApiError> {
+  let code: string | undefined;
+  let message = `modelschemas request failed (${response.status})`;
+  try {
+    const body: ErrorApiResponse = await response.json();
+    code = body.error?.code;
+    if (body.error?.message) message = body.error.message;
+  } catch {
+    // Non-JSON error body — keep the status-based message.
+  }
+  return new CatalogApiError(message, response.status, code);
+}
+
+/**
+ * GET a modelschemas path, serving from the TTL cache when fresh. Attaches
+ * the optional `MODELSCHEMAS_API_KEY` (lifts the anonymous rate limit).
+ * Returns the raw JSON text; callers cast to the endpoint's response type.
+ */
+async function fetchCatalogJson(path: string, ttlMs: number): Promise<string> {
+  const cached = getCached(path);
+  if (cached !== undefined) return cached;
+
+  // MODELSCHEMAS_API_KEY is optional and not part of the generated worker
+  // env types — same narrowing pattern as VIDEO_EXPORT_DEV_URL.
+  const env = getEnv() as ReturnType<typeof getEnv> & {
+    MODELSCHEMAS_API_KEY?: string;
+  };
+  const apiKey = env.MODELSCHEMAS_API_KEY;
+
+  const response = await fetch(`${MODELSCHEMAS_BASE_URL}${path}`, {
+    headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+  });
+  if (!response.ok) throw await toCatalogApiError(response);
+
+  const body = await response.text();
+  setCached(path, body, ttlMs);
+  return body;
+}
+
+// ---------------------------------------------------------------------------
+// Catalog list
+// ---------------------------------------------------------------------------
+
+const DEFAULT_PAGE_SIZE = 60;
+
+function toCatalogModel(model: ApiModel): CatalogModel | null {
+  const activity = CATALOG_ACTIVITIES.find((a) => a === model.activity);
+  if (!activity) return null;
+  if (model.deprecatedAt !== null) return null;
+  return {
+    endpointId: model.rawId,
+    displayName: model.displayName,
+    activity,
+    category: model.capabilities?.category,
+  };
+}
+
+function parseCursor(cursor: string | undefined): number {
+  if (!cursor) return 0;
+  const offset = Number.parseInt(cursor, 10);
+  return Number.isInteger(offset) && offset > 0 ? offset : 0;
+}
+
+export type ListCatalogModelsParams = {
+  activity?: CatalogActivity;
+  /** Free-text filter, matched upstream against endpoint id + display name. */
+  q?: string;
+  /** `nextCursor` from the previous page. */
+  cursor?: string;
+  limit?: number;
+};
+
+/**
+ * List fal models from the live catalog, filtered to runnable activities and
+ * non-deprecated endpoints, paginated locally (see module docs).
+ */
+export async function listCatalogModels(
+  params: ListCatalogModelsParams = {}
+): Promise<CatalogModelList> {
+  const search = new URLSearchParams({ provider: 'fal' });
+  if (params.activity) search.set('activity', params.activity);
+  if (params.q) search.set('q', params.q);
+
+  const body = await fetchCatalogJson(
+    `/v1/models?${search.toString()}`,
+    LIST_CACHE_TTL_MS
+  );
+  const parsed: ModelsApiResponse = JSON.parse(body);
+  const all = parsed.models.flatMap((model) => {
+    const mapped = toCatalogModel(model);
+    return mapped ? [mapped] : [];
+  });
+
+  const offset = parseCursor(params.cursor);
+  const limit = params.limit ?? DEFAULT_PAGE_SIZE;
+  const end = offset + limit;
+  return {
+    models: all.slice(offset, end),
+    nextCursor: end < all.length ? String(end) : undefined,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Model detail
+// ---------------------------------------------------------------------------
+
+async function fetchSchema(
+  endpointId: string,
+  activity: CatalogActivity,
+  kind: 'input' | 'output'
+): Promise<JsonSchema | null> {
+  // Endpoint ids contain slashes and are used as-is in the schema path
+  // (`/v1/schemas/fal/image/fal-ai/flux-1/dev`).
+  try {
+    const body = await fetchCatalogJson(
+      `/v1/schemas/fal/${activity}/${endpointId}?kind=${kind}`,
+      SCHEMA_CACHE_TTL_MS
+    );
+    const parsed: SchemaApiResponse = JSON.parse(body);
+    return parsed.schema;
+  } catch (error) {
+    if (error instanceof CatalogApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/**
+ * Model metadata plus its input JSON Schema (required — a 404 means the
+ * endpoint doesn't exist and throws) and output schema (nullable — some
+ * endpoints don't publish one).
+ */
+export async function getModelDetail(
+  endpointId: string,
+  activity: CatalogActivity
+): Promise<ModelDetail> {
+  const metadataSearch = new URLSearchParams({
+    provider: 'fal',
+    activity,
+    q: endpointId,
+  });
+  const [inputSchema, outputSchema, metadataBody] = await Promise.all([
+    fetchSchema(endpointId, activity, 'input'),
+    fetchSchema(endpointId, activity, 'output'),
+    fetchCatalogJson(
+      `/v1/models?${metadataSearch.toString()}`,
+      LIST_CACHE_TTL_MS
+    ),
+  ]);
+
+  if (!inputSchema) {
+    throw new CatalogApiError(
+      `No input schema for endpoint '${endpointId}' (fal/${activity})`,
+      404,
+      'unknown_schema'
+    );
+  }
+
+  // `q` is a substring match (e.g. `flux-1/dev` also returns `…/dev/redux`),
+  // so pick the exact rawId. The schema existing without a catalog row can
+  // only be a transient upstream inconsistency — fall back to the endpoint id
+  // as the display name rather than failing the whole detail view.
+  const metadataResponse: ModelsApiResponse = JSON.parse(metadataBody);
+  const metadata = metadataResponse.models.find(
+    (model) => model.rawId === endpointId
+  );
+  const model = metadata ? toCatalogModel(metadata) : null;
+
+  return {
+    model: model ?? { endpointId, displayName: endpointId, activity },
+    inputSchema,
+    outputSchema,
+  };
+}
