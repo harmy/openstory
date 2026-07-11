@@ -4,20 +4,20 @@ import { Link } from '@tanstack/react-router';
 import { AudioLines, Film, Image as ImageIcon } from 'lucide-react';
 import type { FC } from 'react';
 
-const ACTIVITY_ICONS = {
+export const ACTIVITY_ICONS = {
   image: ImageIcon,
   video: Film,
   audio: AudioLines,
 } as const;
 
-const ACTIVITY_LABELS = {
+export const ACTIVITY_LABELS = {
   image: 'Image',
   video: 'Video',
   audio: 'Audio',
 } as const;
 
 /** "text-to-image" → "Text to image" for the category badge. */
-function categoryLabel(category: string): string {
+export function categoryLabel(category: string): string {
   const words = category.replaceAll('-', ' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
 }

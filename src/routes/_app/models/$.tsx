@@ -1,6 +1,5 @@
 import { PageContainer } from '@/components/layout/page-container';
-import { PageDescription } from '@/components/typography/page-description';
-import { PageHeader } from '@/components/typography/page-header';
+import { ModelDetailView } from '@/components/models/model-detail-view';
 import { CATALOG_ACTIVITIES } from '@/lib/models/catalog';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
@@ -8,7 +7,8 @@ import { z } from 'zod';
 
 // Splat route: fal endpoint ids contain slashes (`fal-ai/flux-1/dev`), so the
 // whole id is the `_splat`. The activity travels as a search param — the
-// schema API needs both to locate the model.
+// schema API needs both to locate the model (when absent, the view probes
+// each activity in turn).
 const searchParamsSchema = z.object({
   activity: z.enum(CATALOG_ACTIVITIES).optional(),
 });
@@ -19,25 +19,13 @@ export const Route = createFileRoute('/_app/models/$')({
   staticData: { breadcrumb: 'Model' },
 });
 
-/**
- * Placeholder detail page (#458 phase 1): establishes the splat route so
- * catalog cards have real, typed hrefs. Phase 2 replaces this component with
- * the schema-driven parameter form + run/poll/result loop.
- */
 function ModelDetailPage() {
   const { _splat: endpointId } = Route.useParams();
+  const { activity } = Route.useSearch();
 
   return (
     <div className="h-full overflow-auto">
-      <PageContainer>
-        <PageHeader>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {endpointId}
-          </h1>
-          <PageDescription>
-            The parameter form and runner for this model are on their way.
-          </PageDescription>
-        </PageHeader>
+      <PageContainer maxWidth="wide">
         <Link
           to="/models"
           className="flex w-fit items-center gap-2 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -45,6 +33,9 @@ function ModelDetailPage() {
           <ArrowLeft aria-hidden="true" className="size-4" />
           Back to models
         </Link>
+        {endpointId ? (
+          <ModelDetailView endpointId={endpointId} activity={activity} />
+        ) : null}
       </PageContainer>
     </div>
   );

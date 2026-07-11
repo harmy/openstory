@@ -1,0 +1,417 @@
+/**
+ * Model detail page body (#458): header, schema-driven parameter form, run →
+ * poll → result loop, and the team's recent runs of this endpoint.
+ *
+ * The page itself is anonymous-browsable (schema + form render for everyone);
+ * pressing Run goes through `useAuthGate().requireAuth`, the same login-dialog
+ * gate every other action uses. The server re-validates the input against the
+ * live schema — its per-field messages flow back into `<SchemaForm errors>`.
+ */
+
+import { useAuthGate } from '@/components/auth/auth-gate-provider';
+import {
+  ACTIVITY_ICONS,
+  ACTIVITY_LABELS,
+  categoryLabel,
+} from '@/components/models/model-card';
+import { AssetResult } from '@/components/schema-form/asset-result';
+import { SchemaForm } from '@/components/schema-form/schema-form';
+import {
+  parseValidationErrors,
+  seedFormValue,
+} from '@/components/schema-form/widget-plan';
+import { AppImage } from '@/components/ui/app-image';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  createGeneratedAssetFn,
+  getGeneratedAssetFn,
+  listGeneratedAssetsFn,
+} from '@/functions/model-assets';
+import { getModelDetailFn } from '@/functions/model-catalog';
+import { BILLING_BALANCE_KEY } from '@/hooks/use-billing-balance';
+import type { GeneratedAsset } from '@/lib/db/schema';
+import {
+  CATALOG_ACTIVITIES,
+  type CatalogActivity,
+  type JsonValue,
+  type ModelDetail,
+} from '@/lib/models/catalog';
+import {
+  skipToken,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from '@tanstack/react-query';
+import { AlertCircle, ExternalLink, SearchX, Sparkles } from 'lucide-react';
+import type { FC } from 'react';
+import { Suspense, useState } from 'react';
+import { toast } from 'sonner';
+
+// ---------------------------------------------------------------------------
+// Detail fetch (with activity fallback when the search param is absent)
+// ---------------------------------------------------------------------------
+
+/**
+ * Server-fn errors arrive as plain `Error`s (CatalogApiError's status/code
+ * don't survive serialization), so "this endpoint has no schema" is detected
+ * by message — same approach as `isInsufficientCreditsError`.
+ */
+function isNoSchemaError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.message.includes('No input schema') ||
+      error.message.includes('unknown_schema'))
+  );
+}
+
+/**
+ * Fetch the model detail; without an `activity` search param each catalog
+ * activity is tried in turn (a deep link may omit it). Returns null when no
+ * activity has a schema for this endpoint — the friendly no-schema state.
+ */
+async function fetchModelDetail(
+  endpointId: string,
+  activity: CatalogActivity | undefined
+): Promise<ModelDetail | null> {
+  const candidates = activity ? [activity] : [...CATALOG_ACTIVITIES];
+  for (const candidate of candidates) {
+    try {
+      return await getModelDetailFn({
+        data: { endpointId, activity: candidate },
+      });
+    } catch (error) {
+      if (!isNoSchemaError(error)) throw error;
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Run mutation error handling
+// ---------------------------------------------------------------------------
+
+function isInsufficientCreditsError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.message.includes('INSUFFICIENT_CREDITS') ||
+      error.message.includes('Insufficient credits'))
+  );
+}
+
+// ---------------------------------------------------------------------------
+// View
+// ---------------------------------------------------------------------------
+
+const DetailSkeleton: FC = () => (
+  <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-3">
+      <Skeleton className="h-8 w-64" />
+      <Skeleton className="h-4 w-96" />
+    </div>
+    <div className="grid gap-8 lg:grid-cols-2">
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-2/3" />
+      </div>
+      <Skeleton className="aspect-video w-full rounded-lg" />
+    </div>
+  </div>
+);
+
+export const ModelDetailView: FC<{
+  endpointId: string;
+  activity: CatalogActivity | undefined;
+}> = ({ endpointId, activity }) => (
+  <Suspense fallback={<DetailSkeleton />}>
+    <ModelDetailContent endpointId={endpointId} activity={activity} />
+  </Suspense>
+);
+
+const ModelDetailContent: FC<{
+  endpointId: string;
+  activity: CatalogActivity | undefined;
+}> = ({ endpointId, activity }) => {
+  const { data: detail } = useSuspenseQuery({
+    queryKey: ['model-detail', endpointId, activity ?? 'auto'],
+    queryFn: () => fetchModelDetail(endpointId, activity),
+    staleTime: 30 * 60 * 1000,
+  });
+
+  if (!detail) {
+    return (
+      <EmptyState
+        icon={<SearchX className="h-12 w-12" />}
+        title="No schema available"
+        description={`We couldn't find a parameter schema for “${endpointId}”. It may be new, renamed, or not runnable directly.`}
+      />
+    );
+  }
+
+  return <ModelRunPanel key={detail.model.endpointId} detail={detail} />;
+};
+
+const ModelRunPanel: FC<{ detail: ModelDetail }> = ({ detail }) => {
+  const { model, inputSchema } = detail;
+  const queryClient = useQueryClient();
+  const { requireAuth, isAuthenticated } = useAuthGate();
+
+  const [values, setValues] = useState<Record<string, JsonValue>>(() =>
+    seedFormValue(inputSchema)
+  );
+  const [activeAssetId, setActiveAssetId] = useState<string>();
+
+  const runMutation = useMutation({
+    mutationFn: (input: Record<string, JsonValue>) =>
+      createGeneratedAssetFn({
+        data: {
+          endpointId: model.endpointId,
+          activity: model.activity,
+          modelName: model.displayName,
+          input,
+        },
+      }),
+    onSuccess: ({ id }) => {
+      setActiveAssetId(id);
+      void queryClient.invalidateQueries({
+        queryKey: ['generated-assets', model.endpointId],
+      });
+    },
+    onError: (error) => {
+      if (isInsufficientCreditsError(error)) {
+        toast.error('Insufficient credits', {
+          description: 'Add credits to run this model.',
+          action: {
+            label: 'Add Credits',
+            onClick: () => {
+              window.location.href = '/credits';
+            },
+          },
+        });
+        void queryClient.invalidateQueries({ queryKey: BILLING_BALANCE_KEY });
+      }
+    },
+  });
+
+  // The one in-flight/most recent run, polled until it settles.
+  const { data: activeAsset } = useQuery({
+    queryKey: ['generated-asset', activeAssetId],
+    queryFn: activeAssetId
+      ? () => getGeneratedAssetFn({ data: { id: activeAssetId } })
+      : skipToken,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'completed' || status === 'failed' ? false : 1500;
+    },
+  });
+
+  const fieldErrors = parseValidationErrors(
+    runMutation.error,
+    model.endpointId
+  );
+  const generalError =
+    fieldErrors?.[''] ??
+    (runMutation.error &&
+    !fieldErrors &&
+    !isInsufficientCreditsError(runMutation.error)
+      ? runMutation.error.message
+      : undefined);
+
+  const handleSubmit = () => {
+    if (!requireAuth()) return;
+    runMutation.mutate(values);
+  };
+
+  const Icon = ACTIVITY_ICONS[model.activity];
+
+  return (
+    <div className="flex flex-col gap-10">
+      <header className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {model.displayName}
+          </h1>
+          <Badge variant="secondary">
+            <Icon aria-hidden="true" />
+            {ACTIVITY_LABELS[model.activity]}
+          </Badge>
+          {model.category && (
+            <Badge variant="outline">{categoryLabel(model.category)}</Badge>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+          <code className="font-mono text-xs">{model.endpointId}</code>
+          <a
+            href={`https://fal.ai/models/${model.endpointId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            View on fal.ai
+            <ExternalLink aria-hidden="true" className="size-3.5" />
+          </a>
+        </div>
+      </header>
+
+      <div className="grid gap-10 lg:grid-cols-2">
+        <section aria-label="Parameters" className="flex flex-col gap-4">
+          <h2 className="text-sm font-medium text-muted-foreground">
+            Parameters
+          </h2>
+          <SchemaForm
+            schema={inputSchema}
+            value={values}
+            onChange={setValues}
+            onSubmit={handleSubmit}
+            disabled={runMutation.isPending}
+            errors={fieldErrors}
+          >
+            {generalError && (
+              <p role="alert" className="text-sm text-destructive">
+                {generalError}
+              </p>
+            )}
+            <Button
+              type="submit"
+              disabled={runMutation.isPending}
+              className="w-fit"
+            >
+              <Sparkles aria-hidden="true" />
+              {runMutation.isPending ? 'Starting…' : 'Run'}
+            </Button>
+          </SchemaForm>
+        </section>
+
+        <section aria-label="Result" className="flex flex-col gap-4">
+          <h2 className="text-sm font-medium text-muted-foreground">Result</h2>
+          {activeAsset ? (
+            <AssetResult asset={activeAsset} />
+          ) : (
+            <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-dashed">
+              <p className="text-sm text-muted-foreground">
+                Run the model to see the result here.
+              </p>
+            </div>
+          )}
+        </section>
+      </div>
+
+      {isAuthenticated && (
+        <section aria-label="Recent runs" className="flex flex-col gap-4">
+          <h2 className="text-sm font-medium text-muted-foreground">
+            Recent runs
+          </h2>
+          <Suspense
+            fallback={
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <Skeleton key={i} className="aspect-square rounded-lg" />
+                ))}
+              </div>
+            }
+          >
+            <RecentRuns
+              endpointId={model.endpointId}
+              activeAssetId={activeAssetId}
+              onSelect={setActiveAssetId}
+            />
+          </Suspense>
+        </section>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Recent runs strip
+// ---------------------------------------------------------------------------
+
+const RunThumbnail: FC<{ asset: GeneratedAsset }> = ({ asset }) => {
+  if (asset.status === 'failed') {
+    return (
+      <AlertCircle aria-hidden="true" className="size-6 text-destructive" />
+    );
+  }
+  if (asset.status !== 'completed') {
+    return (
+      <span className="text-xs text-muted-foreground" aria-hidden="true">
+        {asset.status === 'queued' ? 'Queued…' : 'Running…'}
+      </span>
+    );
+  }
+  const first = asset.outputs?.[0];
+  if (first?.contentType.startsWith('image/')) {
+    return (
+      <AppImage
+        src={first.url}
+        alt=""
+        width={200}
+        height={200}
+        className="size-full object-cover"
+      />
+    );
+  }
+  if (first?.contentType.startsWith('video/')) {
+    return (
+      <video
+        src={first.url}
+        muted
+        playsInline
+        preload="metadata"
+        className="size-full object-cover"
+      />
+    );
+  }
+  const Icon = ACTIVITY_ICONS[asset.activity];
+  return <Icon aria-hidden="true" className="size-6 text-muted-foreground" />;
+};
+
+const RecentRuns: FC<{
+  endpointId: string;
+  activeAssetId: string | undefined;
+  onSelect: (id: string) => void;
+}> = ({ endpointId, activeAssetId, onSelect }) => {
+  // Self-polls while any listed run is still in flight, so rows settle into
+  // their thumbnails without the panel having to orchestrate invalidations.
+  const { data } = useSuspenseQuery({
+    queryKey: ['generated-assets', endpointId],
+    queryFn: () => listGeneratedAssetsFn({ data: { endpointId, limit: 12 } }),
+    refetchInterval: (query) =>
+      query.state.data?.assets.some(
+        (asset) => asset.status === 'queued' || asset.status === 'running'
+      )
+        ? 3000
+        : false,
+  });
+
+  if (data.assets.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No runs of this model yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+      {data.assets.map((asset) => (
+        <button
+          key={asset.id}
+          type="button"
+          aria-label={`View run from ${asset.createdAt.toLocaleString()}`}
+          aria-pressed={asset.id === activeAssetId}
+          onClick={() => onSelect(asset.id)}
+          className={`flex aspect-square items-center justify-center overflow-hidden rounded-lg border bg-muted transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+            asset.id === activeAssetId ? 'border-primary' : ''
+          }`}
+        >
+          <RunThumbnail asset={asset} />
+        </button>
+      ))}
+    </div>
+  );
+};

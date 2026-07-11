@@ -23,6 +23,7 @@
  *     env, `Authorization: Bearer`) lifts it to 5k/h. The TTL cache below
  *     keeps browsing well under the anonymous limit.
  */
+import type { JsonValue } from '@/lib/db/schema';
 import { getEnv } from '#env';
 
 const MODELSCHEMAS_BASE_URL = 'https://modelschemas.com';
@@ -36,21 +37,17 @@ const MODELSCHEMAS_BASE_URL = 'https://modelschemas.com';
 export const CATALOG_ACTIVITIES = ['image', 'video', 'audio'] as const;
 export type CatalogActivity = (typeof CATALOG_ACTIVITIES)[number];
 
-/** @public #458 contract — consumed by the asset-run server fns (phase 2). */
-export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+/**
+ * Canonical `JsonValue` lives with the `generated_assets` schema; re-exported
+ * here so catalog consumers (SchemaForm, the detail page) have one import
+ * site for schema + value types.
+ */
+export type { JsonValue } from '@/lib/db/schema';
 
 /**
  * The JSON Schema subset fal endpoint schemas actually use (draft 2020-12
  * keywords plus fal's `x-fal-order-properties` UI ordering extension).
  * Schemas arrive self-contained: `$ref`s point into the sibling `$defs`.
- *
- * @public #458 contract — consumed by SchemaForm + asset validation (phase 2).
  */
 export type JsonSchema = {
   $ref?: string;
@@ -82,7 +79,6 @@ export type JsonSchema = {
   'x-fal-order-properties'?: string[];
 };
 
-/** @public #458 contract — consumed by the catalog UI + detail page. */
 export type CatalogModel = {
   /** fal endpoint id, e.g. `fal-ai/flux-1/dev` (the API's `rawId`). */
   endpointId: string;
