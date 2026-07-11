@@ -51,6 +51,7 @@ const TRIGGER_TO_BINDING: Record<string, keyof CloudflareEnv> = {
   storyboard: 'STORYBOARD_WORKFLOW',
   'analyze-script': 'ANALYZE_SCRIPT_WORKFLOW',
   'sequence-export': 'SEQUENCE_EXPORT_WORKFLOW',
+  asset: 'ASSET_WORKFLOW',
 };
 
 export type CfTriggerResult = { workflowRunId: string };

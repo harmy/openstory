@@ -37,6 +37,8 @@ type PriorMotionDirection = {
 import type { AspectRatio, ImageSize } from '@/lib/constants/aspect-ratios';
 import type {
   CharacterMinimal,
+  GeneratedAssetActivity,
+  GeneratedAssetInput,
   SequenceElementMinimal,
   SequenceLocationMinimal,
   StyleConfig,
@@ -1051,6 +1053,22 @@ export interface ReplaceElementWorkflowResult {
   elementId: string;
   successCount: number;
   failedCount: number;
+}
+
+/**
+ * Asset generation workflow input (#458 — direct model access). Everything the
+ * run needs is resolved by `createGeneratedAssetFn` and passed here: the
+ * workflow only WRITES the `generated_assets` row (plus the house exception of
+ * BYOK key resolution via `scopedDb.apiKeys`).
+ */
+export interface AssetGenerationWorkflowInput extends UserWorkflowContext {
+  /** The reserved `generated_assets` row this run fills in. */
+  assetId: string;
+  /** fal endpoint id, e.g. `fal-ai/flux-1/dev`. */
+  endpointId: string;
+  activity: GeneratedAssetActivity;
+  /** Schema-validated endpoint input, forwarded verbatim to fal. */
+  input: GeneratedAssetInput;
 }
 
 /**
