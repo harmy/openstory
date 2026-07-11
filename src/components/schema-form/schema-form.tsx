@@ -495,7 +495,7 @@ const UrlImagePreview: FC<{ url: string; name: string }> = ({ url, name }) => {
       width={160}
       height={160}
       loading="lazy"
-      className="h-24 w-auto max-w-full rounded-md border object-contain"
+      className="h-24 w-auto max-w-full self-start rounded-md border object-contain"
       onError={() => setFailed(true)}
     />
   );
