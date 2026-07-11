@@ -1,0 +1,144 @@
+/**
+ * Scoped generated_assets CRUD (#458 — direct model access).
+ *
+ * Rows are flat, team-scoped runs of arbitrary fal endpoints. They accumulate
+ * (no primary/variant split, no selection pointer): the list IS the asset
+ * library. Every read filters on the injected `teamId`; writes inject
+ * `teamId`/`userId` so callers can't cross team boundaries.
+ *
+ * Status lifecycle: `queued` (row reserved by the server fn) → `running`
+ * (workflow picked it up) → `completed` (outputs uploaded to R2) / `failed`.
+ */
+
+import type { Database } from '@/lib/db/client';
+import {
+  generatedAssets,
+  type GeneratedAsset,
+  type GeneratedAssetOutput,
+  type NewGeneratedAsset,
+} from '@/lib/db/schema';
+import { and, desc, eq, lt, type SQL } from 'drizzle-orm';
+
+/** Filters + keyset pagination for team-scoped listing (newest-first). */
+export type ListGeneratedAssetsOptions = {
+  activity?: GeneratedAsset['activity'];
+  endpointId?: string;
+  /** Page size; capped by the caller's validator. */
+  limit?: number;
+  /** `id` of the last row of the previous page (ULID ≈ creation time). */
+  cursor?: string;
+};
+
+const DEFAULT_LIST_LIMIT = 50;
+
+export function createGeneratedAssetsMethods(
+  db: Database,
+  teamId: string,
+  userId: string
+) {
+  return {
+    /** Reserve a run row (status `queued`); teamId/userId auto-injected. */
+    insert: async (
+      input: Omit<NewGeneratedAsset, 'teamId' | 'userId'>
+    ): Promise<GeneratedAsset> => {
+      const [row] = await db
+        .insert(generatedAssets)
+        .values({ ...input, teamId, userId })
+        .returning();
+      if (!row) throw new Error('Failed to insert generated asset');
+      return row;
+    },
+
+    /** Newest-first team-scoped list with optional filters + keyset cursor. */
+    list: async (
+      options: ListGeneratedAssetsOptions = {}
+    ): Promise<{ assets: GeneratedAsset[]; nextCursor: string | null }> => {
+      const limit = options.limit ?? DEFAULT_LIST_LIMIT;
+      const conditions: SQL[] = [eq(generatedAssets.teamId, teamId)];
+      if (options.activity) {
+        conditions.push(eq(generatedAssets.activity, options.activity));
+      }
+      if (options.endpointId) {
+        conditions.push(eq(generatedAssets.endpointId, options.endpointId));
+      }
+      if (options.cursor) {
+        conditions.push(lt(generatedAssets.id, options.cursor));
+      }
+      const rows = await db
+        .select()
+        .from(generatedAssets)
+        .where(and(...conditions))
+        .orderBy(desc(generatedAssets.id))
+        .limit(limit + 1);
+
+      const page = rows.slice(0, limit);
+      const last = page[page.length - 1];
+      return {
+        assets: page,
+        nextCursor: rows.length > limit && last ? last.id : null,
+      };
+    },
+
+    getById: async (id: string): Promise<GeneratedAsset | null> => {
+      const rows = await db
+        .select()
+        .from(generatedAssets)
+        .where(
+          and(eq(generatedAssets.id, id), eq(generatedAssets.teamId, teamId))
+        )
+        .limit(1);
+      return rows[0] ?? null;
+    },
+
+    setWorkflowRunId: async (
+      id: string,
+      workflowRunId: string
+    ): Promise<void> => {
+      await db
+        .update(generatedAssets)
+        .set({ workflowRunId, updatedAt: new Date() })
+        .where(
+          and(eq(generatedAssets.id, id), eq(generatedAssets.teamId, teamId))
+        );
+    },
+
+    markRunning: async (id: string): Promise<void> => {
+      await db
+        .update(generatedAssets)
+        .set({ status: 'running', updatedAt: new Date() })
+        .where(
+          and(eq(generatedAssets.id, id), eq(generatedAssets.teamId, teamId))
+        );
+    },
+
+    markCompleted: async (
+      id: string,
+      fields: {
+        outputs: GeneratedAssetOutput[];
+        costMicros?: number | null;
+      }
+    ): Promise<void> => {
+      await db
+        .update(generatedAssets)
+        .set({
+          status: 'completed',
+          outputs: fields.outputs,
+          costMicros: fields.costMicros ?? null,
+          error: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(eq(generatedAssets.id, id), eq(generatedAssets.teamId, teamId))
+        );
+    },
+
+    markFailed: async (id: string, error: string): Promise<void> => {
+      await db
+        .update(generatedAssets)
+        .set({ status: 'failed', error, updatedAt: new Date() })
+        .where(
+          and(eq(generatedAssets.id, id), eq(generatedAssets.teamId, teamId))
+        );
+    },
+  };
+}
