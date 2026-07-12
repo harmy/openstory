@@ -1,6 +1,7 @@
 import { AppImage } from '@/components/ui/app-image';
 import type { Style } from '@/lib/db/schema/libraries';
 import { cn } from '@/lib/utils';
+import { Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { getStyleGradient } from './style-gradient';
 
@@ -50,17 +51,15 @@ export function StyleInlineTile({
   return (
     <button
       type="button"
-      data-recommended-tile={recommended ? true : undefined}
       onClick={() => onSelect(style.id)}
       onKeyDown={onKeyDown}
       tabIndex={tabIndex}
       disabled={disabled}
       className={cn(
-        'group relative z-10 aspect-square rounded-lg overflow-hidden',
-        'border-2 transition-all duration-200',
-        'hover:scale-105 hover:shadow-lg',
+        'group relative aspect-square overflow-hidden rounded-lg border-2',
+        'transition-all duration-200 hover:scale-105 hover:shadow-lg',
         'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
+        'disabled:cursor-not-allowed disabled:opacity-50',
         selected
           ? 'border-primary shadow-md scale-105'
           : 'border-transparent hover:border-primary/50'
@@ -69,13 +68,21 @@ export function StyleInlineTile({
       title={reasoning}
     >
       <StyleTileBackground style={style} />
-      <div className="absolute inset-x-0 bottom-0 p-2 bg-linear-to-t from-black/80 via-black/60 to-transparent">
-        <p className="text-xs font-medium text-white text-center line-clamp-2">
+      {recommended && (
+        <span
+          aria-hidden
+          className="absolute left-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"
+        >
+          <Sparkles className="size-3" />
+        </span>
+      )}
+      <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/60 to-transparent p-2">
+        <p className="line-clamp-2 text-center text-xs font-medium text-white">
           {style.name}
         </p>
       </div>
       {selected && (
-        <div className="absolute inset-0 bg-primary/10 pointer-events-none" />
+        <div className="pointer-events-none absolute inset-0 bg-primary/10" />
       )}
     </button>
   );

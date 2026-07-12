@@ -10,7 +10,6 @@ import { GenerateSequenceIcon } from '@/components/icons/generate-sequence-icon'
 import { LocationSuggestionSelector } from '@/components/location-library/location-suggestion-selector';
 import { buildMentionItems } from '@/components/scenes/prompt-mention/mention-items';
 import { GenerationSettings } from '@/components/settings/generation-settings';
-import { RecommendStylesClusterFrame } from '@/components/style/recommended-styles-zone';
 import { StyleSelector } from '@/components/style/style-selector';
 import { TalentSuggestionSelector } from '@/components/talent/talent-suggestion-selector';
 import {
@@ -578,8 +577,6 @@ export const ScriptView: FC<{
       ? recommendations
       : undefined;
   const isRecommended = !!activeRecommendations && !isRecommending;
-  const showRecommendShell =
-    (isRecommending && !recommendationsStale) || isRecommended;
   const recommendButtonLabel = isRecommending
     ? 'Recommend styles'
     : isRecommended
@@ -700,7 +697,6 @@ export const ScriptView: FC<{
 
   const previousScriptRef = useRef<string>('');
   const enhanceAbortRef = useRef<AbortController | null>(null);
-  const recommendClusterRef = useRef<HTMLDivElement>(null);
 
   const handleEnhance = async () => {
     // Enhancing runs an AI model on the server — gate it behind login too.
@@ -926,24 +922,14 @@ export const ScriptView: FC<{
             <p className="text-sm text-destructive">{enhanceError}</p>
           )}
 
-          <div className="shrink-0 flex flex-col gap-3 overflow-visible">
+          <div className="shrink-0 flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
-              <div
-                ref={recommendClusterRef}
-                className="relative min-w-0 flex-1 flex flex-col gap-3 overflow-visible"
-              >
-                {showRecommendShell && (
-                  <RecommendStylesClusterFrame
-                    containerRef={recommendClusterRef}
-                    active={showRecommendShell}
-                  />
-                )}
+              <div className="min-w-0 flex-1 flex flex-col gap-3">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  data-recommend-trigger
-                  className="relative z-10 gap-1.5 self-start"
+                  className="gap-1.5 self-start"
                   disabled={
                     loading || currentScriptText.length < 3 || isRecommending
                   }

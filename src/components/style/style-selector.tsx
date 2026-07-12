@@ -191,7 +191,7 @@ export function StyleSelector({
     <>
       <div
         ref={gridRef}
-        className="relative z-10 grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 overflow-visible p-2"
+        className="grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 p-2"
         role="grid"
         aria-label="Style selection"
       >
@@ -205,7 +205,6 @@ export function StyleSelector({
               ? Array.from({ length: RECOMMENDED_STYLE_SLOT_COUNT }, (_, i) => (
                   <Skeleton
                     key={`rec-skeleton-${i}`}
-                    data-recommended-tile
                     className="aspect-square rounded-lg"
                   />
                 ))

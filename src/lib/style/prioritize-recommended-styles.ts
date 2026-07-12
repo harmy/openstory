@@ -52,28 +52,3 @@ export function catalogueWithoutRecommendations(
   const rest = styles.filter((s) => !recommendedIds.has(s.id));
   return bumpSelectedStyle(rest, selectedStyleId);
 }
-
-/**
- * Put the ranked recommendation shortlist first (up to `limit`), then the
- * remaining styles. When a manual selection falls outside the shortlist, bump
- * it to the front of the tail so it stays reachable in the inline grid.
- */
-export function prioritizeRecommendedStyles(
-  styles: Style[],
-  recommendations: StyleRecommendation[] | undefined,
-  limit = RECOMMENDED_STYLE_SLOT_COUNT,
-  selectedStyleId?: string | null
-): Style[] {
-  const recommended = resolveRecommendedStyles(styles, recommendations, limit);
-  if (!recommended.length) {
-    return bumpSelectedStyle(styles, selectedStyleId);
-  }
-  return [
-    ...recommended,
-    ...catalogueWithoutRecommendations(
-      styles,
-      recommendations,
-      selectedStyleId
-    ),
-  ];
-}
