@@ -21,6 +21,9 @@ import { tanstackStartCookies } from 'better-auth/tanstack-start';
 import { getDb } from '#db-client';
 import { getEnv } from '#env';
 import { teamMembers, teams } from '@/lib/db/schema';
+import { SIGNUP_GRANT_MICROS } from '@/lib/billing/constants';
+import { microsToDisplayUsd } from '@/lib/billing/money';
+import { createBillingMethods } from '@/lib/db/scoped/billing';
 import { sendOtpEmail } from '@/lib/services/email-service';
 import { DEV_OTP_CODE } from '@/lib/auth/dev-otp';
 import {
@@ -256,6 +259,16 @@ function createAuth() {
               userId: user.id,
               role: 'owner',
             });
+
+            // Grant every new team a one-time welcome credit (#1047).
+            await createBillingMethods(db, team.id, user.id).addCredits(
+              SIGNUP_GRANT_MICROS,
+              {
+                type: 'credit_adjustment',
+                description: `Welcome credit: ${microsToDisplayUsd(SIGNUP_GRANT_MICROS)}`,
+                metadata: { signupGrant: true },
+              }
+            );
           },
         },
       },

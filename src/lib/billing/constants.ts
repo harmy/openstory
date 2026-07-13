@@ -14,6 +14,12 @@ export function isStripeEnabled(): boolean {
 /** Markup percentage applied on top of provider costs (e.g., 0.05 = 5%) */
 const BILLING_MARKUP_PERCENT = 0.05;
 
+/** Free credit granted to every new team on signup, in USD */
+const SIGNUP_GRANT_USD = 10;
+
+/** Free credit granted to every new team on signup, in microdollars */
+export const SIGNUP_GRANT_MICROS: Microdollars = usdToMicros(SIGNUP_GRANT_USD);
+
 /** Minimum top-up amount in USD */
 export const MIN_TOPUP_AMOUNT_USD = 10;
 
