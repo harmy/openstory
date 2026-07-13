@@ -5,18 +5,17 @@
  */
 
 import {
-  applyMarkup,
   AUTO_TOPUP_COOLDOWN_MS,
   calculateExpiryDate,
   isStripeEnabled,
   MIN_TOPUP_AMOUNT_MICROS,
+  totalCheckoutCents,
 } from '@/lib/billing/constants';
 import {
   type Microdollars,
   micros,
   microsToDisplayUsd,
   microsToUsd,
-  microsToUsdCents,
   negateMicros,
   ZERO_MICROS,
 } from '@/lib/billing/money';
@@ -78,7 +77,7 @@ function createBillingReadMethods(db: Database, teamId: string) {
     estimatedCostMicros: Microdollars
   ): Promise<boolean> {
     const balance = await getBalance();
-    return balance >= applyMarkup(estimatedCostMicros);
+    return balance >= estimatedCostMicros;
   }
 
   async function getTransactionHistory(
@@ -275,7 +274,7 @@ export function createBillingMethods(
   }
 
   /**
-   * Applies markup automatically. Triggers auto-top-up if balance drops below
+   * Charges provider cost at face value (no usage fee). Triggers auto-top-up if balance drops below
    * threshold.
    *
    * Pass `opts.idempotencyKey` (convention: `${workflowInstanceId}:<charge-name>`)
@@ -308,7 +307,7 @@ export function createBillingMethods(
         transactionId: '',
       };
 
-    const chargedAmount = applyMarkup(rawCostMicros);
+    const chargedAmount = rawCostMicros;
     const { idempotencyKey } = opts;
 
     await db
@@ -316,7 +315,6 @@ export function createBillingMethods(
       .values({ teamId, balance: 0 })
       .onConflictDoNothing();
 
-    const rawUsd = microsToUsd(rawCostMicros);
     const chargedUsd = microsToUsd(chargedAmount);
 
     const updateBalance = db
@@ -356,12 +354,9 @@ export function createBillingMethods(
         type: 'credit_usage' as TransactionType,
         amount: negateMicros(chargedAmount),
         balanceAfter: sql`(select ${credits.balance} from ${credits} where ${credits.teamId} = ${teamId})`,
-        description:
-          opts.description ??
-          `Usage: $${chargedUsd.toFixed(4)} (raw: $${rawUsd.toFixed(4)})`,
+        description: opts.description ?? `Usage: $${chargedUsd.toFixed(4)}`,
         metadata: {
-          rawCostMicros,
-          chargedAmountMicros: chargedAmount,
+          costMicros: chargedAmount,
           ...opts.metadata,
         },
         idempotencyKey: idempotencyKey ?? null,
@@ -521,7 +516,7 @@ export function createBillingMethods(
     }
 
     const stripe = getStripeOrThrow();
-    const amountCents = microsToUsdCents(
+    const amountCents = totalCheckoutCents(
       micros(settings.autoTopUpAmountMicros)
     );
 

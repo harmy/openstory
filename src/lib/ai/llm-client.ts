@@ -4,6 +4,7 @@
  */
 
 import type { TextModel } from '@/lib/ai/models';
+import { reportMissingBillingCost } from '@/lib/billing/billing-observability';
 import {
   usdToMicros,
   ZERO_MICROS,
@@ -24,7 +25,7 @@ const logger = getLogger(['openstory', 'ai', 'llm-client']);
 /**
  * Convert a completed LLM call's usage into a charge. OpenRouter reports an
  * authoritative per-request `cost` (USD) on every response; we charge that raw
- * cost (markup is applied downstream in `deductCredits`). Logs and charges
+ * cost at face value in `deductCredits`. Logs and charges
  * nothing when no cost was reported, surfacing the gap rather than guessing.
  */
 export function llmCostFromUsage(
@@ -36,10 +37,11 @@ export function llmCostFromUsage(
     typeof usage.cost !== 'number' ||
     !Number.isFinite(usage.cost)
   ) {
-    logger.error(
-      `No usage cost reported for LLM call (${modelId}) — charging nothing`,
-      { usage }
-    );
+    reportMissingBillingCost({
+      source: 'llm-cost-from-usage',
+      modelId,
+      metadata: { usage },
+    });
     return ZERO_MICROS;
   }
   return usdToMicros(usage.cost);

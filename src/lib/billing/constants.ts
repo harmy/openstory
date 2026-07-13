@@ -4,15 +4,15 @@
  */
 
 import { getEnv } from '#env';
-import { type Microdollars, usdToMicros, multiplyMicros } from './money';
+import { type Microdollars, usdToMicros, microsToUsd } from './money';
 
 /** Whether Stripe payment processing is available (checkout, webhooks, auto-top-up). */
 export function isStripeEnabled(): boolean {
   return !!getEnv().STRIPE_SECRET_KEY;
 }
 
-/** Markup percentage applied on top of provider costs (e.g., 0.05 = 5%) */
-const BILLING_MARKUP_PERCENT = 0.05;
+/** Processing fee applied when purchasing credits (e.g., 0.05 = 5%). Not charged on usage. */
+export const PROCESSING_FEE_PERCENT = 0.05;
 
 /** Minimum top-up amount in USD */
 export const MIN_TOPUP_AMOUNT_USD = 10;
@@ -40,11 +40,38 @@ export function calculateExpiryDate(from?: Date): Date {
   return date;
 }
 
-/**
- * Apply markup to a raw provider cost in microdollars
- * @param rawCostMicros - The raw cost from the provider in microdollars
- * @returns The cost with markup applied, in microdollars
- */
-export function applyMarkup(rawCostMicros: Microdollars): Microdollars {
-  return multiplyMicros(rawCostMicros, 1 + BILLING_MARKUP_PERCENT);
+/** Processing fee in USD for a credit purchase amount */
+export function processingFeeUsd(creditAmountUsd: number): number {
+  return creditAmountUsd * PROCESSING_FEE_PERCENT;
+}
+
+/** Total charged at checkout (credits + processing fee) */
+export function totalCheckoutUsd(creditAmountUsd: number): number {
+  return creditAmountUsd * (1 + PROCESSING_FEE_PERCENT);
+}
+
+/** Format processing fee percent for display (e.g. "5%") */
+export function formatProcessingFeePercent(): string {
+  return `${Math.round(PROCESSING_FEE_PERCENT * 100)}%`;
+}
+
+/** Split a credit purchase into credit + fee line items (USD, cents-rounded) */
+export function splitCheckoutAmounts(creditAmountUsd: number): {
+  creditUsd: number;
+  feeUsd: number;
+  totalUsd: number;
+} {
+  const creditCents = Math.round(creditAmountUsd * 100);
+  const feeCents = Math.round(creditCents * PROCESSING_FEE_PERCENT);
+  return {
+    creditUsd: creditCents / 100,
+    feeUsd: feeCents / 100,
+    totalUsd: (creditCents + feeCents) / 100,
+  };
+}
+
+/** Total Stripe charge in cents for a credit amount in microdollars */
+export function totalCheckoutCents(creditAmountMicros: Microdollars): number {
+  const { totalUsd } = splitCheckoutAmounts(microsToUsd(creditAmountMicros));
+  return Math.round(totalUsd * 100);
 }

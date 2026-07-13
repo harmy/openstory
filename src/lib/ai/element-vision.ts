@@ -5,13 +5,16 @@
  * @tanstack/ai's OpenRouter adapter.
  */
 
+import type { Microdollars } from '@/lib/billing/money';
+import type { ResolvedLlmKey } from '@/lib/db/scoped/api-keys';
 import type { ChatMessage, ChatMessageImagePart } from '@/lib/prompts';
 import { toVisionImageSource } from '@/lib/storage/external-url';
-import { chat } from '@tanstack/ai';
+import { chat, type TokenUsage } from '@tanstack/ai';
 import { z } from 'zod';
-import { createAdapter, type LlmKeyInfo } from './create-adapter';
+import { createAdapter } from './create-adapter';
+import { llmCostFromUsage } from './llm-client';
 
-const VISION_MODEL = 'anthropic/claude-sonnet-4.6';
+export const ELEMENT_VISION_MODEL = 'anthropic/claude-sonnet-4.6' as const;
 
 const responseSchema = z.object({
   description: z.string().min(1),
@@ -19,13 +22,18 @@ const responseSchema = z.object({
   suggestedToken: z.string().min(1),
 });
 
-export type ElementDescription = z.infer<typeof responseSchema>;
+type ElementDescription = z.infer<typeof responseSchema>;
 
 export type DescribeElementInput = {
   imageUrl: string;
   filename: string;
   /** Resolved LLM key (team OpenRouter, team fal, or platform) */
-  llmKey?: LlmKeyInfo;
+  llmKey?: ResolvedLlmKey;
+};
+
+export type ElementVisionResult = ElementDescription & {
+  costMicros: Microdollars;
+  usedOwnKey: boolean;
 };
 
 /**
@@ -76,7 +84,7 @@ Describe the element in the image below and suggest a token.`;
 
 export async function describeElementImage(
   input: DescribeElementInput
-): Promise<ElementDescription> {
+): Promise<ElementVisionResult> {
   // Local /r2/ URLs aren't reachable by real OpenRouter — inline the image
   // bytes as a data part instead (no-op in prod and e2e replay).
   const imageSource = await toVisionImageSource(input.imageUrl);
@@ -96,8 +104,9 @@ export async function describeElementImage(
     }
   }
 
-  const adapter = createAdapter(VISION_MODEL, input.llmKey);
+  const adapter = createAdapter(ELEMENT_VISION_MODEL, input.llmKey);
 
+  let capturedUsage: TokenUsage | undefined;
   const result = await chat({
     adapter,
     systemPrompts,
@@ -105,6 +114,13 @@ export async function describeElementImage(
     stream: false,
     modelOptions: { temperature: 0.3 },
     outputSchema: responseSchema,
+    middleware: [
+      {
+        onFinish: (_ctx, info) => {
+          capturedUsage = info.usage;
+        },
+      },
+    ],
     debug: false,
   });
 
@@ -112,5 +128,7 @@ export async function describeElementImage(
   return {
     ...parsed,
     suggestedToken: normalizeSuggestedToken(parsed.suggestedToken),
+    costMicros: llmCostFromUsage(capturedUsage, ELEMENT_VISION_MODEL),
+    usedOwnKey: input.llmKey?.source === 'team',
   };
 }
