@@ -1,7 +1,8 @@
 import { PageContainer } from '@/components/layout/page-container';
 import { ModelDetailView } from '@/components/models/model-detail-view';
+import { MODELS_ENABLED } from '@/lib/flags';
 import { CATALOG_ACTIVITIES } from '@/lib/models/catalog';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, notFound } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
 import { z } from 'zod';
 
@@ -14,6 +15,9 @@ const searchParamsSchema = z.object({
 });
 
 export const Route = createFileRoute('/_app/models/$')({
+  beforeLoad: () => {
+    if (!MODELS_ENABLED) throw notFound();
+  },
   validateSearch: searchParamsSchema,
   component: ModelDetailPage,
   staticData: { breadcrumb: 'Model' },

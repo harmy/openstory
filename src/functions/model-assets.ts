@@ -10,6 +10,7 @@
  */
 
 import { usdToMicros, type Microdollars } from '@/lib/billing/money';
+import { assertModelsEnabled } from '@/lib/flags';
 import { requireCredits } from '@/lib/billing/preflight';
 import type { ScopedDb } from '@/lib/db/scoped';
 import {
@@ -173,6 +174,7 @@ export const createGeneratedAssetFn = createServerFn({ method: 'POST' })
   .middleware([authWithTeamMiddleware])
   .inputValidator(zodValidator(createGeneratedAssetInputSchema))
   .handler(async ({ context, data }) => {
+    assertModelsEnabled();
     return createGeneratedAsset(context.scopedDb, data);
   });
 
@@ -193,6 +195,7 @@ export const listGeneratedAssetsFn = createServerFn({ method: 'GET' })
   .middleware([authWithTeamMiddleware])
   .inputValidator(zodValidator(listGeneratedAssetsInputSchema.optional()))
   .handler(async ({ context, data }) => {
+    assertModelsEnabled();
     return context.scopedDb.generatedAssets.list({
       activity: data?.activity,
       endpointId: data?.endpointId,
@@ -210,6 +213,7 @@ export const getGeneratedAssetFn = createServerFn({ method: 'GET' })
   .middleware([authWithTeamMiddleware])
   .inputValidator(zodValidator(getGeneratedAssetInputSchema))
   .handler(async ({ context, data }) => {
+    assertModelsEnabled();
     const asset = await context.scopedDb.generatedAssets.getById(data.id);
     if (!asset) {
       throw new Error('Generated asset not found');

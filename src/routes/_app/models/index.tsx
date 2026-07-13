@@ -2,8 +2,9 @@ import { PageContainer } from '@/components/layout/page-container';
 import { ModelCatalogView } from '@/components/models/model-catalog-view';
 import { PageDescription } from '@/components/typography/page-description';
 import { PageHeader } from '@/components/typography/page-header';
+import { MODELS_ENABLED } from '@/lib/flags';
 import { CATALOG_ACTIVITIES } from '@/lib/models/catalog';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, notFound, useNavigate } from '@tanstack/react-router';
 import { z } from 'zod';
 
 // No `.default()` (mirrors the styles route): a default rewrites bare /models
@@ -14,6 +15,9 @@ const searchParamsSchema = z.object({
 });
 
 export const Route = createFileRoute('/_app/models/')({
+  beforeLoad: () => {
+    if (!MODELS_ENABLED) throw notFound();
+  },
   validateSearch: searchParamsSchema,
   component: ModelsPage,
   staticData: { breadcrumb: 'Models' },

@@ -6,6 +6,7 @@
  * data and the app shell is anonymous-browsable (same policy as
  * getPublicStylesFn) — running a model is what's gated, not browsing.
  */
+import { assertModelsEnabled } from '@/lib/flags';
 import {
   CATALOG_ACTIVITIES,
   getModelDetail,
@@ -29,6 +30,7 @@ const listCatalogModelsInputSchema = z.object({
 export const listCatalogModelsFn = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(listCatalogModelsInputSchema.optional()))
   .handler(async ({ data }) => {
+    assertModelsEnabled();
     return listCatalogModels(data ?? {});
   });
 
@@ -45,5 +47,6 @@ const getModelDetailInputSchema = z.object({
 export const getModelDetailFn = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(getModelDetailInputSchema))
   .handler(async ({ data }) => {
+    assertModelsEnabled();
     return getModelDetail(data.endpointId, data.activity);
   });
