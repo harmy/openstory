@@ -9,7 +9,7 @@ import { useUser } from '@/hooks/use-user';
 import { briefForStyle } from '@/lib/style/brief-for-style';
 import { styleSlug } from '@/lib/style/style-slug';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
 const BILLING_PROMPT_KEY = 'openstory:billing-prompt-dismissed';
@@ -69,29 +69,78 @@ function NewSequencePage() {
   // composer (`key`) on a new seed lets the `initialScript`/`initialStyleId`
   // props re-seed it — and take precedence over a stale draft (see ScriptView).
   const { data: styles } = useStyles();
+
+  // The composer mirrors its style pick into `?style=` (see `handleStyleChange`
+  // below). When that self-sync is what changed the URL, the composer must NOT
+  // re-seed or remount — only a genuine external navigation (a fresh "Try" /
+  // "Use this style" link, or the showcase) should. `lastSelfSyncRef` remembers
+  // the slug we wrote; `seedRef` freezes the one-time seed across our own syncs
+  // so picking a style never clears the script.
+  const lastSelfSyncRef = useRef<string | null>(null);
+  const seedRef = useRef<{ key: string; script?: string; styleId?: string }>({
+    key: 'blank',
+  });
+
   const seedStyle = styleParam
     ? styles?.find((s) => styleSlug(s.name) === styleParam)
     : undefined;
-  // `prefill=style` ("Use this style") seeds ONLY the style; the default
-  // ("Try" / gallery) also seeds the style's sample brief as the prompt.
+  // `prefill=style` ("Use this style", and the composer's own selection sync)
+  // seeds ONLY the style; the default ("Try" / gallery) also seeds the style's
+  // sample brief as the prompt.
   const styleOnly = prefill === 'style';
-  let seedScript: string | undefined;
+  let candidateScript: string | undefined;
   if (seedStyle && !styleOnly) {
     try {
-      seedScript = briefForStyle({
+      candidateScript = briefForStyle({
         name: seedStyle.name,
         category: seedStyle.category,
       });
     } catch {
       // Unmapped style — leave the composer blank rather than seed nothing.
-      seedScript = undefined;
+      candidateScript = undefined;
     }
   }
-  // Distinguish the two seed modes in the key so switching between "Try" and
-  // "Use this style" for the same style still remounts + re-seeds the composer.
-  const composerKey = seedStyle
+  // Distinguish the two seed modes so switching between "Try" and "Use this
+  // style" for the same style still re-seeds.
+  const candidateKey = seedStyle
     ? `seed:${seedStyle.id}:${styleOnly ? 'style' : 'full'}`
     : 'blank';
+
+  // Adopt the URL's seed unless this `?style=` is the composer echoing its own
+  // pick back — then keep the frozen seed so the composer stays mounted and the
+  // script is preserved.
+  const isSelfSync =
+    styleParam != null && styleParam === lastSelfSyncRef.current;
+  if (!isSelfSync && candidateKey !== seedRef.current.key) {
+    seedRef.current = {
+      key: candidateKey,
+      script: candidateScript,
+      styleId: seedStyle?.id,
+    };
+  }
+  const {
+    key: composerKey,
+    script: seedScript,
+    styleId: seedStyleId,
+  } = seedRef.current;
+
+  // Reflect the composer's style pick in the URL so `?style=` always matches the
+  // current selection (shareable, restores on reload). `replace` keeps it out of
+  // the history stack.
+  const handleStyleChange = useCallback(
+    (styleId: string) => {
+      const selected = styles?.find((s) => s.id === styleId);
+      if (!selected) return;
+      const slug = styleSlug(selected.name);
+      lastSelfSyncRef.current = slug;
+      void navigate({
+        to: '/sequences/new',
+        search: (prev) => ({ ...prev, style: slug, prefill: 'style' }),
+        replace: true,
+      });
+    },
+    [styles, navigate]
+  );
 
   const { needsBillingSetup, hasFalKey, hasOpenRouterKey, stripeEnabled } =
     useBillingGate();
@@ -149,7 +198,8 @@ function NewSequencePage() {
             loading={false}
             onSuccess={handleSuccess}
             initialScript={seedScript}
-            initialStyleId={seedStyle?.id}
+            initialStyleId={seedStyleId}
+            onStyleChange={handleStyleChange}
           />
         </PageContainer>
       </div>
@@ -179,7 +229,8 @@ function NewSequencePage() {
             loading={false}
             onSuccess={handleSuccess}
             initialScript={seedScript}
-            initialStyleId={seedStyle?.id}
+            initialStyleId={seedStyleId}
+            onStyleChange={handleStyleChange}
           />
         </div>
         <SampleVideoShowcase />

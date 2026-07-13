@@ -44,7 +44,7 @@ import {
 } from '@/hooks/use-sequence-elements';
 import { useSequenceLocations } from '@/hooks/use-sequence-locations';
 import { useCreateSequence } from '@/hooks/use-sequences';
-import { useStyles } from '@/hooks/use-styles';
+import { useRecommendedStyles, useStyles } from '@/hooks/use-styles';
 import { toEnhanceInputs } from '@/lib/ai/enhance-inputs';
 import {
   DEFAULT_IMAGE_MODEL,
@@ -107,6 +107,9 @@ export const ScriptView: FC<{
    *  saved draft for the initial value; remount (via `key`) to re-seed. */
   initialScript?: string;
   initialStyleId?: string;
+  /** Notified when the user picks a style, so the new-sequence page can mirror
+   *  it into `?style=`. Not called for the auto-selected default. */
+  onStyleChange?: (styleId: string) => void;
 }> = ({
   teamId,
   sequence,
@@ -117,6 +120,7 @@ export const ScriptView: FC<{
   onCancel,
   initialScript,
   initialStyleId,
+  onStyleChange,
 }) => {
   const isEditing = !!sequence?.id;
   const { data: composedScriptData } = useComposedScript(sequence?.id);
@@ -143,6 +147,13 @@ export const ScriptView: FC<{
     setContentState((s) => ({ ...s, script: v }));
   const setStyleId = (v: string | null) =>
     setContentState((s) => ({ ...s, styleId: v }));
+  // A user-initiated style pick: update local state and mirror it to the URL.
+  // The auto-selected default calls `setStyleId` directly, so a bare
+  // /sequences/new stays a bare URL until the user actually chooses.
+  const selectStyle = (styleId: string) => {
+    setStyleId(styleId);
+    onStyleChange?.(styleId);
+  };
 
   // Load saved settings from localStorage
   const {
@@ -267,7 +278,12 @@ export const ScriptView: FC<{
 
   const posthog = usePostHog();
 
-  const { data: styles = [], isLoading: isLoadingStyles } = useStyles();
+  // `isPending` (not `isLoading`) so the skeleton state is shown whenever there
+  // is no styles data yet — including during SSR, where the query is disabled
+  // behind the still-pending session and `isLoading` is misleadingly false.
+  // This keeps the server and first client render identical (both skeletons)
+  // and avoids a hydration mismatch (#style-selector "View all 0 styles").
+  const { data: styles = [], isPending: isLoadingStyles } = useStyles();
 
   // Auto-select first style if none selected
   useEffect(() => {
@@ -554,6 +570,60 @@ export const ScriptView: FC<{
     stripeEnabled,
   } = useBillingGate();
 
+  // Style recommendations. We rank a *snapshot* of the script (not the live
+  // value) so the LLM call only fires on an explicit trigger — the "Recommend
+  // styles" button or a completed enhance — and editing the script afterwards
+  // doesn't re-spend a call on every keystroke. Repeats are free (cached by
+  // script hash in useRecommendedStyles).
+  const [recommendScript, setRecommendScript] = useState<string | null>(null);
+  const {
+    data: recommendData,
+    isFetching: isRecommending,
+    isError: recommendFailed,
+    refetch: refetchRecommendations,
+  } = useRecommendedStyles(recommendScript, {
+    enabled: recommendScript !== null,
+  });
+  const recommendations = recommendData?.recommendations;
+  const currentScriptText = (script ?? sequence?.script ?? '').trim();
+  const recommendationsStale =
+    recommendScript !== null && currentScriptText !== recommendScript;
+  const activeRecommendations =
+    !recommendationsStale && recommendations?.length
+      ? recommendations
+      : undefined;
+  const isRecommended = !!activeRecommendations && !isRecommending;
+  const recommendButtonLabel = isRecommending
+    ? 'Recommend styles'
+    : isRecommended
+      ? 'Recommended'
+      : 'Recommend styles';
+  // The shortlist ran but turned up nothing usable (or errored). Distinguish
+  // this from "never asked" so we can tell the user instead of silently
+  // reverting to the trigger button (which invites a re-click + re-charge).
+  const recommendRanForCurrentScript =
+    recommendScript !== null && !recommendationsStale && !isRecommending;
+  const recommendEmpty =
+    recommendRanForCurrentScript &&
+    !recommendFailed &&
+    recommendations?.length === 0;
+
+  const triggerRecommend = () => {
+    if (!requireAuth()) return;
+    if (needsBillingSetup) {
+      showGate();
+      return;
+    }
+    const text = (script ?? sequence?.script ?? '').trim();
+    if (text.length < 3) return;
+    // Same script after an error/empty run: refetch instead of no-op setState.
+    if (recommendScript === text) {
+      void refetchRecommendations();
+      return;
+    }
+    setRecommendScript(text);
+  };
+
   const handleCancel = onCancel;
 
   const executeRegeneration = () => {
@@ -694,6 +764,13 @@ export const ScriptView: FC<{
         setScript(accumulated);
       }
       setEnhance('canUndoEnhance', true);
+      // Pre-warm the style shortlist off the freshly enhanced script so the
+      // picker is ready the moment the user looks for it.
+      // Billing is already gated above (handleEnhance returns early when
+      // needsBillingSetup), so reaching here means the recommend call can bill.
+      if (!abortController.signal.aborted && accumulated.trim().length >= 3) {
+        setRecommendScript(accumulated.trim());
+      }
     } catch (error) {
       if (!abortController.signal.aborted) {
         setEnhance(
@@ -772,7 +849,7 @@ export const ScriptView: FC<{
         className="flex flex-col min-h-0 max-h-full"
       >
         {/* Control bar */}
-        <CardHeader className="shrink-0 flex flex-col md:flex-row items-start justify-between gap-3 px-6 py-4 border-b border-border/50 bg-card/40">
+        <CardHeader className="shrink-0 flex flex-col lg:flex-row items-start justify-between gap-3 px-6 py-4 border-b border-border/50 bg-card/40">
           <GenerationSettings
             aspectRatio={aspectRatio}
             analysisModels={analysisModels}
@@ -856,104 +933,134 @@ export const ScriptView: FC<{
               showCharacterCount={false}
               mentionItems={mentionItems}
             />
-            <div className="absolute bottom-2 right-2 flex items-center gap-1">
-              {canUndoEnhance && !isEnhancing && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1.5 text-muted-foreground"
-                  onClick={handleUndoEnhance}
-                >
-                  <Undo2 className="size-3.5" />
-                  Undo
-                </Button>
-              )}
-              {isEnhancing ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1.5 text-muted-foreground"
-                  onClick={handleStopEnhance}
-                >
-                  <span className="relative size-5">
-                    <Loader2 className="absolute inset-0 size-5 animate-spin" />
-                    <Square className="absolute inset-[5px] size-[10px] fill-current" />
-                  </span>
-                  Stop
-                </Button>
-              ) : (
-                <Popover
-                  open={enhancePopoverOpen}
-                  onOpenChange={setEnhancePopoverOpen}
-                >
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-muted-foreground"
-                      disabled={
-                        !scriptValue || scriptValue.length < 10 || isSubmitting
-                      }
-                    >
-                      <Sparkles className="size-3.5" />
-                      Enhance Script
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" side="top" className="w-auto">
-                    <div className="flex flex-col gap-3">
-                      <p className="text-sm font-medium">
-                        Target video duration
-                      </p>
-                      <ToggleGroup
-                        type="single"
-                        value={String(targetDuration)}
-                        onValueChange={(v) => {
-                          if (v) setTargetDuration(Number(v));
-                        }}
-                        variant="outline"
-                        size="sm"
-                      >
-                        {DURATION_PRESETS.map((preset) => (
-                          <ToggleGroupItem
-                            key={preset.value}
-                            value={preset.value}
-                          >
-                            {preset.label}
-                          </ToggleGroupItem>
-                        ))}
-                      </ToggleGroup>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={() => {
-                          setEnhancePopoverOpen(false);
-                          void handleEnhance();
-                        }}
-                      >
-                        <Sparkles className="size-3.5" />
-                        Enhance
-                      </Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              )}
-            </div>
           </div>
           {enhanceError && (
             <p className="text-sm text-destructive">{enhanceError}</p>
           )}
 
-          <div className="shrink-0">
+          <div className="shrink-0 flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={
+                  loading || currentScriptText.length < 3 || isRecommending
+                }
+                onClick={triggerRecommend}
+              >
+                {isRecommending ? (
+                  <Loader2 className="size-3.5 animate-spin text-primary" />
+                ) : (
+                  <Sparkles className="size-3.5 text-primary" />
+                )}
+                {recommendButtonLabel}
+              </Button>
+              <div className="flex items-center gap-1 shrink-0">
+                {canUndoEnhance && !isEnhancing && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-muted-foreground"
+                    onClick={handleUndoEnhance}
+                  >
+                    <Undo2 className="size-3.5" />
+                    Undo
+                  </Button>
+                )}
+                {isEnhancing ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-muted-foreground"
+                    onClick={handleStopEnhance}
+                  >
+                    <span className="relative size-5">
+                      <Loader2 className="absolute inset-0 size-5 animate-spin" />
+                      <Square className="absolute inset-[5px] size-[10px] fill-current" />
+                    </span>
+                    Stop
+                  </Button>
+                ) : (
+                  <Popover
+                    open={enhancePopoverOpen}
+                    onOpenChange={setEnhancePopoverOpen}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        disabled={
+                          !scriptValue ||
+                          scriptValue.length < 10 ||
+                          isSubmitting
+                        }
+                      >
+                        <Sparkles className="size-3.5 text-primary" />
+                        Enhance Script
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" side="top" className="w-auto">
+                      <div className="flex flex-col gap-3">
+                        <p className="text-sm font-medium">
+                          Target video duration
+                        </p>
+                        <ToggleGroup
+                          type="single"
+                          value={String(targetDuration)}
+                          onValueChange={(v) => {
+                            if (v) setTargetDuration(Number(v));
+                          }}
+                          variant="outline"
+                          size="sm"
+                        >
+                          {DURATION_PRESETS.map((preset) => (
+                            <ToggleGroupItem
+                              key={preset.value}
+                              value={preset.value}
+                            >
+                              {preset.label}
+                            </ToggleGroupItem>
+                          ))}
+                        </ToggleGroup>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => {
+                            setEnhancePopoverOpen(false);
+                            void handleEnhance();
+                          }}
+                        >
+                          <Sparkles className="size-3.5" />
+                          Enhance
+                        </Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
+            </div>
             <StyleSelector
               styles={styles}
               selectedStyleId={styleId || sequence?.styleId || null}
-              onStyleSelect={setStyleId}
+              onStyleSelect={selectStyle}
               loading={isLoadingStyles}
+              recommendations={activeRecommendations}
+              recommendationsLoading={isRecommending && !recommendationsStale}
             />
+            {(recommendEmpty || recommendFailed) && (
+              <p className="text-xs text-muted-foreground">
+                {recommendFailed
+                  ? "Couldn't suggest styles — try again or pick one below."
+                  : 'No standout matches — try again or pick a style below.'}
+              </p>
+            )}
           </div>
         </CardContent>
 

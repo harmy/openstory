@@ -60,6 +60,7 @@ const RECORD_STAGING_DIR = resolve(
 // family — otherwise its recordings get stuck in `_unsorted/` with a warning.
 const STAGE_PREFIXES: ReadonlyArray<readonly [string, string]> = [
   ['Enhance the script inside <USER_SCRIPT>', 'script-enhance'],
+  ['STYLE CATALOG (choose by index):', 'style-recommend'],
   ['Analyze the script within the USER_SCRIPT', 'script-analyze'],
   ['Match the following library locations', 'location-match'],
   ['Cast the following talent', 'talent-cast'],
