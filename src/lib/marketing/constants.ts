@@ -30,6 +30,8 @@ export const SITE_CONFIG = {
   ctaHref: '/sequences/new',
   githubHref: 'https://github.com/openstory-so/openstory',
   xHref: 'https://x.com/openstory_so',
+  youtubeHref:
+    'https://www.youtube.com/playlist?list=PLCFHxgvzZ1EGTj_miPI2Rn8eUGrajumEA',
   founderXHref: 'https://x.com/tombeckenham',
 };
 

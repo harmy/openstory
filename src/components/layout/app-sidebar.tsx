@@ -1,5 +1,6 @@
 import { GitHubIcon } from '@/components/icons/github-icon';
 import { XIcon } from '@/components/icons/x-icon';
+import { YouTubeIcon } from '@/components/icons/youtube-icon';
 import {
   OpenStoryIcon,
   OpenStoryLogo,
@@ -114,6 +115,18 @@ export function AppSidebar() {
               <a href={SITE_CONFIG.githubHref} target="_blank" rel="noreferrer">
                 <GitHubIcon className="size-4" />
                 <span>GitHub</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Building OpenStory">
+              <a
+                href={SITE_CONFIG.youtubeHref}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <YouTubeIcon className="size-4" />
+                <span>Building OpenStory</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
