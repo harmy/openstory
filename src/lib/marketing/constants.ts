@@ -29,6 +29,9 @@ export const SITE_CONFIG = {
   ctaText: 'Get Started',
   ctaHref: '/sequences/new',
   githubHref: 'https://github.com/openstory-so/openstory',
+  xHref: 'https://x.com/openstory_so',
+  youtubeHref:
+    'https://www.youtube.com/playlist?list=PLCFHxgvzZ1EGTj_miPI2Rn8eUGrajumEA',
 };
 
 export const TOP_TIER_FEATURES = [
