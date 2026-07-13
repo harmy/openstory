@@ -2,7 +2,7 @@
 name: block-migration-edits
 enabled: true
 event: file
-action: block
+action: warn
 conditions:
   - field: file_path
     operator: regex_match

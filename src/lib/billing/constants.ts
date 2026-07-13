@@ -14,6 +14,12 @@ export function isStripeEnabled(): boolean {
 /** Processing fee applied when purchasing credits (e.g., 0.05 = 5%). Not charged on usage. */
 export const PROCESSING_FEE_PERCENT = 0.05;
 
+/** Free credit granted to every new team on signup, in USD */
+const SIGNUP_GRANT_USD = 10;
+
+/** Free credit granted to every new team on signup, in microdollars */
+export const SIGNUP_GRANT_MICROS: Microdollars = usdToMicros(SIGNUP_GRANT_USD);
+
 /** Minimum top-up amount in USD */
 export const MIN_TOPUP_AMOUNT_USD = 10;
 
