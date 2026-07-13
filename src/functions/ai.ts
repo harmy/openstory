@@ -654,8 +654,11 @@ ${truncateField(sanitizedScript, RECOMMEND_SCRIPT_BUDGET)}
 
 Return up to ${limit} best-fit styles, strongest first.`;
 
-    const result = await callLLM({
-      model: RECOMMENDED_MODELS.structured,
+    const model = RECOMMENDED_MODELS.structured;
+    let result;
+    let usage;
+    for await (const chunk of callLLMStream({
+      model,
       messages: [
         { role: 'system' as const, content: RECOMMEND_STYLES_SYSTEM },
         { role: 'user' as const, content: userPrompt },
@@ -665,9 +668,18 @@ Return up to ${limit} best-fit styles, strongest first.`;
       userId: context.user.id,
       responseSchema: styleRecommendationResponseSchema,
       apiKey: llmKey,
-    });
+    })) {
+      if (chunk.done) {
+        result = chunk.parsed;
+        usage = chunk.usage;
+      }
+    }
 
-    await deduct?.();
+    if (!result) {
+      throw new Error('No response received from AI service');
+    }
+
+    await deduct?.(llmCostFromUsage(usage, model));
 
     const recommendations = rankStyleRecommendations(
       result,
