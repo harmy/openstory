@@ -32,7 +32,6 @@ export const SITE_CONFIG = {
   xHref: 'https://x.com/openstory_so',
   youtubeHref:
     'https://www.youtube.com/playlist?list=PLCFHxgvzZ1EGTj_miPI2Rn8eUGrajumEA',
-  founderXHref: 'https://x.com/tombeckenham',
 };
 
 export const TOP_TIER_FEATURES = [

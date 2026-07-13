@@ -119,14 +119,14 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Building OpenStory">
+            <SidebarMenuButton asChild tooltip="YouTube">
               <a
                 href={SITE_CONFIG.youtubeHref}
                 target="_blank"
                 rel="noreferrer"
               >
                 <YouTubeIcon className="size-4" />
-                <span>Building OpenStory</span>
+                <span>YouTube</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -135,18 +135,6 @@ export function AppSidebar() {
               <a href={SITE_CONFIG.xHref} target="_blank" rel="noreferrer">
                 <XIcon className="size-4" />
                 <span>Follow OpenStory</span>
-              </a>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Follow the founder">
-              <a
-                href={SITE_CONFIG.founderXHref}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <XIcon className="size-4" />
-                <span>Follow the founder</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
