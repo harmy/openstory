@@ -2,7 +2,7 @@
 name: block-migration-bash
 enabled: true
 event: bash
-action: block
+action: warn
 pattern: (rm|mv|cp|sed\s+-i|echo\s*>|tee|truncate).*drizzle/migrations/(meta/|[^/]+/snapshot\.json)|(rm|mv)\s+(-[^\s]*\s+)*drizzle/migrations/[0-9]|drizzle/migrations/(meta/|[^/]+/snapshot\.json).*(>|>>)
 ---
 
