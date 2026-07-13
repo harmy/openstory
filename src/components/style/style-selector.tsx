@@ -1,6 +1,6 @@
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { MoreHorizontal } from 'lucide-react';
+import { Info, MoreHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StyleRecommendation } from '@/hooks/use-styles';
 import {
@@ -9,9 +9,45 @@ import {
   RECOMMENDED_STYLE_SLOT_COUNT,
   resolveRecommendedStyles,
 } from '@/lib/style/prioritize-recommended-styles';
+import { StyleDetailDialog } from '@/components/style/style-detail-dialog';
 import { StyleInlineTile } from '@/components/style/style-inline-tile';
 import { StyleSelectionDialog } from './style-selection-dialog';
 import type { Style } from '@/lib/db/schema/libraries';
+
+/**
+ * Keep specific styles on screen without reordering the strip: any catalogue
+ * style in `keep` that fell outside the visible head is swapped into the tail
+ * slots (deduped, order preserved). Used so the current selection and the last
+ * browse-dialog pick always stay reachable, even when they sit deep in the
+ * catalogue.
+ */
+function keepStylesVisible(
+  head: Style[],
+  catalogue: Style[],
+  max: number,
+  keep: Array<Style | null>
+): Style[] {
+  if (max <= 0) return head;
+  const inCatalogue = new Set(catalogue.map((s) => s.id));
+  const inHead = new Set(head.map((s) => s.id));
+  const extras: Style[] = [];
+  const seen = new Set<string>();
+  for (const style of keep) {
+    if (
+      !style ||
+      seen.has(style.id) ||
+      inHead.has(style.id) ||
+      !inCatalogue.has(style.id)
+    ) {
+      continue;
+    }
+    seen.add(style.id);
+    extras.push(style);
+  }
+  if (extras.length === 0) return head;
+  const tail = extras.slice(0, max);
+  return [...head.slice(0, max - tail.length), ...tail];
+}
 
 type StyleSelectorProps = {
   styles: Style[];
@@ -33,6 +69,11 @@ export function StyleSelector({
   recommendationsLoading = false,
 }: StyleSelectorProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [detailStyle, setDetailStyle] = useState<Style | null>(null);
+  // The last style chosen from the "browse all" dialog. It stays pinned into
+  // the strip even after other tiles are selected, and only clears when the
+  // composer remounts (i.e. a fresh sequence).
+  const [pinnedStyleId, setPinnedStyleId] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const [focusableIndex, setFocusableIndex] = useState(0);
   const [visibleCount, setVisibleCount] = useState(10);
@@ -93,17 +134,30 @@ export function StyleSelector({
     () =>
       catalogueWithoutRecommendations(
         styles,
-        showRecommendations ? recommendations : undefined,
-        selectedStyleId
+        showRecommendations ? recommendations : undefined
       ),
-    [styles, recommendations, selectedStyleId, showRecommendations]
+    [styles, recommendations, showRecommendations]
   );
+
+  const selectedStyle = styles.find((s) => s.id === selectedStyleId) ?? null;
+  const pinnedStyle = pinnedStyleId
+    ? (styles.find((s) => s.id === pinnedStyleId) ?? null)
+    : null;
 
   const maxCatalogueSlots = Math.max(
     0,
     visibleCount - reservedSlots - recommendationSlotCount
   );
-  const visibleCatalogueStyles = catalogueStyles.slice(0, maxCatalogueSlots);
+  // Show the first N catalogue tiles in stable order (selecting must never
+  // shuffle tiles to the front). Keep the current selection visible — it may
+  // come from outside the strip (a URL `?style=`, the browse dialog) — plus the
+  // last browse-dialog pick, which stays pinned while other tiles are selected.
+  const visibleCatalogueStyles = keepStylesVisible(
+    catalogueStyles.slice(0, maxCatalogueSlots),
+    catalogueStyles,
+    maxCatalogueSlots,
+    [pinnedStyle, selectedStyle]
+  );
 
   const moreIndex = recommendationSlotCount + visibleCatalogueStyles.length;
   const totalItems = moreIndex + 1;
@@ -172,10 +226,12 @@ export function StyleSelector({
 
       if (nextIndex !== currentIndex) {
         setFocusableIndex(nextIndex);
-        const buttons = gridRef.current?.querySelectorAll('button');
-        const nextButton = buttons?.[nextIndex];
-        if (nextButton instanceof HTMLElement) {
-          nextButton.focus();
+        // The style tiles and the trailing "More" tile carry the roving
+        // tabindex, in render order — index them directly.
+        const tiles = gridRef.current?.querySelectorAll('[data-style-tile]');
+        const nextTile = tiles?.[nextIndex];
+        if (nextTile instanceof HTMLElement) {
+          nextTile.focus();
         }
       }
     },
@@ -183,6 +239,8 @@ export function StyleSelector({
   );
 
   const handleStyleSelect = (styleId: string) => {
+    // Pin the browse-dialog pick so it stays in the strip afterwards.
+    setPinnedStyleId(styleId);
     onStyleSelect(styleId);
     setDialogOpen(false);
   };
@@ -191,7 +249,7 @@ export function StyleSelector({
     <>
       <div
         ref={gridRef}
-        className="grid grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 p-2"
+        className="grid w-full grid-cols-[repeat(auto-fill,minmax(65px,1fr))] gap-3 py-2"
         role="grid"
         aria-label="Style selection"
       >
@@ -239,6 +297,7 @@ export function StyleSelector({
 
             <button
               type="button"
+              data-style-tile
               onClick={() => setDialogOpen(true)}
               onKeyDown={(e) => handleKeyDown(e, moreIndex)}
               tabIndex={moreIndex === focusableIndex ? 0 : -1}
@@ -264,15 +323,39 @@ export function StyleSelector({
           </>
         )}
       </div>
+      {/* Reserve the info-line height so it never shifts the layout when the
+          selection resolves — skeleton while styles load, then the link. */}
+      <div className="flex min-h-5 items-center">
+        {loading ? (
+          <Skeleton className="h-4 w-40" />
+        ) : (
+          selectedStyle && (
+            <button
+              type="button"
+              onClick={() => setDetailStyle(selectedStyle)}
+              className="inline-flex w-fit items-center gap-1.5 self-start rounded-sm px-1 text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Info className="size-3.5" />
+              View {selectedStyle.name} details
+            </button>
+          )
+        )}
+      </div>
 
       <StyleSelectionDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         styles={styles}
-        selectedStyleId={selectedStyleId}
         onStyleSelect={handleStyleSelect}
-        recommendations={recommendations}
-        recommendationsLoading={recommendationsLoading}
+      />
+
+      <StyleDetailDialog
+        style={detailStyle}
+        open={detailStyle !== null}
+        onOpenChange={(open) => {
+          if (!open) setDetailStyle(null);
+        }}
+        onUseStyle={onStyleSelect}
       />
     </>
   );

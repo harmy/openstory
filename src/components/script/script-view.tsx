@@ -107,6 +107,9 @@ export const ScriptView: FC<{
    *  saved draft for the initial value; remount (via `key`) to re-seed. */
   initialScript?: string;
   initialStyleId?: string;
+  /** Notified when the user picks a style, so the new-sequence page can mirror
+   *  it into `?style=`. Not called for the auto-selected default. */
+  onStyleChange?: (styleId: string) => void;
 }> = ({
   teamId,
   sequence,
@@ -117,6 +120,7 @@ export const ScriptView: FC<{
   onCancel,
   initialScript,
   initialStyleId,
+  onStyleChange,
 }) => {
   const isEditing = !!sequence?.id;
   const { data: composedScriptData } = useComposedScript(sequence?.id);
@@ -143,6 +147,13 @@ export const ScriptView: FC<{
     setContentState((s) => ({ ...s, script: v }));
   const setStyleId = (v: string | null) =>
     setContentState((s) => ({ ...s, styleId: v }));
+  // A user-initiated style pick: update local state and mirror it to the URL.
+  // The auto-selected default calls `setStyleId` directly, so a bare
+  // /sequences/new stays a bare URL until the user actually chooses.
+  const selectStyle = (styleId: string) => {
+    setStyleId(styleId);
+    onStyleChange?.(styleId);
+  };
 
   // Load saved settings from localStorage
   const {
@@ -267,7 +278,12 @@ export const ScriptView: FC<{
 
   const posthog = usePostHog();
 
-  const { data: styles = [], isLoading: isLoadingStyles } = useStyles();
+  // `isPending` (not `isLoading`) so the skeleton state is shown whenever there
+  // is no styles data yet — including during SSR, where the query is disabled
+  // behind the still-pending session and `isLoading` is misleadingly false.
+  // This keeps the server and first client render identical (both skeletons)
+  // and avoids a hydration mismatch (#style-selector "View all 0 styles").
+  const { data: styles = [], isPending: isLoadingStyles } = useStyles();
 
   // Auto-select first style if none selected
   useEffect(() => {
@@ -833,7 +849,7 @@ export const ScriptView: FC<{
         className="flex flex-col min-h-0 max-h-full"
       >
         {/* Control bar */}
-        <CardHeader className="shrink-0 flex flex-col md:flex-row items-start justify-between gap-3 px-6 py-4 border-b border-border/50 bg-card/40">
+        <CardHeader className="shrink-0 flex flex-col lg:flex-row items-start justify-between gap-3 px-6 py-4 border-b border-border/50 bg-card/40">
           <GenerationSettings
             aspectRatio={aspectRatio}
             analysisModels={analysisModels}
@@ -923,44 +939,25 @@ export const ScriptView: FC<{
           )}
 
           <div className="shrink-0 flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1 flex flex-col gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 self-start"
-                  disabled={
-                    loading || currentScriptText.length < 3 || isRecommending
-                  }
-                  onClick={triggerRecommend}
-                >
-                  {isRecommending ? (
-                    <Loader2 className="size-3.5 animate-spin text-primary" />
-                  ) : (
-                    <Sparkles className="size-3.5 text-primary" />
-                  )}
-                  {recommendButtonLabel}
-                </Button>
-                <StyleSelector
-                  styles={styles}
-                  selectedStyleId={styleId || sequence?.styleId || null}
-                  onStyleSelect={setStyleId}
-                  loading={isLoadingStyles}
-                  recommendations={activeRecommendations}
-                  recommendationsLoading={
-                    isRecommending && !recommendationsStale
-                  }
-                />
-                {(recommendEmpty || recommendFailed) && (
-                  <p className="text-xs text-muted-foreground">
-                    {recommendFailed
-                      ? "Couldn't suggest styles — try again or pick one below."
-                      : 'No standout matches — try again or pick a style below.'}
-                  </p>
+            <div className="flex items-center justify-between gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={
+                  loading || currentScriptText.length < 3 || isRecommending
+                }
+                onClick={triggerRecommend}
+              >
+                {isRecommending ? (
+                  <Loader2 className="size-3.5 animate-spin text-primary" />
+                ) : (
+                  <Sparkles className="size-3.5 text-primary" />
                 )}
-              </div>
-              <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                {recommendButtonLabel}
+              </Button>
+              <div className="flex items-center gap-1 shrink-0">
                 {canUndoEnhance && !isEnhancing && (
                   <Button
                     type="button"
@@ -1049,6 +1046,21 @@ export const ScriptView: FC<{
                 )}
               </div>
             </div>
+            <StyleSelector
+              styles={styles}
+              selectedStyleId={styleId || sequence?.styleId || null}
+              onStyleSelect={selectStyle}
+              loading={isLoadingStyles}
+              recommendations={activeRecommendations}
+              recommendationsLoading={isRecommending && !recommendationsStale}
+            />
+            {(recommendEmpty || recommendFailed) && (
+              <p className="text-xs text-muted-foreground">
+                {recommendFailed
+                  ? "Couldn't suggest styles — try again or pick one below."
+                  : 'No standout matches — try again or pick a style below.'}
+              </p>
+            )}
           </div>
         </CardContent>
 

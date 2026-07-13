@@ -28,27 +28,13 @@ export function resolveRecommendedStyles(
     .filter((s): s is Style => s !== undefined);
 }
 
-function bumpSelectedStyle(
-  styles: Style[],
-  selectedStyleId?: string | null
-): Style[] {
-  if (!selectedStyleId) return styles;
-  const selectedIndex = styles.findIndex((s) => s.id === selectedStyleId);
-  if (selectedIndex <= 0) return styles;
-  const selected = styles[selectedIndex];
-  if (!selected) return styles;
-  return [selected, ...styles.filter((s) => s.id !== selectedStyleId)];
-}
-
-/** Catalogue order with recommendations removed (selected style bumped when needed). */
+/** Catalogue in its natural order with the recommended picks removed. */
 export function catalogueWithoutRecommendations(
   styles: Style[],
-  recommendations: StyleRecommendation[] | undefined,
-  selectedStyleId?: string | null
+  recommendations: StyleRecommendation[] | undefined
 ): Style[] {
   const recommendedIds = new Set(
     resolveRecommendedStyles(styles, recommendations).map((s) => s.id)
   );
-  const rest = styles.filter((s) => !recommendedIds.has(s.id));
-  return bumpSelectedStyle(rest, selectedStyleId);
+  return styles.filter((s) => !recommendedIds.has(s.id));
 }

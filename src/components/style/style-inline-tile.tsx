@@ -51,6 +51,7 @@ export function StyleInlineTile({
   return (
     <button
       type="button"
+      data-style-tile
       onClick={() => onSelect(style.id)}
       onKeyDown={onKeyDown}
       tabIndex={tabIndex}
