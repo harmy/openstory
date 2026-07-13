@@ -126,14 +126,14 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Follow Tom on X">
+            <SidebarMenuButton asChild tooltip="Follow the founder on X">
               <a
                 href={SITE_CONFIG.founderXHref}
                 target="_blank"
                 rel="noreferrer"
               >
                 <XIcon className="size-4" />
-                <span>Follow Tom on X</span>
+                <span>Follow the founder on X</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
