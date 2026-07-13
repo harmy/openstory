@@ -22,7 +22,19 @@ import {
 } from '@/lib/shots/shot-with-image';
 import { teamMembers, teams } from '@/lib/db/schema/teams';
 import { ValidationError } from '@/lib/errors';
-import { and, asc, count, desc, eq, like, not, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  like,
+  not,
+  or,
+  sql,
+} from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 
 // Ambiguity-free alphabet (no 0/O/1/I) -- 32 chars -> 32^6 ~ 1B combinations
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -153,11 +165,32 @@ export function createAdminMethods(db: Database) {
     const { limit = 50, offset = 0, search } = opts ?? {};
 
     const trimmed = search?.trim().toLowerCase();
+
+    // Resolve a person via TEAM MEMBERSHIP, not the sequence creator. Support
+    // ("show me this customer's account") means their whole team's work, and
+    // `sequences.createdBy` is not a reliable handle for it: it is nullable and
+    // `ON DELETE SET NULL`, so a `user`-table rebuild nulls it wholesale (the
+    // #612-class incident that stranded 174 prod sequences). Matching any team
+    // member keeps lookup working even when the creator column is lost again.
+    const memberUser = alias(user, 'member_user');
     const searchClause = trimmed
       ? or(
           like(sql`lower(${sequences.title})`, `%${trimmed}%`),
-          like(sql`lower(${user.name})`, `%${trimmed}%`),
-          like(sql`lower(${user.email})`, `%${trimmed}%`)
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(teamMembers)
+              .innerJoin(memberUser, eq(memberUser.id, teamMembers.userId))
+              .where(
+                and(
+                  eq(teamMembers.teamId, sequences.teamId),
+                  or(
+                    like(sql`lower(${memberUser.name})`, `%${trimmed}%`),
+                    like(sql`lower(${memberUser.email})`, `%${trimmed}%`)
+                  )
+                )
+              )
+          )
         )
       : undefined;
 
