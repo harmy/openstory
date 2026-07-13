@@ -18,7 +18,7 @@ import { aspectRatioToDimensions } from '@/lib/constants/aspect-ratios';
 import { type Microdollars, addMicros, micros, multiplyMicros } from './money';
 
 /**
- * Estimate the raw cost (before markup) of generating images. Rough pre-flight
+ * Estimate provider cost of generating images. Rough pre-flight
  * gate only — the exact charge comes from fal's reported units post-generation.
  */
 export function estimateImageCost(
@@ -38,7 +38,7 @@ export function estimateImageCost(
 }
 
 /**
- * Estimate the raw cost (before markup) of generating video.
+ * Estimate provider cost of generating video.
  */
 export function estimateVideoCost(
   model: ImageToVideoModel,
@@ -52,7 +52,7 @@ export function estimateVideoCost(
 }
 
 /**
- * Estimate the raw cost (before markup) of generating one music track.
+ * Estimate provider cost of generating one music track.
  */
 export function estimateAudioCost(
   model: AudioModel,

@@ -42,8 +42,10 @@ import {
 import { BILLING_GATE_KEY } from '@/hooks/use-billing-gate';
 import { useShowBalance } from '@/hooks/use-show-balance';
 import {
+  formatProcessingFeePercent,
   MIN_TOPUP_AMOUNT_USD,
   PRESET_TOPUP_AMOUNTS_USD,
+  splitCheckoutAmounts,
 } from '@/lib/billing/constants';
 import { usePostHog } from '@posthog/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -219,6 +221,10 @@ export function BillingSettings({ success, canceled }: BillingSettingsProps) {
   const effectiveAmount = selectedAmount ?? parseFloat(customAmount);
   const isValidAmount =
     !isNaN(effectiveAmount) && effectiveAmount >= MIN_TOPUP_AMOUNT_USD;
+  const checkoutBreakdown = isValidAmount
+    ? splitCheckoutAmounts(effectiveAmount)
+    : null;
+  const feePercent = formatProcessingFeePercent();
   const autoTopUpThreshold =
     autoTopUpPrompt !== null ? Math.ceil((autoTopUpPrompt * 0.1) / 5) * 5 : 5;
 
@@ -300,7 +306,7 @@ export function BillingSettings({ success, canceled }: BillingSettingsProps) {
           <SectionHeader
             icon={Wallet}
             title="Credit Balance"
-            description="Credits are used for image and video generation"
+            description="Pay-as-you-go wallet for AI generation at provider cost"
           />
         </CardHeader>
         <CardContent className="space-y-4">
@@ -342,7 +348,7 @@ export function BillingSettings({ success, canceled }: BillingSettingsProps) {
               <SectionHeader
                 icon={DollarSign}
                 title="Add Credits"
-                description="Choose an amount or enter a custom value"
+                description={`Credits are billed at provider cost. A ${feePercent} processing fee applies at purchase — not on usage.`}
               />
             </CardHeader>
             <CardContent className="space-y-4">
@@ -386,6 +392,25 @@ export function BillingSettings({ success, canceled }: BillingSettingsProps) {
                 />
               </div>
 
+              {checkoutBreakdown && (
+                <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm">
+                  <div className="flex justify-between tabular-nums">
+                    <span className="text-muted-foreground">Credits</span>
+                    <span>${checkoutBreakdown.creditUsd.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between tabular-nums">
+                    <span className="text-muted-foreground">
+                      Processing fee ({feePercent})
+                    </span>
+                    <span>${checkoutBreakdown.feeUsd.toFixed(2)}</span>
+                  </div>
+                  <div className="mt-2 flex justify-between border-t pt-2 font-medium tabular-nums">
+                    <span>Total charged</span>
+                    <span>${checkoutBreakdown.totalUsd.toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+
               <Button
                 onClick={handleTopUp}
                 disabled={!isValidAmount || checkoutMutation.isPending}
@@ -393,10 +418,16 @@ export function BillingSettings({ success, canceled }: BillingSettingsProps) {
               >
                 {checkoutMutation.isPending
                   ? 'Loading…'
-                  : isValidAmount
-                    ? `Top up $${effectiveAmount}`
+                  : checkoutBreakdown
+                    ? `Pay $${checkoutBreakdown.totalUsd.toFixed(2)}`
                     : 'Top up'}
               </Button>
+
+              <p className="text-center text-xs text-muted-foreground">
+                <Link to="/pricing" className="underline hover:text-foreground">
+                  View full model pricing
+                </Link>
+              </p>
 
               {!balanceLoading && !balanceData?.hasPaymentMethod && (
                 <p className="text-xs text-muted-foreground">

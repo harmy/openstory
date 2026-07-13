@@ -6,8 +6,8 @@
 import { getEnv } from '#env';
 import { mediaUrlSchema } from '@/lib/schemas/media-url.schemas';
 import {
-  callLLM,
   callLLMStream,
+  llmCostFromUsage,
   PROMPT_REASONING,
   RECOMMENDED_MODELS,
 } from '@/lib/ai/llm-client';
@@ -22,6 +22,7 @@ import {
   scriptEnhancementRateLimiter,
 } from '@/lib/ai/script-enhancer';
 import { estimateLLMCost } from '@/lib/billing/cost-estimation';
+import type { Microdollars } from '@/lib/billing/money';
 import { aspectRatioSchema } from '@/lib/constants/aspect-ratios';
 import { StyleConfigSchema } from '@/lib/db/schema/libraries';
 import type { ScopedDb } from '@/lib/db/scoped';
@@ -87,12 +88,15 @@ async function prepareBilling(
   scopedDb: ScopedDb,
   description: string,
   metadata?: Record<string, unknown>
-): Promise<{ llmKey: ResolvedLlmKey; deduct?: () => Promise<void> }> {
+): Promise<{
+  llmKey: ResolvedLlmKey;
+  deduct?: (actualCost: Microdollars) => Promise<void>;
+}> {
   const llmKey = await scopedDb.apiKeys.resolveLlmKey();
   if (llmKey.source === 'team') return { llmKey };
 
-  const cost = estimateLLMCost(1);
-  const canAfford = await scopedDb.billing.hasEnoughCredits(cost);
+  const estimatedCost = estimateLLMCost(1);
+  const canAfford = await scopedDb.billing.hasEnoughCredits(estimatedCost);
   if (!canAfford) {
     throw new InsufficientCreditsError(
       `Insufficient credits for ${description.toLowerCase()}`
@@ -101,9 +105,9 @@ async function prepareBilling(
 
   return {
     llmKey,
-    deduct: async () => {
-      if (cost > 0) {
-        await scopedDb.billing.deductCredits(cost, {
+    deduct: async (actualCost) => {
+      if (actualCost > 0) {
+        await scopedDb.billing.deductCredits(actualCost, {
           description,
           metadata,
         });
@@ -133,8 +137,11 @@ export const shortenPromptFn = createServerFn({ method: 'POST' })
       { model: RECOMMENDED_MODELS.fast }
     );
 
-    const shortenedPrompt = await callLLM({
-      model: RECOMMENDED_MODELS.fast,
+    const model = RECOMMENDED_MODELS.fast;
+    let shortenedPrompt = '';
+    let usage;
+    for await (const chunk of callLLMStream({
+      model,
       messages: [
         { role: 'system' as const, content: SHORTEN_PROMPT_SYSTEM },
         { role: 'user' as const, content: data.prompt },
@@ -144,9 +151,12 @@ export const shortenPromptFn = createServerFn({ method: 'POST' })
       observationName: 'shortenPrompt',
       userId: context.user.id,
       apiKey: llmKey,
-    });
+    })) {
+      shortenedPrompt = chunk.accumulated;
+      if (chunk.done) usage = chunk.usage;
+    }
 
-    await deduct?.();
+    await deduct?.(llmCostFromUsage(usage, model));
 
     if (!shortenedPrompt) {
       throw new Error('No response received from AI service');
@@ -238,7 +248,9 @@ export const estimateSceneDurationFn = createServerFn({ method: 'POST' })
       .filter(Boolean)
       .join('\n');
 
-    const response = await callLLM({
+    let response;
+    let usage;
+    for await (const chunk of callLLMStream({
       model: analysisModel,
       messages: [
         { role: 'system' as const, content: ESTIMATE_SCENE_DURATION_SYSTEM },
@@ -250,9 +262,18 @@ export const estimateSceneDurationFn = createServerFn({ method: 'POST' })
       userId: context.user.id,
       responseSchema: sceneDurationResponseSchema,
       apiKey: llmKey,
-    });
+    })) {
+      if (chunk.done) {
+        response = chunk.parsed;
+        usage = chunk.usage;
+      }
+    }
 
-    await deduct?.();
+    if (!response) {
+      throw new Error('No response received from AI service');
+    }
+
+    await deduct?.(llmCostFromUsage(usage, analysisModel));
 
     return { durationSeconds: clampDuration(response.durationSeconds) };
   });
@@ -390,6 +411,7 @@ export async function* streamScriptEnhancement(
   // is NOT gated — it's deterministic once recorded, so E2E records + replays
   // it like any other request.
   const useWebSearch = getEnv().E2E_TEST !== 'true';
+  let usage;
   for await (const chunk of callLLMStream({
     model,
     messages,
@@ -417,9 +439,10 @@ export async function* streamScriptEnhancement(
     if (chunk.delta) {
       yield { delta: chunk.delta };
     }
+    if (chunk.done) usage = chunk.usage;
   }
 
-  await deduct?.();
+  await deduct?.(llmCostFromUsage(usage, model));
 }
 
 /**

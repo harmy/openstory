@@ -72,6 +72,12 @@ export function SiteFooter() {
 
           <div className="flex items-center gap-4">
             <Link
+              to="/pricing"
+              className="text-xs text-background/40 transition-colors hover:text-background"
+            >
+              Pricing
+            </Link>
+            <Link
               to="/docs"
               className="text-xs text-background/40 transition-colors hover:text-background"
             >

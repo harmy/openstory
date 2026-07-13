@@ -122,7 +122,7 @@ export const FAQ_ITEMS = [
   {
     question: 'How does pricing work?',
     answer:
-      'There are no subscriptions and no margin on model costs. You pay exactly what the AI providers charge\u2009\u2014\u2009nothing more. Bring your own API keys or self-host for full control.',
+      'No subscriptions. AI usage is billed at exact provider cost — the same rates as OpenRouter and fal.ai. A small processing fee applies only when you buy credits, not on each generation. See openstory.so/pricing for the full model price list. Bring your own API keys to pay providers directly.',
   },
   {
     question: 'Can I use my own API keys?',
@@ -150,12 +150,12 @@ export const OPEN_FAIR_BENEFITS = [
   {
     title: 'Bring Your Own Keys',
     description:
-      'Use your own API keys or self-host entirely. Pay providers directly, no markup.',
+      'Use your own API keys or self-host entirely. Pay providers directly with no platform fees.',
   },
   {
     title: 'At Cost Pricing',
     description:
-      'No subscriptions. No margin on model costs. You pay what the AI providers charge.',
+      'No subscriptions. AI usage at provider cost. A small fee applies only when buying credits.',
   },
   {
     title: 'Export Everything',

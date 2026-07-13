@@ -24,7 +24,7 @@ const logger = getLogger(['openstory', 'ai', 'llm-client']);
 /**
  * Convert a completed LLM call's usage into a charge. OpenRouter reports an
  * authoritative per-request `cost` (USD) on every response; we charge that raw
- * cost (markup is applied downstream in `deductCredits`). Logs and charges
+ * cost at face value in `deductCredits`. Logs and charges
  * nothing when no cost was reported, surfacing the gap rather than guessing.
  */
 export function llmCostFromUsage(
