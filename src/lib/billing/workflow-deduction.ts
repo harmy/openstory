@@ -9,6 +9,7 @@
  */
 
 import type { ScopedDb } from '@/lib/db/scoped';
+import { reportMissingBillingCost } from './billing-observability';
 import { type Microdollars, microsToUsd, ZERO_MICROS } from './money';
 
 import { getLogger } from '@/lib/observability/logger';
@@ -45,7 +46,17 @@ type WorkflowDeductionOpts = {
 export async function deductWorkflowCredits(
   opts: WorkflowDeductionOpts
 ): Promise<void> {
-  if (!opts.scopedDb || opts.costMicros <= 0 || opts.usedOwnKey) return;
+  if (!opts.scopedDb || opts.usedOwnKey) return;
+
+  if (opts.costMicros <= 0) {
+    reportMissingBillingCost({
+      source: 'workflow-deduction',
+      workflowName: opts.workflowName,
+      description: opts.description,
+      metadata: opts.metadata,
+    });
+    return;
+  }
 
   const { scopedDb } = opts;
   const canAfford = await scopedDb.billing.hasEnoughCredits(opts.costMicros);

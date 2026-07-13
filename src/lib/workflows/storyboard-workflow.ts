@@ -168,22 +168,22 @@ export class StoryboardWorkflow extends OpenStoryWorkflowEntrypoint<StoryboardWo
             { posterUrl }
           );
         });
-      }
 
-      await step.do('deduct-poster-credits', async () => {
-        await deductWorkflowCredits({
-          scopedDb,
-          costMicros: extractImageCost(posterResult.metadata),
-          usedOwnKey: posterResult.metadata.usedOwnKey,
-          description: `Sequence poster (${PREVIEW_IMAGE_MODEL})`,
-          idempotencyKey: `${event.instanceId}:poster`,
-          metadata: {
-            model: PREVIEW_IMAGE_MODEL,
-            sequenceId,
-          },
-          workflowName: 'StoryboardWorkflow',
+        await step.do('deduct-poster-credits', async () => {
+          await deductWorkflowCredits({
+            scopedDb,
+            costMicros: extractImageCost(posterResult.metadata),
+            usedOwnKey: posterResult.metadata.usedOwnKey,
+            description: `Sequence poster (${PREVIEW_IMAGE_MODEL})`,
+            idempotencyKey: `${event.instanceId}:poster`,
+            metadata: {
+              model: PREVIEW_IMAGE_MODEL,
+              sequenceId,
+            },
+            workflowName: 'StoryboardWorkflow',
+          });
         });
-      });
+      }
     }
 
     // Spawn the analyze-script child and block until it returns. Pattern 3.

@@ -4,12 +4,7 @@
  */
 
 import { getEnv } from '#env';
-import {
-  type Microdollars,
-  usdToMicros,
-  multiplyMicros,
-  microsToUsdCents,
-} from './money';
+import { type Microdollars, usdToMicros, microsToUsd } from './money';
 
 /** Whether Stripe payment processing is available (checkout, webhooks, auto-top-up). */
 export function isStripeEnabled(): boolean {
@@ -77,7 +72,6 @@ export function splitCheckoutAmounts(creditAmountUsd: number): {
 
 /** Total Stripe charge in cents for a credit amount in microdollars */
 export function totalCheckoutCents(creditAmountMicros: Microdollars): number {
-  return microsToUsdCents(
-    multiplyMicros(creditAmountMicros, 1 + PROCESSING_FEE_PERCENT)
-  );
+  const { totalUsd } = splitCheckoutAmounts(microsToUsd(creditAmountMicros));
+  return Math.round(totalUsd * 100);
 }

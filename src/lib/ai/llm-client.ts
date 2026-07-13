@@ -4,6 +4,7 @@
  */
 
 import type { TextModel } from '@/lib/ai/models';
+import { reportMissingBillingCost } from '@/lib/billing/billing-observability';
 import {
   usdToMicros,
   ZERO_MICROS,
@@ -36,10 +37,11 @@ export function llmCostFromUsage(
     typeof usage.cost !== 'number' ||
     !Number.isFinite(usage.cost)
   ) {
-    logger.error(
-      `No usage cost reported for LLM call (${modelId}) — charging nothing`,
-      { usage }
-    );
+    reportMissingBillingCost({
+      source: 'llm-cost-from-usage',
+      modelId,
+      metadata: { usage },
+    });
     return ZERO_MICROS;
   }
   return usdToMicros(usage.cost);

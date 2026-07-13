@@ -7,7 +7,11 @@
 import type { ScopedDb } from '@/lib/db/scoped';
 import { describe, expect, it, vi } from 'vitest';
 import { micros, ZERO_MICROS } from './money';
-import { deductWorkflowCredits } from './workflow-deduction';
+
+const reportMissingBillingCost = vi.fn();
+vi.doMock('./billing-observability', () => ({
+  reportMissingBillingCost,
+}));
 
 function makeScopedDb({ canAfford = true } = {}) {
   const deductCredits = vi.fn().mockResolvedValue({
@@ -25,11 +29,14 @@ function makeScopedDb({ canAfford = true } = {}) {
   return { scopedDb, deductCredits, hasEnoughCredits, checkAutoTopUp };
 }
 
+const { deductWorkflowCredits: deductWorkflowCreditsImpl } =
+  await import('./workflow-deduction');
+
 describe('deductWorkflowCredits', () => {
   it('forwards the idempotencyKey to deductCredits', async () => {
     const { scopedDb, deductCredits } = makeScopedDb();
 
-    await deductWorkflowCredits({
+    await deductWorkflowCreditsImpl({
       scopedDb,
       costMicros: micros(2_000_000),
       usedOwnKey: false,
@@ -49,7 +56,7 @@ describe('deductWorkflowCredits', () => {
   it('skips when the team used its own key', async () => {
     const { scopedDb, deductCredits } = makeScopedDb();
 
-    await deductWorkflowCredits({
+    await deductWorkflowCreditsImpl({
       scopedDb,
       costMicros: micros(2_000_000),
       usedOwnKey: true,
@@ -60,24 +67,32 @@ describe('deductWorkflowCredits', () => {
     expect(deductCredits).not.toHaveBeenCalled();
   });
 
-  it('skips for a zero cost', async () => {
+  it('reports missing cost and skips deduction for zero cost', async () => {
+    reportMissingBillingCost.mockClear();
     const { scopedDb, deductCredits } = makeScopedDb();
 
-    await deductWorkflowCredits({
+    await deductWorkflowCreditsImpl({
       scopedDb,
       costMicros: ZERO_MICROS,
       usedOwnKey: false,
       description: 'LLM analysis (model)',
       idempotencyKey: 'env_wf_abc123:llm-step',
+      workflowName: 'ImageWorkflow',
     });
 
     expect(deductCredits).not.toHaveBeenCalled();
+    expect(reportMissingBillingCost).toHaveBeenCalledWith({
+      source: 'workflow-deduction',
+      workflowName: 'ImageWorkflow',
+      description: 'LLM analysis (model)',
+      metadata: undefined,
+    });
   });
 
   it('skips without a scopedDb (anonymous workflow)', async () => {
     const { deductCredits } = makeScopedDb();
 
-    await deductWorkflowCredits({
+    await deductWorkflowCreditsImpl({
       scopedDb: undefined,
       costMicros: micros(2_000_000),
       usedOwnKey: false,
@@ -93,7 +108,7 @@ describe('deductWorkflowCredits', () => {
       canAfford: false,
     });
 
-    await deductWorkflowCredits({
+    await deductWorkflowCreditsImpl({
       scopedDb,
       costMicros: micros(2_000_000),
       usedOwnKey: false,

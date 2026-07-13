@@ -4,6 +4,9 @@ import {
   describeElementImage,
   ELEMENT_VISION_MODEL,
 } from '@/lib/ai/element-vision';
+import { reportMissingBillingCost } from '@/lib/billing/billing-observability';
+import { estimateLLMCost } from '@/lib/billing/cost-estimation';
+import { InsufficientCreditsError } from '@/lib/errors';
 import { DEFAULT_VIDEO_MODEL, safeImageToVideoModel } from '@/lib/ai/models';
 import { resolveMotionPromptFromVersion } from '@/lib/motion/resolve-motion-prompt';
 import { generateId } from '@/lib/db/id';
@@ -140,16 +143,36 @@ export const analyzeDraftElementFn = createServerFn({ method: 'POST' })
   .handler(async ({ context, data }) => {
     const { scopedDb } = context;
     const llmKeyInfo = await scopedDb.apiKeys.resolveLlmKey();
+    if (llmKeyInfo.source !== 'team') {
+      const estimatedCost = estimateLLMCost(1);
+      const canAfford = await scopedDb.billing.hasEnoughCredits(estimatedCost);
+      if (!canAfford) {
+        throw new InsufficientCreditsError(
+          'Insufficient credits for element vision'
+        );
+      }
+    }
+
     const result = await describeElementImage({
       imageUrl: data.publicUrl,
       filename: data.filename,
       llmKey: llmKeyInfo,
     });
-    if (result.costMicros > 0 && !result.usedOwnKey) {
-      await scopedDb.billing.deductCredits(result.costMicros, {
-        description: `Element vision (${ELEMENT_VISION_MODEL})`,
-        metadata: { model: ELEMENT_VISION_MODEL, draft: true },
-      });
+
+    if (!result.usedOwnKey) {
+      if (result.costMicros > 0) {
+        await scopedDb.billing.deductCredits(result.costMicros, {
+          description: `Element vision (${ELEMENT_VISION_MODEL})`,
+          metadata: { model: ELEMENT_VISION_MODEL, draft: true },
+          idempotencyKey: `draft-vision:${data.publicUrl}`,
+        });
+      } else {
+        reportMissingBillingCost({
+          source: 'draft-element-vision',
+          modelId: ELEMENT_VISION_MODEL,
+          metadata: { draft: true, publicUrl: data.publicUrl },
+        });
+      }
     }
     return {
       description: result.description,

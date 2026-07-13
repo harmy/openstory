@@ -21,6 +21,7 @@ import {
   RateLimiter,
   scriptEnhancementRateLimiter,
 } from '@/lib/ai/script-enhancer';
+import { reportMissingBillingCost } from '@/lib/billing/billing-observability';
 import { estimateLLMCost } from '@/lib/billing/cost-estimation';
 import type { Microdollars } from '@/lib/billing/money';
 import { aspectRatioSchema } from '@/lib/constants/aspect-ratios';
@@ -111,7 +112,13 @@ async function prepareBilling(
           description,
           metadata,
         });
+        return;
       }
+      reportMissingBillingCost({
+        source: 'server-fn-deduct',
+        description,
+        metadata,
+      });
     },
   };
 }
@@ -156,8 +163,6 @@ export const shortenPromptFn = createServerFn({ method: 'POST' })
       if (chunk.done) usage = chunk.usage;
     }
 
-    await deduct?.(llmCostFromUsage(usage, model));
-
     if (!shortenedPrompt) {
       throw new Error('No response received from AI service');
     }
@@ -166,6 +171,8 @@ export const shortenPromptFn = createServerFn({ method: 'POST' })
     if (trimmedPrompt.length < 20) {
       throw new Error('Shortened prompt is too short. Please try again.');
     }
+
+    await deduct?.(llmCostFromUsage(usage, model));
 
     return {
       originalPrompt: data.prompt,
