@@ -9,9 +9,9 @@
  *
  * Falls back to single FAL_KEY when per-tier keys are not set.
  *
- * Usage:
- *   FAL_KEY=... bun scripts/verify-fal-costs.ts
- *   FAL_KEY_LOW=... FAL_KEY_HIGH=... bun scripts/verify-fal-costs.ts
+ * Usage (Bun autoloads .env.local; use --env-file= to override):
+ *   bun scripts/verify-fal-costs.ts
+ *   bun scripts/verify-fal-costs.ts --dry-run
  *   bun scripts/verify-fal-costs.ts --image-url https://example.com/test.jpg
  *   bun scripts/verify-fal-costs.ts --dry-run
  *   bun scripts/verify-fal-costs.ts --retry              # rerun only errored tasks
@@ -32,7 +32,6 @@ import { typedEntries } from '@/lib/utils/typed-object';
 import { createFalClient } from '@fal-ai/client';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-
 // ============================================================================
 // Configuration
 // ============================================================================
@@ -44,13 +43,13 @@ const FAL_KEY_HIGH = process.env.FAL_KEY_HIGH ?? process.env.FAL_KEY;
 
 if (!FAL_KEY_LOW || !FAL_KEY_HIGH) {
   console.error(
-    'Set FAL_KEY_LOW + FAL_KEY_HIGH (or FAL_KEY for single-key mode)'
+    'Set FAL_KEY in .env.local (or FAL_KEY_LOW + FAL_KEY_HIGH for two-key mode)'
   );
   process.exit(1);
 }
 
 const twoKeyMode = FAL_KEY_LOW !== FAL_KEY_HIGH;
-const FAL_ADMIN_KEY = process.env.FAL_ADMIN_KEY;
+const FAL_PRICING_KEY = process.env.FAL_PRICING_KEY;
 
 const MAX_CONCURRENT = 20;
 const TEST_PROMPT =
@@ -434,7 +433,7 @@ async function runTask(task: Task, semaphore: Semaphore): Promise<Result> {
 }
 
 // ============================================================================
-// Usage API (requires FAL_ADMIN_KEY)
+// Usage API (requires FAL_PRICING_KEY)
 // ============================================================================
 
 type UsageEntry = {
@@ -599,8 +598,10 @@ async function main() {
 
   // --compare: skip generation, load previous results and fetch usage
   if (compareOnly) {
-    if (!FAL_ADMIN_KEY) {
-      console.error('FAL_ADMIN_KEY is required for --compare');
+    if (!FAL_PRICING_KEY) {
+      console.error(
+        'FAL_PRICING_KEY is required for --compare (set in .env.local)'
+      );
       process.exit(1);
     }
     const csvPath = path.join(
@@ -675,7 +676,7 @@ async function main() {
     ];
 
     const usage = await fetchUsage(
-      FAL_ADMIN_KEY,
+      FAL_PRICING_KEY,
       startTime,
       endTime,
       uniqueEndpoints
@@ -809,8 +810,8 @@ async function main() {
   await writeFile(csvPath, csv);
   console.error(`\nCSV saved to: ${csvPath}`);
 
-  // Fetch usage data (requires FAL_ADMIN_KEY, skip in dry-run)
-  if (!dryRun && FAL_ADMIN_KEY) {
+  // Fetch usage data (requires FAL_PRICING_KEY, skip in dry-run)
+  if (!dryRun && FAL_PRICING_KEY) {
     const successfulResults = results.filter((r) => r.status === 'completed');
     const uniqueEndpoints = [
       ...new Set(successfulResults.map((r) => r.endpointId)),
@@ -823,7 +824,7 @@ async function main() {
       console.error('Fetching usage data from fal API…');
       try {
         const usage = await fetchUsage(
-          FAL_ADMIN_KEY,
+          FAL_PRICING_KEY,
           startTime,
           endTime,
           uniqueEndpoints
@@ -862,8 +863,10 @@ async function main() {
         );
       }
     }
-  } else if (!dryRun && !FAL_ADMIN_KEY) {
-    console.error('\nSkipping usage comparison (set FAL_ADMIN_KEY to enable)');
+  } else if (!dryRun && !FAL_PRICING_KEY) {
+    console.error(
+      '\nSkipping usage comparison (set FAL_PRICING_KEY in .env.local to enable)'
+    );
   }
 
   // Summary

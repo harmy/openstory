@@ -1,6 +1,9 @@
 import { mediaUrlSchema } from '@/lib/schemas/media-url.schemas';
 import { getSignedUploadUrl } from '#storage';
-import { describeElementImage } from '@/lib/ai/element-vision';
+import {
+  describeElementImage,
+  ELEMENT_VISION_MODEL,
+} from '@/lib/ai/element-vision';
 import { DEFAULT_VIDEO_MODEL, safeImageToVideoModel } from '@/lib/ai/models';
 import { resolveMotionPromptFromVersion } from '@/lib/motion/resolve-motion-prompt';
 import { generateId } from '@/lib/db/id';
@@ -135,12 +138,19 @@ export const analyzeDraftElementFn = createServerFn({ method: 'POST' })
     )
   )
   .handler(async ({ context, data }) => {
-    const llmKeyInfo = await context.scopedDb.apiKeys.resolveLlmKey();
+    const { scopedDb } = context;
+    const llmKeyInfo = await scopedDb.apiKeys.resolveLlmKey();
     const result = await describeElementImage({
       imageUrl: data.publicUrl,
       filename: data.filename,
       llmKey: llmKeyInfo,
     });
+    if (result.costMicros > 0 && !result.usedOwnKey) {
+      await scopedDb.billing.deductCredits(result.costMicros, {
+        description: `Element vision (${ELEMENT_VISION_MODEL})`,
+        metadata: { model: ELEMENT_VISION_MODEL, draft: true },
+      });
+    }
     return {
       description: result.description,
       consistencyTag: result.consistencyTag,

@@ -1,6 +1,6 @@
 /**
  * Fetch live pricing from fal.ai and write src/lib/ai/fal-pricing-data.ts
- * Usage:
+ * Usage (Bun autoloads .env.local; use --env-file= to override):
  *   bun scripts/update-fal-pricing.ts
  *
  * The output is a single flat map of `endpointId -> { unitPrice, unit }` taken
@@ -12,8 +12,8 @@
  * count before a generation runs.
  */
 import { writeFile } from 'node:fs/promises';
-import { getEnv } from '#env';
 import { getFalEndpointIds } from './fal-endpoints';
+import { requireFalPricingKey } from './env-file';
 
 /**
  * Wrapper to tag numeric values that should be serialized as `micros(X)` in the
@@ -38,11 +38,7 @@ type FalUnit =
 
 type BuilderFalPricing = { unitPrice: MicrosValue; unit: FalUnit };
 
-const apiKey = getEnv().FAL_KEY;
-if (!apiKey) {
-  console.error('FAL_KEY not set');
-  process.exit(1);
-}
+const apiKey = requireFalPricingKey();
 
 const endpoints = getFalEndpointIds();
 

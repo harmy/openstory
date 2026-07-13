@@ -21,7 +21,11 @@
  *     `context.workflowRunId` (not needed by this workflow, but included
  *     here for parity with other CF ports). */
 
-import { describeElementImage } from '@/lib/ai/element-vision';
+import {
+  describeElementImage,
+  ELEMENT_VISION_MODEL,
+} from '@/lib/ai/element-vision';
+import { deductWorkflowCredits } from '@/lib/billing/workflow-deduction';
 import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_VIDEO_MODEL,
@@ -226,6 +230,22 @@ export class ReplaceElementWorkflow extends OpenStoryWorkflowEntrypoint<ReplaceE
         result.consistencyTag
       );
       return result;
+    });
+
+    await step.do('deduct-vision-credits', async () => {
+      await deductWorkflowCredits({
+        scopedDb,
+        costMicros: visionResult.costMicros,
+        usedOwnKey: visionResult.usedOwnKey,
+        description: `Element vision (${ELEMENT_VISION_MODEL})`,
+        idempotencyKey: `${event.instanceId}:vision`,
+        metadata: {
+          model: ELEMENT_VISION_MODEL,
+          elementId,
+          sequenceId,
+        },
+        workflowName: 'ReplaceElementWorkflow',
+      });
     });
 
     // Vision-driven auto-rename: if the new image suggests a meaningfully
