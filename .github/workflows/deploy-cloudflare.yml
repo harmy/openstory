@@ -331,6 +331,51 @@ jobs:
           done
           echo "Deleted $deleted preview workflow(s) with suffix $SUFFIX"
 
+      # Container applications are account-level resources tied to a worker's
+      # DO namespace — they outlive the worker delete above. Leaving them
+      # blocks reopened/redeployed PRs ("already an application with the name
+      # pr-<n>-videoexportcontainer … associated with a different durable
+      # object namespace") and accrues provisioned instances. See #1052.
+      - name: Delete container application
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Naming: wrangler deploys the container as `<worker>-<class>` lowercased
+          # — worker is `pr-<n>`, class is VideoExportContainer →
+          # `pr-<n>-videoexportcontainer`. Same list-then-delete pattern as
+          # workflows; tolerate not-found (PRs that never got a container).
+          APP_NAME="pr-${PR_NUMBER}-videoexportcontainer"
+          resp=$(curl -sf \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/containers/applications?name=$APP_NAME") || {
+              echo "::warning::Failed to list container applications — skipping container cleanup"
+              exit 0
+            }
+
+          # Response may be a bare array (Cloudchamber OpenAPI) or the usual
+          # `{ success, result: [...] }` envelope — accept both.
+          ids=$(echo "$resp" | jq -r '
+            if type == "array" then .[]?.id
+            elif .result | type == "array" then .result[]?.id
+            else empty
+            end
+          ')
+
+          if [ -z "$ids" ]; then
+            echo "Container application $APP_NAME not found (already deleted or never deployed)"
+            exit 0
+          fi
+
+          for id in $ids; do
+            status=$(curl -sw '%{http_code}' -o /dev/null \
+              -X DELETE \
+              -H "Authorization: Bearer $CF_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/containers/applications/$id")
+            echo "Delete container application $APP_NAME ($id) response: $status"
+          done
+
       - name: Delete D1 database
         env:
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -373,4 +418,4 @@ jobs:
             <!-- cf-preview -->
             **Cloudflare Preview** torn down
 
-            Worker `pr-${{ github.event.pull_request.number }}` and D1 database `openstory-pr-${{ github.event.pull_request.number }}` have been deleted.
+            Worker `pr-${{ github.event.pull_request.number }}`, D1 database `openstory-pr-${{ github.event.pull_request.number }}`, preview workflows, and container application `pr-${{ github.event.pull_request.number }}-videoexportcontainer` have been deleted.
