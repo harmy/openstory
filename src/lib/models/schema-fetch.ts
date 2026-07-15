@@ -7,7 +7,7 @@
  * fetch happens server-side, per endpoint. (The bulk activity map is broken
  * for fal — too large — hence the per-endpoint route.)
  *
- * Deliberately self-contained: the richer catalog lib (`listCatalogModels` /
+ * Deliberately self-contained: the richer catalog lib (`listCatalogModelFamilies` /
  * `getModelDetail`) lives separately and owns browsing concerns; this helper
  * only answers "give me the input schema to validate against".
  */

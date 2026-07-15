@@ -1,4 +1,4 @@
-import { ModelCard } from '@/components/models/model-card';
+import { ModelFamilyCard } from '@/components/models/model-family-card';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/input-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { listCatalogModelsFn } from '@/functions/model-catalog';
+import { listCatalogModelFamiliesFn } from '@/functions/model-catalog';
 import { CATALOG_ACTIVITIES, type CatalogActivity } from '@/lib/models/catalog';
 import { useSuspenseInfiniteQuery } from '@tanstack/react-query';
 import { Boxes, Search, X } from 'lucide-react';
@@ -66,7 +66,7 @@ const ModelResults: FC<{
     useSuspenseInfiniteQuery({
       queryKey: ['model-catalog', activity ?? 'all', q ?? ''],
       queryFn: ({ pageParam }) =>
-        listCatalogModelsFn({
+        listCatalogModelFamiliesFn({
           data: {
             activity,
             q: q || undefined,
@@ -78,7 +78,7 @@ const ModelResults: FC<{
       staleTime: 5 * 60 * 1000,
     });
 
-  const models = data.pages.flatMap((page) => page.models);
+  const families = data.pages.flatMap((page) => page.families);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -98,7 +98,7 @@ const ModelResults: FC<{
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  if (models.length === 0) {
+  if (families.length === 0) {
     return (
       <Empty data-testid="models-empty-state">
         <EmptyHeader>
@@ -117,8 +117,13 @@ const ModelResults: FC<{
   return (
     <div className="flex flex-col items-center gap-6">
       <div className={`w-full ${GRID_CLASSES}`}>
-        {models.map((model) => (
-          <ModelCard key={model.endpointId} model={model} />
+        {families.map((family) => (
+          // Family names aren't unique (vendor-scoped); the representative
+          // belongs to exactly one family, so its id is.
+          <ModelFamilyCard
+            key={family.representative.endpointId}
+            family={family}
+          />
         ))}
       </div>
       {hasNextPage && (

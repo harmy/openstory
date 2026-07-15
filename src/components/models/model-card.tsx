@@ -3,6 +3,8 @@ import type { CatalogModel } from '@/lib/models/catalog';
 import { Link } from '@tanstack/react-router';
 import { AudioLines, Film, Image as ImageIcon } from 'lucide-react';
 import type { FC } from 'react';
+import { getModelGradient } from './model-gradient';
+import { ReleaseBadge } from './release-badge';
 
 export const ACTIVITY_ICONS = {
   image: ImageIcon,
@@ -39,10 +41,13 @@ export const ModelCard: FC<{ model: CatalogModel }> = ({ model }) => {
       aria-label={`${model.displayName} model details`}
       className="group flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition-all hover:scale-[1.02] hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
-      <div className="flex aspect-video items-center justify-center bg-muted">
+      <div
+        className="flex aspect-video items-center justify-center"
+        style={{ background: getModelGradient(model.endpointId) }}
+      >
         <Icon
           aria-hidden="true"
-          className="size-8 text-muted-foreground transition-transform group-hover:scale-110"
+          className="size-8 text-white/80 transition-transform group-hover:scale-110"
         />
       </div>
       <div className="flex flex-col gap-2 p-3">
@@ -58,11 +63,12 @@ export const ModelCard: FC<{ model: CatalogModel }> = ({ model }) => {
         >
           {model.endpointId}
         </span>
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <Badge variant="secondary">{ACTIVITY_LABELS[model.activity]}</Badge>
           {model.category && (
             <Badge variant="outline">{categoryLabel(model.category)}</Badge>
           )}
+          <ReleaseBadge releasedAt={model.firstSeenAt} />
         </div>
       </div>
     </Link>

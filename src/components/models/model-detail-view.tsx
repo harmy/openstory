@@ -24,13 +24,22 @@ import { AppImage } from '@/components/ui/app-image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   createGeneratedAssetFn,
   getGeneratedAssetFn,
   listGeneratedAssetsFn,
 } from '@/functions/model-assets';
-import { getModelDetailFn } from '@/functions/model-catalog';
+import { getModelDetailFn, getModelFamilyFn } from '@/functions/model-catalog';
 import { BILLING_BALANCE_KEY } from '@/hooks/use-billing-balance';
 import type { GeneratedAsset } from '@/lib/db/schema';
 import {
@@ -46,6 +55,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { AlertCircle, ExternalLink, SearchX, Sparkles } from 'lucide-react';
 import type { FC } from 'react';
 import { Suspense, useState } from 'react';
@@ -244,7 +254,7 @@ const ModelRunPanel: FC<{ detail: ModelDetail }> = ({ detail }) => {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-          <code className="font-mono text-xs">{model.endpointId}</code>
+          <VariantSwitcher model={model} />
           <a
             href={`https://fal.ai/models/${model.endpointId}`}
             target="_blank"
@@ -323,6 +333,83 @@ const ModelRunPanel: FC<{ detail: ModelDetail }> = ({ detail }) => {
         </section>
       )}
     </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Variant switcher
+// ---------------------------------------------------------------------------
+
+/**
+ * The endpoint-id line of the header. When the endpoint's family (see
+ * model-families.ts) has siblings, it becomes a select that navigates to the
+ * chosen variant; otherwise (single variant, family still loading, or lookup
+ * failure) it stays a static code element — progressive enhancement, the page
+ * never blocks on it.
+ */
+const VariantSwitcher: FC<{ model: ModelDetail['model'] }> = ({ model }) => {
+  const navigate = useNavigate();
+  const { data: family } = useQuery({
+    queryKey: ['model-family', model.endpointId, model.activity],
+    queryFn: () =>
+      getModelFamilyFn({
+        data: { endpointId: model.endpointId, activity: model.activity },
+      }),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const variants = family?.variants ?? [];
+  if (variants.length <= 1) {
+    return <code className="font-mono text-xs">{model.endpointId}</code>;
+  }
+
+  // Variants arrive sorted newest-version-first; group them for the listbox.
+  const versionGroups = new Map<string, typeof variants>();
+  for (const variant of variants) {
+    const version = variant.version ?? 'other';
+    versionGroups.set(version, [
+      ...(versionGroups.get(version) ?? []),
+      variant,
+    ]);
+  }
+  const showVersionLabels = versionGroups.size > 1;
+
+  return (
+    <Select
+      value={model.endpointId}
+      onValueChange={(endpointId) =>
+        void navigate({
+          to: '/models/$',
+          params: { _splat: endpointId },
+          search: { activity: model.activity },
+        })
+      }
+    >
+      <SelectTrigger size="sm" aria-label="Switch variant" className="w-fit">
+        <SelectValue>
+          <code className="font-mono text-xs">{model.endpointId}</code>
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {[...versionGroups.entries()].map(([version, group]) => (
+          <SelectGroup key={version}>
+            {showVersionLabels && <SelectLabel>{version}</SelectLabel>}
+            {group.map((variant) => (
+              <SelectItem key={variant.endpointId} value={variant.endpointId}>
+                <span className="flex min-w-0 flex-col items-start">
+                  <span className="truncate">
+                    {variant.variantLabel || variant.displayName}
+                  </span>
+                  <span className="truncate font-mono text-xs text-muted-foreground">
+                    {variant.endpointId}
+                  </span>
+                </span>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        ))}
+      </SelectContent>
+    </Select>
   );
 };
 

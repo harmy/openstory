@@ -1,30 +1,31 @@
 import { PageContainer } from '@/components/layout/page-container';
-import { ModelDetailView } from '@/components/models/model-detail-view';
+import { ModelFamilyView } from '@/components/models/model-family-view';
 import { MODELS_ENABLED } from '@/lib/flags';
 import { CATALOG_ACTIVITIES } from '@/lib/models/catalog';
 import { createFileRoute, Link, notFound } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
 import { z } from 'zod';
 
-// Splat route: fal endpoint ids contain slashes (`fal-ai/flux-1/dev`), so the
-// whole id is the `_splat`. The activity travels as a search param — the
-// schema API needs both to locate the model (when absent, the view probes
-// each activity in turn).
+// Splat route: family paths contain slashes (`fal-ai/kling-video`), so the
+// whole path is the `_splat`. The activity travels as a search param — the
+// catalog fetch needs both (when absent, the view probes each activity in
+// turn). The static `family` segment keeps this from colliding with the
+// endpoint-id splat at /models/$.
 const searchParamsSchema = z.object({
   activity: z.enum(CATALOG_ACTIVITIES).optional(),
 });
 
-export const Route = createFileRoute('/_app/models/$')({
+export const Route = createFileRoute('/_app/models/family/$')({
   beforeLoad: () => {
     if (!MODELS_ENABLED) throw notFound();
   },
   validateSearch: searchParamsSchema,
-  component: ModelDetailPage,
-  staticData: { breadcrumb: 'Model' },
+  component: ModelFamilyPage,
+  staticData: { breadcrumb: 'Model family' },
 });
 
-function ModelDetailPage() {
-  const { _splat: endpointId } = Route.useParams();
+function ModelFamilyPage() {
+  const { _splat: family } = Route.useParams();
   const { activity } = Route.useSearch();
 
   return (
@@ -38,8 +39,8 @@ function ModelDetailPage() {
           <ArrowLeft aria-hidden="true" className="size-4" />
           Back to models
         </Link>
-        {endpointId ? (
-          <ModelDetailView endpointId={endpointId} activity={activity} />
+        {family ? (
+          <ModelFamilyView family={family} activity={activity} />
         ) : null}
       </PageContainer>
     </div>

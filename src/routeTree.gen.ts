@@ -78,6 +78,7 @@ import { Route as AppSequencesIdScriptRouteImport } from './routes/_app/sequence
 import { Route as AppSequencesIdScenesRouteImport } from './routes/_app/sequences/$id/scenes'
 import { Route as AppSequencesIdMusicRouteImport } from './routes/_app/sequences/$id/music'
 import { Route as AppSequencesIdElementsRouteImport } from './routes/_app/sequences/$id/elements'
+import { Route as AppModelsFamilySplatRouteImport } from './routes/_app/models/family/$'
 import { Route as AppSequencesIdLocationsIndexRouteImport } from './routes/_app/sequences/$id/locations/index'
 import { Route as AppSequencesIdCastIndexRouteImport } from './routes/_app/sequences/$id/cast/index'
 import { Route as ApiV1SequencesIdExportsRouteImport } from './routes/api/v1/sequences.$id.exports'
@@ -426,6 +427,11 @@ const AppSequencesIdElementsRoute = AppSequencesIdElementsRouteImport.update({
   path: '/elements',
   getParentRoute: () => AppSequencesIdRouteRoute,
 } as any)
+const AppModelsFamilySplatRoute = AppModelsFamilySplatRouteImport.update({
+  id: '/models/family/$',
+  path: '/models/family/$',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppSequencesIdLocationsIndexRoute =
   AppSequencesIdLocationsIndexRouteImport.update({
     id: '/locations/',
@@ -515,6 +521,7 @@ export interface FileRoutesByFullPath {
   '/styles/': typeof AppStylesIndexRoute
   '/talent/': typeof AppTalentIndexRoute
   '/api/v1/': typeof ApiV1IndexRoute
+  '/models/family/$': typeof AppModelsFamilySplatRoute
   '/sequences/$id/elements': typeof AppSequencesIdElementsRoute
   '/sequences/$id/music': typeof AppSequencesIdMusicRoute
   '/sequences/$id/scenes': typeof AppSequencesIdScenesRoute
@@ -586,6 +593,7 @@ export interface FileRoutesByTo {
   '/styles': typeof AppStylesIndexRoute
   '/talent': typeof AppTalentIndexRoute
   '/api/v1': typeof ApiV1IndexRoute
+  '/models/family/$': typeof AppModelsFamilySplatRoute
   '/sequences/$id/elements': typeof AppSequencesIdElementsRoute
   '/sequences/$id/music': typeof AppSequencesIdMusicRoute
   '/sequences/$id/scenes': typeof AppSequencesIdScenesRoute
@@ -663,6 +671,7 @@ export interface FileRoutesById {
   '/_app/styles/': typeof AppStylesIndexRoute
   '/_app/talent/': typeof AppTalentIndexRoute
   '/api/v1/': typeof ApiV1IndexRoute
+  '/_app/models/family/$': typeof AppModelsFamilySplatRoute
   '/_app/sequences/$id/elements': typeof AppSequencesIdElementsRoute
   '/_app/sequences/$id/music': typeof AppSequencesIdMusicRoute
   '/_app/sequences/$id/scenes': typeof AppSequencesIdScenesRoute
@@ -738,6 +747,7 @@ export interface FileRouteTypes {
     | '/styles/'
     | '/talent/'
     | '/api/v1/'
+    | '/models/family/$'
     | '/sequences/$id/elements'
     | '/sequences/$id/music'
     | '/sequences/$id/scenes'
@@ -809,6 +819,7 @@ export interface FileRouteTypes {
     | '/styles'
     | '/talent'
     | '/api/v1'
+    | '/models/family/$'
     | '/sequences/$id/elements'
     | '/sequences/$id/music'
     | '/sequences/$id/scenes'
@@ -885,6 +896,7 @@ export interface FileRouteTypes {
     | '/_app/styles/'
     | '/_app/talent/'
     | '/api/v1/'
+    | '/_app/models/family/$'
     | '/_app/sequences/$id/elements'
     | '/_app/sequences/$id/music'
     | '/_app/sequences/$id/scenes'
@@ -1411,6 +1423,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSequencesIdElementsRouteImport
       parentRoute: typeof AppSequencesIdRouteRoute
     }
+    '/_app/models/family/$': {
+      id: '/_app/models/family/$'
+      path: '/models/family/$'
+      fullPath: '/models/family/$'
+      preLoaderRoute: typeof AppModelsFamilySplatRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/_app/sequences/$id/locations/': {
       id: '/_app/sequences/$id/locations/'
       path: '/locations'
@@ -1521,6 +1540,7 @@ interface AppRouteRouteChildren {
   AppSequencesIndexRoute: typeof AppSequencesIndexRoute
   AppStylesIndexRoute: typeof AppStylesIndexRoute
   AppTalentIndexRoute: typeof AppTalentIndexRoute
+  AppModelsFamilySplatRoute: typeof AppModelsFamilySplatRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
@@ -1538,6 +1558,7 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppSequencesIndexRoute: AppSequencesIndexRoute,
   AppStylesIndexRoute: AppStylesIndexRoute,
   AppTalentIndexRoute: AppTalentIndexRoute,
+  AppModelsFamilySplatRoute: AppModelsFamilySplatRoute,
 }
 
 const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(

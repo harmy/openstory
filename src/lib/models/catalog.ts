@@ -25,6 +25,7 @@
  */
 import type { JsonValue } from '@/lib/db/schema';
 import { getEnv } from '#env';
+import { groupModelsIntoFamilies, type ModelFamily } from './model-families';
 
 const MODELSCHEMAS_BASE_URL = 'https://modelschemas.com';
 
@@ -84,6 +85,13 @@ export type CatalogModel = {
   endpointId: string;
   displayName: string;
   activity: CatalogActivity;
+  /**
+   * Epoch seconds when modelschemas first saw the endpoint. Today this is
+   * mostly the June 2026 tracking epoch, not a true release date — it drives
+   * newest-first family ordering and gets meaningful as dates are backdated
+   * upstream / new models land.
+   */
+  firstSeenAt?: number;
   /** Not provided by modelschemas today; reserved for a future source. */
   thumbnailUrl?: string;
   /** Not provided by modelschemas today; reserved for a future source. */
@@ -92,8 +100,8 @@ export type CatalogModel = {
   category?: string;
 };
 
-export type CatalogModelList = {
-  models: CatalogModel[];
+export type CatalogFamilyList = {
+  families: ModelFamily[];
   /** Opaque cursor for the next page; absent on the last page. */
   nextCursor?: string;
 };
@@ -130,6 +138,7 @@ type ApiModel = {
   activity: string | null;
   displayName: string;
   capabilities: { category?: string } | null;
+  firstSeenAt: number | null;
   deprecatedAt: number | null;
 };
 
@@ -237,6 +246,7 @@ function toCatalogModel(model: ApiModel): CatalogModel | null {
     endpointId: model.rawId,
     displayName: model.displayName,
     activity,
+    firstSeenAt: model.firstSeenAt ?? undefined,
     category: model.capabilities?.category,
   };
 }
@@ -247,7 +257,7 @@ function parseCursor(cursor: string | undefined): number {
   return Number.isInteger(offset) && offset > 0 ? offset : 0;
 }
 
-export type ListCatalogModelsParams = {
+export type ListCatalogFamiliesParams = {
   activity?: CatalogActivity;
   /** Free-text filter, matched upstream against endpoint id + display name. */
   q?: string;
@@ -256,13 +266,11 @@ export type ListCatalogModelsParams = {
   limit?: number;
 };
 
-/**
- * List fal models from the live catalog, filtered to runnable activities and
- * non-deprecated endpoints, paginated locally (see module docs).
- */
-export async function listCatalogModels(
-  params: ListCatalogModelsParams = {}
-): Promise<CatalogModelList> {
+/** The full filtered catalog (runnable activities, non-deprecated). */
+async function fetchCatalogModels(params: {
+  activity?: CatalogActivity;
+  q?: string;
+}): Promise<CatalogModel[]> {
   const search = new URLSearchParams({ provider: 'fal' });
   if (params.activity) search.set('activity', params.activity);
   if (params.q) search.set('q', params.q);
@@ -272,18 +280,61 @@ export async function listCatalogModels(
     LIST_CACHE_TTL_MS
   );
   const parsed: ModelsApiResponse = JSON.parse(body);
-  const all = parsed.models.flatMap((model) => {
+  return parsed.models.flatMap((model) => {
     const mapped = toCatalogModel(model);
     return mapped ? [mapped] : [];
   });
+}
+
+/**
+ * List fal model families from the live catalog: the full filtered list is
+ * fetched (and TTL-cached), grouped by family (see model-families.ts), and
+ * paginated locally over families (see module docs re upstream pagination).
+ */
+export async function listCatalogModelFamilies(
+  params: ListCatalogFamiliesParams = {}
+): Promise<CatalogFamilyList> {
+  const all = await fetchCatalogModels(params);
+  const families = groupModelsIntoFamilies(all);
 
   const offset = parseCursor(params.cursor);
   const limit = params.limit ?? DEFAULT_PAGE_SIZE;
   const end = offset + limit;
   return {
-    models: all.slice(offset, end),
-    nextCursor: end < all.length ? String(end) : undefined,
+    families: families.slice(offset, end),
+    nextCursor: end < families.length ? String(end) : undefined,
   };
+}
+
+/**
+ * The family containing `endpointId` (drives the detail page's variant
+ * switcher), or null when the endpoint isn't in the catalog. Reuses the same
+ * cached activity list as the browse grid.
+ */
+export async function getModelFamily(
+  endpointId: string,
+  activity: CatalogActivity
+): Promise<ModelFamily | null> {
+  const all = await fetchCatalogModels({ activity });
+  const families = groupModelsIntoFamilies(all);
+  return (
+    families.find((family) =>
+      family.variants.some((variant) => variant.endpointId === endpointId)
+    ) ?? null
+  );
+}
+
+/**
+ * A family by its id-path key (`fal-ai/kling-video`) — the family page's
+ * fetch. Null when no such family exists for the activity.
+ */
+export async function getModelFamilyByPath(
+  familyPath: string,
+  activity: CatalogActivity
+): Promise<ModelFamily | null> {
+  const all = await fetchCatalogModels({ activity });
+  const families = groupModelsIntoFamilies(all);
+  return families.find((family) => family.family === familyPath) ?? null;
 }
 
 // ---------------------------------------------------------------------------

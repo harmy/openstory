@@ -95,9 +95,9 @@ beforeEach(() => {
   env = {};
 });
 
-describe('listCatalogModels', () => {
-  it('maps API models to CatalogModel', async () => {
-    const { listCatalogModels } = await importCatalog();
+describe('listCatalogModelFamilies', () => {
+  it('maps API models to CatalogModel families', async () => {
+    const { listCatalogModelFamilies } = await importCatalog();
     mockFetch.mockResolvedValueOnce(
       modelsResponse([
         apiModel({
@@ -109,31 +109,74 @@ describe('listCatalogModels', () => {
       ])
     );
 
-    const result = await listCatalogModels({ activity: 'video' });
+    const result = await listCatalogModelFamilies({ activity: 'video' });
 
-    expect(result.models).toEqual([
+    expect(result.families).toEqual([
       {
-        endpointId: 'fal-ai/kling-video/v3/pro',
-        displayName: 'Kling v3 Pro',
+        family: 'kling-video',
+        title: 'Kling Video',
         activity: 'video',
-        category: 'image-to-video',
+        latestVersion: 'v3',
+        releasedAt: 1781210859,
+        representative: {
+          endpointId: 'fal-ai/kling-video/v3/pro',
+          displayName: 'Kling v3 Pro',
+          activity: 'video',
+          category: 'image-to-video',
+          firstSeenAt: 1781210859,
+          version: 'v3',
+          variantLabel: 'pro',
+        },
+        variants: [
+          {
+            endpointId: 'fal-ai/kling-video/v3/pro',
+            displayName: 'Kling v3 Pro',
+            activity: 'video',
+            category: 'image-to-video',
+            firstSeenAt: 1781210859,
+            version: 'v3',
+            variantLabel: 'pro',
+          },
+        ],
       },
     ]);
     expect(result.nextCursor).toBeUndefined();
   });
 
+  it('groups same-family endpoints into one family', async () => {
+    const { listCatalogModelFamilies } = await importCatalog();
+    mockFetch.mockResolvedValueOnce(
+      modelsResponse([
+        apiModel({
+          rawId: 'fal-ai/flux-1/schnell',
+          displayName: 'FLUX.1 [schnell]',
+        }),
+        apiModel({ rawId: 'fal-ai/flux-1/dev', displayName: 'FLUX.1 [dev]' }),
+        apiModel({ rawId: 'fal-ai/recraft/v3', displayName: 'Recraft V3' }),
+      ])
+    );
+
+    const { families } = await listCatalogModelFamilies();
+
+    expect(families.map((f) => f.family)).toEqual(['flux', 'recraft']);
+    expect(families[0]?.variants.map((v) => v.endpointId)).toEqual([
+      'fal-ai/flux-1/dev',
+      'fal-ai/flux-1/schnell',
+    ]);
+  });
+
   it('omits category when capabilities are null', async () => {
-    const { listCatalogModels } = await importCatalog();
+    const { listCatalogModelFamilies } = await importCatalog();
     mockFetch.mockResolvedValueOnce(
       modelsResponse([apiModel({ category: null })])
     );
 
-    const { models } = await listCatalogModels();
-    expect(models[0]?.category).toBeUndefined();
+    const { families } = await listCatalogModelFamilies();
+    expect(families[0]?.representative.category).toBeUndefined();
   });
 
   it('filters out chat, activity-less, and deprecated models', async () => {
-    const { listCatalogModels } = await importCatalog();
+    const { listCatalogModelFamilies } = await importCatalog();
     mockFetch.mockResolvedValueOnce(
       modelsResponse([
         apiModel({ rawId: 'fal-ai/keep-me' }),
@@ -143,49 +186,47 @@ describe('listCatalogModels', () => {
       ])
     );
 
-    const { models } = await listCatalogModels();
-    expect(models.map((m) => m.endpointId)).toEqual(['fal-ai/keep-me']);
+    const { families } = await listCatalogModelFamilies();
+    expect(
+      families.flatMap((f) => f.variants.map((v) => v.endpointId))
+    ).toEqual(['fal-ai/keep-me']);
   });
 
-  it('paginates locally with numeric-offset cursors', async () => {
-    const { listCatalogModels } = await importCatalog();
-    const all = Array.from({ length: 5 }, (_, i) =>
-      apiModel({ rawId: `fal-ai/model-${i}` })
+  it('paginates families locally with numeric-offset cursors', async () => {
+    const { listCatalogModelFamilies } = await importCatalog();
+    // Distinct unversioned ids → five single-variant families (title-sorted).
+    const names = ['alpha', 'bravo', 'charlie', 'delta', 'echo'];
+    const all = names.map((name) =>
+      apiModel({ rawId: `fal-ai/${name}`, displayName: name })
     );
     mockFetch.mockResolvedValue(modelsResponse(all));
 
-    const page1 = await listCatalogModels({ limit: 2 });
-    expect(page1.models.map((m) => m.endpointId)).toEqual([
-      'fal-ai/model-0',
-      'fal-ai/model-1',
-    ]);
+    const page1 = await listCatalogModelFamilies({ limit: 2 });
+    expect(page1.families.map((f) => f.family)).toEqual(['alpha', 'bravo']);
     expect(page1.nextCursor).toBe('2');
 
-    const page2 = await listCatalogModels({ limit: 2, cursor: '2' });
-    expect(page2.models.map((m) => m.endpointId)).toEqual([
-      'fal-ai/model-2',
-      'fal-ai/model-3',
-    ]);
+    const page2 = await listCatalogModelFamilies({ limit: 2, cursor: '2' });
+    expect(page2.families.map((f) => f.family)).toEqual(['charlie', 'delta']);
     expect(page2.nextCursor).toBe('4');
 
-    const page3 = await listCatalogModels({ limit: 2, cursor: '4' });
-    expect(page3.models.map((m) => m.endpointId)).toEqual(['fal-ai/model-4']);
+    const page3 = await listCatalogModelFamilies({ limit: 2, cursor: '4' });
+    expect(page3.families.map((f) => f.family)).toEqual(['echo']);
     expect(page3.nextCursor).toBeUndefined();
   });
 
   it('treats an invalid cursor as the first page', async () => {
-    const { listCatalogModels } = await importCatalog();
+    const { listCatalogModelFamilies } = await importCatalog();
     mockFetch.mockResolvedValueOnce(modelsResponse([apiModel()]));
 
-    const { models } = await listCatalogModels({ cursor: 'garbage' });
-    expect(models).toHaveLength(1);
+    const { families } = await listCatalogModelFamilies({ cursor: 'garbage' });
+    expect(families).toHaveLength(1);
   });
 
   it('passes provider, activity, and q upstream, unauthenticated by default', async () => {
-    const { listCatalogModels } = await importCatalog();
+    const { listCatalogModelFamilies } = await importCatalog();
     mockFetch.mockResolvedValueOnce(modelsResponse([]));
 
-    await listCatalogModels({ activity: 'image', q: 'flux' });
+    await listCatalogModelFamilies({ activity: 'image', q: 'flux' });
 
     expect(fetchedUrls()).toEqual([
       'https://modelschemas.com/v1/models?provider=fal&activity=image&q=flux',
@@ -196,10 +237,10 @@ describe('listCatalogModels', () => {
 
   it('sends Authorization when MODELSCHEMAS_API_KEY is set', async () => {
     env = { MODELSCHEMAS_API_KEY: 'ms-test-key' };
-    const { listCatalogModels } = await importCatalog();
+    const { listCatalogModelFamilies } = await importCatalog();
     mockFetch.mockResolvedValueOnce(modelsResponse([]));
 
-    await listCatalogModels();
+    await listCatalogModelFamilies();
 
     const call = mockFetch.mock.calls[0];
     expect(call && fetchedHeaders(call).get('authorization')).toBe(
@@ -208,18 +249,18 @@ describe('listCatalogModels', () => {
   });
 
   it('serves repeat requests from the TTL cache', async () => {
-    const { listCatalogModels } = await importCatalog();
+    const { listCatalogModelFamilies } = await importCatalog();
     mockFetch.mockResolvedValueOnce(modelsResponse([apiModel()]));
 
-    await listCatalogModels({ limit: 1 });
-    const again = await listCatalogModels({ limit: 1 });
+    await listCatalogModelFamilies({ limit: 1 });
+    const again = await listCatalogModelFamilies({ limit: 1 });
 
-    expect(again.models).toHaveLength(1);
+    expect(again.families).toHaveLength(1);
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it('throws CatalogApiError with the upstream code and message', async () => {
-    const { listCatalogModels, CatalogApiError } = await importCatalog();
+    const { listCatalogModelFamilies, CatalogApiError } = await importCatalog();
     mockFetch.mockResolvedValueOnce(
       jsonResponse(
         { error: { code: 'rate_limited', message: 'Too many requests' } },
@@ -227,7 +268,7 @@ describe('listCatalogModels', () => {
       )
     );
 
-    const promise = listCatalogModels();
+    const promise = listCatalogModelFamilies();
     await expect(promise).rejects.toBeInstanceOf(CatalogApiError);
     await expect(promise).rejects.toMatchObject({
       status: 429,
@@ -237,10 +278,10 @@ describe('listCatalogModels', () => {
   });
 
   it('throws a status-based CatalogApiError on a non-JSON error body', async () => {
-    const { listCatalogModels } = await importCatalog();
+    const { listCatalogModelFamilies } = await importCatalog();
     mockFetch.mockResolvedValueOnce(new Response('gateway荒', { status: 502 }));
 
-    await expect(listCatalogModels()).rejects.toMatchObject({
+    await expect(listCatalogModelFamilies()).rejects.toMatchObject({
       status: 502,
       message: 'modelschemas request failed (502)',
     });
@@ -289,6 +330,7 @@ describe('getModelDetail', () => {
       displayName: 'FLUX.1 [dev]',
       activity: 'image',
       category: 'text-to-image',
+      firstSeenAt: 1781210859,
     });
     expect(detail.inputSchema).toMatchObject({
       required: ['prompt'],
