@@ -8,7 +8,7 @@
 import { getEnv } from '#env';
 import type { TextModel } from '@/lib/ai/models';
 import { HTTPClient } from '@openrouter/sdk/lib/http';
-import { createModel, extendAdapter } from '@tanstack/ai';
+import { extendAdapter } from '@tanstack/ai';
 import { createOpenRouterText, openRouterText } from '@tanstack/ai-openrouter';
 
 import { getLogger } from '@/lib/observability/logger';
@@ -70,22 +70,10 @@ let loggedRetryMode = false;
  * registry id that is in NEITHER list is a compile error instead of an
  * unsafe cast. `catalog-lag.test.ts` fails once a package bump ships an id
  * below, telling the bumper (usually the model-freshness routine, #792) to
- * prune it here.
+ * prune it here. Add entries with `createModel` from '@tanstack/ai':
+ * `createModel('vendor/model-id', { input: [...], features: [...] })`.
  */
-export const CATALOG_LAG_MODELS = [
-  createModel('anthropic/claude-fable-5', {
-    input: ['text', 'image'],
-    features: ['reasoning', 'structured_outputs'],
-  }),
-  createModel('anthropic/claude-sonnet-5', {
-    input: ['text', 'image'],
-    features: ['reasoning', 'structured_outputs'],
-  }),
-  createModel('z-ai/glm-5.2', {
-    input: ['text'],
-    features: ['reasoning', 'structured_outputs'],
-  }),
-] as const;
+export const CATALOG_LAG_MODELS = [] as const;
 
 const openRouterTextExtended = extendAdapter(
   openRouterText,

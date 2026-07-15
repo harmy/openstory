@@ -9,9 +9,9 @@
  * in the bump PR automatically.
  */
 import type { OpenRouterModelOptionsByName } from '@tanstack/ai-openrouter';
-import { describe, expect, expectTypeOf, it } from 'vitest';
-import { CATALOG_LAG_MODELS } from './create-adapter';
-import { ANALYSIS_MODEL_IDS } from './models.config';
+import { describe, expectTypeOf, it } from 'vitest';
+import type { CATALOG_LAG_MODELS } from './create-adapter';
+import type { AnalysisModelId } from './models.config';
 
 type CatalogId = keyof OpenRouterModelOptionsByName;
 type LagId = (typeof CATALOG_LAG_MODELS)[number]['name'];
@@ -19,14 +19,15 @@ type LagId = (typeof CATALOG_LAG_MODELS)[number]['name'];
 /** Lag ids the upstream catalog now includes — must stay `never`. */
 type StaleLagEntries = Extract<CatalogId, LagId>;
 
+/** Lag ids that left the model registry — must stay `never`. */
+type UnregisteredLagEntries = Exclude<LagId, AnalysisModelId>;
+
 describe('CATALOG_LAG_MODELS', () => {
   it('contains no id the upstream catalog now ships (prune it when this fails)', () => {
     expectTypeOf<StaleLagEntries>().toBeNever();
   });
 
   it('only bridges ids that are still in the model registry', () => {
-    for (const def of CATALOG_LAG_MODELS) {
-      expect(ANALYSIS_MODEL_IDS).toContain(def.name);
-    }
+    expectTypeOf<UnregisteredLagEntries>().toBeNever();
   });
 });
