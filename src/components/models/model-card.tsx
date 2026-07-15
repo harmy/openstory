@@ -42,12 +42,16 @@ export const ModelCard: FC<{ model: CatalogModel }> = ({ model }) => {
       className="group flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition-all hover:scale-[1.02] hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <div
-        className="flex aspect-video items-center justify-center"
+        className="relative flex aspect-video items-center justify-center"
         style={{ background: getModelGradient(model.endpointId) }}
       >
         <Icon
           aria-hidden="true"
           className="size-8 text-white/80 transition-transform group-hover:scale-110"
+        />
+        <ReleaseBadge
+          releasedAt={model.firstSeenAt}
+          className="absolute top-2 right-2"
         />
       </div>
       <div className="flex flex-col gap-2 p-3">
@@ -68,7 +72,6 @@ export const ModelCard: FC<{ model: CatalogModel }> = ({ model }) => {
           {model.category && (
             <Badge variant="outline">{categoryLabel(model.category)}</Badge>
           )}
-          <ReleaseBadge releasedAt={model.firstSeenAt} />
         </div>
       </div>
     </Link>

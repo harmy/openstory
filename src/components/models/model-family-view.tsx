@@ -151,11 +151,14 @@ const ModelFamilyContent: FC<{
                         {variant.endpointId}
                       </span>
                     </span>
-                    {variant.category && (
-                      <Badge variant="outline" className="shrink-0">
-                        {categoryLabel(variant.category)}
-                      </Badge>
-                    )}
+                    <span className="flex shrink-0 items-center gap-2">
+                      {variant.category && (
+                        <Badge variant="outline">
+                          {categoryLabel(variant.category)}
+                        </Badge>
+                      )}
+                      <ReleaseBadge releasedAt={variant.firstSeenAt} />
+                    </span>
                   </Link>
                 </li>
               ))}
