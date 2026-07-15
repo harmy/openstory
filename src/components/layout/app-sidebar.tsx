@@ -19,10 +19,12 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { useLowBalanceWarning } from '@/hooks/use-low-balance-warning';
+import { MODELS_ENABLED } from '@/lib/flags';
 import { SITE_CONFIG } from '@/lib/marketing/constants';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import {
+  Boxes,
   Clapperboard,
   LifeBuoy,
   MapPin,
@@ -40,6 +42,9 @@ const navLinks = [
   { to: '/talent', label: 'Talent', icon: Users },
   { to: '/locations', label: 'Locations', icon: MapPin },
   { to: '/gallery', label: 'Gallery', icon: Clapperboard },
+  ...(MODELS_ENABLED
+    ? [{ to: '/models', label: 'Models', icon: Boxes } as const]
+    : []),
 ] as const;
 
 export function AppSidebar() {

@@ -41,6 +41,7 @@ import { Route as AppTalentIndexRouteImport } from './routes/_app/talent/index'
 import { Route as AppStylesIndexRouteImport } from './routes/_app/styles/index'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSequencesIndexRouteImport } from './routes/_app/sequences/index'
+import { Route as AppModelsIndexRouteImport } from './routes/_app/models/index'
 import { Route as AppLocationsIndexRouteImport } from './routes/_app/locations/index'
 import { Route as AppGalleryIndexRouteImport } from './routes/_app/gallery/index'
 import { Route as ApiV1SequencesRouteImport } from './routes/api/v1/sequences'
@@ -66,6 +67,7 @@ import { Route as AppSettingsPasskeysRouteImport } from './routes/_app/settings/
 import { Route as AppSettingsDeveloperRouteImport } from './routes/_app/settings/developer'
 import { Route as AppSettingsApiKeysRouteImport } from './routes/_app/settings/api-keys'
 import { Route as AppSequencesNewRouteImport } from './routes/_app/sequences/new'
+import { Route as AppModelsSplatRouteImport } from './routes/_app/models/$'
 import { Route as AppLocationsLocationIdRouteImport } from './routes/_app/locations/$locationId'
 import { Route as AppAdminUsageRouteImport } from './routes/_app/admin/usage'
 import { Route as AppSequencesIdRouteRouteImport } from './routes/_app/sequences/$id/route'
@@ -76,6 +78,7 @@ import { Route as AppSequencesIdScriptRouteImport } from './routes/_app/sequence
 import { Route as AppSequencesIdScenesRouteImport } from './routes/_app/sequences/$id/scenes'
 import { Route as AppSequencesIdMusicRouteImport } from './routes/_app/sequences/$id/music'
 import { Route as AppSequencesIdElementsRouteImport } from './routes/_app/sequences/$id/elements'
+import { Route as AppModelsFamilySplatRouteImport } from './routes/_app/models/family/$'
 import { Route as AppSequencesIdLocationsIndexRouteImport } from './routes/_app/sequences/$id/locations/index'
 import { Route as AppSequencesIdCastIndexRouteImport } from './routes/_app/sequences/$id/cast/index'
 import { Route as ApiV1SequencesIdExportsRouteImport } from './routes/api/v1/sequences.$id.exports'
@@ -239,6 +242,11 @@ const AppSequencesIndexRoute = AppSequencesIndexRouteImport.update({
   path: '/sequences/',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppModelsIndexRoute = AppModelsIndexRouteImport.update({
+  id: '/models/',
+  path: '/models/',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppLocationsIndexRoute = AppLocationsIndexRouteImport.update({
   id: '/locations/',
   path: '/locations/',
@@ -364,6 +372,11 @@ const AppSequencesNewRoute = AppSequencesNewRouteImport.update({
   path: '/sequences/new',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppModelsSplatRoute = AppModelsSplatRouteImport.update({
+  id: '/models/$',
+  path: '/models/$',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppLocationsLocationIdRoute = AppLocationsLocationIdRouteImport.update({
   id: '/locations/$locationId',
   path: '/locations/$locationId',
@@ -413,6 +426,11 @@ const AppSequencesIdElementsRoute = AppSequencesIdElementsRouteImport.update({
   id: '/elements',
   path: '/elements',
   getParentRoute: () => AppSequencesIdRouteRoute,
+} as any)
+const AppModelsFamilySplatRoute = AppModelsFamilySplatRouteImport.update({
+  id: '/models/family/$',
+  path: '/models/family/$',
+  getParentRoute: () => AppRouteRoute,
 } as any)
 const AppSequencesIdLocationsIndexRoute =
   AppSequencesIdLocationsIndexRouteImport.update({
@@ -471,6 +489,7 @@ export interface FileRoutesByFullPath {
   '/sequences/$id': typeof AppSequencesIdRouteRouteWithChildren
   '/admin/usage': typeof AppAdminUsageRoute
   '/locations/$locationId': typeof AppLocationsLocationIdRoute
+  '/models/$': typeof AppModelsSplatRoute
   '/sequences/new': typeof AppSequencesNewRoute
   '/settings/api-keys': typeof AppSettingsApiKeysRoute
   '/settings/developer': typeof AppSettingsDeveloperRoute
@@ -496,11 +515,13 @@ export interface FileRoutesByFullPath {
   '/api/v1/sequences': typeof ApiV1SequencesRouteWithChildren
   '/gallery/': typeof AppGalleryIndexRoute
   '/locations/': typeof AppLocationsIndexRoute
+  '/models/': typeof AppModelsIndexRoute
   '/sequences/': typeof AppSequencesIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/styles/': typeof AppStylesIndexRoute
   '/talent/': typeof AppTalentIndexRoute
   '/api/v1/': typeof ApiV1IndexRoute
+  '/models/family/$': typeof AppModelsFamilySplatRoute
   '/sequences/$id/elements': typeof AppSequencesIdElementsRoute
   '/sequences/$id/music': typeof AppSequencesIdMusicRoute
   '/sequences/$id/scenes': typeof AppSequencesIdScenesRoute
@@ -540,6 +561,7 @@ export interface FileRoutesByTo {
   '/sequences/$id': typeof AppSequencesIdRouteRouteWithChildren
   '/admin/usage': typeof AppAdminUsageRoute
   '/locations/$locationId': typeof AppLocationsLocationIdRoute
+  '/models/$': typeof AppModelsSplatRoute
   '/sequences/new': typeof AppSequencesNewRoute
   '/settings/api-keys': typeof AppSettingsApiKeysRoute
   '/settings/developer': typeof AppSettingsDeveloperRoute
@@ -565,11 +587,13 @@ export interface FileRoutesByTo {
   '/api/v1/sequences': typeof ApiV1SequencesRouteWithChildren
   '/gallery': typeof AppGalleryIndexRoute
   '/locations': typeof AppLocationsIndexRoute
+  '/models': typeof AppModelsIndexRoute
   '/sequences': typeof AppSequencesIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/styles': typeof AppStylesIndexRoute
   '/talent': typeof AppTalentIndexRoute
   '/api/v1': typeof ApiV1IndexRoute
+  '/models/family/$': typeof AppModelsFamilySplatRoute
   '/sequences/$id/elements': typeof AppSequencesIdElementsRoute
   '/sequences/$id/music': typeof AppSequencesIdMusicRoute
   '/sequences/$id/scenes': typeof AppSequencesIdScenesRoute
@@ -615,6 +639,7 @@ export interface FileRoutesById {
   '/_app/sequences/$id': typeof AppSequencesIdRouteRouteWithChildren
   '/_app/admin/usage': typeof AppAdminUsageRoute
   '/_app/locations/$locationId': typeof AppLocationsLocationIdRoute
+  '/_app/models/$': typeof AppModelsSplatRoute
   '/_app/sequences/new': typeof AppSequencesNewRoute
   '/_app/settings/api-keys': typeof AppSettingsApiKeysRoute
   '/_app/settings/developer': typeof AppSettingsDeveloperRoute
@@ -640,11 +665,13 @@ export interface FileRoutesById {
   '/api/v1/sequences': typeof ApiV1SequencesRouteWithChildren
   '/_app/gallery/': typeof AppGalleryIndexRoute
   '/_app/locations/': typeof AppLocationsIndexRoute
+  '/_app/models/': typeof AppModelsIndexRoute
   '/_app/sequences/': typeof AppSequencesIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/styles/': typeof AppStylesIndexRoute
   '/_app/talent/': typeof AppTalentIndexRoute
   '/api/v1/': typeof ApiV1IndexRoute
+  '/_app/models/family/$': typeof AppModelsFamilySplatRoute
   '/_app/sequences/$id/elements': typeof AppSequencesIdElementsRoute
   '/_app/sequences/$id/music': typeof AppSequencesIdMusicRoute
   '/_app/sequences/$id/scenes': typeof AppSequencesIdScenesRoute
@@ -688,6 +715,7 @@ export interface FileRouteTypes {
     | '/sequences/$id'
     | '/admin/usage'
     | '/locations/$locationId'
+    | '/models/$'
     | '/sequences/new'
     | '/settings/api-keys'
     | '/settings/developer'
@@ -713,11 +741,13 @@ export interface FileRouteTypes {
     | '/api/v1/sequences'
     | '/gallery/'
     | '/locations/'
+    | '/models/'
     | '/sequences/'
     | '/settings/'
     | '/styles/'
     | '/talent/'
     | '/api/v1/'
+    | '/models/family/$'
     | '/sequences/$id/elements'
     | '/sequences/$id/music'
     | '/sequences/$id/scenes'
@@ -757,6 +787,7 @@ export interface FileRouteTypes {
     | '/sequences/$id'
     | '/admin/usage'
     | '/locations/$locationId'
+    | '/models/$'
     | '/sequences/new'
     | '/settings/api-keys'
     | '/settings/developer'
@@ -782,11 +813,13 @@ export interface FileRouteTypes {
     | '/api/v1/sequences'
     | '/gallery'
     | '/locations'
+    | '/models'
     | '/sequences'
     | '/settings'
     | '/styles'
     | '/talent'
     | '/api/v1'
+    | '/models/family/$'
     | '/sequences/$id/elements'
     | '/sequences/$id/music'
     | '/sequences/$id/scenes'
@@ -831,6 +864,7 @@ export interface FileRouteTypes {
     | '/_app/sequences/$id'
     | '/_app/admin/usage'
     | '/_app/locations/$locationId'
+    | '/_app/models/$'
     | '/_app/sequences/new'
     | '/_app/settings/api-keys'
     | '/_app/settings/developer'
@@ -856,11 +890,13 @@ export interface FileRouteTypes {
     | '/api/v1/sequences'
     | '/_app/gallery/'
     | '/_app/locations/'
+    | '/_app/models/'
     | '/_app/sequences/'
     | '/_app/settings/'
     | '/_app/styles/'
     | '/_app/talent/'
     | '/api/v1/'
+    | '/_app/models/family/$'
     | '/_app/sequences/$id/elements'
     | '/_app/sequences/$id/music'
     | '/_app/sequences/$id/scenes'
@@ -1128,6 +1164,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSequencesIndexRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/_app/models/': {
+      id: '/_app/models/'
+      path: '/models'
+      fullPath: '/models/'
+      preLoaderRoute: typeof AppModelsIndexRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/_app/locations/': {
       id: '/_app/locations/'
       path: '/locations'
@@ -1303,6 +1346,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSequencesNewRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/_app/models/$': {
+      id: '/_app/models/$'
+      path: '/models/$'
+      fullPath: '/models/$'
+      preLoaderRoute: typeof AppModelsSplatRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/_app/locations/$locationId': {
       id: '/_app/locations/$locationId'
       path: '/locations/$locationId'
@@ -1372,6 +1422,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/sequences/$id/elements'
       preLoaderRoute: typeof AppSequencesIdElementsRouteImport
       parentRoute: typeof AppSequencesIdRouteRoute
+    }
+    '/_app/models/family/$': {
+      id: '/_app/models/family/$'
+      path: '/models/family/$'
+      fullPath: '/models/family/$'
+      preLoaderRoute: typeof AppModelsFamilySplatRouteImport
+      parentRoute: typeof AppRouteRoute
     }
     '/_app/sequences/$id/locations/': {
       id: '/_app/sequences/$id/locations/'
@@ -1474,13 +1531,16 @@ interface AppRouteRouteChildren {
   AppCreditsRoute: typeof AppCreditsRoute
   AppSequencesIdRouteRoute: typeof AppSequencesIdRouteRouteWithChildren
   AppLocationsLocationIdRoute: typeof AppLocationsLocationIdRoute
+  AppModelsSplatRoute: typeof AppModelsSplatRoute
   AppSequencesNewRoute: typeof AppSequencesNewRoute
   AppTalentIdRoute: typeof AppTalentIdRoute
   AppGalleryIndexRoute: typeof AppGalleryIndexRoute
   AppLocationsIndexRoute: typeof AppLocationsIndexRoute
+  AppModelsIndexRoute: typeof AppModelsIndexRoute
   AppSequencesIndexRoute: typeof AppSequencesIndexRoute
   AppStylesIndexRoute: typeof AppStylesIndexRoute
   AppTalentIndexRoute: typeof AppTalentIndexRoute
+  AppModelsFamilySplatRoute: typeof AppModelsFamilySplatRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
@@ -1489,13 +1549,16 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppCreditsRoute: AppCreditsRoute,
   AppSequencesIdRouteRoute: AppSequencesIdRouteRouteWithChildren,
   AppLocationsLocationIdRoute: AppLocationsLocationIdRoute,
+  AppModelsSplatRoute: AppModelsSplatRoute,
   AppSequencesNewRoute: AppSequencesNewRoute,
   AppTalentIdRoute: AppTalentIdRoute,
   AppGalleryIndexRoute: AppGalleryIndexRoute,
   AppLocationsIndexRoute: AppLocationsIndexRoute,
+  AppModelsIndexRoute: AppModelsIndexRoute,
   AppSequencesIndexRoute: AppSequencesIndexRoute,
   AppStylesIndexRoute: AppStylesIndexRoute,
   AppTalentIndexRoute: AppTalentIndexRoute,
+  AppModelsFamilySplatRoute: AppModelsFamilySplatRoute,
 }
 
 const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(

@@ -63,7 +63,6 @@
     ".conductor",
     ".trees"
   ],
-  "typescript.experimental.useTsgo": true,
   "editor.defaultFormatter": "oxc.oxc-vscode",
   "oxc.fixKind": "dangerous_fix_or_suggestion",
   "oxc.fmt.configPath": ".oxfmtrc.json",
@@ -73,5 +72,4 @@
   "bun.test.filePattern": "src/**/*.{test,spec}.{ts,tsx,js,jsx}",
   "bun.diagnosticsSocket.enabled": true,
   "typescript.native-preview.goMemLimit": "4GiB",
-  "typescript.native-preview.tsdk": "./node_modules/@typescript/native-preview"
 }

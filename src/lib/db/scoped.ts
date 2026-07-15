@@ -17,6 +17,7 @@ import { createCharactersMethods } from '@/lib/db/scoped/characters';
 import { createFramePromptVersionsMethods } from '@/lib/db/scoped/frame-prompt-versions';
 import { createFrameVariantsMethods } from '@/lib/db/scoped/frame-variants';
 import { createFramesMethods } from '@/lib/db/scoped/frames';
+import { createGeneratedAssetsMethods } from '@/lib/db/scoped/generated-assets';
 import { createScenesMethods } from '@/lib/db/scoped/scenes';
 import { createSceneScriptVersionsMethods } from '@/lib/db/scoped/scene-script-versions';
 import { createSequenceEventsMethods } from '@/lib/db/scoped/sequence-events';
@@ -318,6 +319,10 @@ export function createScopedDb(teamId: string, userId: string) {
     characters: createCharactersMethods(db),
     sequenceLocations: createSequenceLocationsMethods(db),
     sequenceElements: createSequenceElementsMethods(db),
+
+    // Direct model access (#458) — flat team-scoped runs of arbitrary fal
+    // endpoints, decoupled from the sequence graph.
+    generatedAssets: createGeneratedAssetsMethods(db, teamId, userId),
 
     billing: createBillingMethods(db, teamId, userId),
     apiKeys: createApiKeysMethods(db, teamId, userId),

@@ -79,6 +79,9 @@ import { giftTokenRedemptions, giftTokens } from './gift-tokens';
 
 import { appMetadata } from './app-metadata';
 
+// Generated Assets (#458 — direct model access)
+import { generatedAssets } from './generated-assets';
+
 // Better Auth tables
 export { account, apikey, passkey, session, user, verification };
 
@@ -317,6 +320,21 @@ export { giftTokens, giftTokenRedemptions };
 // App Metadata (key/value bookkeeping, e.g. system-template seed hash)
 export { appMetadata };
 
+// Generated Assets (#458 — direct model access; flat team-scoped runs of
+// arbitrary fal endpoints, decoupled from the sequence graph)
+export { generatedAssets };
+
+export { GENERATED_ASSET_ACTIVITIES } from './generated-assets';
+
+export type {
+  GeneratedAsset,
+  NewGeneratedAsset,
+  GeneratedAssetActivity,
+  GeneratedAssetInput,
+  GeneratedAssetOutput,
+  JsonValue,
+} from './generated-assets';
+
 /**
  * Complete schema object for Drizzle client initialization (tables only).
  * Relations are defined separately in ./relations.ts using defineRelations().
@@ -397,4 +415,7 @@ export const schema = {
 
   // App Metadata
   appMetadata,
+
+  // Generated Assets (#458 — direct model access)
+  generatedAssets,
 };

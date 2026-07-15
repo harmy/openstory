@@ -21,13 +21,14 @@ import { getDb } from '#db-client';
 import {
   frameVariants,
   frames,
+  generatedAssets,
   shots,
   shotVariants,
   sequenceElements,
   sequences,
 } from '@/lib/db/schema';
 import { resolveRunState, STALE_THRESHOLD_MS } from '@/lib/workflow/reconcile';
-import { and, eq, isNotNull, lt } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
 
 import { getLogger } from '@/lib/observability/logger';
 
@@ -71,6 +72,10 @@ export async function reconcileAllStuckJobs(): Promise<ReconcileCounts> {
     ['sequences.status', () => reconcileSequencesPass(db)],
     ['sequences.music', () => blindFailPass(db, 'sequencesMusic')],
     ['sequence_elements.vision', () => blindFailPass(db, 'sequenceElements')],
+    // Direct model runs (#458) — verified pass plus an orphan pass for rows
+    // whose trigger died before a workflowRunId was ever persisted.
+    ['generated_assets.status', () => reconcileGeneratedAssetsPass(db)],
+    ['generated_assets.orphaned', () => failOrphanedGeneratedAssetsPass(db)],
   ];
 
   for (const [name, run] of passes) {
@@ -320,6 +325,84 @@ async function reconcileSequencesPass(db: Database): Promise<number> {
     updated++;
   }
   return updated;
+}
+
+// Narrowly typed like `setSequenceStatus` so dropping the null/'unknown'
+// guard in the loop fails typecheck. A verified-'completed' instance whose
+// row is still queued/running means `markCompleted` never landed — the
+// outputs can't be recovered here, so the honest terminal state is 'failed'
+// with a retry hint, never a fabricated 'completed' without outputs.
+const setGeneratedAssetStatus = (next: 'failed' | 'completed') =>
+  next === 'failed'
+    ? {
+        status: 'failed' as const,
+        error: 'Generation was interrupted — run it again.',
+      }
+    : {
+        status: 'failed' as const,
+        error:
+          'The generation finished but its result was not saved — run it again.',
+      };
+
+/**
+ * Heal `generated_assets` rows stuck in 'queued'/'running' whose workflow
+ * died without persisting an outcome, verified against the CF instance via
+ * the persisted `workflowRunId` (same shape as the sequences pass).
+ */
+async function reconcileGeneratedAssetsPass(db: Database): Promise<number> {
+  const staleCutoff = new Date(Date.now() - STALE_THRESHOLD_MS);
+
+  const stuck = await db
+    .select({ id: generatedAssets.id, runId: generatedAssets.workflowRunId })
+    .from(generatedAssets)
+    .where(
+      and(
+        inArray(generatedAssets.status, ['queued', 'running']),
+        isNotNull(generatedAssets.workflowRunId),
+        lt(generatedAssets.updatedAt, staleCutoff)
+      )
+    )
+    .limit(MAX_ROWS_PER_PASS);
+
+  let updated = 0;
+  for (const row of stuck) {
+    const next = await resolveRunState(row.runId ?? '');
+    if (next === null || next === 'unknown') continue;
+    await db
+      .update(generatedAssets)
+      .set(setGeneratedAssetStatus(next))
+      .where(eq(generatedAssets.id, row.id));
+    updated++;
+  }
+  return updated;
+}
+
+/**
+ * Blind-fail `generated_assets` rows stuck 'queued' with NO `workflowRunId`.
+ * The create fn marks the row failed when the trigger throws, so this only
+ * catches the residue (crash between insert and that catch, or a failed
+ * `setWorkflowRunId` write whose workflow then also died before its own
+ * first write). A live workflow flips the row to 'running' within seconds,
+ * so 'queued' after 30 minutes with no run id is safely dead.
+ */
+async function failOrphanedGeneratedAssetsPass(db: Database): Promise<number> {
+  const staleCutoff = new Date(Date.now() - BLIND_FAIL_THRESHOLD_MS);
+
+  const result = await db
+    .update(generatedAssets)
+    .set({
+      status: 'failed',
+      error: 'The generation could not be started — please try again.',
+    })
+    .where(
+      and(
+        eq(generatedAssets.status, 'queued'),
+        isNull(generatedAssets.workflowRunId),
+        lt(generatedAssets.updatedAt, staleCutoff)
+      )
+    )
+    .returning({ id: generatedAssets.id });
+  return result.length;
 }
 
 type BlindFailPipeline = 'sequencesMusic' | 'sequenceElements';

@@ -259,6 +259,11 @@
       "binding": "SEQUENCE_EXPORT_WORKFLOW",
       "class_name": "SequenceExportWorkflow",
     },
+    {
+      "name": "asset-generation-workflow",
+      "binding": "ASSET_WORKFLOW",
+      "class_name": "AssetGenerationWorkflow",
+    },
   ],
   // Realtime broker (#802): one SQLite-backed Durable Object per channel holds
   // SSE subscribers open and persists replayable history. The `RealtimeChannel`
@@ -490,6 +495,11 @@
           "name": "sequence-export-workflow",
           "binding": "SEQUENCE_EXPORT_WORKFLOW",
           "class_name": "SequenceExportWorkflow",
+        },
+        {
+          "name": "asset-generation-workflow",
+          "binding": "ASSET_WORKFLOW",
+          "class_name": "AssetGenerationWorkflow",
         },
       ],
       // Server-side video export (#968). The `VideoExportContainer` Durable
@@ -762,6 +772,11 @@
           "name": "sequence-export-workflow",
           "binding": "SEQUENCE_EXPORT_WORKFLOW",
           "class_name": "SequenceExportWorkflow",
+        },
+        {
+          "name": "asset-generation-workflow",
+          "binding": "ASSET_WORKFLOW",
+          "class_name": "AssetGenerationWorkflow",
         },
       ],
       // Realtime broker DO — redeclared because durable_objects + migrations
