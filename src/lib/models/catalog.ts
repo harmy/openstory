@@ -23,7 +23,7 @@
  *     env, `Authorization: Bearer`) lifts it to 5k/h. The TTL cache below
  *     keeps browsing well under the anonymous limit.
  */
-import type { JsonValue } from '@/lib/db/schema';
+import type { GeneratedAssetActivity, JsonValue } from '@/lib/db/schema';
 import { getEnv } from '#env';
 import { groupModelsIntoFamilies, type ModelFamily } from './model-families';
 
@@ -35,7 +35,14 @@ const MODELSCHEMAS_BASE_URL = 'https://modelschemas.com';
  * excluded — they can't be run through the media-generation engine and have
  * no schema path without an activity.
  */
-export const CATALOG_ACTIVITIES = ['image', 'video', 'audio'] as const;
+// `satisfies` links this union to the storable-asset one: adding a catalog
+// activity that `generated_assets` can't store fails typecheck here instead
+// of as a runtime 400 at the create fn's zod gate.
+export const CATALOG_ACTIVITIES = [
+  'image',
+  'video',
+  'audio',
+] as const satisfies readonly GeneratedAssetActivity[];
 export type CatalogActivity = (typeof CATALOG_ACTIVITIES)[number];
 
 /**
@@ -113,7 +120,12 @@ export type ModelDetail = {
   outputSchema: JsonSchema | null;
 };
 
-/** @public #458 contract — callers branch on `status`/`code` (phase 2). */
+/**
+ * @public Typed upstream failure. `status`/`code` are branched on INSIDE this
+ * module (e.g. `fetchSchema` maps 404 → null); they do NOT survive server-fn
+ * serialization, so client code matches on `message` instead (see
+ * `isNoSchemaError` in model-detail-view.tsx).
+ */
 export class CatalogApiError extends Error {
   readonly status: number;
   readonly code?: string;
@@ -140,19 +152,6 @@ type ApiModel = {
   capabilities: { category?: string } | null;
   firstSeenAt: number | null;
   deprecatedAt: number | null;
-};
-
-type ModelsApiResponse = {
-  count: number;
-  models: ApiModel[];
-};
-
-type SchemaApiResponse = {
-  provider: string;
-  activity: string;
-  endpointId: string;
-  kind: 'input' | 'output';
-  schema: JsonSchema;
 };
 
 type ErrorApiResponse = {
@@ -238,6 +237,55 @@ async function fetchCatalogJson(path: string, ttlMs: number): Promise<string> {
 
 const DEFAULT_PAGE_SIZE = 60;
 
+/**
+ * Boundary guards for the upstream JSON: the response types above are
+ * "observed on the live service", so a shape change must surface as a clear
+ * `CatalogApiError` at the parse site — not a `TypeError` deep in `flatMap`
+ * or silently wrong data. Entries missing the fields this module reads are
+ * dropped; a body without the expected envelope throws.
+ */
+function isApiModelShaped(value: JsonValue): boolean {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof value.rawId === 'string' &&
+    typeof value.displayName === 'string'
+  );
+}
+
+function parseModelsResponse(body: string): ApiModel[] {
+  const parsed: JsonValue = JSON.parse(body);
+  const models =
+    parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed.models
+      : undefined;
+  if (!Array.isArray(models)) {
+    throw new CatalogApiError(
+      'modelschemas returned an unexpected /v1/models response shape',
+      502
+    );
+  }
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- entries are structurally guarded by isApiModelShaped; the remaining ApiModel fields are all null-tolerated by toCatalogModel
+  return models.filter(isApiModelShaped) as unknown as ApiModel[];
+}
+
+function parseSchemaResponse(body: string, endpointId: string): JsonSchema {
+  const parsed: JsonValue = JSON.parse(body);
+  const schema =
+    parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed.schema
+      : undefined;
+  if (schema === null || typeof schema !== 'object' || Array.isArray(schema)) {
+    throw new CatalogApiError(
+      `modelschemas returned a non-object schema for '${endpointId}'`,
+      502
+    );
+  }
+  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- guarded to be a plain object; JsonSchema keywords are all optional
+  return schema as JsonSchema;
+}
+
 function toCatalogModel(model: ApiModel): CatalogModel | null {
   const activity = CATALOG_ACTIVITIES.find((a) => a === model.activity);
   if (!activity) return null;
@@ -279,8 +327,7 @@ async function fetchCatalogModels(params: {
     `/v1/models?${search.toString()}`,
     LIST_CACHE_TTL_MS
   );
-  const parsed: ModelsApiResponse = JSON.parse(body);
-  return parsed.models.flatMap((model) => {
+  return parseModelsResponse(body).flatMap((model) => {
     const mapped = toCatalogModel(model);
     return mapped ? [mapped] : [];
   });
@@ -353,8 +400,7 @@ async function fetchSchema(
       `/v1/schemas/fal/${activity}/${endpointId}?kind=${kind}`,
       SCHEMA_CACHE_TTL_MS
     );
-    const parsed: SchemaApiResponse = JSON.parse(body);
-    return parsed.schema;
+    return parseSchemaResponse(body, endpointId);
   } catch (error) {
     if (error instanceof CatalogApiError && error.status === 404) return null;
     throw error;
@@ -396,11 +442,23 @@ export async function getModelDetail(
   // so pick the exact rawId. The schema existing without a catalog row can
   // only be a transient upstream inconsistency — fall back to the endpoint id
   // as the display name rather than failing the whole detail view.
-  const metadataResponse: ModelsApiResponse = JSON.parse(metadataBody);
-  const metadata = metadataResponse.models.find(
+  const metadata = parseModelsResponse(metadataBody).find(
     (model) => model.rawId === endpointId
   );
-  const model = metadata ? toCatalogModel(metadata) : null;
+  // `toCatalogModel` drops deprecated models (correct for the browse grid),
+  // but the detail page should keep a deprecated endpoint's real display
+  // name rather than degrade it to the raw id.
+  const model =
+    (metadata ? toCatalogModel(metadata) : null) ??
+    (metadata
+      ? {
+          endpointId,
+          displayName: metadata.displayName,
+          activity,
+          firstSeenAt: metadata.firstSeenAt ?? undefined,
+          category: metadata.capabilities?.category,
+        }
+      : null);
 
   return {
     model: model ?? { endpointId, displayName: endpointId, activity },

@@ -17,9 +17,11 @@
  * BYOK follows the house pattern (`scopedDb.apiKeys.resolveKey('fal')`,
  * platform key fallback), applied to the `fal` singleton via `fal.config` —
  * the same singleton the base class routes through the e2e proxy. No credit
- * deduction happens here: the raw queue API doesn't surface `unitsBilled`
- * and `FAL_PRICING` has no data for arbitrary endpoints, so per the house
- * billing rule we charge nothing rather than guess (`costMicros` stays null).
+ * deduction happens here YET: the raw queue API doesn't surface
+ * `unitsBilled` and `FAL_PRICING` has no data for arbitrary endpoints, so we
+ * charge nothing rather than guess (`costMicros` stays null) — real charging
+ * is a follow-up PR; the create fn's `requireCredits` gate is the only
+ * billing control today.
  */
 
 import { extractFalErrorMessage } from '@/lib/ai/fal-error';
@@ -32,10 +34,7 @@ import type {
 import { getLogger } from '@/lib/observability/logger';
 import { STORAGE_BUCKETS, type StorageBucket } from '@/lib/storage/buckets';
 import { uploadResponse } from '@/lib/storage/upload-response';
-import {
-  getExtensionFromUrl,
-  getMimeTypeFromExtension,
-} from '@/lib/utils/file';
+import { getMimeTypeFromExtension } from '@/lib/utils/file';
 import { OpenStoryWorkflowEntrypoint } from '@/lib/workflow/base-workflow';
 import type { AssetGenerationWorkflowInput } from '@/lib/workflow/types';
 import { fal } from '@fal-ai/client';
@@ -99,23 +98,73 @@ const OUTPUT_FIELDS = [
  * Scan a fal queue result for output media files. fal output schemas vary per
  * endpoint but converge on a handful of field names holding either a file
  * object (`{ url, content_type }`), a bare URL string, or an array of either
- * — collect them all, in field order.
+ * — collect them all, in field order. Deduped by URL: endpoints that populate
+ * both a singular and plural field (`video` + `output`) with the same file
+ * would otherwise upload it twice.
  */
 export function extractAssetOutputs(data: JsonValue): AssetOutputRef[] {
   if (data === null || typeof data !== 'object' || Array.isArray(data)) {
     return [];
   }
   const refs: AssetOutputRef[] = [];
+  const seen = new Set<string>();
   for (const field of OUTPUT_FIELDS) {
     const value = data[field];
     if (value === undefined) continue;
     const candidates = Array.isArray(value) ? value : [value];
     for (const candidate of candidates) {
       const ref = toOutputRef(candidate);
-      if (ref) refs.push(ref);
+      if (ref && !seen.has(ref.url)) {
+        seen.add(ref.url);
+        refs.push(ref);
+      }
     }
   }
   return refs;
+}
+
+/**
+ * fal returns 422 for a payload the endpoint itself rejected — deterministic
+ * for a given input, so the workflow must not burn CF retries on it.
+ */
+export function isFalValidationError(error: unknown): boolean {
+  return error instanceof Error && 'status' in error && error.status === 422;
+}
+
+/** Extension map for provider URLs with no file extension (common on fal). */
+const EXTENSION_BY_MIME: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+  'audio/mpeg': 'mp3',
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/ogg': 'ogg',
+  'audio/mp4': 'm4a',
+};
+
+/**
+ * R2 key extension for one output: from the URL path when it has one,
+ * otherwise from the content type — fal media URLs frequently omit the
+ * extension, and defaulting a video to `.jpg` produces misleading download
+ * filenames. `bin` when neither source knows.
+ */
+export function outputExtension(
+  url: string,
+  contentType: string | null
+): string {
+  try {
+    const match = /\.([a-zA-Z0-9]+)$/.exec(new URL(url).pathname);
+    if (match?.[1]) return match[1].toLowerCase();
+  } catch {
+    // Not an absolute URL — fall through to the content type.
+  }
+  const mime = contentType?.split(';', 1)[0]?.trim().toLowerCase();
+  return (mime && EXTENSION_BY_MIME[mime]) || 'bin';
 }
 
 /** The row writes this workflow needs — a narrow slice of {@link ScopedDb}
@@ -167,11 +216,7 @@ export class AssetGenerationWorkflow extends OpenStoryWorkflowEntrypoint<AssetGe
         const { request_id } = await fal.queue.submit(endpointId, { input });
         return { requestId: request_id };
       } catch (error) {
-        if (
-          error instanceof Error &&
-          'status' in error &&
-          error.status === 422
-        ) {
+        if (isFalValidationError(error)) {
           throw new NonRetryableError(
             `Model rejected the input (422): ${extractFalErrorMessage(error)}`
           );
@@ -223,8 +268,14 @@ export class AssetGenerationWorkflow extends OpenStoryWorkflowEntrypoint<AssetGe
       }
       const refs = extractAssetOutputs(data);
       if (refs.length === 0) {
+        // Include the result's shape so a miss in OUTPUT_FIELDS (or a
+        // base64-only endpoint) is diagnosable from the row's error message.
+        const keys =
+          data !== null && typeof data === 'object' && !Array.isArray(data)
+            ? Object.keys(data).join(', ')
+            : typeof data;
         throw new NonRetryableError(
-          `Model returned no output files for ${endpointId}`
+          `Model returned no output files for ${endpointId} (result keys: ${keys || 'none'})`
         );
       }
       return refs;
@@ -239,11 +290,11 @@ export class AssetGenerationWorkflow extends OpenStoryWorkflowEntrypoint<AssetGe
             `Failed to download output ${index} from provider: ${response.status}`
           );
         }
-        const extension = getExtensionFromUrl(ref.url);
+        const knownContentType =
+          ref.contentType ?? response.headers.get('content-type');
+        const extension = outputExtension(ref.url, knownContentType);
         const contentType =
-          ref.contentType ??
-          response.headers.get('content-type') ??
-          getMimeTypeFromExtension(extension);
+          knownContentType ?? getMimeTypeFromExtension(extension);
         const path = `teams/${teamId}/assets/${assetId}/output-${index}.${extension}`;
         const result = await uploadResponse(
           response,
@@ -290,7 +341,10 @@ export class AssetGenerationWorkflow extends OpenStoryWorkflowEntrypoint<AssetGe
   }
 }
 
-/** Flip the row to `completed` with its uploaded outputs (`error` cleared). */
+/**
+ * Flip the row to `completed` with its uploaded outputs (`error` cleared).
+ * `costMicros` stays null until real charging ships (see the module header).
+ */
 export async function persistAssetCompletion(params: {
   scopedDb: AssetPersistScopedDb;
   assetId: string;

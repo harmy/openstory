@@ -9,10 +9,15 @@
  *
  * Deliberately self-contained: the richer catalog lib (`listCatalogModelFamilies` /
  * `getModelDetail`) lives separately and owns browsing concerns; this helper
- * only answers "give me the input schema to validate against".
+ * only answers "give me the input schema to validate against". That also
+ * means it forgoes the catalog lib's TTL cache — every Run click is one
+ * upstream request, acceptable because runs are far rarer than browse hits
+ * and a stale cached schema on the VALIDATION path would be worse than the
+ * extra request.
  */
 
 import type { GeneratedAssetActivity, JsonValue } from '@/lib/db/schema';
+import { getEnv } from '#env';
 import { getLogger } from '@/lib/observability/logger';
 
 const logger = getLogger(['openstory', 'models', 'schema-fetch']);
@@ -45,7 +50,13 @@ export async function fetchModelInputSchema(
   activity: GeneratedAssetActivity
 ): Promise<ModelInputJsonSchema> {
   const url = `${MODELSCHEMAS_BASE_URL}/v1/schemas/fal/${activity}/${encodeURI(endpointId)}?kind=input`;
-  const apiKey = process.env.MODELSCHEMAS_API_KEY;
+  // Same optional-env narrowing as the catalog lib — `process.env` reads are
+  // not reliably populated in workerd, and a silently-missing key drops this
+  // path to the anonymous 60 req/h limit.
+  const env = getEnv() as ReturnType<typeof getEnv> & {
+    MODELSCHEMAS_API_KEY?: string;
+  };
+  const apiKey = env.MODELSCHEMAS_API_KEY;
 
   const res = await fetch(url, {
     headers: {

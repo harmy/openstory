@@ -1,5 +1,12 @@
 # Direct Model Access — Plan (#458 umbrella)
 
+> **As shipped (2026-07-15):** this is the historical plan; the code is the contract. Notable
+> divergences: the DB activity enum is `image | video | audio` only (no `chat`); the list fn is
+> `listCatalogModelFamiliesFn` (family-grouped, not flat); and completed runs currently charge
+> **nothing** (`costMicros` stays null) — the raw queue client cannot provide `usage.unitsBilled`
+> metering, and real charging is deferred to a follow-up PR. The `requireCredits` pre-flight gate
+> is the only billing control.
+
 ## Vision
 
 A new **Models** surface in openstory: browse the full fal.ai catalog (~1,400 models, live from

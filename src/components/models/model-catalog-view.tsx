@@ -62,21 +62,26 @@ const ModelResults: FC<{
   activity: CatalogActivity | undefined;
   q: string | undefined;
 }> = ({ activity, q }) => {
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useSuspenseInfiniteQuery({
-      queryKey: ['model-catalog', activity ?? 'all', q ?? ''],
-      queryFn: ({ pageParam }) =>
-        listCatalogModelFamiliesFn({
-          data: {
-            activity,
-            q: q || undefined,
-            cursor: pageParam || undefined,
-          },
-        }),
-      initialPageParam: '',
-      getNextPageParam: (lastPage) => lastPage.nextCursor,
-      staleTime: 5 * 60 * 1000,
-    });
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+  } = useSuspenseInfiniteQuery({
+    queryKey: ['model-catalog', activity ?? 'all', q ?? ''],
+    queryFn: ({ pageParam }) =>
+      listCatalogModelFamiliesFn({
+        data: {
+          activity,
+          q: q || undefined,
+          cursor: pageParam || undefined,
+        },
+      }),
+    initialPageParam: '',
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const families = data.pages.flatMap((page) => page.families);
 
@@ -118,8 +123,9 @@ const ModelResults: FC<{
     <div className="flex flex-col items-center gap-6">
       <div className={`w-full ${GRID_CLASSES}`}>
         {families.map((family) => (
-          // Family names aren't unique (vendor-scoped); the representative
-          // belongs to exactly one family, so its id is.
+          // Family paths are only unique per activity, so the "All" view can
+          // repeat one; the representative belongs to exactly one family, so
+          // its endpoint id is a safe key.
           <ModelFamilyCard
             key={family.representative.endpointId}
             family={family}
@@ -131,12 +137,21 @@ const ModelResults: FC<{
           {/* Auto-loads ahead of the scroll edge; the button is the visible,
               keyboard-reachable fallback. */}
           <div ref={sentinelRef} aria-hidden="true" />
+          {isFetchNextPageError && (
+            <p role="alert" className="text-sm text-destructive">
+              Couldn't load more models.
+            </p>
+          )}
           <Button
             variant="outline"
             onClick={() => void fetchNextPage()}
             disabled={isFetchingNextPage}
           >
-            {isFetchingNextPage ? 'Loading…' : 'Load more'}
+            {isFetchingNextPage
+              ? 'Loading…'
+              : isFetchNextPageError
+                ? 'Try again'
+                : 'Load more'}
           </Button>
         </>
       )}

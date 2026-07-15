@@ -120,16 +120,38 @@ describe('validateAssetInput', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('passes unknown keys through (JSON Schema default: additionalProperties allowed)', () => {
+    // Pins the trust-boundary behavior on the platform-key spend path: keys
+    // the schema doesn't mention are forwarded to fal verbatim, matching
+    // JSON Schema semantics (fal is authoritative for rejecting them).
+    expect(
+      validateAssetInput(FLUX_SCHEMA, { prompt: 'ok', unexpected_key: 42 })
+    ).toEqual({ success: true });
+  });
+
+  it('throws (not "invalid input") when the schema itself cannot be converted', () => {
+    const badSchema: ModelInputJsonSchema = {
+      type: 'object',
+      properties: { x: { type: 'weird' } },
+    };
+    expect(() => validateAssetInput(badSchema, { x: 1 })).toThrow();
+  });
 });
 
 describe('createGeneratedAsset', () => {
   it('rejects invalid input BEFORE the credit gate, leaving no row', async () => {
     const scopedDb = createScopedDb(TEAM_ID, USER_ID);
 
-    await expect(
-      createGeneratedAsset(scopedDb, createData({ num_images: 2 }))
-    ).rejects.toThrow(/Invalid input for fal-ai\/flux-1\/dev.*prompt/);
+    const result = await createGeneratedAsset(
+      scopedDb,
+      createData({ num_images: 2 })
+    );
 
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.path === 'prompt')).toBe(true);
+    }
     expect(mockRequireCredits).not.toHaveBeenCalled();
     expect(mockTriggerWorkflow).not.toHaveBeenCalled();
     expect(await db.select().from(generatedAssets)).toEqual([]);
@@ -157,6 +179,8 @@ describe('createGeneratedAsset', () => {
       createData({ prompt: 'a red fox', num_images: 2 })
     );
 
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
     expect(result.workflowRunId).toBe('wf-run-1');
 
     // Validation used the SERVER-fetched schema, not a client-sent one.
@@ -188,5 +212,22 @@ describe('createGeneratedAsset', () => {
       },
       { deduplicationId: `asset-${result.id}` }
     );
+  });
+
+  it('marks the row failed (and rethrows) when the workflow trigger throws', async () => {
+    mockTriggerWorkflow.mockRejectedValueOnce(new Error('binding exploded'));
+    const scopedDb = createScopedDb(TEAM_ID, USER_ID);
+
+    await expect(
+      createGeneratedAsset(scopedDb, createData({ prompt: 'a red fox' }))
+    ).rejects.toThrow('binding exploded');
+
+    // Without this the row would sit 'queued' forever with no workflowRunId
+    // — invisible to the verified reconciler pass.
+    const rows = await db.select().from(generatedAssets);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe('failed');
+    expect(rows[0]?.error).toMatch(/could not be started/);
+    expect(rows[0]?.workflowRunId).toBeNull();
   });
 });

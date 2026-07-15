@@ -16,8 +16,10 @@ import type { JsonSchema, JsonValue } from '@/lib/models/catalog';
 /**
  * Beyond this nesting depth a field falls back to the raw-JSON escape hatch.
  * Real fal schemas are 2–3 levels deep; the cap exists for `$defs` cycles
- * that `resolveRef`'s hop limit alone can't unwind (mutual recursion through
- * `properties`/`items` never terminates by ref-resolution alone).
+ * that `resolveRef`'s hop limit alone can't unwind (recursion through
+ * `properties`/`items`/`anyOf`/`allOf` never terminates by ref-resolution
+ * alone). Every recursion — including the single-variant collapse and the
+ * allOf unwrap in `planWidget` — must therefore advance `depth`.
  */
 export const MAX_FIELD_DEPTH = 8;
 
@@ -154,14 +156,14 @@ export function planWidget(
   const variants = variantsOf(schema, root);
   if (variants) {
     const only = variants.length === 1 ? variants[0] : undefined;
-    if (only) return planWidget(name, only, root, depth);
+    if (only) return planWidget(name, only, root, depth + 1);
     return { kind: 'variants', variants };
   }
 
   // OpenAPI-derived schemas wrap enum refs as `allOf: [$ref]`.
   const allOfOnly = schema.allOf?.length === 1 ? schema.allOf[0] : undefined;
   if (allOfOnly) {
-    return planWidget(name, resolveRef(allOfOnly, root), root, depth);
+    return planWidget(name, resolveRef(allOfOnly, root), root, depth + 1);
   }
 
   switch (schemaTypeOf(schema)) {
@@ -242,8 +244,18 @@ export function seedValue(
     case 'string':
       return '';
     case 'integer':
-    case 'number':
-      return resolved.minimum ?? 0;
+    case 'number': {
+      if (resolved.minimum !== undefined) return resolved.minimum;
+      // `exclusiveMinimum` alone: seed just above it, or the server-side
+      // validation rejects the seed (e.g. exclusiveMinimum: 0 seeding 0).
+      if (resolved.exclusiveMinimum !== undefined) {
+        const step =
+          resolved.multipleOf ??
+          (schemaTypeOf(resolved) === 'integer' ? 1 : 0.01);
+        return resolved.exclusiveMinimum + step;
+      }
+      return 0;
+    }
     case 'boolean':
       return false;
     case 'array': {
@@ -286,25 +298,16 @@ export function seedFormValue(root: JsonSchema): Record<string, JsonValue> {
 }
 
 /**
- * Parse `createGeneratedAssetFn`'s validation failure —
- * `Invalid input for <endpointId>: <path>: <message>; …` — into per-field
- * messages for `<SchemaForm errors>`. Issues without a path key under ''.
+ * Fold `createGeneratedAssetFn`'s typed issue list into per-field messages
+ * for `<SchemaForm errors>` (first message per path wins; issues without a
+ * path key under '').
  */
-export function parseValidationErrors(
-  error: unknown,
-  endpointId: string
-): Record<string, string> | undefined {
-  if (!(error instanceof Error)) return undefined;
-  const prefix = `Invalid input for ${endpointId}: `;
-  if (!error.message.startsWith(prefix)) return undefined;
+export function issuesToFieldErrors(
+  issues: Array<{ path: string; message: string }>
+): Record<string, string> {
   const errors: Record<string, string> = {};
-  for (const part of error.message.slice(prefix.length).split('; ')) {
-    const at = part.indexOf(': ');
-    if (at > 0) {
-      errors[part.slice(0, at)] = part.slice(at + 2);
-    } else {
-      errors[''] = part;
-    }
+  for (const issue of issues) {
+    errors[issue.path] ??= issue.message;
   }
   return errors;
 }

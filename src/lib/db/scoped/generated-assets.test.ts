@@ -194,12 +194,22 @@ describe('status lifecycle', () => {
     expect(current?.outputs).toBeNull();
   });
 
-  it('scopes writes to the team (a foreign markFailed is a no-op)', async () => {
+  it('scopes writes to the team (a foreign markFailed throws, row untouched)', async () => {
     const row = await methods.insert(assetInput());
-    await otherTeamMethods.markFailed(row.id, 'cross-team write');
+    // Throwing (not a silent no-op) — a zero-row status write means the
+    // workflow would otherwise "succeed" with nothing persisted.
+    await expect(
+      otherTeamMethods.markFailed(row.id, 'cross-team write')
+    ).rejects.toThrow(/not found for this team/);
 
     const current = await methods.getById(row.id);
     expect(current?.status).toBe('queued');
     expect(current?.error).toBeNull();
+  });
+
+  it('throws on status writes to a nonexistent row', async () => {
+    await expect(
+      methods.markRunning('01J00000000000000000000000')
+    ).rejects.toThrow(/not found for this team/);
   });
 });

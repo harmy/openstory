@@ -12,6 +12,7 @@
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
+  generatedAssets,
   shotVariants,
   shots,
   sequenceElements,
@@ -22,7 +23,8 @@ type SchemaTable =
   | typeof shots
   | typeof shotVariants
   | typeof sequences
-  | typeof sequenceElements;
+  | typeof sequenceElements
+  | typeof generatedAssets;
 type SetPayload = Record<string, Date | string>;
 type UpdateCall = {
   table: SchemaTable;
@@ -155,9 +157,10 @@ describe('reconcileAllStuckJobs — run-id-verified passes', () => {
   test('caps stuck-row selection at MAX_ROWS_PER_PASS (100) per verified pass', async () => {
     const { reconcileAllStuckJobs } = await import('./reconcile-all');
     await reconcileAllStuckJobs();
-    // 7 verified (run-id) passes: frames.image + shots.video/audio +
-    // frame_variants.status + 2 shot_variants + sequences.status (#989).
-    expect(limitArgs.filter((n) => n === 100)).toHaveLength(7);
+    // 8 verified (run-id) passes: frames.image + shots.video/audio +
+    // frame_variants.status + 2 shot_variants + sequences.status (#989) +
+    // generated_assets.status (#458).
+    expect(limitArgs.filter((n) => n === 100)).toHaveLength(8);
   });
 
   test('in-flight instance (resolveRunState null) → no per-row update on verified tables', async () => {
@@ -216,5 +219,51 @@ describe('reconcileAllStuckJobs — sequences.status pass (#839)', () => {
     );
     expect(statusUpdate).toBeDefined();
     expect('statusError' in (statusUpdate?.payload ?? {})).toBe(false);
+  });
+});
+
+describe('reconcileAllStuckJobs — generated_assets passes (#458)', () => {
+  test('dead asset run → status=failed with a retry hint', async () => {
+    stuckRows = [{ id: 'ga_1', runId: 'openstory-so_asset_dead' }];
+    runStateResult = 'failed';
+    const { reconcileAllStuckJobs } = await import('./reconcile-all');
+
+    const counts = await reconcileAllStuckJobs();
+
+    const update = updateCalls.find(
+      (c) => c.table === generatedAssets && c.payload.status === 'failed'
+    );
+    expect(update).toBeDefined();
+    expect(update?.payload.error).toMatch(/run it again/);
+    expect(counts['generated_assets.status']).toBeGreaterThan(0);
+  });
+
+  test('completed instance with an unflipped row → failed (never completed without outputs)', async () => {
+    stuckRows = [{ id: 'ga_1', runId: 'openstory-so_asset_done' }];
+    runStateResult = 'completed';
+    const { reconcileAllStuckJobs } = await import('./reconcile-all');
+
+    await reconcileAllStuckJobs();
+
+    const update = updateCalls.find((c) => c.table === generatedAssets);
+    expect(update?.payload.status).toBe('failed');
+    expect(update?.payload.error).toMatch(/was not saved/);
+  });
+
+  test('orphan pass blind-fails queued rows with no run id', async () => {
+    blindFailReturning = [{ id: 'ga_orphan' }];
+    const { reconcileAllStuckJobs } = await import('./reconcile-all');
+
+    const counts = await reconcileAllStuckJobs();
+
+    const update = updateCalls.find(
+      (c) =>
+        c.table === generatedAssets &&
+        c.returning &&
+        c.payload.status === 'failed'
+    );
+    expect(update).toBeDefined();
+    expect(update?.payload.error).toMatch(/could not be started/);
+    expect(counts['generated_assets.orphaned']).toBe(1);
   });
 });

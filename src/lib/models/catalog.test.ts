@@ -391,4 +391,57 @@ describe('getModelDetail', () => {
       activity: 'image',
     });
   });
+
+  it('keeps a deprecated endpoint’s real display name on the detail page', async () => {
+    const { getModelDetail } = await importCatalog();
+    mockDetailFetches({
+      metadataModels: [apiModel({ deprecatedAt: 1783721711 })],
+    });
+
+    const detail = await getModelDetail('fal-ai/flux-1/dev', 'image');
+    // Deprecated models are dropped from the browse grid (toCatalogModel),
+    // but the detail page must not degrade their identity to the raw id.
+    expect(detail.model.displayName).toBe('FLUX.1 [dev]');
+  });
+});
+
+describe('upstream shape guards', () => {
+  it('throws a clear CatalogApiError when /v1/models loses its envelope', async () => {
+    const { listCatalogModelFamilies, CatalogApiError } = await importCatalog();
+    mockFetch.mockResolvedValueOnce(jsonResponse({ data: [] }));
+
+    const promise = listCatalogModelFamilies({ activity: 'image' });
+    await expect(promise).rejects.toBeInstanceOf(CatalogApiError);
+    await expect(promise).rejects.toThrow(/unexpected \/v1\/models response/);
+  });
+
+  it('drops malformed model entries instead of crashing the grid', async () => {
+    const { listCatalogModelFamilies } = await importCatalog();
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({
+        count: 2,
+        models: [{ rawId: 42, displayName: null }, apiModel()],
+      })
+    );
+
+    const result = await listCatalogModelFamilies({ activity: 'image' });
+    expect(result.families).toHaveLength(1);
+  });
+
+  it('throws a clear CatalogApiError when a schema body is not an object', async () => {
+    const { getModelDetail, CatalogApiError } = await importCatalog();
+    mockFetch.mockImplementation((input) => {
+      const url = urlOf(input);
+      if (url.includes('/v1/schemas/')) {
+        return Promise.resolve(
+          jsonResponse({ provider: 'fal', schema: 'not-a-schema' })
+        );
+      }
+      return Promise.resolve(modelsResponse([apiModel()]));
+    });
+
+    await expect(
+      getModelDetail('fal-ai/flux-1/dev', 'image')
+    ).rejects.toBeInstanceOf(CatalogApiError);
+  });
 });

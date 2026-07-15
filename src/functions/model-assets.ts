@@ -12,6 +12,7 @@
 import { usdToMicros, type Microdollars } from '@/lib/billing/money';
 import { assertModelsEnabled } from '@/lib/flags';
 import { requireCredits } from '@/lib/billing/preflight';
+import { getLogger } from '@/lib/observability/logger';
 import type { ScopedDb } from '@/lib/db/scoped';
 import {
   GENERATED_ASSET_ACTIVITIES,
@@ -31,16 +32,18 @@ import { zodValidator } from '@tanstack/zod-adapter';
 import { z } from 'zod';
 import { authWithTeamMiddleware } from './middleware';
 
+const logger = getLogger(['openstory', 'functions', 'model-assets']);
+
 // ---------------------------------------------------------------------------
 // Cost estimates
 // ---------------------------------------------------------------------------
 
 /**
- * Conservative flat pre-flight estimates per activity, used only to gate
+ * Conservative flat pre-flight estimates per activity, used ONLY to gate
  * affordability in `requireCredits` (BYOK fal keys skip the gate entirely).
- * fal pricing is unavailable per-model for arbitrary endpoints, so these err
- * high; no post-run deduction happens without exact billed units (see the
- * workflow header).
+ * fal pricing is unavailable per-model for arbitrary endpoints and the raw
+ * queue API reports no `unitsBilled`, so completed runs currently charge
+ * NOTHING (`costMicros` stays null) — real charging is a follow-up PR.
  */
 const ASSET_COST_ESTIMATES: Record<GeneratedAssetActivity, Microdollars> = {
   image: usdToMicros(0.1),
@@ -69,13 +72,10 @@ const createGeneratedAssetInputSchema = z.object({
   activity: z.enum(GENERATED_ASSET_ACTIVITIES),
   /** Catalog display name, stored for listing. */
   modelName: z.string().min(1).max(200),
+  // Note there is deliberately NO client-sent schema field: the server
+  // re-fetches the live schema from modelschemas itself, so the client
+  // cannot influence validation.
   input: z.record(z.string(), jsonValueSchema),
-  /**
-   * The schema the client rendered its form from. Accepted for contract
-   * parity but NEVER used for validation — the server re-fetches the live
-   * schema from modelschemas itself.
-   */
-  inputSchema: z.record(z.string(), jsonValueSchema).optional(),
 });
 
 export type CreateGeneratedAssetData = z.infer<
@@ -116,6 +116,16 @@ export function validateAssetInput(
 // ---------------------------------------------------------------------------
 
 /**
+ * Discriminated create result: validation failures are DATA, not thrown —
+ * server-fn errors serialize to bare message strings, which would force the
+ * client to re-parse per-field issues out of prose. `ok: false` carries the
+ * typed issue list straight to `<SchemaForm errors>`.
+ */
+export type CreateGeneratedAssetResult =
+  | { ok: true; id: string; workflowRunId: string }
+  | { ok: false; issues: Array<{ path: string; message: string }> };
+
+/**
  * The create flow, separated from the server-fn shell so tests can drive it
  * with a mocked `#db-client` / `triggerWorkflow` (vi.doMock + dynamic import).
  * Order matters: schema validation MUST precede `requireCredits`, which MUST
@@ -124,19 +134,14 @@ export function validateAssetInput(
 export async function createGeneratedAsset(
   scopedDb: ScopedDb,
   data: CreateGeneratedAssetData
-): Promise<{ id: string; workflowRunId: string }> {
+): Promise<CreateGeneratedAssetResult> {
   const inputSchema = await fetchModelInputSchema(
     data.endpointId,
     data.activity
   );
   const validation = validateAssetInput(inputSchema, data.input);
   if (!validation.success) {
-    const detail = validation.issues
-      .map((issue) =>
-        issue.path ? `${issue.path}: ${issue.message}` : issue.message
-      )
-      .join('; ');
-    throw new Error(`Invalid input for ${data.endpointId}: ${detail}`);
+    return { ok: false, issues: validation.issues };
   }
 
   await requireCredits(scopedDb, ASSET_COST_ESTIMATES[data.activity], {
@@ -161,13 +166,35 @@ export async function createGeneratedAsset(
     input: data.input,
   };
 
-  const workflowRunId = await triggerWorkflow('/asset', workflowInput, {
-    deduplicationId: `asset-${row.id}`,
-  });
+  let workflowRunId: string;
+  try {
+    workflowRunId = await triggerWorkflow('/asset', workflowInput, {
+      deduplicationId: `asset-${row.id}`,
+    });
+  } catch (error) {
+    // No workflow ever ran, so nothing else will flip this row — without
+    // this it would sit 'queued' forever (and with no workflowRunId, the
+    // cron reconciler couldn't verify it either).
+    await scopedDb.generatedAssets.markFailed(
+      row.id,
+      'The generation could not be started — please try again.'
+    );
+    throw error;
+  }
 
-  await scopedDb.generatedAssets.setWorkflowRunId(row.id, workflowRunId);
+  try {
+    await scopedDb.generatedAssets.setWorkflowRunId(row.id, workflowRunId);
+  } catch (error) {
+    // The workflow IS running at this point — failing the request would
+    // read as "run failed" and invite a duplicate paid run. The workflow
+    // itself flips the row to a terminal status regardless.
+    logger.error(
+      `Failed to persist workflowRunId ${workflowRunId} for asset ${row.id}`,
+      { data: error instanceof Error ? error.message : error }
+    );
+  }
 
-  return { id: row.id, workflowRunId };
+  return { ok: true, id: row.id, workflowRunId };
 }
 
 export const createGeneratedAssetFn = createServerFn({ method: 'POST' })

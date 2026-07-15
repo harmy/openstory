@@ -4,9 +4,11 @@
  * Each row is ONE run of an arbitrary fal endpoint (picked from the live
  * modelschemas catalog), decoupled from the sequence→scene→shot→frame graph:
  * a flat, team-scoped asset. `input` snapshots exactly what the user submitted
- * (validated against the endpoint's live JSON Schema before any credit spend),
- * so a run can be inspected or re-run without re-fetching the schema.
- * `outputs` are R2 uploads with origin-relative `/r2/<key>` URLs (#894).
+ * (validated against the endpoint's live JSON Schema before the credit gate),
+ * so a run can be inspected later without re-fetching the schema. `outputs`
+ * are R2 uploads with origin-relative `/r2/<key>` URLs (#894). `costMicros`
+ * is reserved for real charging (a follow-up PR) and stays null today —
+ * completed runs currently deduct nothing.
  *
  * FKs deliberately use `onDelete: 'restrict'` — never CASCADE — because
  * `teams` / `user` are long-lived parent tables (see the D1 table-rebuild

@@ -94,21 +94,25 @@ export function createGeneratedAssetsMethods(
       id: string,
       workflowRunId: string
     ): Promise<void> => {
-      await db
+      const updated = await db
         .update(generatedAssets)
         .set({ workflowRunId, updatedAt: new Date() })
         .where(
           and(eq(generatedAssets.id, id), eq(generatedAssets.teamId, teamId))
-        );
+        )
+        .returning({ id: generatedAssets.id });
+      assertUpdated(updated, id);
     },
 
     markRunning: async (id: string): Promise<void> => {
-      await db
+      const updated = await db
         .update(generatedAssets)
         .set({ status: 'running', updatedAt: new Date() })
         .where(
           and(eq(generatedAssets.id, id), eq(generatedAssets.teamId, teamId))
-        );
+        )
+        .returning({ id: generatedAssets.id });
+      assertUpdated(updated, id);
     },
 
     markCompleted: async (
@@ -118,7 +122,7 @@ export function createGeneratedAssetsMethods(
         costMicros?: number | null;
       }
     ): Promise<void> => {
-      await db
+      const updated = await db
         .update(generatedAssets)
         .set({
           status: 'completed',
@@ -129,16 +133,31 @@ export function createGeneratedAssetsMethods(
         })
         .where(
           and(eq(generatedAssets.id, id), eq(generatedAssets.teamId, teamId))
-        );
+        )
+        .returning({ id: generatedAssets.id });
+      assertUpdated(updated, id);
     },
 
     markFailed: async (id: string, error: string): Promise<void> => {
-      await db
+      const updated = await db
         .update(generatedAssets)
         .set({ status: 'failed', error, updatedAt: new Date() })
         .where(
           and(eq(generatedAssets.id, id), eq(generatedAssets.teamId, teamId))
-        );
+        )
+        .returning({ id: generatedAssets.id });
+      assertUpdated(updated, id);
     },
   };
+}
+
+/**
+ * A status/run-id UPDATE that matched no row means the id doesn't exist for
+ * this team — without this check the workflow would "succeed" with nothing
+ * persisted (deleted row, cross-team id).
+ */
+function assertUpdated(updated: Array<{ id: string }>, id: string): void {
+  if (updated.length === 0) {
+    throw new Error(`generated_assets row ${id} not found for this team`);
+  }
 }

@@ -719,24 +719,36 @@ const RawJsonControl: FC<WidgetProps> = ({ value, onChange, disabled, id }) => {
   const [invalid, setInvalid] = useState(false);
 
   return (
-    <Textarea
-      id={id}
-      rows={5}
-      spellCheck={false}
-      value={draft}
-      aria-invalid={invalid}
-      disabled={disabled}
-      className="font-mono text-xs"
-      onChange={(event) => {
-        setDraft(event.target.value);
-        const parsed = parseJsonDraft(event.target.value);
-        if (parsed === undefined) {
-          setInvalid(true);
-        } else {
-          onChange(parsed);
-          setInvalid(false);
-        }
-      }}
-    />
+    <div className="flex flex-col gap-1.5">
+      <Textarea
+        id={id}
+        rows={5}
+        spellCheck={false}
+        value={draft}
+        aria-invalid={invalid}
+        disabled={disabled}
+        className="font-mono text-xs"
+        onChange={(event) => {
+          setDraft(event.target.value);
+          const parsed = parseJsonDraft(event.target.value);
+          if (parsed === undefined) {
+            // While unparseable the form value keeps the LAST VALID parse —
+            // blocking submit via native validity keeps what's on screen and
+            // what would be sent from silently diverging.
+            setInvalid(true);
+            event.target.setCustomValidity('Enter valid JSON');
+          } else {
+            onChange(parsed);
+            setInvalid(false);
+            event.target.setCustomValidity('');
+          }
+        }}
+      />
+      {invalid && (
+        <p role="alert" className="text-xs text-destructive">
+          Invalid JSON — fix it before running.
+        </p>
+      )}
+    </div>
   );
 };

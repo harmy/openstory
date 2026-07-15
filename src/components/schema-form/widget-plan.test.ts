@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   CHIP_ENUM_MAX,
   MAX_FIELD_DEPTH,
+  issuesToFieldErrors,
   matchVariant,
   orderedPropertyNames,
   parseJsonDraft,
-  parseValidationErrors,
   planWidget,
   resolveRef,
   seedFormValue,
@@ -239,6 +239,28 @@ describe('planWidget', () => {
   });
 });
 
+describe('planWidget cycle safety', () => {
+  it('terminates on a self-referential $def reached via anyOf (single-variant collapse)', () => {
+    const root: JsonSchema = {
+      $defs: { Node: { anyOf: [{ $ref: '#/$defs/Node' }] } },
+    };
+    const node = root.$defs?.Node;
+    if (!node) throw new Error('test setup');
+    // Before the depth+1 fix this recursed forever: the collapse re-planned
+    // the same schema at the same depth, so neither guard ever fired.
+    expect(planWidget('node', node, root, 0)).toEqual({ kind: 'raw' });
+  });
+
+  it('terminates on a self-referential $def reached via allOf unwrap', () => {
+    const root: JsonSchema = {
+      $defs: { Loop: { allOf: [{ $ref: '#/$defs/Loop' }] } },
+    };
+    const loop = root.$defs?.Loop;
+    if (!loop) throw new Error('test setup');
+    expect(planWidget('loop', loop, root, 0)).toEqual({ kind: 'raw' });
+  });
+});
+
 describe('variantsOf', () => {
   it('drops null variants and resolves refs', () => {
     const root: JsonSchema = { $defs: { S: { type: 'string' } } };
@@ -267,6 +289,23 @@ describe('seedValue / seedFormValue', () => {
     expect(seedValue({ type: 'number', minimum: 2 }, emptyRoot)).toBe(2);
     expect(seedValue({ type: 'boolean' }, emptyRoot)).toBe(false);
     expect(seedValue({ type: 'array' }, emptyRoot)).toEqual([]);
+  });
+
+  it('seeds strictly above a bare exclusiveMinimum', () => {
+    // exclusiveMinimum: 0 seeding 0 would fail server validation immediately.
+    expect(seedValue({ type: 'integer', exclusiveMinimum: 0 }, emptyRoot)).toBe(
+      1
+    );
+    expect(
+      seedValue(
+        { type: 'number', exclusiveMinimum: 0, multipleOf: 0.5 },
+        emptyRoot
+      )
+    ).toBe(0.5);
+    // An inclusive minimum still wins.
+    expect(
+      seedValue({ type: 'number', minimum: 2, exclusiveMinimum: 0 }, emptyRoot)
+    ).toBe(2);
   });
 
   it('seeds arrays up to minItems', () => {
@@ -338,28 +377,30 @@ describe('parseJsonDraft', () => {
   });
 });
 
-describe('parseValidationErrors', () => {
-  it('splits server validation messages into per-field errors', () => {
-    const error = new Error(
-      'Invalid input for fal-ai/flux-1/dev: prompt: Required; image_size.width: Too small'
-    );
-    expect(parseValidationErrors(error, 'fal-ai/flux-1/dev')).toEqual({
+describe('issuesToFieldErrors', () => {
+  it('folds typed issues into per-field messages, first message per path winning', () => {
+    expect(
+      issuesToFieldErrors([
+        { path: 'prompt', message: 'Required' },
+        { path: 'image_size.width', message: 'Too small' },
+        { path: 'prompt', message: 'A later duplicate' },
+      ])
+    ).toEqual({
       prompt: 'Required',
       'image_size.width': 'Too small',
     });
   });
 
-  it('keys pathless issues under the empty string', () => {
-    const error = new Error('Invalid input for m: Unrecognized key');
-    expect(parseValidationErrors(error, 'm')).toEqual({
-      '': 'Unrecognized key',
-    });
-  });
-
-  it('returns undefined for other errors', () => {
+  it('keys pathless issues under the empty string, even with separator-laden messages', () => {
+    // Zod messages routinely contain ': ' and '; ' — the typed contract must
+    // not care (this is what killed the old string-parsing approach).
     expect(
-      parseValidationErrors(new Error('Insufficient credits'), 'm')
-    ).toBeUndefined();
-    expect(parseValidationErrors('not an error', 'm')).toBeUndefined();
+      issuesToFieldErrors([
+        {
+          path: '',
+          message: 'Invalid input: expected string; received number',
+        },
+      ])
+    ).toEqual({ '': 'Invalid input: expected string; received number' });
   });
 });

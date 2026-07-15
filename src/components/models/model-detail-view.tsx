@@ -17,7 +17,7 @@ import {
 import { AssetResult } from '@/components/schema-form/asset-result';
 import { SchemaForm } from '@/components/schema-form/schema-form';
 import {
-  parseValidationErrors,
+  issuesToFieldErrors,
   seedFormValue,
 } from '@/components/schema-form/widget-plan';
 import { AppImage } from '@/components/ui/app-image';
@@ -68,13 +68,15 @@ import { toast } from 'sonner';
 /**
  * Server-fn errors arrive as plain `Error`s (CatalogApiError's status/code
  * don't survive serialization), so "this endpoint has no schema" is detected
- * by message — same approach as `isInsufficientCreditsError`.
+ * by message — same approach as `isInsufficientCreditsError`. Anchored to the
+ * exact message `getModelDetail` throws: a looser match (e.g. on the upstream
+ * `unknown_schema` code) would swallow a modelschemas outage into the
+ * friendly "not runnable" empty state.
  */
 function isNoSchemaError(error: unknown): boolean {
   return (
     error instanceof Error &&
-    (error.message.includes('No input schema') ||
-      error.message.includes('unknown_schema'))
+    error.message.includes('No input schema for endpoint')
   );
 }
 
@@ -109,6 +111,22 @@ function isInsufficientCreditsError(error: unknown): boolean {
     error instanceof Error &&
     (error.message.includes('INSUFFICIENT_CREDITS') ||
       error.message.includes('Insufficient credits'))
+  );
+}
+
+/**
+ * A non-terminal run past the workflow's absolute budget (30 min) plus slack
+ * is dead — the cron reconciler flips it to 'failed' out-of-band, so the
+ * client stops burning a poll on it.
+ */
+const STALLED_RUN_CUTOFF_MS = 45 * 60 * 1000;
+
+function isStalled(
+  asset: Pick<GeneratedAsset, 'status' | 'updatedAt'>
+): boolean {
+  return (
+    (asset.status === 'queued' || asset.status === 'running') &&
+    Date.now() - asset.updatedAt.getTime() > STALLED_RUN_CUTOFF_MS
   );
 }
 
@@ -185,8 +203,11 @@ const ModelRunPanel: FC<{ detail: ModelDetail }> = ({ detail }) => {
           input,
         },
       }),
-    onSuccess: ({ id }) => {
-      setActiveAssetId(id);
+    onSuccess: (result) => {
+      // `ok: false` is a validation failure — the issues render inline via
+      // `fieldErrors` below; there is no run to show.
+      if (!result.ok) return;
+      setActiveAssetId(result.id);
       void queryClient.invalidateQueries({
         queryKey: ['generated-assets', model.endpointId],
       });
@@ -207,27 +228,34 @@ const ModelRunPanel: FC<{ detail: ModelDetail }> = ({ detail }) => {
     },
   });
 
-  // The one in-flight/most recent run, polled until it settles.
-  const { data: activeAsset } = useQuery({
+  // The one in-flight/most recent run, polled until it settles. Polling
+  // stops on fetch errors (the error panel renders instead — silently
+  // spinning forever helps nobody) and on runs past the workflow's absolute
+  // budget, which the cron reconciler flips to 'failed' out-of-band.
+  const { data: activeAsset, error: activeAssetError } = useQuery({
     queryKey: ['generated-asset', activeAssetId],
     queryFn: activeAssetId
       ? () => getGeneratedAssetFn({ data: { id: activeAssetId } })
       : skipToken,
     refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === 'completed' || status === 'failed' ? false : 1500;
+      if (query.state.error) return false;
+      const asset = query.state.data;
+      if (!asset) return 1500;
+      if (asset.status === 'completed' || asset.status === 'failed') {
+        return false;
+      }
+      return isStalled(asset) ? false : 1500;
     },
   });
 
-  const fieldErrors = parseValidationErrors(
-    runMutation.error,
-    model.endpointId
-  );
+  const runResult = runMutation.data;
+  const fieldErrors =
+    runResult && !runResult.ok
+      ? issuesToFieldErrors(runResult.issues)
+      : undefined;
   const generalError =
     fieldErrors?.[''] ??
-    (runMutation.error &&
-    !fieldErrors &&
-    !isInsufficientCreditsError(runMutation.error)
+    (runMutation.error && !isInsufficientCreditsError(runMutation.error)
       ? runMutation.error.message
       : undefined);
 
@@ -298,7 +326,14 @@ const ModelRunPanel: FC<{ detail: ModelDetail }> = ({ detail }) => {
 
         <section aria-label="Result" className="flex flex-col gap-4">
           <h2 className="text-sm font-medium text-muted-foreground">Result</h2>
-          {activeAsset ? (
+          {activeAssetError ? (
+            <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-dashed">
+              <p role="alert" className="text-sm text-destructive">
+                Couldn't load the run status — check Recent runs below, or run
+                again.
+              </p>
+            </div>
+          ) : activeAsset ? (
             <AssetResult asset={activeAsset} />
           ) : (
             <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-dashed">
@@ -464,15 +499,21 @@ const RecentRuns: FC<{
 }> = ({ endpointId, activeAssetId, onSelect }) => {
   // Self-polls while any listed run is still in flight, so rows settle into
   // their thumbnails without the panel having to orchestrate invalidations.
+  // Stops on refetch errors and ignores stalled rows (see `isStalled`) so a
+  // stranded run can't keep every visit to this page polling forever.
   const { data } = useSuspenseQuery({
     queryKey: ['generated-assets', endpointId],
     queryFn: () => listGeneratedAssetsFn({ data: { endpointId, limit: 12 } }),
-    refetchInterval: (query) =>
-      query.state.data?.assets.some(
-        (asset) => asset.status === 'queued' || asset.status === 'running'
+    refetchInterval: (query) => {
+      if (query.state.error) return false;
+      return query.state.data?.assets.some(
+        (asset) =>
+          (asset.status === 'queued' || asset.status === 'running') &&
+          !isStalled(asset)
       )
         ? 3000
-        : false,
+        : false;
+    },
   });
 
   if (data.assets.length === 0) {
