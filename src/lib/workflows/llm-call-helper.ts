@@ -13,6 +13,8 @@ import {
   extractRunError,
   formatRunErrorMessage,
   llmCostFromUsage,
+  parseJsonObjectResponse,
+  planStructuredOutput,
   PROMPT_REASONING,
 } from '@/lib/ai/llm-client';
 import type { TextModel } from '@/lib/ai/models';
@@ -280,12 +282,15 @@ export async function durableLLMCallCf<TSchema extends z.ZodType>(
       const timeout = setTimeout(() => abortController.abort(), 300_000);
 
       let capturedUsage: TokenUsage | undefined;
+      // Native strict output when the provider's grammar fits the schema;
+      // json_object + schema-in-prompt when it can't (Anthropic large
+      // schemas). The trailing responseSchema.parse validates either way.
+      const plan = planStructuredOutput(modelId, config.responseSchema);
       try {
-        const text = await chat({
+        const commonOptions = {
           adapter,
           messages: chatMessages,
-          systemPrompts: systemPrompts,
-          stream: false,
+          stream: false as const,
           abortController,
           modelOptions: {
             ...reasoningModelOptions(config.reasoning),
@@ -299,21 +304,37 @@ export async function durableLLMCallCf<TSchema extends z.ZodType>(
             sessionId: callContext.sequenceId,
             userId: callContext.userId,
           },
-          outputSchema: config.responseSchema,
           middleware: [
             {
-              onFinish: (_ctx, info) => {
+              onFinish: (_ctx: unknown, info: { usage?: TokenUsage }) => {
                 capturedUsage = info.usage;
               },
             },
           ],
           debug: false,
-        });
+        };
+        const result =
+          plan.mode === 'json-object'
+            ? parseJsonObjectResponse(
+                await chat({
+                  ...commonOptions,
+                  systemPrompts: [...systemPrompts, plan.instruction],
+                  modelOptions: {
+                    ...commonOptions.modelOptions,
+                    responseFormat: { type: 'json_object' as const },
+                  },
+                })
+              )
+            : await chat({
+                ...commonOptions,
+                systemPrompts,
+                outputSchema: config.responseSchema,
+              });
         logger.info(`[LLM:${logName}:cf] Call succeeded`);
         // Return as JSON string — round-trips through step.do without hitting
         // CF's Rpc.Serializable constraint on the Zod-inferred shape.
         return {
-          jsonText: JSON.stringify(text),
+          jsonText: JSON.stringify(result),
           costMicros: llmCostFromUsage(capturedUsage, modelId),
         };
       } finally {
@@ -442,35 +463,52 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
         await channel.emit('shotPrompt.streaming', { promptType, delta });
       };
 
-      try {
-        for await (const event of chat({
-          adapter,
-          messages: chatMessages,
-          systemPrompts: systemPrompts,
-          stream: true,
-          abortController,
-          modelOptions: {
-            ...reasoningModelOptions(config.reasoning),
-            maxCompletionTokens: Math.floor(getContextWindow(modelId) * 0.5),
-          },
-          metadata: {
-            observationName: logName,
-            prompt: promptReference,
-            tags: logTags,
-            metadata: logMetadata,
-            sessionId: callContext.sequenceId,
-            userId: callContext.userId,
-          },
-          outputSchema: config.responseSchema,
-          middleware: [
-            {
-              onFinish: (_ctx, info) => {
-                capturedUsage = info.usage;
-              },
+      // Same native-vs-json_object routing as the non-streaming path; both
+      // stream raw JSON text deltas, so the loop below is mode-agnostic.
+      const plan = planStructuredOutput(modelId, config.responseSchema);
+      const commonOptions = {
+        adapter,
+        messages: chatMessages,
+        stream: true as const,
+        abortController,
+        modelOptions: {
+          ...reasoningModelOptions(config.reasoning),
+          maxCompletionTokens: Math.floor(getContextWindow(modelId) * 0.5),
+        },
+        metadata: {
+          observationName: logName,
+          prompt: promptReference,
+          tags: logTags,
+          metadata: logMetadata,
+          sessionId: callContext.sequenceId,
+          userId: callContext.userId,
+        },
+        middleware: [
+          {
+            onFinish: (_ctx: unknown, info: { usage?: TokenUsage }) => {
+              capturedUsage = info.usage;
             },
-          ],
-          debug: false,
-        })) {
+          },
+        ],
+        debug: false,
+      };
+      const eventStream =
+        plan.mode === 'json-object'
+          ? chat({
+              ...commonOptions,
+              systemPrompts: [...systemPrompts, plan.instruction],
+              modelOptions: {
+                ...commonOptions.modelOptions,
+                responseFormat: { type: 'json_object' as const },
+              },
+            })
+          : chat({
+              ...commonOptions,
+              systemPrompts,
+              outputSchema: config.responseSchema,
+            });
+      try {
+        for await (const event of eventStream) {
           if (
             event.type === 'TEXT_MESSAGE_CONTENT' &&
             typeof event.delta === 'string'
@@ -527,5 +565,7 @@ export async function durableStreamingLLMCallCf<TSchema extends z.ZodType>(
     });
   }
 
-  return config.responseSchema.parse(JSON.parse(jsonText));
+  // Streaming accumulates the model’s raw text; the fence-tolerant parse
+  // covers the json_object fallback (native structured streams are plain JSON).
+  return config.responseSchema.parse(parseJsonObjectResponse(jsonText));
 }
