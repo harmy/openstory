@@ -32,7 +32,7 @@ const validAudioModelKeys = Object.keys(
   AUDIO_MODELS
 ) satisfies readonly string[];
 
-const MUSIC_REQUIRES_MOTION_ERROR =
+export const MUSIC_REQUIRES_MOTION_ERROR =
   'Music generation currently requires motion. Turn on motion or disable music.';
 
 export const createSequenceSchema = createInsertSchema(sequences, {
@@ -151,14 +151,9 @@ export const createSequenceSchema = createInsertSchema(sequences, {
     // newly created sequence so the user doesn't have to re-upload references.
     sourceSequenceId: ulidSchemaOptional,
   })
-  .superRefine((data, ctx) => {
-    if (data.autoGenerateMusic && !data.autoGenerateMotion) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['autoGenerateMusic'],
-        message: MUSIC_REQUIRES_MOTION_ERROR,
-      });
-    }
+  .refine((data) => !data.autoGenerateMusic || data.autoGenerateMotion, {
+    path: ['autoGenerateMusic'],
+    message: MUSIC_REQUIRES_MOTION_ERROR,
   });
 
 export const updateSequenceSchema = createUpdateSchema(sequences, {

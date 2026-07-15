@@ -30,6 +30,7 @@ import { VARIANT_TYPES, type VariantType } from '@/lib/db/schema/shot-variants';
 import { ulidSchema } from '@/lib/schemas/id.schemas';
 import {
   createSequenceSchema,
+  MUSIC_REQUIRES_MOTION_ERROR,
   updateSequenceSchema,
 } from '@/lib/schemas/sequence.schemas';
 import { triggerWorkflow } from '@/lib/workflow/client';
@@ -101,6 +102,19 @@ export const createSequenceFn = createServerFn({ method: 'POST' })
   });
 
 /**
+ * Music only generates inside the motion phase (#823), so an update whose
+ * merged flags leave music on without motion would strand music as a silent
+ * no-op on the next regeneration. The schema alone can't catch this — it
+ * doesn't see the persisted flags a partial update leaves untouched.
+ */
+export const musicWithoutMotion = (
+  update: { autoGenerateMusic?: boolean; autoGenerateMotion?: boolean },
+  existing: { autoGenerateMusic: boolean; autoGenerateMotion: boolean }
+): boolean =>
+  (update.autoGenerateMusic ?? existing.autoGenerateMusic) &&
+  !(update.autoGenerateMotion ?? existing.autoGenerateMotion);
+
+/**
  * Update a sequence.
  * Triggers storyboard regeneration if script/style/aspectRatio/model changes.
  */
@@ -111,6 +125,10 @@ export const updateSequenceFn = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data, context }) => {
     const { sequenceId, ...updateData } = data;
+
+    if (musicWithoutMotion(updateData, context.sequence)) {
+      throw new Error(MUSIC_REQUIRES_MOTION_ERROR);
+    }
 
     const needsRegeneration =
       updateData.script !== undefined ||

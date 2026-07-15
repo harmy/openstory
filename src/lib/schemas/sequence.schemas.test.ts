@@ -12,7 +12,10 @@ describe('createSequenceSchema', () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0]?.message).toContain('requires motion');
+      const issue = result.error.issues.find(
+        (i) => i.path[0] === 'autoGenerateMusic'
+      );
+      expect(issue?.message).toContain('requires motion');
     }
   });
 
